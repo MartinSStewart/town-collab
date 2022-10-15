@@ -340,27 +340,6 @@ clusterToImage model actualChanges bounds =
                                         Just imageRow ->
                                             Array.slice x0 x1 imageRow
                                                 |> Array.toList
-                                                |> (\list ->
-                                                        case maybeUser of
-                                                            Just user ->
-                                                                let
-                                                                    userColor : Image.Pixel
-                                                                    userColor =
-                                                                        Shaders.userPixelColor user
-                                                                in
-                                                                List.map
-                                                                    (\pixel ->
-                                                                        if pixel + 1 == 0 then
-                                                                            userColor
-
-                                                                        else
-                                                                            pixel
-                                                                    )
-                                                                    list
-
-                                                            Nothing ->
-                                                                list
-                                                   )
 
                                         Nothing ->
                                             []

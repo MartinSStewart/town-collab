@@ -256,7 +256,7 @@ asciiBox offsetX offsetY indexOffset =
 
 
 type alias Vertex =
-    { position : Vec2, texturePosition : Vec2, quadPosition : Vec2, userId : Float }
+    { position : Vec2, texturePosition : Vec2 }
 
 
 mesh :
@@ -283,10 +283,6 @@ mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
                     in
                     { position = Math.Vector2.add offset v
                     , texturePosition = uv
-                    , quadPosition = Math.Vector2.add offset boxCenter
-
-                    -- This -9 default value must equal the -9 in Shaders.vertexShader
-                    , userId = userId |> Maybe.map User.rawId |> Maybe.withDefault -9 |> toFloat
                     }
                 )
                 box

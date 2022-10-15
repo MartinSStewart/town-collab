@@ -1673,7 +1673,6 @@ userListView model =
                 , Element.Border.rounded 2
                 , Element.Border.width 1
                 , Element.Border.color UiColors.colorSquareBorder
-                , Element.Background.color <| Shaders.lch2rgb <| Shaders.userColor userId
                 ]
                 (if isAdmin model then
                     Element.paragraph
@@ -2148,9 +2147,6 @@ canvasView maybeHyperlink model =
                     (negate <| toFloat <| round x)
                     (negate <| toFloat <| round y)
                     0
-
-        color =
-            LocalGrid.localModel model.localModel |> .user |> Shaders.userColor |> Shaders.lch2rgb
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False, WebGL.antialias ]
@@ -2160,7 +2156,7 @@ canvasView maybeHyperlink model =
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
         ((if cursorEnabled model then
-            [ Cursor.draw viewMatrix color model ]
+            [ Cursor.draw viewMatrix (Element.rgba 1 0 1 0.5) model ]
 
           else
             []
@@ -2227,52 +2223,6 @@ drawText animationElapsedTime meshes userHighlighted showColors viewMatrix maybe
                     mesh
                     { view = viewMatrix
                     , texture = texture
-                    , highlightedUser =
-                        userHighlighted
-                            |> Maybe.map (User.rawId >> toFloat)
-                            |> Maybe.withDefault -2
-                    , showColors =
-                        if showColors then
-                            1
-
-                        else
-                            0
-                    , highlightIntensity =
-                        case userHighlighted of
-                            Just userId ->
-                                let
-                                    duration =
-                                        1500
-                                in
-                                Duration.inMilliseconds animationElapsedTime
-                                    |> max 0
-                                    |> (*) (2 * pi / duration)
-                                    |> cos
-                                    |> (+) -1
-                                    |> (*)
-                                        (if (Shaders.userColor userId).luminance > 80 then
-                                            10
-
-                                         else
-                                            -10
-                                        )
-
-                            Nothing ->
-                                0
-                    , hyperlinkMin =
-                        Maybe.map (.position >> Units.asciiToWorld >> Helper.coordToVec) maybeHyperlink
-                            |> Maybe.withDefault (Math.Vector2.vec2 1 1)
-                    , hyperlinkMax =
-                        Maybe.map
-                            (\hyperlink ->
-                                Helper.addTuple
-                                    hyperlink.position
-                                    (Helper.fromRawCoord ( hyperlink.length, 1 ))
-                                    |> Units.asciiToWorld
-                                    |> Helper.coordToVec
-                            )
-                            maybeHyperlink
-                            |> Maybe.withDefault (Math.Vector2.vec2 0 0)
                     }
             )
 
