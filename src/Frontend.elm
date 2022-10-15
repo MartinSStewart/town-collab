@@ -1,4 +1,4 @@
-port module Frontend exposing (app, init, selectionToString, update, updateFromBackend, view)
+port module Frontend exposing (app, init, update, updateFromBackend, view)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -29,7 +29,6 @@ import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Touch
-import Hyperlink exposing (Hyperlink)
 import Icons
 import Json.Decode
 import Json.Encode
@@ -401,12 +400,13 @@ updateLoaded msg model =
                     position =
                         screenToWorld model mousePosition |> Units.worldToAscii
 
-                    ( maybeUserId, _ ) =
+                    maybeUserId =
                         selectionPoint
                             position
                             localModel.hiddenUsers
                             localModel.adminHiddenUsers
                             localModel.grid
+                            |> Maybe.map .userId
                 in
                 case maybeUserId of
                     Just userId ->
@@ -426,33 +426,12 @@ updateLoaded msg model =
                     mainMouseButtonUp mousePosition mouseState model
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
-                    let
-                        isSmallDistance =
-                            Vector2d.from mouseState.start mousePosition
-                                |> Vector2d.length
-                                |> Quantity.lessThan (Pixels.pixels 5)
-
-                        maybeHyperlink =
-                            if isSmallDistance then
-                                hyperlinkAtPosition
-                                    (screenToWorld model mousePosition |> Units.worldToAscii)
-                                    (LocalGrid.localModel model.localModel)
-
-                            else
-                                Nothing
-
-                        newModel =
-                            { model
-                                | mouseMiddle = MouseButtonUp { current = mousePosition }
-                                , viewPoint = offsetViewPoint model mouseState.start mousePosition
-                            }
-                    in
-                    case maybeHyperlink of
-                        Just hyperlink ->
-                            followHyperlink True hyperlink newModel
-
-                        Nothing ->
-                            ( newModel, Cmd.none )
+                    ( { model
+                        | mouseMiddle = MouseButtonUp { current = mousePosition }
+                        , viewPoint = offsetViewPoint model mouseState.start mousePosition
+                      }
+                    , Cmd.none
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -497,12 +476,13 @@ updateLoaded msg model =
                                     position =
                                         screenToWorld model mousePosition |> Units.worldToAscii
 
-                                    ( hideUserId, _ ) =
+                                    hideUserId =
                                         selectionPoint
                                             position
                                             localModel.hiddenUsers
                                             localModel.adminHiddenUsers
                                             localModel.grid
+                                            |> Maybe.map .userId
                                 in
                                 hideUserId |> Maybe.map (\a -> ( a, position )) |> HighlightTool
 
@@ -555,10 +535,10 @@ updateLoaded msg model =
             ( resetTouchMove model |> updateLocalModel Change.LocalRedo, Cmd.none )
 
         CopyPressed ->
-            copyText model
+            Debug.todo ""
 
         CutPressed ->
-            cutText model
+            Debug.todo ""
 
         TouchMove touchPosition ->
             let
@@ -712,7 +692,7 @@ keyMsgCanvasUpdate key model =
     case key of
         Keyboard.Character "c" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                copyText model
+                Debug.todo ""
 
             else
                 ( model, Cmd.none )
@@ -720,7 +700,7 @@ keyMsgCanvasUpdate key model =
         Keyboard.Character "x" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 if cursorEnabled model then
-                    cutText model
+                    Debug.todo ""
 
                 else
                     ( model, Cmd.none )
@@ -884,94 +864,17 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.highlightContextMenu
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
-
-        pressedHyperlink : Maybe Hyperlink
-        pressedHyperlink =
-            case model.lastMouseLeftUp of
-                Just ( lastTime, lastPosition ) ->
-                    if
-                        List.any (\key -> key == Keyboard.Control || key == Keyboard.Meta) model_.pressedKeys
-                            || ((Duration.from lastTime model_.time |> Quantity.lessThan Duration.second)
-                                    && (Vector2d.from lastPosition mousePosition
-                                            |> Vector2d.length
-                                            |> Quantity.lessThan (Pixels.pixels 10)
-                                       )
-                               )
-                    then
-                        hyperlinkAtPosition
-                            (screenToWorld model_ mousePosition |> Units.worldToAscii)
-                            (LocalGrid.localModel model_.localModel)
-
-                    else
-                        Nothing
-
-                Nothing ->
-                    Nothing
     in
-    case ( pressedHyperlink, model_.tool ) of
-        ( Just hyperlink, _ ) ->
-            followHyperlink False hyperlink model_
-
-        ( Nothing, HighlightTool (Just ( userId, hidePoint )) ) ->
+    case model_.tool of
+        HighlightTool (Just ( userId, hidePoint )) ->
             if isSmallDistance then
                 ( highlightUser userId hidePoint model_, Cmd.none )
 
             else
                 ( model_, Cmd.none )
 
-        ( Nothing, _ ) ->
+        _ ->
             ( model_, Cmd.none )
-
-
-followHyperlink : Bool -> Hyperlink -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
-followHyperlink newTab hyperlink model =
-    let
-        routeData =
-            { viewPoint = actualViewPoint model |> Units.worldToAscii
-            , showNotifyMe = model.showNotifyMe
-            }
-    in
-    case hyperlink.route of
-        Hyperlink.Coordinate viewPoint_ ->
-            if newTab then
-                ( model, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route) )
-
-            else
-                pushUrl
-                    (Hyperlink.routeToUrl routeData hyperlink.route)
-                    { model
-                        | cursor = Cursor.setCursor viewPoint_
-                        , viewPoint = Units.asciiToWorld viewPoint_ |> Helper.coordToPoint
-                    }
-
-        Hyperlink.NotifyMe ->
-            if newTab then
-                ( model, martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route) )
-
-            else
-                pushUrl
-                    (Hyperlink.routeToUrl routeData hyperlink.route)
-                    { model
-                        | showNotifyMe = True
-                    }
-
-        Hyperlink.External _ ->
-            ( model
-            , if newTab then
-                martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route)
-
-              else
-                Browser.Navigation.load (Hyperlink.routeToUrl routeData hyperlink.route)
-            )
-
-        Hyperlink.Resource _ ->
-            ( model
-            , if newTab then
-                martinsstewart_elm_open_new_tab_to_js (Hyperlink.routeToUrl routeData hyperlink.route)
-
-              else
-                Browser.Navigation.load (Hyperlink.routeToUrl routeData hyperlink.route)
-            )
 
 
 highlightUser : UserId -> Coord AsciiUnit -> FrontendLoaded -> FrontendLoaded
@@ -1006,41 +909,6 @@ resetTouchMove model =
 
             else
                 model
-
-
-copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
-copyText model =
-    let
-        model_ =
-            resetTouchMove model
-
-        localModel =
-            LocalGrid.localModel model_.localModel
-    in
-    ( model_
-    , localModel.grid
-        |> selectionToString (Cursor.bounds model_.cursor) localModel.hiddenUsers localModel.adminHiddenUsers
-        |> supermario_copy_to_clipboard_to_js
-    )
-
-
-cutText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
-cutText model =
-    let
-        model_ =
-            resetTouchMove model
-
-        bounds =
-            Cursor.bounds model_.cursor
-
-        localModel =
-            LocalGrid.localModel model_.localModel
-    in
-    ( clearTextSelection bounds model_
-    , localModel.grid
-        |> selectionToString bounds localModel.hiddenUsers localModel.adminHiddenUsers
-        |> supermario_copy_to_clipboard_to_js
-    )
 
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> FrontendLoaded
@@ -1089,63 +957,14 @@ worldToScreen model =
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
-selectionToString : Bounds AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> String
-selectionToString bounds hiddenUsers hiddenUsersForAll grid =
-    let
-        minCell =
-            Bounds.minimum bounds |> Grid.asciiToCellAndLocalCoord |> Tuple.first
-
-        maxCell =
-            Bounds.maximum bounds |> Grid.asciiToCellAndLocalCoord |> Tuple.first
-
-        flattenedCells =
-            Bounds.coordRangeFold
-                (\coord dict ->
-                    case Grid.getCell coord grid of
-                        Just cell ->
-                            Dict.insert
-                                (Helper.toRawCoord coord)
-                                (GridCell.flatten hiddenUsers hiddenUsersForAll cell)
-                                dict
-
-                        Nothing ->
-                            dict
-                )
-                identity
-                (Bounds.bounds minCell maxCell)
-                Dict.empty
-    in
-    Bounds.coordRangeFoldReverse
-        (\coord chars ->
-            let
-                ( cellCoord, localCoord ) =
-                    Grid.asciiToCellAndLocalCoord coord
-            in
-            (Dict.get (Helper.toRawCoord cellCoord) flattenedCells
-                |> Maybe.andThen (Array.get localCoord >> Maybe.map Tuple.second)
-                |> Maybe.withDefault Ascii.default
-                |> Ascii.toChar
-            )
-                :: chars
-        )
-        ((::) '\n')
-        (Bounds.bounds
-            (Bounds.minimum bounds)
-            (Bounds.maximum bounds)
-        )
-        []
-        |> String.fromList
-
-
-selectionPoint : Coord AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> ( Maybe UserId, Ascii )
+selectionPoint : Coord AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> Maybe { userId : UserId, value : Ascii }
 selectionPoint position hiddenUsers hiddenUsersForAll grid =
     let
         ( cellPosition, localPosition ) =
             Grid.asciiToCellAndLocalCoord position
     in
     Grid.getCell cellPosition grid
-        |> Maybe.andThen (GridCell.flatten hiddenUsers hiddenUsersForAll >> Array.get localPosition)
-        |> Maybe.withDefault ( Nothing, Ascii.default )
+        |> Maybe.andThen (GridCell.flatten hiddenUsers hiddenUsersForAll >> Dict.get localPosition)
 
 
 windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
@@ -1166,46 +985,37 @@ devicePixelRatioUpdate devicePixelRatio model =
     )
 
 
-maxStringLength : number
-maxStringLength =
-    if Env.isProduction then
-        5000
-
-    else
-        100000
-
-
 changeText : String -> FrontendLoaded -> FrontendLoaded
 changeText text model =
-    String.left maxStringLength text
-        |> String.filter ((/=) '\u{000D}')
-        |> String.split "\n"
-        |> List.Nonempty.fromList
-        |> Maybe.map (List.Nonempty.map (String.toList >> List.map (Ascii.fromChar >> Maybe.withDefault Ascii.default)))
-        |> Maybe.map
-            (\lines ->
-                let
-                    model_ =
-                        if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
-                            updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
+    case String.toList text of
+        head :: _ ->
+            case Ascii.fromChar head of
+                Just ascii ->
+                    let
+                        model_ =
+                            if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
+                                updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
 
-                        else
-                            model
-                in
-                Grid.textToChange (Cursor.position model_.cursor) lines
-                    |> List.Nonempty.map Change.LocalGridChange
-                    |> List.Nonempty.foldl updateLocalModel
-                        { model_
-                            | cursor =
-                                Cursor.moveCursor
-                                    False
-                                    ( Units.asciiUnit (List.Nonempty.last lines |> List.length)
-                                    , Units.asciiUnit (List.Nonempty.length lines - 1)
-                                    )
-                                    model_.cursor
-                        }
-            )
-        |> Maybe.withDefault model
+                            else
+                                model
+
+                        ( cellPosition, localPosition ) =
+                            Grid.asciiToCellAndLocalCoord (Cursor.position model.cursor)
+                    in
+                    updateLocalModel
+                        (Change.LocalGridChange
+                            { cellPosition = cellPosition
+                            , localPosition = localPosition
+                            , change = ascii
+                            }
+                        )
+                        model_
+
+                Nothing ->
+                    model
+
+        [] ->
+            model
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -1258,7 +1068,7 @@ updateMeshes oldModel newModel =
             in
             Grid.mesh
                 coord
-                (GridCell.flatten newHidden newHiddenForAll newCell |> Array.toList)
+                (GridCell.flatten newHidden newHiddenForAll newCell)
 
         hiddenUnchanged : Bool
         hiddenUnchanged =
@@ -1300,27 +1110,6 @@ updateMeshes oldModel newModel =
                 )
                 newCells
     }
-
-
-hyperlinkAtPosition : Coord Units.AsciiUnit -> LocalGrid_ -> Maybe Hyperlink
-hyperlinkAtPosition coord model =
-    let
-        offset =
-            Helper.fromRawCoord ( 50, 0 )
-
-        start =
-            coord |> Helper.minusTuple offset
-    in
-    selectionToString
-        (Bounds.bounds start (coord |> Helper.addTuple offset))
-        model.hiddenUsers
-        model.adminHiddenUsers
-        model.grid
-        |> Parser.run (Hyperlink.urlsParser start)
-        |> Result.toMaybe
-        |> Maybe.withDefault []
-        |> List.filter (Hyperlink.contains coord)
-        |> List.head
 
 
 viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg_ ) -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1433,17 +1222,8 @@ updateLoadedFromBackend msg model =
             ( { model | notifyMeModel = NotifyMe.unsubscribed model.notifyMeModel }, Cmd.none )
 
 
-textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg_
-textarea maybeHyperlink model =
-    let
-        pointer =
-            case maybeHyperlink of
-                Just _ ->
-                    Html.Attributes.style "cursor" "pointer"
-
-                Nothing ->
-                    Html.Attributes.style "cursor" "auto"
-    in
+textarea : FrontendLoaded -> Element.Attribute FrontendMsg_
+textarea model =
     if cursorEnabled model then
         Html.textarea
             [ Html.Attributes.value model.textAreaText
@@ -1455,7 +1235,6 @@ textarea maybeHyperlink model =
             , Html.Attributes.id "textareaId"
             , Html.Events.onFocus TextAreaFocused
             , Html.Attributes.attribute "data-gramm" "false"
-            , pointer
             , Html.Events.Extra.Touch.onWithOptions
                 "touchmove"
                 { stopPropagation = False, preventDefault = True }
@@ -1489,7 +1268,6 @@ textarea maybeHyperlink model =
                     (\{ clientPos, button } ->
                         MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
                     )
-            , Element.htmlAttribute pointer
             ]
             Element.none
             |> Element.inFront
@@ -1550,24 +1328,11 @@ view _ model =
                     (Element.text "Loading")
 
             Loaded loadedModel ->
-                let
-                    maybeHyperlink =
-                        case loadedModel.mouseLeft of
-                            MouseButtonUp { current } ->
-                                hyperlinkAtPosition
-                                    (screenToWorld loadedModel current |> Units.worldToAscii)
-                                    (LocalGrid.localModel loadedModel.localModel)
-
-                            MouseButtonDown { current } ->
-                                hyperlinkAtPosition
-                                    (screenToWorld loadedModel current |> Units.worldToAscii)
-                                    (LocalGrid.localModel loadedModel.localModel)
-                in
                 Element.layout
                     (Element.width Element.fill
                         :: Element.height Element.fill
                         :: Element.clip
-                        :: textarea maybeHyperlink loadedModel
+                        :: textarea loadedModel
                         :: Element.inFront (toolbarView loadedModel)
                         :: Element.inFront (userListView loadedModel)
                         :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
@@ -1581,7 +1346,7 @@ view _ model =
                            )
                         ++ [ notifyMeView loadedModel ]
                     )
-                    (Element.html (canvasView maybeHyperlink loadedModel))
+                    (Element.html (canvasView loadedModel))
         , Html.node "style"
             []
             [ Html.text "@font-face { font-family: ascii; src: url('ascii.ttf'); }" ]
@@ -2147,8 +1912,8 @@ viewBoundingBox model =
     BoundingBox2d.from viewMin viewMax
 
 
-canvasView : Maybe Hyperlink -> FrontendLoaded -> Html FrontendMsg_
-canvasView maybeHyperlink model =
+canvasView : FrontendLoaded -> Html FrontendMsg_
+canvasView model =
     let
         viewBounds_ =
             viewBoundingBox model
@@ -2207,7 +1972,6 @@ canvasView maybeHyperlink model =
                                 False
                         )
                         viewMatrix
-                        maybeHyperlink
                     )
                     model.texture
                     |> Maybe.withDefault []
@@ -2231,10 +1995,9 @@ drawText :
     -> Maybe UserId
     -> Bool
     -> Mat4
-    -> Maybe Hyperlink
     -> Texture
     -> List WebGL.Entity
-drawText animationElapsedTime meshes userHighlighted showColors viewMatrix maybeHyperlink texture =
+drawText animationElapsedTime meshes userHighlighted showColors viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->

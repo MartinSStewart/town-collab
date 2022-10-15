@@ -12,11 +12,9 @@ import Element.Background
 import Email.Html
 import EmailAddress as Email exposing (EmailAddress)
 import EverySet
-import Frontend
 import Grid
 import GridCell
 import Helper exposing (Coord)
-import Hyperlink exposing (Hyperlink)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid

@@ -1,4 +1,4 @@
-module BackendLogic exposing (Effect(..), init, notifyAdminWait, sendConfirmationEmailRateLimit, statistics, update, updateFromFrontend)
+module BackendLogic exposing (Effect(..), init, notifyAdminWait, sendConfirmationEmailRateLimit, update, updateFromFrontend)
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -45,7 +45,14 @@ type Effect
 
 init : BackendModel
 init =
-    { grid = Grid.empty
+    { grid =
+        Grid.addChange
+            { cellPosition = Helper.fromRawCoord ( 0, 0 )
+            , localPosition = 0
+            , change = Ascii.RailVertical
+            , userId = User.userId 0
+            }
+            Grid.empty
     , userSessions = Dict.empty
     , users =
         Dict.empty
@@ -89,20 +96,8 @@ update msg model =
 
                 ( newModel2, cmd2 ) =
                     sendChangeEmails time newModel
-
-                ( newModel4, cmd3 ) =
-                    case Dict.get (User.rawId backendUserId) newModel2.users of
-                        Just userData ->
-                            drawStatistics time ( backendUserId, userData ) newModel2
-
-                        Nothing ->
-                            let
-                                ( newModel3, userData ) =
-                                    createUser backendUserId newModel2
-                            in
-                            drawStatistics time ( backendUserId, userData ) newModel3
             in
-            ( newModel4, cmd ++ cmd2 ++ cmd3 )
+            ( newModel2, cmd ++ cmd2 )
 
         NotifyAdminEmailSent ->
             ( model, [] )
@@ -296,8 +291,9 @@ clusterToImage model actualChanges bounds =
                             Grid.getCell coord model.grid
                                 |> Maybe.withDefault GridCell.empty
                                 |> GridCell.flatten EverySet.empty (hiddenUsers Nothing model)
-                                |> Array.map (\( _, ascii ) -> ( Nothing, ascii ))
+                                |> Debug.todo ""
 
+                --|> Array.map (\{ value } -> ( Nothing, value ))
                 slices : List (List ( Maybe UserId, Ascii ))
                 slices =
                     List.range 0 (GridCell.cellSize - 1)
@@ -417,327 +413,14 @@ diffCells model before after =
             else
                 after_
         )
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) before |> Array.toList)
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) after |> Array.toList)
+        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) before |> Debug.todo "")
+        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) after |> Debug.todo "")
         |> Array.fromList
 
 
 backendUserId : UserId
 backendUserId =
     User.userId -1
-
-
-drawStatistics : Time.Posix -> ( UserId, BackendUserData ) -> BackendModel -> ( BackendModel, List Effect )
-drawStatistics currentTime ( userId, userData ) model =
-    let
-        stats : Nonempty ( Ascii, Int )
-        stats =
-            statistics (hiddenUsers (Just userId) model) Env.statisticsBounds model.grid
-
-        map : Nonempty (List Ascii)
-        map =
-            generateMap
-                (hiddenUsers (Just userId) model)
-                (Bounds.convert (Grid.asciiToCellAndLocalCoord >> Tuple.first) Env.statisticsBounds)
-                model.grid
-
-        rows =
-            32
-
-        statText : Nonempty (List Ascii)
-        statText =
-            stats
-                |> Nonempty.sortWith
-                    (\( asciiA, totalA ) ( asciiB, totalB ) ->
-                        case compare totalA totalB of
-                            GT ->
-                                GT
-
-                            LT ->
-                                LT
-
-                            EQ ->
-                                compare (Ascii.toChar asciiB) (Ascii.toChar asciiA)
-                    )
-                |> Nonempty.reverse
-                |> Nonempty.greedyGroupsOf rows
-                |> Nonempty.map
-                    (Nonempty.map
-                        (\( ascii, total ) ->
-                            let
-                                number : List (Maybe Ascii)
-                                number =
-                                    String.fromInt total
-                                        |> String.toList
-                                        |> List.map Ascii.fromChar
-                            in
-                            [ Just ascii, Ascii.fromChar '=' ]
-                                ++ number
-                                |> List.filterMap identity
-                        )
-                        >> (\column ->
-                                let
-                                    maxWidth =
-                                        Nonempty.maximumBy List.length column |> List.length |> max 5 |> (+) 2
-                                in
-                                Nonempty.map
-                                    (\chars -> chars ++ List.repeat (maxWidth - List.length chars) Ascii.default)
-                                    column
-                           )
-                    )
-                -- We need to make sure our list of lists is rectangular before we do a transpose
-                |> Nonempty.map
-                    (\list ->
-                        let
-                            length =
-                                Nonempty.length list
-                        in
-                        case List.repeat (rows - length) [] |> Nonempty.fromList of
-                            Just padding ->
-                                Nonempty.append list padding
-
-                            Nothing ->
-                                list
-                    )
-                |> Nonempty.transpose
-                |> Nonempty.map (Nonempty.toList >> List.concat)
-
-        timestamp_ : Nonempty (List Ascii)
-        timestamp_ =
-            timestamp currentTime (Duration.addTo currentTime notifyAdminWait)
-                |> String.toList
-                |> List.filterMap Ascii.fromChar
-                |> Nonempty.fromElement
-
-        mapTextPos : Coord AsciiUnit
-        mapTextPos =
-            Bounds.height Env.statisticsBounds
-                |> Quantity.toFloatQuantity
-                |> Quantity.divideBy 8
-                |> Quantity.round
-                |> Quantity.plus (Quantity 1)
-                |> Tuple.pair Quantity.zero
-                |> Helper.addTuple Env.mapDrawAt
-    in
-    Grid.textToChange Env.statisticsDrawAt statText
-        |> Nonempty.append
-            (Grid.textToChange (Helper.addTuple ( Quantity 0, Quantity (rows + 1) ) Env.statisticsDrawAt) timestamp_)
-        |> Nonempty.append (Grid.textToChange Env.mapDrawAt map)
-        |> Nonempty.append (Grid.textToChange mapTextPos timestamp_)
-        |> Nonempty.map Change.LocalGridChange
-        -- Remove previous statistics so the undo history doesn't get really long
-        |> Nonempty.append (Nonempty Change.LocalUndo [ Change.LocalAddUndo ])
-        |> (\a -> broadcastLocalChange ( userId, userData ) a model)
-
-
-timestamp : Time.Posix -> Time.Posix -> String
-timestamp currentTime nextUpdate =
-    let
-        hourMinute time =
-            String.fromInt (Time.toHour Time.utc time)
-                ++ ":"
-                ++ String.padLeft 2 '0' (String.fromInt (Time.toMinute Time.utc time))
-    in
-    "Last updated at "
-        ++ hourMinute currentTime
-        ++ " UTC. Next update at "
-        ++ hourMinute nextUpdate
-        ++ "."
-
-
-statistics : EverySet UserId -> Bounds AsciiUnit -> Grid -> Nonempty ( Ascii, Int )
-statistics hiddenUsers_ bounds grid =
-    let
-        cells =
-            Grid.allCellsDict grid
-
-        charsPerCell =
-            GridCell.cellSize * GridCell.cellSize
-
-        adjustedBounds : Bounds CellUnit
-        adjustedBounds =
-            Bounds.convert
-                (Grid.asciiToCellAndLocalCoord >> Tuple.first)
-                bounds
-
-        isOnEdge : Coord CellUnit -> Bool
-        isOnEdge coord =
-            let
-                ( minX, minY ) =
-                    Bounds.minimum adjustedBounds |> Helper.toRawCoord
-
-                ( maxX, maxY ) =
-                    Bounds.maximum adjustedBounds |> Helper.toRawCoord
-
-                ( x, y ) =
-                    Helper.toRawCoord coord
-            in
-            x == minX || x == maxX || y == minY || y == maxY
-
-        countCell : Coord CellUnit -> GridCell.Cell -> Nonempty ( Ascii, Int ) -> Nonempty ( Ascii, Int )
-        countCell coord cell acc =
-            GridCell.flatten EverySet.empty hiddenUsers_ cell
-                |> Array.foldl
-                    (\( _, value ) ( acc_, index ) ->
-                        ( if Bounds.contains (Grid.cellAndLocalCoordToAscii ( coord, index )) bounds then
-                            Nonempty.updateFirst (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
-
-                          else
-                            acc_
-                        , index + 1
-                        )
-                    )
-                    ( acc, 0 )
-                |> Tuple.first
-
-        initialCount : Nonempty ( Ascii, Int )
-        initialCount =
-            Ascii.asciis
-                |> Nonempty.toList
-                |> List.remove Ascii.default
-                -- We make sure the default character comes first because we are going to encounter it a lot
-                |> Nonempty Ascii.default
-                |> Nonempty.map (\a -> ( a, 0 ))
-    in
-    Bounds.coordRangeFold
-        (\coord acc ->
-            case Dict.get (Helper.toRawCoord coord) cells of
-                Just cell ->
-                    if isOnEdge coord then
-                        countCell coord cell acc
-
-                    else
-                        GridCell.flatten EverySet.empty hiddenUsers_ cell
-                            |> Array.foldl
-                                (\( _, value ) acc_ ->
-                                    Nonempty.updateFirst (Tuple.first >> (==) value) (Tuple.mapSecond ((+) 1)) acc_
-                                )
-                                acc
-
-                Nothing ->
-                    if isOnEdge coord then
-                        countCell coord GridCell.empty acc
-
-                    else
-                        Nonempty.updateIf
-                            (Tuple.first >> (==) Ascii.default)
-                            (Tuple.mapSecond ((+) charsPerCell))
-                            acc
-        )
-        identity
-        adjustedBounds
-        initialCount
-
-
-generateMap : EverySet UserId -> Bounds CellUnit -> Grid -> Nonempty (List Ascii)
-generateMap hiddenUsers_ bounds grid =
-    let
-        cells =
-            Grid.allCellsDict grid
-                |> Dict.toList
-                |> List.concatMap
-                    (\( ( x, y ), cell ) ->
-                        if Bounds.contains (Helper.fromRawCoord ( x, y )) bounds then
-                            let
-                                flattened =
-                                    GridCell.flatten EverySet.empty hiddenUsers_ cell |> Array.toList
-
-                                halfCell =
-                                    GridCell.cellSize // 2
-
-                                splitRow list =
-                                    list
-                                        |> List.splitAt halfCell
-                                        |> (\( firstList, rest ) ->
-                                                let
-                                                    ( secondList, rest2 ) =
-                                                        List.splitAt halfCell rest
-                                                in
-                                                { firstList = firstList, secondList = secondList, rest = rest2 }
-                                           )
-
-                                ( topLeft, topRight, remaining ) =
-                                    List.repeat halfCell ()
-                                        |> List.foldl
-                                            (\() ( topLeft_, topRight_, list ) ->
-                                                let
-                                                    { firstList, secondList, rest } =
-                                                        splitRow list
-                                                in
-                                                ( topLeft_ ++ firstList, topRight_ ++ secondList, rest )
-                                            )
-                                            ( [], [], flattened )
-
-                                ( bottomLeft, bottomRight, _ ) =
-                                    List.repeat 8 ()
-                                        |> List.foldl
-                                            (\() ( bottomLeft_, bottomRight_, list ) ->
-                                                let
-                                                    { firstList, secondList, rest } =
-                                                        splitRow list
-                                                in
-                                                ( bottomLeft_ ++ firstList, bottomRight_ ++ secondList, rest )
-                                            )
-                                            ( [], [], remaining )
-
-                                listToAscii list =
-                                    List.foldl
-                                        (\( _, ascii ) totalIntensity ->
-                                            if ascii == Ascii.default then
-                                                totalIntensity
-
-                                            else
-                                                1 + totalIntensity
-                                        )
-                                        0
-                                        list
-                                        |> toFloat
-                                        |> (*) (1 / toFloat charsPerCell)
-                            in
-                            [ ( ( x * 2, y * 2 ), listToAscii topLeft )
-                            , ( ( x * 2 + 1, y * 2 ), listToAscii topRight )
-                            , ( ( x * 2, y * 2 + 1 ), listToAscii bottomLeft )
-                            , ( ( x * 2 + 1, y * 2 + 1 ), listToAscii bottomRight )
-                            ]
-
-                        else
-                            []
-                    )
-                |> Dict.fromList
-
-        charsPerCell =
-            GridCell.cellSize * GridCell.cellSize
-
-        chars =
-            [ ( 0.01, Ascii.fromChar '░' )
-            , ( 0.05, Ascii.fromChar '▒' )
-            , ( 0.1, Ascii.fromChar '▓' )
-            , ( 0.15, Ascii.fromChar '█' )
-            ]
-                |> List.map (Tuple.mapSecond (Maybe.withDefault Ascii.default))
-    in
-    Bounds.coordRangeFold
-        (\coord acc ->
-            case Dict.get (Helper.toRawCoord coord) cells of
-                Just intensity ->
-                    Nonempty.replaceHead
-                        ((List.takeWhile (\( threshold, _ ) -> intensity >= threshold) chars
-                            |> List.last
-                            |> Maybe.map Tuple.second
-                            |> Maybe.withDefault Ascii.default
-                         )
-                            :: Nonempty.head acc
-                        )
-                        acc
-
-                Nothing ->
-                    Nonempty.replaceHead (Ascii.default :: Nonempty.head acc) acc
-        )
-        (Nonempty.cons [])
-        (Bounds.multiplyBy 2 bounds)
-        (Nonempty.fromElement [])
-        |> Nonempty.map List.reverse
-        |> Nonempty.reverse
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )

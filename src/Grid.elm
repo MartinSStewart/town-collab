@@ -6,7 +6,6 @@ module Grid exposing
     , addChange
     , allCells
     , allCellsDict
-    , asciiBox
     , asciiToCellAndLocalCoord
     , cellAndLocalCoordToAscii
     , changeCount
@@ -18,7 +17,6 @@ module Grid exposing
     , moveUndoPoint
     , region
     , removeUser
-    , textToChange
     )
 
 import Ascii exposing (Ascii)
@@ -26,7 +24,6 @@ import Bounds exposing (Bounds)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
 import Helper exposing (Coord, RawCellCoord)
-import Hyperlink exposing (Hyperlink)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
@@ -72,11 +69,11 @@ cellAndLocalCoordToAscii ( ( Quantity x, Quantity y ), local ) =
 
 
 type alias GridChange =
-    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii, userId : UserId }
+    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Ascii, userId : UserId }
 
 
 type alias LocalGridChange =
-    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Nonempty Ascii }
+    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Ascii }
 
 
 localChangeToChange : UserId -> LocalGridChange -> GridChange
@@ -86,43 +83,6 @@ localChangeToChange userId change_ =
     , change = change_.change
     , userId = userId
     }
-
-
-textToChange : Coord Units.AsciiUnit -> Nonempty (List Ascii) -> Nonempty LocalGridChange
-textToChange asciiCoord lines =
-    List.Nonempty.toList lines
-        |> List.indexedMap Tuple.pair
-        |> List.filterMap
-            (\( yOffset, line ) ->
-                case List.Nonempty.fromList line of
-                    Just line_ ->
-                        splitUpLine asciiCoord (Units.asciiUnit yOffset) line_
-                            |> List.map
-                                (\( pos, change ) ->
-                                    let
-                                        ( cellPosition, localPosition ) =
-                                            asciiToCellAndLocalCoord pos
-                                    in
-                                    { cellPosition = cellPosition
-                                    , localPosition = localPosition
-                                    , change = change
-                                    }
-                                )
-                            |> Just
-
-                    Nothing ->
-                        Nothing
-            )
-        |> List.concat
-        |> List.Nonempty.fromList
-        -- This should never happen
-        |> Maybe.withDefault
-            (List.Nonempty.fromElement
-                { cellPosition = ( Units.cellUnit 0, Units.cellUnit 0 )
-                , localPosition = 0
-                , change = List.Nonempty.fromElement Ascii.default
-                }
-            )
 
 
 moveUndoPoint : UserId -> Dict RawCellCoord Int -> Grid -> Grid
@@ -158,31 +118,6 @@ addChange change grid =
         |> (\cell_ -> setCell change.cellPosition cell_ grid)
 
 
-splitUpLine :
-    Coord Units.AsciiUnit
-    -> Quantity Int Units.AsciiUnit
-    -> Nonempty Ascii
-    -> List ( Coord Units.AsciiUnit, Nonempty Ascii )
-splitUpLine asciiCoord offsetY line =
-    let
-        (Quantity.Quantity x) =
-            Tuple.first asciiCoord
-
-        splitIndex =
-            GridCell.cellSize - modBy GridCell.cellSize x
-
-        ( head, rest ) =
-            List.splitAt splitIndex (List.Nonempty.toList line)
-
-        restCoord index =
-            Helper.addTuple asciiCoord ( Units.asciiUnit <| splitIndex + GridCell.cellSize * index, offsetY )
-    in
-    List.greedyGroupsOf GridCell.cellSize rest
-        |> List.indexedMap (\index value -> ( restCoord index, value ))
-        |> (::) ( Helper.addTuple asciiCoord ( Quantity.zero, offsetY ), head )
-        |> List.filterMap (\( position, value ) -> List.Nonempty.fromList value |> Maybe.map (Tuple.pair position))
-
-
 allCells : Grid -> List ( Coord CellUnit, Cell )
 allCells (Grid grid) =
     Dict.toList grid |> List.map (Tuple.mapFirst (\( x, y ) -> ( Units.cellUnit x, Units.cellUnit y )))
@@ -208,94 +143,69 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
     Dict.insert ( x, y ) value grid |> Grid
 
 
-baseMesh : { boxes : List { box : List Vec2, boxCenter : Vec2 }, indices : List ( Int, Int, Int ) }
-baseMesh =
-    let
-        ( Quantity w, Quantity h ) =
-            Ascii.size
-    in
-    List.range 0 (GridCell.cellSize * GridCell.cellSize - 1)
-        |> List.foldl
-            (\index { boxes, indices } ->
-                let
-                    offsetX : Int
-                    offsetX =
-                        modBy GridCell.cellSize index |> (*) w
-
-                    offsetY : Int
-                    offsetY =
-                        index // GridCell.cellSize |> (*) h
-
-                    box =
-                        asciiBox offsetX offsetY (index * 4)
-
-                    boxCenter =
-                        Math.Vector2.vec2 (toFloat offsetX + toFloat w / 2) (toFloat offsetY + toFloat h / 2)
-                in
-                { boxes = boxes ++ [ { box = box.vertices, boxCenter = boxCenter } ]
-                , indices = indices ++ box.indices
-                }
-            )
-            { boxes = [], indices = [] }
-
-
-asciiBox : Int -> Int -> Int -> { vertices : List Vec2, indices : List ( Int, Int, Int ) }
-asciiBox offsetX offsetY indexOffset =
-    let
-        ( Quantity w, Quantity h ) =
-            Ascii.size
-    in
-    { vertices =
-        [ Math.Vector2.vec2 (toFloat offsetX) (toFloat offsetY)
-        , Math.Vector2.vec2 (toFloat (offsetX + w)) (toFloat offsetY)
-        , Math.Vector2.vec2 (toFloat (offsetX + w)) (toFloat (offsetY + h))
-        , Math.Vector2.vec2 (toFloat offsetX) (toFloat (offsetY + h))
-        ]
-    , indices = [ ( indexOffset + 3, indexOffset + 1, indexOffset ), ( indexOffset + 2, indexOffset + 1, indexOffset + 3 ) ]
-    }
-
-
 type alias Vertex =
     { position : Vec2, texturePosition : Vec2 }
 
 
 mesh :
     Coord Units.CellUnit
-    -> List ( Maybe UserId, Ascii )
+    -> Dict Int { userId : UserId, value : Ascii }
     -> WebGL.Mesh Vertex
-mesh ( Quantity.Quantity x, Quantity.Quantity y ) asciiValues =
-    List.map2
-        (\( userId, ascii ) { box, boxCenter } ->
+mesh cellPosition asciiValues =
+    let
+        list : List { position : Coord Units.AsciiUnit, userId : UserId, value : Ascii }
+        list =
+            Dict.toList asciiValues
+                |> List.map
+                    (\( localPosition, { userId, value } ) ->
+                        { position = cellAndLocalCoordToAscii ( cellPosition, localPosition )
+                        , userId = userId
+                        , value = value
+                        }
+                    )
+
+        indices : List ( Int, Int, Int )
+        indices =
+            List.range 0 (List.length list - 1)
+                |> List.concatMap getIndices
+    in
+    List.map
+        (\{ position, value } ->
             let
                 { topLeft, bottomRight } =
-                    Ascii.texturePosition ascii
+                    Ascii.texturePosition value
+
+                ( Quantity x, Quantity y ) =
+                    position
 
                 ( w, h ) =
                     Ascii.size
             in
-            List.map2
-                (\v uv ->
+            List.map
+                (\uv ->
                     let
                         offset =
                             Math.Vector2.vec2
-                                (x * GridCell.cellSize * Pixels.inPixels w |> toFloat)
-                                (y * GridCell.cellSize * Pixels.inPixels h |> toFloat)
+                                (x * Pixels.inPixels w |> toFloat)
+                                (y * Pixels.inPixels h |> toFloat)
                     in
-                    { position = Math.Vector2.add offset v
+                    { position = Math.Vector2.add offset uv
                     , texturePosition = uv
                     }
                 )
-                box
                 [ topLeft
                 , Math.Vector2.vec2 (Math.Vector2.getX bottomRight) (Math.Vector2.getY topLeft)
                 , bottomRight
                 , Math.Vector2.vec2 (Math.Vector2.getX topLeft) (Math.Vector2.getY bottomRight)
                 ]
         )
-        asciiValues
-        baseMesh.boxes
+        list
         |> List.concat
-        |> (\vertices -> WebGL.indexedTriangles vertices baseMesh.indices)
+        |> (\vertices -> WebGL.indexedTriangles vertices indices)
+
+
+getIndices indexOffset =
+    [ ( indexOffset + 3, indexOffset + 1, indexOffset ), ( indexOffset + 2, indexOffset + 1, indexOffset + 3 ) ]
 
 
 removeUser : UserId -> Grid -> Grid

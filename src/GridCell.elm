@@ -1,4 +1,14 @@
-module GridCell exposing (Cell(..), addLine, cellSize, changeCount, empty, flatten, hasChangesBy, moveUndoPoint, removeUser)
+module GridCell exposing
+    ( Cell(..)
+    , addLine
+    , cellSize
+    , changeCount
+    , empty
+    , flatten
+    , hasChangesBy
+    , moveUndoPoint
+    , removeUser
+    )
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
@@ -10,12 +20,12 @@ import User exposing (RawUserId, UserId)
 
 type Cell
     = Cell
-        { history : List { userId : UserId, position : Int, line : Nonempty Ascii }
+        { history : List { userId : UserId, position : Int, line : Ascii }
         , undoPoint : Dict RawUserId Int
         }
 
 
-addLine : UserId -> Int -> Nonempty Ascii -> Cell -> Cell
+addLine : UserId -> Int -> Ascii -> Cell -> Cell
 addLine userId position line (Cell cell) =
     let
         userUndoPoint =
@@ -73,7 +83,7 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> EverySet UserId -> Cell -> Array ( Maybe UserId, Ascii )
+flatten : EverySet UserId -> EverySet UserId -> Cell -> Dict Int { userId : UserId, value : Ascii }
 flatten hiddenUsers hiddenUsersForAll (Cell cell) =
     let
         hidden =
@@ -88,14 +98,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                 case Dict.get (User.rawId userId) state.undoPoint of
                     Just stepsLeft ->
                         if stepsLeft > 0 then
-                            { array =
-                                List.Nonempty.foldl
-                                    (\ascii ( position_, state_ ) ->
-                                        ( position_ + 1, Array.set position_ ( Just userId, ascii ) state_ )
-                                    )
-                                    ( position, state.array )
-                                    line
-                                    |> Tuple.second
+                            { dict = Dict.insert position { userId = userId, value = line } state.dict
                             , undoPoint = Dict.insert (User.rawId userId) (stepsLeft - 1) state.undoPoint
                             }
 
@@ -105,9 +108,9 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                     Nothing ->
                         state
         )
-        { array = Array.initialize (cellSize * cellSize) (\_ -> ( Nothing, Ascii.default )), undoPoint = cell.undoPoint }
+        { dict = Dict.empty, undoPoint = cell.undoPoint }
         cell.history
-        |> .array
+        |> .dict
 
 
 cellSize : Int
