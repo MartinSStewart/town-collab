@@ -6,8 +6,10 @@ module Types exposing
     , EmailEvent(..)
     , FrontendLoaded
     , FrontendLoading
-    , FrontendModel(..)
-    , FrontendMsg(..)
+    , FrontendModel
+    , FrontendModel_(..)
+    , FrontendMsg
+    , FrontendMsg_(..)
     , LoadingData_
     , MouseButtonState(..)
     , PendingEmail
@@ -17,6 +19,7 @@ module Types exposing
     , ToolType(..)
     )
 
+import Audio
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
@@ -50,7 +53,11 @@ import WebGL
 import WebGL.Texture exposing (Texture)
 
 
-type FrontendModel
+type alias FrontendModel =
+    Audio.Model FrontendMsg_ FrontendModel_
+
+
+type FrontendModel_
     = Loading FrontendLoading
     | Loaded FrontendLoaded
 
@@ -65,6 +72,7 @@ type alias FrontendLoading =
     , mousePosition : Point2d Pixels ScreenCoordinate
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
+    , popSound : Maybe (Result Audio.LoadError Audio.Source)
     }
 
 
@@ -97,6 +105,7 @@ type alias FrontendLoaded =
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
     , textAreaText : String
+    , popSound : Maybe (Result Audio.LoadError Audio.Source)
     }
 
 
@@ -159,7 +168,11 @@ type alias BackendUserData =
     }
 
 
-type FrontendMsg
+type alias FrontendMsg =
+    Audio.Msg FrontendMsg_
+
+
+type FrontendMsg_
     = UrlClicked UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
@@ -192,6 +205,7 @@ type FrontendMsg
     | PressedCancelNotifyMe
     | PressedSubmitNotifyMe NotifyMe.Validated
     | NotifyMeModelChanged NotifyMe.Model
+    | PopSoundLoaded (Result Audio.LoadError Audio.Source)
 
 
 type ToBackend

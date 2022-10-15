@@ -2,6 +2,7 @@ port module Frontend exposing (app, init, selectionToString, update, updateFromB
 
 import Array exposing (Array)
 import Ascii exposing (Ascii)
+import Audio exposing (AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest(..))
@@ -30,6 +31,8 @@ import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Touch
 import Hyperlink exposing (Hyperlink)
 import Icons
+import Json.Decode
+import Json.Encode
 import Keyboard
 import Lamdera
 import List.Extra as List
@@ -72,19 +75,31 @@ port supermario_copy_to_clipboard_to_js : String -> Cmd msg
 port martinsstewart_elm_open_new_tab_to_js : String -> Cmd msg
 
 
+port audioPortToJS : Json.Encode.Value -> Cmd msg
+
+
+port audioPortFromJS : (Json.Decode.Value -> msg) -> Sub msg
+
+
 app =
-    Lamdera.frontend
+    Audio.lamderaFrontendWithAudio
         { init = init
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
-        , update = update
-        , updateFromBackend = updateFromBackend
+        , update = \_ msg model -> update msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
+        , updateFromBackend = \_ msg model -> updateFromBackend msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
         , subscriptions = subscriptions
         , view = view
+        , audio = audio
+        , audioPort = { toJS = audioPortToJS, fromJS = audioPortFromJS }
         }
 
 
-loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel, Cmd FrontendMsg )
+audio audioData model =
+    Audio.silence
+
+
+loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
 loadedInit loading loadingData =
     let
         cursor : Cursor
@@ -121,6 +136,7 @@ loadedInit loading loadingData =
             , showNotifyMe = loading.showNotifyMe
             , notifyMeModel = loading.notifyMeModel
             , textAreaText = ""
+            , popSound = loading.popSound
             }
     in
     ( updateMeshes model model
@@ -141,7 +157,7 @@ loadedInit loading loadingData =
         |> Tuple.mapFirst Loaded
 
 
-init : Url -> Browser.Navigation.Key -> ( FrontendModel, Cmd FrontendMsg )
+init : Url -> Browser.Navigation.Key -> ( FrontendModel_, Cmd FrontendMsg_, AudioCmd FrontendMsg_ )
 init url key =
     let
         { viewPoint, showNotifyMe, notifyMe, emailEvent, cmd } =
@@ -204,6 +220,7 @@ init url key =
         , mousePosition = Point2d.origin
         , showNotifyMe = showNotifyMe
         , notifyMeModel = notifyMe
+        , popSound = Nothing
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (ConnectToBackend bounds emailEvent)
@@ -218,6 +235,7 @@ init url key =
         , Task.perform ShortIntervalElapsed Time.now
         , cmd
         ]
+    , Audio.loadAudio PopSoundLoaded "/pop.mp3"
     )
 
 
@@ -226,7 +244,7 @@ isTouchDevice model =
     model.lastTouchMove /= Nothing
 
 
-update : FrontendMsg -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
+update : FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_ )
 update msg model =
     case model of
         Loading loadingModel ->
@@ -240,6 +258,9 @@ update msg model =
                 GotDevicePixelRatio devicePixelRatio ->
                     devicePixelRatioUpdate devicePixelRatio loadingModel |> Tuple.mapFirst Loading
 
+                PopSoundLoaded result ->
+                    ( Loading { loadingModel | popSound = Just result }, Cmd.none )
+
                 _ ->
                     ( model, Cmd.none )
 
@@ -250,7 +271,7 @@ update msg model =
                 |> Tuple.mapFirst Loaded
 
 
-updateLoaded : FrontendMsg -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+updateLoaded : FrontendMsg_ -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 updateLoaded msg model =
     case msg of
         UrlClicked urlRequest ->
@@ -652,20 +673,23 @@ updateLoaded msg model =
         NotifyMeModelChanged notifyMeModel ->
             ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
 
+        PopSoundLoaded result ->
+            ( { model | popSound = Just result }, Cmd.none )
 
-closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+
+closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 closeNotifyMe model =
     UrlHelper.internalRoute False (Units.worldToAscii (actualViewPoint model))
         |> UrlHelper.encodeUrl
         |> (\a -> pushUrl a { model | showNotifyMe = False, notifyMeModel = NotifyMe.init })
 
 
-replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 replaceUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.replaceUrl model.key url )
 
 
-pushUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+pushUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 pushUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.pushUrl model.key url )
 
@@ -683,7 +707,7 @@ cursorEnabled model =
             True
 
 
-keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 keyMsgCanvasUpdate key model =
     case key of
         Keyboard.Character "c" ->
@@ -822,7 +846,7 @@ mainMouseButtonUp :
     Point2d Pixels ScreenCoordinate
     -> { a | start : Point2d Pixels ScreenCoordinate }
     -> FrontendLoaded
-    -> ( FrontendLoaded, Cmd FrontendMsg )
+    -> ( FrontendLoaded, Cmd FrontendMsg_ )
 mainMouseButtonUp mousePosition mouseState model =
     let
         isSmallDistance =
@@ -899,7 +923,7 @@ mainMouseButtonUp mousePosition mouseState model =
             ( model_, Cmd.none )
 
 
-followHyperlink : Bool -> Hyperlink -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+followHyperlink : Bool -> Hyperlink -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 followHyperlink newTab hyperlink model =
     let
         routeData =
@@ -984,7 +1008,7 @@ resetTouchMove model =
                 model
 
 
-copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+copyText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 copyText model =
     let
         model_ =
@@ -1000,7 +1024,7 @@ copyText model =
     )
 
 
-cutText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+cutText : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 cutText model =
     let
         model_ =
@@ -1299,7 +1323,7 @@ hyperlinkAtPosition coord model =
         |> List.head
 
 
-viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg ) -> ( FrontendLoaded, Cmd FrontendMsg )
+viewBoundsUpdate : ( FrontendLoaded, Cmd FrontendMsg_ ) -> ( FrontendLoaded, Cmd FrontendMsg_ )
 viewBoundsUpdate ( model, cmd ) =
     let
         { minX, minY, maxX, maxY } =
@@ -1373,7 +1397,7 @@ actualViewPoint model =
             model.viewPoint
 
 
-updateFromBackend : ToFrontend -> FrontendModel -> ( FrontendModel, Cmd FrontendMsg )
+updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_ )
 updateFromBackend msg model =
     case ( model, msg ) of
         ( Loading loading, LoadingData loadingData ) ->
@@ -1386,7 +1410,7 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
 
-updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg )
+updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 updateLoadedFromBackend msg model =
     case msg of
         LoadingData _ ->
@@ -1409,7 +1433,7 @@ updateLoadedFromBackend msg model =
             ( { model | notifyMeModel = NotifyMe.unsubscribed model.notifyMeModel }, Cmd.none )
 
 
-textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg
+textarea : Maybe Hyperlink -> FrontendLoaded -> Element.Attribute FrontendMsg_
 textarea maybeHyperlink model =
     let
         pointer =
@@ -1481,10 +1505,10 @@ lostConnection model =
             False
 
 
-view : FrontendModel -> Browser.Document FrontendMsg
-view model =
+view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
+view _ model =
     let
-        notifyMeView : { a | showNotifyMe : Bool, notifyMeModel : NotifyMe.Model } -> Element.Attribute FrontendMsg
+        notifyMeView : { a | showNotifyMe : Bool, notifyMeModel : NotifyMe.Model } -> Element.Attribute FrontendMsg_
         notifyMeView a =
             Element.inFront
                 (if a.showNotifyMe then
@@ -1565,7 +1589,7 @@ view model =
     }
 
 
-contextMenuView : { userId : UserId, hidePoint : Coord AsciiUnit } -> FrontendLoaded -> Element FrontendMsg
+contextMenuView : { userId : UserId, hidePoint : Coord AsciiUnit } -> FrontendLoaded -> Element FrontendMsg_
 contextMenuView { userId, hidePoint } loadedModel =
     let
         { x, y } =
@@ -1610,7 +1634,7 @@ offlineWarningView =
             ]
 
 
-mouseAttributes : List (Element.Attribute FrontendMsg)
+mouseAttributes : List (Element.Attribute FrontendMsg_)
 mouseAttributes =
     [ Html.Events.Extra.Mouse.onMove
         (\{ clientPos } ->
@@ -1634,7 +1658,7 @@ currentUserId =
     .localModel >> LocalGrid.localModel >> .user
 
 
-userListView : FrontendLoaded -> Element FrontendMsg
+userListView : FrontendLoaded -> Element FrontendMsg_
 userListView model =
     let
         localModel =
@@ -1665,7 +1689,7 @@ userListView model =
                 )
                 (colorSquareInner userId)
 
-        colorSquareInner : UserId -> Element FrontendMsg
+        colorSquareInner : UserId -> Element FrontendMsg_
         colorSquareInner userId =
             Element.el
                 [ Element.width (Element.px 20)
@@ -1692,7 +1716,7 @@ userListView model =
             else
                 Element.el [ Element.Font.bold, Element.centerX ] (Element.text "⇽ You")
 
-        userTag : Element FrontendMsg
+        userTag : Element FrontendMsg_
         userTag =
             baseTag
                 True
@@ -1709,7 +1733,7 @@ userListView model =
                 )
                 localModel.user
 
-        baseTag : Bool -> Bool -> Element FrontendMsg -> UserId -> Element FrontendMsg
+        baseTag : Bool -> Bool -> Element FrontendMsg_ -> UserId -> Element FrontendMsg_
         baseTag isFirst isLast content userId =
             Element.row
                 [ Element.width Element.fill
@@ -1748,7 +1772,7 @@ userListView model =
                         []
                    )
 
-        hiddenUserTag : Bool -> Bool -> UserId -> Element FrontendMsg
+        hiddenUserTag : Bool -> Bool -> UserId -> Element FrontendMsg_
         hiddenUserTag isFirst isLast userId =
             Element.Input.button
                 (Element.Events.onMouseEnter (UserTagMouseEntered userId)
@@ -1786,7 +1810,7 @@ userListView model =
                             a
                    )
 
-        hiddenUserForAllTag : Bool -> Bool -> UserId -> Element FrontendMsg
+        hiddenUserForAllTag : Bool -> Bool -> UserId -> Element FrontendMsg_
         hiddenUserForAllTag isFirst isLast userId =
             Element.Input.button
                 (Element.Events.onMouseEnter (UserTagMouseEntered userId)
@@ -1831,7 +1855,7 @@ userListView model =
                             False
                    )
 
-        hiddenUsers : List (Element FrontendMsg)
+        hiddenUsers : List (Element FrontendMsg_)
         hiddenUsers =
             hiddenUserList
                 |> List.indexedMap
@@ -1846,7 +1870,7 @@ userListView model =
         hiddenusersForAllList =
             EverySet.toList localModel.adminHiddenUsers
 
-        hiddenUsersForAll : List (Element FrontendMsg)
+        hiddenUsersForAll : List (Element FrontendMsg_)
         hiddenUsersForAll =
             hiddenusersForAllList
                 |> List.indexedMap
@@ -1910,7 +1934,7 @@ canRedo model =
     LocalGrid.localModel model.localModel |> .redoHistory |> List.isEmpty |> not
 
 
-toolbarView : FrontendLoaded -> Element FrontendMsg
+toolbarView : FrontendLoaded -> Element FrontendMsg_
 toolbarView model =
     let
         zoomView =
@@ -2123,7 +2147,7 @@ viewBoundingBox model =
     BoundingBox2d.from viewMin viewMax
 
 
-canvasView : Maybe Hyperlink -> FrontendLoaded -> Html FrontendMsg
+canvasView : Maybe Hyperlink -> FrontendLoaded -> Html FrontendMsg_
 canvasView maybeHyperlink model =
     let
         viewBounds_ =
@@ -2227,8 +2251,8 @@ drawText animationElapsedTime meshes userHighlighted showColors viewMatrix maybe
             )
 
 
-subscriptions : FrontendModel -> Sub FrontendMsg
-subscriptions model =
+subscriptions : AudioData -> FrontendModel_ -> Sub FrontendMsg_
+subscriptions _ model =
     Sub.batch
         [ martinsstewart_elm_device_pixel_ratio_from_js
             (Units.worldUnit >> Quantity.per Pixels.pixel >> GotDevicePixelRatio)
