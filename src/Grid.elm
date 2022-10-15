@@ -200,6 +200,7 @@ mesh cellPosition asciiValues =
                 ]
         )
         list
+        |> Debug.log "grid"
         |> List.concat
         |> (\vertices -> WebGL.indexedTriangles vertices indices)
 

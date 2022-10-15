@@ -81,6 +81,13 @@ port audioPortFromJS : (Json.Decode.Value -> msg) -> Sub msg
 
 
 app =
+    let
+        _ =
+            supermario_copy_to_clipboard_to_js
+
+        _ =
+            martinsstewart_elm_open_new_tab_to_js
+    in
     Audio.lamderaFrontendWithAudio
         { init = init
         , onUrlRequest = UrlClicked
