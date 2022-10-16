@@ -189,7 +189,7 @@ mesh cellPosition asciiValues =
                                 (x * Pixels.inPixels w |> toFloat)
                                 (y * Pixels.inPixels h |> toFloat)
                     in
-                    { position = Math.Vector2.add offset uv
+                    { position = Math.Vector2.sub (Math.Vector2.add offset uv) topLeft
                     , texturePosition = uv
                     }
                 )
@@ -205,8 +205,11 @@ mesh cellPosition asciiValues =
         |> (\vertices -> WebGL.indexedTriangles vertices indices)
 
 
+getIndices : number -> List ( number, number, number )
 getIndices indexOffset =
-    [ ( indexOffset + 3, indexOffset + 1, indexOffset ), ( indexOffset + 2, indexOffset + 1, indexOffset + 3 ) ]
+    [ ( 4 * indexOffset + 3, 4 * indexOffset + 1, 4 * indexOffset )
+    , ( 4 * indexOffset + 2, 4 * indexOffset + 1, 4 * indexOffset + 3 )
+    ]
 
 
 removeUser : UserId -> Grid -> Grid

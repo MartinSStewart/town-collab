@@ -29,7 +29,6 @@ varying vec2 vcoord;
 
 void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
-
     vcoord = texturePosition;
 }
 
@@ -44,6 +43,6 @@ uniform sampler2D texture;
 varying vec2 vcoord;
 
 void main () {
-    gl_FragColor = texture2D(texture, vcoord);
+    gl_FragColor = texture2D(texture, vec2(vcoord.x / 256.0, (vcoord.y) / 512.0));
 }
     |]
