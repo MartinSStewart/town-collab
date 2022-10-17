@@ -2,6 +2,7 @@ module Ascii exposing
     ( Ascii(..)
     , charsPerRow
     , fromChar
+    , getData
     , image
     , size
     , textureData
@@ -92,24 +93,31 @@ texturePosition ascii =
         ( Quantity.Quantity tileW, Quantity.Quantity tileH ) =
             size
 
-        ( ( x, y ), ( w, h ) ) =
-            data ascii
+        data =
+            getData ascii
+
+        ( x, y ) =
+            data.texturePosition
+
+        ( w, h ) =
+            data.size
     in
     { topLeft = Math.Vector2.vec2 (x * tileW) (y * tileH)
     , bottomRight = Math.Vector2.vec2 ((x + w) * tileW) ((y + h) * tileH)
     }
 
 
-data ascii =
+getData : Ascii -> { texturePosition : ( number, number ), size : ( number, number ) }
+getData ascii =
     case ascii of
         House ->
-            ( ( 0, 1 ), ( 3, 2 ) )
+            { texturePosition = ( 0, 1 ), size = ( 3, 2 ) }
 
         RailHorizontal ->
-            ( ( 0, 0 ), ( 1, 1 ) )
+            { texturePosition = ( 0, 0 ), size = ( 1, 1 ) }
 
         RailVertical ->
-            ( ( 1, 0 ), ( 1, 1 ) )
+            { texturePosition = ( 1, 0 ), size = ( 1, 1 ) }
 
 
 texturePositionInt : Ascii -> Bounds Pixels
@@ -118,8 +126,14 @@ texturePositionInt ascii =
         ( Quantity.Quantity tileW, Quantity.Quantity tileH ) =
             size
 
-        ( ( x, y ), ( w, h ) ) =
-            data ascii
+        data =
+            getData ascii
+
+        ( x, y ) =
+            data.texturePosition
+
+        ( w, h ) =
+            data.size
     in
     Bounds.bounds
         (Helper.fromRawCoord

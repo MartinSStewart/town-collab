@@ -149,20 +149,20 @@ type alias Vertex =
 
 mesh :
     Coord Units.CellUnit
-    -> Dict Int { userId : UserId, value : Ascii }
+    -> List { userId : UserId, position : Int, value : Ascii }
     -> WebGL.Mesh Vertex
 mesh cellPosition asciiValues =
     let
         list : List { position : Coord Units.AsciiUnit, userId : UserId, value : Ascii }
         list =
-            Dict.toList asciiValues
-                |> List.map
-                    (\( localPosition, { userId, value } ) ->
-                        { position = cellAndLocalCoordToAscii ( cellPosition, localPosition )
-                        , userId = userId
-                        , value = value
-                        }
-                    )
+            List.map
+                (\{ userId, position, value } ->
+                    { position = cellAndLocalCoordToAscii ( cellPosition, position )
+                    , userId = userId
+                    , value = value
+                    }
+                )
+                asciiValues
 
         indices : List ( Int, Int, Int )
         indices =

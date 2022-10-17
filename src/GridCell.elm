@@ -20,7 +20,7 @@ import User exposing (RawUserId, UserId)
 
 type Cell
     = Cell
-        { history : List { userId : UserId, position : Int, line : Ascii }
+        { history : List { userId : UserId, position : Int, value : Ascii }
         , undoPoint : Dict RawUserId Int
         }
 
@@ -48,7 +48,7 @@ addLine userId position line (Cell cell) =
                 ( [], userUndoPoint )
                 cell.history
                 |> Tuple.first
-                |> (::) { userId = userId, position = position, line = line }
+                |> (::) { userId = userId, position = position, value = line }
         , undoPoint =
             Dict.insert
                 (User.rawId userId)
@@ -83,14 +83,14 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> EverySet UserId -> Cell -> Dict Int { userId : UserId, value : Ascii }
+flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Int, value : Ascii }
 flatten hiddenUsers hiddenUsersForAll (Cell cell) =
     let
         hidden =
             EverySet.union hiddenUsers hiddenUsersForAll
     in
     List.foldr
-        (\{ userId, position, line } state ->
+        (\({ userId, position, value } as item) state ->
             if EverySet.member userId hidden then
                 state
 
@@ -98,7 +98,32 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                 case Dict.get (User.rawId userId) state.undoPoint of
                     Just stepsLeft ->
                         if stepsLeft > 0 then
-                            { dict = Dict.insert position { userId = userId, value = line } state.dict
+                            let
+                                data =
+                                    Ascii.getData value
+
+                                ( width, height ) =
+                                    data.size
+
+                                ( x, y ) =
+                                    localCoordToAscii position
+                            in
+                            { list =
+                                item
+                                    :: List.filter
+                                        (\item2 ->
+                                            let
+                                                ( x2, y2 ) =
+                                                    localCoordToAscii item2.position
+
+                                                ( width2, height2 ) =
+                                                    (Ascii.getData item2.value).size
+                                            in
+                                            ((x2 >= x && x2 < x + width) || (x >= x2 && x < x2 + width2))
+                                                && ((y2 >= y && y2 < y + height) || (y >= y2 && y < y2 + height2))
+                                                |> not
+                                        )
+                                        state.list
                             , undoPoint = Dict.insert (User.rawId userId) (stepsLeft - 1) state.undoPoint
                             }
 
@@ -108,9 +133,19 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                     Nothing ->
                         state
         )
-        { dict = Dict.empty, undoPoint = cell.undoPoint }
+        { list = [], undoPoint = cell.undoPoint }
         cell.history
-        |> .dict
+        |> .list
+
+
+asciiToLocalCoord : ( Int, Int ) -> Int
+asciiToLocalCoord ( x, y ) =
+    x + y * cellSize
+
+
+localCoordToAscii : Int -> ( Int, Int )
+localCoordToAscii position =
+    ( modBy cellSize position, position // cellSize )
 
 
 cellSize : Int

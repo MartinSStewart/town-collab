@@ -49,13 +49,12 @@ init =
         Grid.addChange
             { cellPosition = Helper.fromRawCoord ( 0, 0 )
             , localPosition = 0
-            , change = Ascii.RailVertical
+            , change = Ascii.House
             , userId = User.userId 0
             }
             Grid.empty
     , userSessions = Dict.empty
-    , users =
-        Dict.empty
+    , users = Dict.empty
     , usersHiddenRecently = []
     , userChangesRecently = RecentChanges.init
     , subscribedEmails = []

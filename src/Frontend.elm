@@ -970,8 +970,14 @@ selectionPoint position hiddenUsers hiddenUsersForAll grid =
         ( cellPosition, localPosition ) =
             Grid.asciiToCellAndLocalCoord position
     in
-    Grid.getCell cellPosition grid
-        |> Maybe.andThen (GridCell.flatten hiddenUsers hiddenUsersForAll >> Dict.get localPosition)
+    case Grid.getCell cellPosition grid of
+        Just cell ->
+            GridCell.flatten hiddenUsers hiddenUsersForAll cell
+                |> List.find (.position >> (==) localPosition)
+                |> Maybe.map (\{ userId, value } -> { userId = userId, value = value })
+
+        Nothing ->
+            Nothing
 
 
 windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
