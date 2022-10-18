@@ -1011,14 +1011,10 @@ changeText text model =
 
                             else
                                 model
-
-                        ( cellPosition, localPosition ) =
-                            Grid.asciiToCellAndLocalCoord (Cursor.position model.cursor)
                     in
                     updateLocalModel
                         (Change.LocalGridChange
-                            { cellPosition = cellPosition
-                            , localPosition = localPosition
+                            { position = Cursor.position model.cursor
                             , change = ascii
                             }
                         )

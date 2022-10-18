@@ -47,8 +47,7 @@ init : BackendModel
 init =
     { grid =
         Grid.addChange
-            { cellPosition = Helper.fromRawCoord ( 0, 0 )
-            , localPosition = 0
+            { position = Helper.fromRawCoord ( 0, 0 )
             , change = Ascii.House
             , userId = User.userId 0
             }
@@ -92,11 +91,8 @@ update msg model =
             let
                 ( newModel, cmd ) =
                     notifyAdmin model
-
-                ( newModel2, cmd2 ) =
-                    sendChangeEmails time newModel
             in
-            ( newModel2, cmd ++ cmd2 )
+            ( newModel, cmd )
 
         NotifyAdminEmailSent ->
             ( model, [] )
@@ -134,223 +130,6 @@ update msg model =
 
                 Err error ->
                     ( addError time (SendGridError email error) model, [] )
-
-
-sendChangeEmails : Time.Posix -> BackendModel -> ( BackendModel, List Effect )
-sendChangeEmails time model =
-    let
-        ( frequencyChanges, recentChangeState ) =
-            RecentChanges.threeHoursElapsed model.userChangesRecently
-
-        getActualChanges : Dict.Dict RawCellCoord GridCell.Cell -> Maybe (Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) ))
-        getActualChanges changes =
-            Dict.toList changes
-                |> List.filterMap
-                    (\( coord, originalCell ) ->
-                        let
-                            diff : Array ( Maybe UserId, Ascii )
-                            diff =
-                                diffCells
-                                    model
-                                    originalCell
-                                    (Grid.getCell (Helper.fromRawCoord coord) model.grid
-                                        |> Maybe.withDefault GridCell.empty
-                                    )
-                        in
-                        if Array.toList diff |> List.any (Tuple.first >> (/=) Nothing) then
-                            Just ( coord, diff )
-
-                        else
-                            Nothing
-                    )
-                |> Nonempty.fromList
-
-        clusters :
-            Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
-            -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
-        clusters actualChanges =
-            Nonempty.map Tuple.first actualChanges |> Nonempty.toList |> Set.fromList |> Cluster.cluster
-
-        content :
-            Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
-            -> UnsubscribeEmailKey
-            -> Email.Html.Html
-        content actualChanges =
-            let
-                images =
-                    List.map (\( bounds, _ ) -> clusterToImage model actualChanges bounds) (clusters actualChanges)
-            in
-            \unsubscribeKey ->
-                Email.Html.div
-                    [ Email.Html.Attributes.backgroundColor "rgb(230, 230, 225)"
-                    , Email.Html.Attributes.padding "8px"
-                    ]
-                    [ Email.Html.text "Click on an image to view it in ascii-collab"
-                    , Email.Html.div [] images
-                    , Email.Html.hr [] []
-                    , Email.Html.a
-                        [ UrlHelper.encodeUrl (EmailUnsubscribeRoute unsubscribeKey)
-                            |> (++) (Env.domain ++ "/")
-                            |> Email.Html.Attributes.href
-                        ]
-                        [ Email.Html.text "Click here to unsubscribe" ]
-                    , Time.posixToMillis time
-                        |> String.fromInt
-                        |> (++) "Generated at "
-                        |> Email.Html.text
-                        |> List.singleton
-                        |> Email.Html.div
-                            [ Email.Html.Attributes.fontSize "12px"
-                            , Email.Html.Attributes.color "rgb(160, 160, 155)"
-                            , Email.Html.Attributes.paddingTop "8px"
-                            ]
-                    ]
-
-        subject frequency_ =
-            case frequency_ of
-                NotifyMe.Every3Hours ->
-                    NonemptyString 'C' "hanges over the past 3 hours"
-
-                NotifyMe.Every12Hours ->
-                    NonemptyString 'C' "hanges over the past 12 hours"
-
-                NotifyMe.Daily ->
-                    NonemptyString 'C' "hanges over the past day"
-
-                NotifyMe.Weekly ->
-                    NonemptyString 'C' "hanges over the past week"
-
-                NotifyMe.Monthly ->
-                    NonemptyString 'C' "hanges over the past month"
-    in
-    ( { model | userChangesRecently = recentChangeState }
-    , List.concatMap
-        (\( frequency, changes ) ->
-            case getActualChanges changes of
-                Just actualChanges_ ->
-                    let
-                        content_ =
-                            content actualChanges_
-
-                        subject_ =
-                            subject frequency
-                    in
-                    List.filter (.frequency >> (==) frequency)
-                        model.subscribedEmails
-                        |> List.map
-                            (\email ->
-                                SendEmail
-                                    (ChangeEmailSent time email.email)
-                                    subject_
-                                    (content_ email.unsubscribeKey)
-                                    email.email
-                            )
-
-                Nothing ->
-                    []
-        )
-        frequencyChanges
-    )
-
-
-clusterToImage :
-    { a | grid : Grid, users : Dict.Dict Int { b | hiddenForAll : Bool } }
-    -> Nonempty ( RawCellCoord, Array ( Maybe UserId, Ascii ) )
-    -> Bounds CellUnit
-    -> Email.Html.Html
-clusterToImage model actualChanges bounds =
-    let
-        url : String
-        url =
-            bounds
-                |> Bounds.addToMax ( Units.cellUnit 1, Units.cellUnit 1 )
-                |> Bounds.center
-                |> Units.cellToAscii_
-                |> Helper.roundPoint
-                |> UrlHelper.internalRoute False
-                |> UrlHelper.encodeUrl
-                |> (++) Env.domain
-
-        height =
-            Pixels.inPixels (Tuple.second Ascii.size)
-    in
-    Bounds.coordRangeFold
-        (\coord ( value, a ) ->
-            let
-                rawCoord =
-                    Helper.toRawCoord coord
-
-                array : Array ( Maybe UserId, Ascii )
-                array =
-                    case List.find (Tuple.first >> (==) rawCoord) (Nonempty.toList actualChanges) of
-                        Just ( _, original ) ->
-                            original
-
-                        Nothing ->
-                            Grid.getCell coord model.grid
-                                |> Maybe.withDefault GridCell.empty
-                                |> GridCell.flatten EverySet.empty (hiddenUsers Nothing model)
-                                |> Debug.todo ""
-
-                --|> Array.map (\{ value } -> ( Nothing, value ))
-                slices : List (List ( Maybe UserId, Ascii ))
-                slices =
-                    List.range 0 (GridCell.cellSize - 1)
-                        |> List.map
-                            (\index ->
-                                Array.slice
-                                    (GridCell.cellSize * index)
-                                    (GridCell.cellSize * (index + 1))
-                                    array
-                                    |> Array.toList
-                            )
-            in
-            ( List.map2 (\slice rest -> rest ++ slice) slices value
-            , a
-            )
-        )
-        (\( a, b ) -> ( List.repeat GridCell.cellSize [], b ++ [ a ] ))
-        bounds
-        ( List.repeat GridCell.cellSize [], [] )
-        |> (\( a, b ) -> b ++ [ a ])
-        |> List.concat
-        |> List.foldl
-            (\row pixels ->
-                List.range 0 (height - 1)
-                    |> List.map
-                        (\yIndex ->
-                            List.concatMap
-                                (\( maybeUser, ascii ) ->
-                                    let
-                                        bounds_ =
-                                            Ascii.texturePositionInt ascii
-
-                                        ( x0, y0 ) =
-                                            Bounds.minimum bounds_ |> Helper.toRawCoord
-
-                                        ( x1, _ ) =
-                                            Bounds.maximum bounds_ |> Helper.toRawCoord
-                                    in
-                                    case Array.get (y0 + yIndex) Ascii.image of
-                                        Just imageRow ->
-                                            Array.slice x0 x1 imageRow
-                                                |> Array.toList
-
-                                        Nothing ->
-                                            []
-                                )
-                                row
-                        )
-                    |> (++) pixels
-            )
-            []
-        |> Image.fromList2d
-        |> Image.toPng
-        |> (\image -> Email.Html.inlinePngImg image [] [])
-        |> List.singleton
-        |> Email.Html.a [ Email.Html.Attributes.href url ]
-        |> List.singleton
-        |> Email.Html.div [ Email.Html.Attributes.style "margin" "8px 0" ]
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -743,6 +522,10 @@ updateLocalChange ( userId, _ ) change model =
         Change.LocalGridChange localChange ->
             case Dict.get (User.rawId userId) model.users of
                 Just user ->
+                    let
+                        ( cellPosition, _ ) =
+                            Grid.asciiToCellAndLocalCoord localChange.position
+                    in
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
                         , userChangesRecently =
@@ -751,13 +534,13 @@ updateLocalChange ( userId, _ ) change model =
 
                             else
                                 RecentChanges.addChange
-                                    localChange.cellPosition
-                                    (Grid.getCell localChange.cellPosition model.grid |> Maybe.withDefault GridCell.empty)
+                                    cellPosition
+                                    (Grid.getCell cellPosition model.grid |> Maybe.withDefault GridCell.empty)
                                     model.userChangesRecently
                       }
                         |> updateUser
                             userId
-                            (always { user | undoCurrent = LocalGrid.incrementUndoCurrent localChange user.undoCurrent })
+                            (always { user | undoCurrent = LocalGrid.incrementUndoCurrent cellPosition user.undoCurrent })
                     , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
                     )
 

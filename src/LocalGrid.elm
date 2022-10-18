@@ -70,10 +70,10 @@ updateFromBackend changes localModel_ =
     LocalModel.updateFromBackend config changes localModel_
 
 
-incrementUndoCurrent : { a | cellPosition : Coord units } -> Dict RawCellCoord Int -> Dict RawCellCoord Int
+incrementUndoCurrent : Coord CellUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
 incrementUndoCurrent gridChange undoCurrent =
     Dict.update
-        (Helper.toRawCoord gridChange.cellPosition)
+        (Helper.toRawCoord gridChange)
         (Maybe.withDefault 0 >> (+) 1 >> Just)
         undoCurrent
 
@@ -82,15 +82,19 @@ update_ : Change -> LocalGrid_ -> LocalGrid_
 update_ msg model =
     case msg of
         LocalChange (LocalGridChange gridChange) ->
+            let
+                cellPosition =
+                    Grid.asciiToCellAndLocalCoord gridChange.position |> Tuple.first
+            in
             { model
                 | redoHistory = []
                 , grid =
-                    if Bounds.contains gridChange.cellPosition model.viewBounds then
+                    if Bounds.contains cellPosition model.viewBounds then
                         Grid.addChange (Grid.localChangeToChange model.user gridChange) model.grid
 
                     else
                         model.grid
-                , undoCurrent = incrementUndoCurrent gridChange model.undoCurrent
+                , undoCurrent = incrementUndoCurrent cellPosition model.undoCurrent
             }
 
         LocalChange LocalRedo ->
@@ -136,7 +140,11 @@ update_ msg model =
             { model | adminHiddenUsers = Helper.toggleSet hideUserId model.adminHiddenUsers }
 
         ServerChange (ServerGridChange gridChange) ->
-            if Bounds.contains gridChange.cellPosition model.viewBounds then
+            if
+                Bounds.contains
+                    (Grid.asciiToCellAndLocalCoord gridChange.position |> Tuple.first)
+                    model.viewBounds
+            then
                 { model | grid = Grid.addChange gridChange model.grid }
 
             else

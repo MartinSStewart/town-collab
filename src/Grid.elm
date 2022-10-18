@@ -48,38 +48,43 @@ from =
     Grid
 
 
-asciiToCellAndLocalCoord : Coord Units.AsciiUnit -> ( Coord Units.CellUnit, Int )
+asciiToCellAndLocalCoord : Coord Units.AsciiUnit -> ( Coord Units.CellUnit, Coord Units.LocalUnit )
 asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
     let
         offset =
             1000000
     in
-    ( ( (x + (GridCell.cellSize * offset)) // GridCell.cellSize - offset |> Quantity
-      , (y + (GridCell.cellSize * offset)) // GridCell.cellSize - offset |> Quantity
-      )
-    , modBy GridCell.cellSize x + modBy GridCell.cellSize y * GridCell.cellSize
+    ( Helper.fromRawCoord
+        ( (x + (Units.cellSize * offset)) // Units.cellSize - offset
+        , (y + (Units.cellSize * offset)) // Units.cellSize - offset
+        )
+    , Helper.fromRawCoord
+        ( modBy Units.cellSize x
+        , modBy Units.cellSize y
+        )
     )
 
 
-cellAndLocalCoordToAscii : ( Coord Units.CellUnit, Int ) -> Coord Units.AsciiUnit
-cellAndLocalCoordToAscii ( ( Quantity x, Quantity y ), local ) =
-    ( (x * GridCell.cellSize + modBy GridCell.cellSize local) |> Quantity
-    , (y * GridCell.cellSize + local // GridCell.cellSize) |> Quantity
-    )
+cellAndLocalCoordToAscii : ( Coord Units.CellUnit, Coord Units.LocalUnit ) -> Coord Units.AsciiUnit
+cellAndLocalCoordToAscii ( cell, local ) =
+    Helper.addTuple
+        (Helper.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
+        (Helper.toRawCoord local |> Helper.fromRawCoord)
+        |> Helper.toRawCoord
+        |> Helper.fromRawCoord
 
 
 type alias GridChange =
-    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Ascii, userId : UserId }
+    { position : Coord Units.AsciiUnit, change : Ascii, userId : UserId }
 
 
 type alias LocalGridChange =
-    { cellPosition : Coord Units.CellUnit, localPosition : Int, change : Ascii }
+    { position : Coord Units.AsciiUnit, change : Ascii }
 
 
 localChangeToChange : UserId -> LocalGridChange -> GridChange
 localChangeToChange userId change_ =
-    { cellPosition = change_.cellPosition
-    , localPosition = change_.localPosition
+    { position = change_.position
     , change = change_.change
     , userId = userId
     }
@@ -109,13 +114,16 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
 addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
+        ( cellPosition, localPosition ) =
+            asciiToCellAndLocalCoord change.position
+
         cell : Cell
         cell =
-            getCell change.cellPosition grid
+            getCell cellPosition grid
                 |> Maybe.withDefault GridCell.empty
     in
-    GridCell.addLine change.userId change.localPosition change.change cell
-        |> (\cell_ -> setCell change.cellPosition cell_ grid)
+    GridCell.addValue change.userId localPosition change.change cell
+        |> (\cell_ -> setCell cellPosition cell_ grid)
 
 
 allCells : Grid -> List ( Coord CellUnit, Cell )
@@ -149,7 +157,7 @@ type alias Vertex =
 
 mesh :
     Coord Units.CellUnit
-    -> List { userId : UserId, position : Int, value : Ascii }
+    -> List { userId : UserId, position : Coord Units.LocalUnit, value : Ascii }
     -> WebGL.Mesh Vertex
 mesh cellPosition asciiValues =
     let

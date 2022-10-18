@@ -1,7 +1,6 @@
 module GridCell exposing
     ( Cell(..)
-    , addLine
-    , cellSize
+    , addValue
     , changeCount
     , empty
     , flatten
@@ -10,23 +9,23 @@ module GridCell exposing
     , removeUser
     )
 
-import Array exposing (Array)
 import Ascii exposing (Ascii)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
-import List.Nonempty exposing (Nonempty)
+import Helper exposing (Coord)
+import Units exposing (LocalUnit)
 import User exposing (RawUserId, UserId)
 
 
 type Cell
     = Cell
-        { history : List { userId : UserId, position : Int, value : Ascii }
+        { history : List { userId : UserId, position : Coord LocalUnit, value : Ascii }
         , undoPoint : Dict RawUserId Int
         }
 
 
-addLine : UserId -> Int -> Ascii -> Cell -> Cell
-addLine userId position line (Cell cell) =
+addValue : UserId -> Coord LocalUnit -> Ascii -> Cell -> Cell
+addValue userId position line (Cell cell) =
     let
         userUndoPoint =
             Dict.get (User.rawId userId) cell.undoPoint |> Maybe.withDefault 0
@@ -83,7 +82,7 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Int, value : Ascii }
+flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Coord LocalUnit, value : Ascii }
 flatten hiddenUsers hiddenUsersForAll (Cell cell) =
     let
         hidden =
@@ -106,7 +105,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                     data.size
 
                                 ( x, y ) =
-                                    localCoordToAscii position
+                                    Helper.toRawCoord position
                             in
                             { list =
                                 item
@@ -114,7 +113,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                         (\item2 ->
                                             let
                                                 ( x2, y2 ) =
-                                                    localCoordToAscii item2.position
+                                                    Helper.toRawCoord item2.position
 
                                                 ( width2, height2 ) =
                                                     (Ascii.getData item2.value).size
@@ -136,21 +135,6 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
         { list = [], undoPoint = cell.undoPoint }
         cell.history
         |> .list
-
-
-asciiToLocalCoord : ( Int, Int ) -> Int
-asciiToLocalCoord ( x, y ) =
-    x + y * cellSize
-
-
-localCoordToAscii : Int -> ( Int, Int )
-localCoordToAscii position =
-    ( modBy cellSize position, position // cellSize )
-
-
-cellSize : Int
-cellSize =
-    16
 
 
 empty : Cell
