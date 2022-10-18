@@ -9,6 +9,7 @@ module Grid exposing
     , asciiToCellAndLocalCoord
     , cellAndLocalCoordToAscii
     , changeCount
+    , closeNeighborCells
     , empty
     , from
     , getCell
@@ -111,19 +112,98 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
+closeNeighborCells : Coord Units.CellUnit -> Coord Units.LocalUnit -> List (Coord Units.CellUnit)
+closeNeighborCells cellPosition localPosition =
+    List.filterMap
+        (\offset ->
+            let
+                ( Quantity x, Quantity y ) =
+                    Coord.fromRawCoord offset
+                        |> Coord.multiplyTuple ( maxSize, maxSize )
+                        |> Coord.addTuple localPosition
+
+                ( a, b ) =
+                    ( if x < 0 then
+                        -1
+
+                      else if x < Units.cellSize then
+                        0
+
+                      else
+                        1
+                    , if y < 0 then
+                        -1
+
+                      else if y < Units.cellSize then
+                        0
+
+                      else
+                        1
+                    )
+
+                newCellPos : Coord CellUnit
+                newCellPos =
+                    Coord.fromRawCoord offset |> Coord.addTuple cellPosition
+
+                cellBounds : Bounds unit
+                cellBounds =
+                    Nonempty
+                        (Coord.fromRawCoord ( 0, 0 ))
+                        [ Coord.fromRawCoord ( Units.cellSize - 1, Units.cellSize - 1 ) ]
+                        |> Bounds.fromCoords
+            in
+            if ( a, b ) == offset then
+                Just newCellPos
+
+            else
+                Nothing
+        )
+        [ ( 1, 1 )
+        , ( 0, 1 )
+        , ( -1, 1 )
+        , ( 1, -1 )
+        , ( 0, -1 )
+        , ( -1, -1 )
+        , ( 1, 0 )
+        , ( -1, 0 )
+        ]
+
+
 addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
         ( cellPosition, localPosition ) =
             asciiToCellAndLocalCoord change.position
 
-        cell : Cell
-        cell =
-            getCell cellPosition grid
-                |> Maybe.withDefault GridCell.empty
+        ( Quantity localX, Quantity localY ) =
+            localPosition
+
+        neighborCells_ : List ( Coord Units.CellUnit, Cell )
+        neighborCells_ =
+            closeNeighborCells cellPosition localPosition
+                |> List.map
+                    (\newCellPos ->
+                        getCell newCellPos grid
+                            |> Maybe.withDefault GridCell.empty
+                            |> GridCell.addValue change.userId localPosition change.change
+                            |> Tuple.pair newCellPos
+                    )
     in
-    GridCell.addValue change.userId localPosition change.change cell
-        |> (\cell_ -> setCell cellPosition cell_ grid)
+    getCell cellPosition grid
+        |> Maybe.withDefault GridCell.empty
+        |> GridCell.addValue change.userId localPosition change.change
+        |> (\cell_ ->
+                List.foldl
+                    (\( neighborPos, neighbor ) grid2 ->
+                        setCell neighborPos neighbor grid2
+                    )
+                    (setCell cellPosition cell_ grid)
+                    neighborCells_
+           )
+
+
+maxSize =
+    6
 
 
 allCells : Grid -> List ( Coord CellUnit, Cell )

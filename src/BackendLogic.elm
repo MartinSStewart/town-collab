@@ -45,13 +45,7 @@ type Effect
 
 init : BackendModel
 init =
-    { grid =
-        Grid.addChange
-            { position = Coord.fromRawCoord ( 0, 0 )
-            , change = Ascii.House
-            , userId = User.userId 0
-            }
-            Grid.empty
+    { grid = Grid.empty
     , userSessions = Dict.empty
     , users = Dict.empty
     , usersHiddenRecently = []
@@ -523,7 +517,7 @@ updateLocalChange ( userId, _ ) change model =
             case Dict.get (User.rawId userId) model.users of
                 Just user ->
                     let
-                        ( cellPosition, _ ) =
+                        ( cellPosition, localPosition ) =
                             Grid.asciiToCellAndLocalCoord localChange.position
                     in
                     ( { model
@@ -540,7 +534,12 @@ updateLocalChange ( userId, _ ) change model =
                       }
                         |> updateUser
                             userId
-                            (always { user | undoCurrent = LocalGrid.incrementUndoCurrent cellPosition user.undoCurrent })
+                            (always
+                                { user
+                                    | undoCurrent =
+                                        LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
+                                }
+                            )
                     , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
                     )
 

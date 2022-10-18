@@ -10,7 +10,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Time
 import Undo
-import Units exposing (CellUnit)
+import Units exposing (CellUnit, LocalUnit)
 import User exposing (UserId)
 
 
@@ -70,12 +70,18 @@ updateFromBackend changes localModel_ =
     LocalModel.updateFromBackend config changes localModel_
 
 
-incrementUndoCurrent : Coord CellUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
-incrementUndoCurrent gridChange undoCurrent =
-    Dict.update
-        (Coord.toRawCoord gridChange)
-        (Maybe.withDefault 0 >> (+) 1 >> Just)
-        undoCurrent
+incrementUndoCurrent : Coord CellUnit -> Coord LocalUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
+incrementUndoCurrent cellPosition localPosition undoCurrent =
+    cellPosition
+        :: Grid.closeNeighborCells cellPosition localPosition
+        |> List.foldl
+            (\neighborPos undoCurrent2 ->
+                Dict.update
+                    (Coord.toRawCoord neighborPos)
+                    (Maybe.withDefault 0 >> (+) 1 >> Just)
+                    undoCurrent2
+            )
+            undoCurrent
 
 
 update_ : Change -> LocalGrid_ -> LocalGrid_
@@ -83,8 +89,8 @@ update_ msg model =
     case msg of
         LocalChange (LocalGridChange gridChange) ->
             let
-                cellPosition =
-                    Grid.asciiToCellAndLocalCoord gridChange.position |> Tuple.first
+                ( cellPosition, localPosition ) =
+                    Grid.asciiToCellAndLocalCoord gridChange.position
             in
             { model
                 | redoHistory = []
@@ -94,7 +100,7 @@ update_ msg model =
 
                     else
                         model.grid
-                , undoCurrent = incrementUndoCurrent cellPosition model.undoCurrent
+                , undoCurrent = incrementUndoCurrent cellPosition localPosition model.undoCurrent
             }
 
         LocalChange LocalRedo ->
