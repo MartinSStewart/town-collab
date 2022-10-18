@@ -73,7 +73,7 @@ updateFromBackend changes localModel_ =
 incrementUndoCurrent : Coord CellUnit -> Coord LocalUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
 incrementUndoCurrent cellPosition localPosition undoCurrent =
     cellPosition
-        :: Grid.closeNeighborCells cellPosition localPosition
+        :: List.map Tuple.first (Grid.closeNeighborCells cellPosition localPosition)
         |> List.foldl
             (\neighborPos undoCurrent2 ->
                 Dict.update

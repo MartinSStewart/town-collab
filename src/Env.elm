@@ -1,4 +1,4 @@
-module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId_, confirmationEmailKey, domain, hyperlinkWhitelist, isProduction, isProduction_, mode, notifyAdminWaitInHours, sendGridKey, sendGridKey_, startPointAt, startPointX, startPointY)
+module Env exposing (..)
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.

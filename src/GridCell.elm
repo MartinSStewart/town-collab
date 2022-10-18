@@ -10,9 +10,11 @@ module GridCell exposing
     )
 
 import Ascii exposing (Ascii)
+import Bounds exposing (Bounds)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
+import List.Nonempty exposing (Nonempty(..))
 import Units exposing (LocalUnit)
 import User exposing (RawUserId, UserId)
 
@@ -47,7 +49,9 @@ addValue userId position line (Cell cell) =
                 ( [], userUndoPoint )
                 cell.history
                 |> Tuple.first
-                |> (::) { userId = userId, position = position, value = line }
+                |> (\list ->
+                        { userId = userId, position = position, value = line } :: list
+                   )
         , undoPoint =
             Dict.insert
                 (User.rawId userId)

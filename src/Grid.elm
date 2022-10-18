@@ -30,7 +30,7 @@ import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Quantity exposing (Quantity(..))
-import Units exposing (CellUnit)
+import Units exposing (CellUnit, LocalUnit)
 import User exposing (UserId)
 import WebGL
 
@@ -112,7 +112,7 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
-closeNeighborCells : Coord Units.CellUnit -> Coord Units.LocalUnit -> List (Coord Units.CellUnit)
+closeNeighborCells : Coord CellUnit -> Coord LocalUnit -> List ( Coord CellUnit, Coord LocalUnit )
 closeNeighborCells cellPosition localPosition =
     List.filterMap
         (\offset ->
@@ -121,6 +121,9 @@ closeNeighborCells cellPosition localPosition =
                     Coord.fromRawCoord offset
                         |> Coord.multiplyTuple ( maxSize, maxSize )
                         |> Coord.addTuple localPosition
+
+                ( Quantity localX, Quantity localY ) =
+                    localPosition
 
                 ( a, b ) =
                     ( if x < 0 then
@@ -144,16 +147,15 @@ closeNeighborCells cellPosition localPosition =
                 newCellPos : Coord CellUnit
                 newCellPos =
                     Coord.fromRawCoord offset |> Coord.addTuple cellPosition
-
-                cellBounds : Bounds unit
-                cellBounds =
-                    Nonempty
-                        (Coord.fromRawCoord ( 0, 0 ))
-                        [ Coord.fromRawCoord ( Units.cellSize - 1, Units.cellSize - 1 ) ]
-                        |> Bounds.fromCoords
             in
             if ( a, b ) == offset then
-                Just newCellPos
+                ( newCellPos
+                , Coord.fromRawCoord
+                    ( localX - Units.cellSize * a
+                    , localY - Units.cellSize * b
+                    )
+                )
+                    |> Just
 
             else
                 Nothing
@@ -175,17 +177,14 @@ addChange change grid =
         ( cellPosition, localPosition ) =
             asciiToCellAndLocalCoord change.position
 
-        ( Quantity localX, Quantity localY ) =
-            localPosition
-
         neighborCells_ : List ( Coord Units.CellUnit, Cell )
         neighborCells_ =
             closeNeighborCells cellPosition localPosition
                 |> List.map
-                    (\newCellPos ->
+                    (\( newCellPos, newLocalPos ) ->
                         getCell newCellPos grid
                             |> Maybe.withDefault GridCell.empty
-                            |> GridCell.addValue change.userId localPosition change.change
+                            |> GridCell.addValue change.userId newLocalPos change.change
                             |> Tuple.pair newCellPos
                     )
     in

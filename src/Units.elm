@@ -12,6 +12,7 @@ module Units exposing
     , cellToAscii_
     , cellUnit
     , inWorldUnits
+    , localUnit
     , pixelToWorldPixel
     , screenFrame
     , worldToAscii
@@ -60,6 +61,11 @@ inWorldUnits (Quantity.Quantity value) =
 
 cellUnit : number -> Quantity number CellUnit
 cellUnit =
+    Quantity.Quantity
+
+
+localUnit : number -> Quantity number LocalUnit
+localUnit =
     Quantity.Quantity
 
 
