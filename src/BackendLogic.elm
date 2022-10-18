@@ -5,6 +5,7 @@ import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
 import Cluster
+import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
@@ -15,7 +16,6 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Helper exposing (Coord, RawCellCoord)
 import Image
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
@@ -47,7 +47,7 @@ init : BackendModel
 init =
     { grid =
         Grid.addChange
-            { position = Helper.fromRawCoord ( 0, 0 )
+            { position = Coord.fromRawCoord ( 0, 0 )
             , change = Ascii.House
             , userId = User.userId 0
             }
@@ -585,7 +585,7 @@ updateLocalChange ( userId, _ ) change model =
               else if Dict.member (User.rawId hideUserId) model.users then
                 updateUser
                     userId
-                    (\user -> { user | hiddenUsers = Helper.toggleSet hideUserId user.hiddenUsers })
+                    (\user -> { user | hiddenUsers = Coord.toggleSet hideUserId user.hiddenUsers })
                     { model
                         | usersHiddenRecently =
                             if Just userId == Env.adminUserId then
@@ -603,7 +603,7 @@ updateLocalChange ( userId, _ ) change model =
         Change.LocalUnhideUser unhideUserId ->
             ( updateUser
                 userId
-                (\user -> { user | hiddenUsers = Helper.toggleSet unhideUserId user.hiddenUsers })
+                (\user -> { user | hiddenUsers = Coord.toggleSet unhideUserId user.hiddenUsers })
                 { model
                     | usersHiddenRecently =
                         List.filterMap

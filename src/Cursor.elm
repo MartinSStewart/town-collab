@@ -2,8 +2,8 @@ module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, 
 
 import Ascii
 import Bounds exposing (Bounds)
+import Coord exposing (Coord)
 import Element
-import Helper exposing (Coord)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -27,14 +27,14 @@ moveCursor isShiftDown offset (Cursor cursor) =
     if isShiftDown then
         Cursor
             { cursor
-                | position = Helper.addTuple offset cursor.position
-                , size = cursor.size |> Helper.minusTuple offset
+                | position = Coord.addTuple offset cursor.position
+                , size = cursor.size |> Coord.minusTuple offset
             }
 
     else
         Cursor
             { cursor
-                | position = Helper.addTuple offset cursor.position
+                | position = Coord.addTuple offset cursor.position
                 , size = ( Units.asciiUnit 0, Units.asciiUnit 0 )
             }
 
@@ -81,14 +81,14 @@ toMesh cursor =
 
         ( cw, ch ) =
             size cursor
-                |> Helper.toRawCoord
+                |> Coord.toRawCoord
                 |> Tuple.mapBoth (abs >> (+) 1) (abs >> (+) 1)
 
         ( cw_, ch_ ) =
-            size cursor |> Helper.toRawCoord
+            size cursor |> Coord.toRawCoord
 
         ( w, h ) =
-            Helper.toRawCoord Ascii.size
+            Coord.toRawCoord Ascii.size
 
         ( v0, i0 ) =
             mesh 0
@@ -144,7 +144,7 @@ size (Cursor cursor) =
 selection : Coord Units.AsciiUnit -> Coord Units.AsciiUnit -> Cursor
 selection start end =
     { position = end
-    , size = Helper.minusTuple end start
+    , size = Coord.minusTuple end start
     , startingColumn = Quantity.min (Tuple.first start) (Tuple.first end)
     }
         |> Cursor
@@ -157,11 +157,11 @@ bounds (Cursor cursor) =
             cursor.position
 
         pos1 =
-            Helper.addTuple cursor.position cursor.size
+            Coord.addTuple cursor.position cursor.size
     in
     Bounds.bounds
-        (Helper.minTuple pos0 pos1)
-        (Helper.maxTuple pos0 pos1)
+        (Coord.minTuple pos0 pos1)
+        (Coord.maxTuple pos0 pos1)
 
 
 draw : Mat4 -> Element.Color -> { a | cursor : Cursor, cursorMesh : WebGL.Mesh { position : Vec2 } } -> WebGL.Entity
@@ -172,7 +172,7 @@ draw viewMatrix color model =
         fragmentShader
         model.cursorMesh
         { view = viewMatrix
-        , offset = bounds model.cursor |> Bounds.minimum |> Units.asciiToWorld |> Helper.coordToVec
+        , offset = bounds model.cursor |> Bounds.minimum |> Units.asciiToWorld |> Coord.coordToVec
         , color = Shaders.colorToVec3 color
         }
 

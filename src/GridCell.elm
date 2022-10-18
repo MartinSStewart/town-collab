@@ -10,9 +10,9 @@ module GridCell exposing
     )
 
 import Ascii exposing (Ascii)
+import Coord exposing (Coord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
-import Helper exposing (Coord)
 import Units exposing (LocalUnit)
 import User exposing (RawUserId, UserId)
 
@@ -105,7 +105,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                     data.size
 
                                 ( x, y ) =
-                                    Helper.toRawCoord position
+                                    Coord.toRawCoord position
                             in
                             { list =
                                 item
@@ -113,7 +113,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                         (\item2 ->
                                             let
                                                 ( x2, y2 ) =
-                                                    Helper.toRawCoord item2.position
+                                                    Coord.toRawCoord item2.position
 
                                                 ( width2, height2 ) =
                                                     (Ascii.getData item2.value).size

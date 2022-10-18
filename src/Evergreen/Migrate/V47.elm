@@ -1,6 +1,7 @@
 module Evergreen.Migrate.V47 exposing (backendModel, backendMsg, frontendModel, frontendMsg, toBackend, toFrontend)
 
 import AssocList
+import Coord
 import Dict
 import Evergreen.V45.Ascii
 import Evergreen.V45.Grid
@@ -16,7 +17,6 @@ import Evergreen.V47.RecentChanges exposing (RecentChanges(..))
 import Evergreen.V47.Types as New
 import Evergreen.V47.User as User
 import EverySet
-import Helper
 import Lamdera.Migrations exposing (..)
 import List.Nonempty
 import Quantity exposing (Quantity(..))
@@ -58,7 +58,7 @@ migrateQuantity (Quantity quantity) =
     Quantity quantity
 
 
-migrateCoord : Evergreen.V45.Helper.Coord a -> Helper.Coord b
+migrateCoord : Evergreen.V45.Helper.Coord a -> Coord.Coord b
 migrateCoord ( x, y ) =
     ( migrateQuantity x, migrateQuantity y )
 

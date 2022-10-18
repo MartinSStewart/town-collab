@@ -19,8 +19,8 @@ module Units exposing
     )
 
 import Ascii
+import Coord exposing (Coord)
 import Frame2d exposing (Frame2d)
-import Helper exposing (Coord)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
@@ -91,7 +91,7 @@ cellSize =
 
 cellToAscii : Coord CellUnit -> Coord AsciiUnit
 cellToAscii coord =
-    Helper.multiplyTuple ( cellSize, cellSize ) coord |> Helper.toRawCoord |> Helper.fromRawCoord
+    Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
 
 
 cellToAscii_ : Point2d CellUnit WorldCoordinate -> Point2d AsciiUnit WorldCoordinate

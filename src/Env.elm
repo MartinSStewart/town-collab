@@ -4,8 +4,8 @@ module Env exposing (Mode(..), adminEmail, adminEmail_, adminUserId, adminUserId
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 import Bounds exposing (Bounds)
+import Coord exposing (Coord)
 import EmailAddress exposing (EmailAddress)
-import Helper exposing (Coord)
 import SendGrid
 import Units exposing (AsciiUnit)
 import User exposing (UserId)
@@ -92,7 +92,7 @@ startPointY =
 startPointAt : Coord AsciiUnit
 startPointAt =
     Maybe.map2
-        (\x y -> Helper.fromRawCoord ( x, y ))
+        (\x y -> Coord.fromRawCoord ( x, y ))
         (String.toInt startPointX)
         (String.toInt startPointY)
-        |> Maybe.withDefault (Helper.fromRawCoord ( 0, 0 ))
+        |> Maybe.withDefault (Coord.fromRawCoord ( 0, 0 ))

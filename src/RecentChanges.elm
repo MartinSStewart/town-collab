@@ -1,10 +1,10 @@
 module RecentChanges exposing (RecentChanges(..), addChange, init, threeHoursElapsed, undoRedoChange)
 
 import AssocList
+import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import Grid exposing (Grid)
 import GridCell
-import Helper exposing (Coord, RawCellCoord)
 import List.Extra as List
 import NotifyMe exposing (Frequency(..), ThreeHours)
 import Quantity exposing (Quantity(..))
@@ -39,7 +39,7 @@ addChange coord originalCell (RecentChanges recentChanges) =
                 AssocList.update
                     Every3Hours
                     (Maybe.withDefault Dict.empty
-                        >> Dict.update (Helper.toRawCoord coord) (Maybe.withDefault originalCell >> Just)
+                        >> Dict.update (Coord.toRawCoord coord) (Maybe.withDefault originalCell >> Just)
                         >> Just
                     )
                     recentChanges.frequencies
@@ -51,7 +51,7 @@ undoRedoChange changes grid recentChanges =
     addChanges
         Every3Hours
         (Dict.map
-            (\key _ -> Grid.getCell (Helper.fromRawCoord key) grid |> Maybe.withDefault GridCell.empty)
+            (\key _ -> Grid.getCell (Coord.fromRawCoord key) grid |> Maybe.withDefault GridCell.empty)
             changes
         )
         recentChanges

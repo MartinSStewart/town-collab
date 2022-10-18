@@ -1,7 +1,7 @@
 module UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..), coordQueryParser, encodeUrl, internalRoute, notifyMe, urlParser)
 
+import Coord exposing (Coord)
 import Env
-import Helper exposing (Coord)
 import Units exposing (AsciiUnit)
 import Url.Builder
 import Url.Parser exposing ((</>), (<?>))
@@ -44,7 +44,7 @@ encodeUrl route =
         InternalRoute internalRoute_ ->
             let
                 ( x, y ) =
-                    Helper.toRawCoord internalRoute_.viewPoint
+                    Coord.toRawCoord internalRoute_.viewPoint
             in
             Url.Builder.relative
                 (if internalRoute_.showNotifyMe then

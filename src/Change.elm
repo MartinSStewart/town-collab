@@ -1,10 +1,10 @@
 module Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
 
 import Bounds exposing (Bounds)
+import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import Grid
 import GridCell
-import Helper exposing (Coord, RawCellCoord)
 import NotifyMe
 import Units exposing (AsciiUnit, CellUnit)
 import User exposing (UserId)

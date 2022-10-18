@@ -2,10 +2,10 @@ module LocalGrid exposing (LocalGrid, LocalGrid_, incrementUndoCurrent, init, lo
 
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
+import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
-import Helper exposing (Coord, RawCellCoord)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Time
@@ -73,7 +73,7 @@ updateFromBackend changes localModel_ =
 incrementUndoCurrent : Coord CellUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
 incrementUndoCurrent gridChange undoCurrent =
     Dict.update
-        (Helper.toRawCoord gridChange)
+        (Coord.toRawCoord gridChange)
         (Maybe.withDefault 0 >> (+) 1 >> Just)
         undoCurrent
 
@@ -137,7 +137,7 @@ update_ msg model =
             }
 
         LocalChange (LocalToggleUserVisibilityForAll hideUserId) ->
-            { model | adminHiddenUsers = Helper.toggleSet hideUserId model.adminHiddenUsers }
+            { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }
 
         ServerChange (ServerGridChange gridChange) ->
             if
@@ -154,14 +154,14 @@ update_ msg model =
             { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
 
         ServerChange (ServerToggleUserVisibilityForAll hideUserId) ->
-            { model | adminHiddenUsers = Helper.toggleSet hideUserId model.adminHiddenUsers }
+            { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }
 
         ClientChange (ViewBoundsChange bounds newCells) ->
             { model
                 | grid =
                     Grid.allCellsDict model.grid
-                        |> Dict.filter (\coord _ -> Bounds.contains (Helper.fromRawCoord coord) bounds)
-                        |> Dict.union (List.map (Tuple.mapFirst Helper.toRawCoord) newCells |> Dict.fromList)
+                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.fromRawCoord coord) bounds)
+                        |> Dict.union (List.map (Tuple.mapFirst Coord.toRawCoord) newCells |> Dict.fromList)
                         |> Grid.from
                 , viewBounds = bounds
             }

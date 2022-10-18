@@ -21,9 +21,9 @@ module Grid exposing
 
 import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
+import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
-import Helper exposing (Coord, RawCellCoord)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
@@ -54,11 +54,11 @@ asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
         offset =
             1000000
     in
-    ( Helper.fromRawCoord
+    ( Coord.fromRawCoord
         ( (x + (Units.cellSize * offset)) // Units.cellSize - offset
         , (y + (Units.cellSize * offset)) // Units.cellSize - offset
         )
-    , Helper.fromRawCoord
+    , Coord.fromRawCoord
         ( modBy Units.cellSize x
         , modBy Units.cellSize y
         )
@@ -67,11 +67,11 @@ asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
 
 cellAndLocalCoordToAscii : ( Coord Units.CellUnit, Coord Units.LocalUnit ) -> Coord Units.AsciiUnit
 cellAndLocalCoordToAscii ( cell, local ) =
-    Helper.addTuple
-        (Helper.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
-        (Helper.toRawCoord local |> Helper.fromRawCoord)
-        |> Helper.toRawCoord
-        |> Helper.fromRawCoord
+    Coord.addTuple
+        (Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
+        (Coord.toRawCoord local |> Coord.fromRawCoord)
+        |> Coord.toRawCoord
+        |> Coord.fromRawCoord
 
 
 type alias GridChange =
@@ -138,7 +138,7 @@ allCellsDict (Grid grid) =
 
 region : Bounds CellUnit -> Grid -> Grid
 region bounds (Grid grid) =
-    Dict.filter (\coord _ -> Bounds.contains (Helper.fromRawCoord coord) bounds) grid |> Grid
+    Dict.filter (\coord _ -> Bounds.contains (Coord.fromRawCoord coord) bounds) grid |> Grid
 
 
 getCell : Coord Units.CellUnit -> Grid -> Maybe Cell

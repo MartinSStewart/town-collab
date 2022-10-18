@@ -20,7 +20,7 @@ module Bounds exposing
     )
 
 import BoundingBox2d exposing (BoundingBox2d)
-import Helper exposing (Coord)
+import Coord exposing (Coord)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import NonemptyExtra as Nonempty
@@ -34,12 +34,12 @@ type Bounds unit
 
 width : Bounds unit -> Quantity Int unit
 width bounds_ =
-    maximum bounds_ |> Helper.minusTuple (minimum bounds_) |> Tuple.first
+    maximum bounds_ |> Coord.minusTuple (minimum bounds_) |> Tuple.first
 
 
 height : Bounds unit -> Quantity Int unit
 height bounds_ =
-    maximum bounds_ |> Helper.minusTuple (minimum bounds_) |> Tuple.second
+    maximum bounds_ |> Coord.minusTuple (minimum bounds_) |> Tuple.second
 
 
 minimum : Bounds unit -> Coord unit
@@ -55,16 +55,16 @@ maximum (Bounds bounds_) =
 multiplyBy : Int -> Bounds unit -> Bounds unit
 multiplyBy scalar (Bounds bounds_) =
     Bounds
-        { min = Helper.multiplyTuple ( scalar, scalar ) bounds_.min
-        , max = Helper.multiplyTuple ( scalar, scalar ) bounds_.max
+        { min = Coord.multiplyTuple ( scalar, scalar ) bounds_.min
+        , max = Coord.multiplyTuple ( scalar, scalar ) bounds_.max
         }
 
 
 bounds : Coord unit -> Coord unit -> Bounds unit
 bounds min_ max_ =
     Bounds
-        { min = Helper.minTuple min_ max_
-        , max = Helper.maxTuple min_ max_
+        { min = Coord.minTuple min_ max_
+        , max = Coord.maxTuple min_ max_
         }
 
 
@@ -86,23 +86,23 @@ fromCoords coords =
 centerAndHalfSize : Coord unit -> Coord unit -> Bounds unit
 centerAndHalfSize centerPoint halfSize =
     bounds
-        (centerPoint |> Helper.minusTuple halfSize)
-        (centerPoint |> Helper.addTuple halfSize)
+        (centerPoint |> Coord.minusTuple halfSize)
+        (centerPoint |> Coord.addTuple halfSize)
 
 
 translate : Coord unit -> Bounds unit -> Bounds unit
 translate coord (Bounds bounds_) =
     Bounds
-        { min = Helper.addTuple coord bounds_.min
-        , max = Helper.addTuple coord bounds_.max
+        { min = Coord.addTuple coord bounds_.min
+        , max = Coord.addTuple coord bounds_.max
         }
 
 
 expand : Quantity Int unit -> Bounds unit -> Bounds unit
 expand expandBy (Bounds bounds_) =
     Bounds
-        { min = Helper.minusTuple ( expandBy, expandBy ) bounds_.min
-        , max = Helper.addTuple ( expandBy, expandBy ) bounds_.max
+        { min = Coord.minusTuple ( expandBy, expandBy ) bounds_.min
+        , max = Coord.addTuple ( expandBy, expandBy ) bounds_.max
         }
 
 
@@ -161,22 +161,22 @@ center (Bounds bounds_) =
 
 addToMax : Coord unit -> Bounds unit -> Bounds unit
 addToMax coord (Bounds bounds_) =
-    Bounds { min = bounds_.min, max = Helper.addTuple coord bounds_.max }
+    Bounds { min = bounds_.min, max = Coord.addTuple coord bounds_.max }
 
 
 boundsToBounds2d : Bounds units -> BoundingBox2d units coordinate
 boundsToBounds2d (Bounds bounds_) =
-    BoundingBox2d.from (Helper.coordToPoint bounds_.min) (Helper.coordToPoint bounds_.max)
+    BoundingBox2d.from (Coord.coordToPoint bounds_.min) (Coord.coordToPoint bounds_.max)
 
 
 coordRangeFold : (Coord units -> a -> a) -> (a -> a) -> Bounds units -> a -> a
 coordRangeFold foldFunc rowChangeFunc (Bounds bounds_) initialValue =
     let
         ( x0, y0 ) =
-            Helper.toRawCoord bounds_.min
+            Coord.toRawCoord bounds_.min
 
         ( x1, y1 ) =
-            Helper.toRawCoord bounds_.max
+            Coord.toRawCoord bounds_.max
     in
     coordRangeFoldHelper foldFunc rowChangeFunc x0 x1 y0 y1 x0 y0 initialValue
 
@@ -219,10 +219,10 @@ coordRangeFoldReverse : (Coord units -> a -> a) -> (a -> a) -> Bounds units -> a
 coordRangeFoldReverse foldFunc rowChangeFunc (Bounds bounds_) initialValue =
     let
         ( x0, y0 ) =
-            Helper.toRawCoord bounds_.min
+            Coord.toRawCoord bounds_.min
 
         ( x1, y1 ) =
-            Helper.toRawCoord bounds_.max
+            Coord.toRawCoord bounds_.max
     in
     coordRangeFoldReverseHelper foldFunc rowChangeFunc x0 x1 y0 y1 x1 y1 initialValue
 

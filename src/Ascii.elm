@@ -15,8 +15,8 @@ module Ascii exposing
 import Array exposing (Array)
 import Base64
 import Bounds exposing (Bounds)
+import Coord exposing (Coord)
 import Dict exposing (Dict)
-import Helper exposing (Coord)
 import Image exposing (Image)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
@@ -136,12 +136,12 @@ texturePositionInt ascii =
             data.size
     in
     Bounds.bounds
-        (Helper.fromRawCoord
+        (Coord.fromRawCoord
             ( x * tileW
             , y * tileH
             )
         )
-        (Helper.fromRawCoord
+        (Coord.fromRawCoord
             ( (x + w) * tileW
             , (y + h) * tileH
             )

@@ -5,6 +5,7 @@ import Ascii exposing (Ascii)
 import BackendLogic exposing (Effect(..))
 import Bounds exposing (Bounds)
 import Change exposing (LocalChange(..))
+import Coord exposing (Coord)
 import Dict
 import Duration
 import Element exposing (Element)
@@ -14,7 +15,6 @@ import EmailAddress as Email exposing (EmailAddress)
 import EverySet
 import Grid
 import GridCell
-import Helper exposing (Coord)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
@@ -235,32 +235,32 @@ tests () =
             |> testAssert (checkGridValue ( ( Units.cellUnit 0, Units.cellUnit 0 ), 0 ) Nothing)
         )
     , boundsTest "Bounds fold 0x0"
-        [ Helper.fromRawCoord ( 0, 0 ) ]
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 0, 0 )))
+        [ Coord.fromRawCoord ( 0, 0 ) ]
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 0, 0 )))
     , boundsTest "Bounds fold 2x1"
         (List.reverse [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 2, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 2, Quantity 1 ) ])
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 2, 1 )))
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 2, 1 )))
     , boundsTest "Bounds fold 1x2"
         (List.reverse [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 0, Quantity 2 ), ( Quantity 1, Quantity 2 ) ])
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 2 )))
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 1, 2 )))
     , boundsTest "Bounds fold 1x1"
         (List.reverse [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ) ])
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 1 )))
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 1, 1 )))
     , boundsTest "Bounds fold 1x1 offset"
         [ ( Quantity 0, Quantity -1 ), ( Quantity -1, Quantity -1 ), ( Quantity 0, Quantity -2 ), ( Quantity -1, Quantity -2 ) ]
-        (Bounds.bounds (Helper.fromRawCoord ( -1, -2 )) (Helper.fromRawCoord ( 0, -1 )))
+        (Bounds.bounds (Coord.fromRawCoord ( -1, -2 )) (Coord.fromRawCoord ( 0, -1 )))
     , boundsReverseTest "Bounds reverse fold 0x0"
-        [ Helper.fromRawCoord ( 0, 0 ) ]
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 0, 0 )))
+        [ Coord.fromRawCoord ( 0, 0 ) ]
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 0, 0 )))
     , boundsReverseTest "Bounds reverse fold 2x1"
         [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 2, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 2, Quantity 1 ) ]
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 2, 1 )))
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 2, 1 )))
     , boundsReverseTest "Bounds reverse fold 1x2"
         [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ), ( Quantity 0, Quantity 2 ), ( Quantity 1, Quantity 2 ) ]
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 2 )))
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 1, 2 )))
     , boundsReverseTest "Bounds reverse fold 1x1"
         [ ( Quantity 0, Quantity 0 ), ( Quantity 1, Quantity 0 ), ( Quantity 0, Quantity 1 ), ( Quantity 1, Quantity 1 ) ]
-        (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 1, 1 )))
+        (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 1, 1 )))
     , test "statistics empty 1x1" <|
         (BackendLogic.statistics
             EverySet.empty
@@ -281,7 +281,7 @@ tests () =
             (Bounds.bounds ( Quantity 0, Quantity 0 ) ( Quantity -15, Quantity -15 ))
             (Grid.empty
                 |> Grid.addChange
-                    { cellPosition = Helper.fromRawCoord ( 0, 0 )
+                    { cellPosition = Coord.fromRawCoord ( 0, 0 )
                     , localPosition = 0
                     , change = Nonempty asciiA []
                     , userId = User.userId 0
@@ -485,7 +485,7 @@ tests () =
     , test "Selection test" <|
         (Grid.empty
             |> Grid.addChange
-                { cellPosition = Helper.fromRawCoord ( 0, 0 )
+                { cellPosition = Coord.fromRawCoord ( 0, 0 )
                 , localPosition = 0
                 , change =
                     Nonempty asciiA
@@ -879,7 +879,7 @@ tests () =
                             "sessionId0"
                             "clientId1"
                             (ConnectToBackend
-                                (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                                (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 5, 5 )))
                                 (Just (UnsubscribeEmail unsubscribeKey))
                             )
                     )
@@ -909,7 +909,7 @@ tests () =
                         "sessionId0"
                         "clientId0"
                         (ConnectToBackend
-                            (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                            (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 5, 5 )))
                             Nothing
                         )
                         >> Tuple.first
@@ -998,7 +998,7 @@ notifyMeEvery frequency email =
                 "sessionId0"
                 "clientId0"
                 (ConnectToBackend
-                    (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                    (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 5, 5 )))
                     Nothing
                 )
                 >> Tuple.first
@@ -1053,7 +1053,7 @@ notifyMeEvery frequency email =
                 "sessionId1"
                 "clientId1"
                 (ConnectToBackend
-                    (Bounds.bounds (Helper.fromRawCoord ( 0, 0 )) (Helper.fromRawCoord ( 5, 5 )))
+                    (Bounds.bounds (Coord.fromRawCoord ( 0, 0 )) (Coord.fromRawCoord ( 5, 5 )))
                     (Just (ConfirmationEmailConfirmed_ confirmationKey))
                 )
             )
@@ -1121,7 +1121,7 @@ parseHyperlinkTest : String -> List Hyperlink -> Test ()
 parseHyperlinkTest input expected =
     let
         actual =
-            Parser.run (Hyperlink.urlsParser (Helper.fromRawCoord ( 0, 0 ))) input
+            Parser.run (Hyperlink.urlsParser (Coord.fromRawCoord ( 0, 0 ))) input
     in
     expectEqual (Ok expected) actual |> testSingle
 

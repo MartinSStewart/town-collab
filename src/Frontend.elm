@@ -1,6 +1,5 @@
 port module Frontend exposing (app, init, update, updateFromBackend, view)
 
-import Array exposing (Array)
 import Ascii exposing (Ascii)
 import Audio exposing (AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
@@ -10,6 +9,7 @@ import Browser.Dom
 import Browser.Events
 import Browser.Navigation
 import Change exposing (Change(..))
+import Coord exposing (Coord)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
@@ -23,7 +23,6 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Helper exposing (Coord)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -39,9 +38,7 @@ import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector2
 import NotifyMe
-import Parser
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -118,7 +115,7 @@ loadedInit loading loadingData =
             , localModel = LocalGrid.init loadingData
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
-            , viewPoint = Units.asciiToWorld loading.viewPoint |> Helper.coordToPoint
+            , viewPoint = Units.asciiToWorld loading.viewPoint |> Coord.coordToPoint
             , viewPointLastInterval = Point2d.origin
             , cursor = cursor
             , texture = Nothing
@@ -209,11 +206,11 @@ init url key =
             Bounds.bounds
                 (Grid.asciiToCellAndLocalCoord viewPoint
                     |> Tuple.first
-                    |> Helper.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
+                    |> Coord.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
                 )
                 (Grid.asciiToCellAndLocalCoord viewPoint
                     |> Tuple.first
-                    |> Helper.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
+                    |> Coord.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
                 )
     in
     ( Loading
@@ -301,7 +298,7 @@ updateLoaded msg model =
                     Just (UrlHelper.InternalRoute { viewPoint, showNotifyMe }) ->
                         { model
                             | cursor = Cursor.setCursor viewPoint
-                            , viewPoint = Units.asciiToWorld viewPoint |> Helper.coordToPoint
+                            , viewPoint = Units.asciiToWorld viewPoint |> Coord.coordToPoint
                             , showNotifyMe = showNotifyMe
                         }
 
@@ -931,9 +928,9 @@ clearTextSelection bounds model =
     let
         ( w, h ) =
             Bounds.maximum bounds
-                |> Helper.minusTuple (Bounds.minimum bounds)
-                |> Helper.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 )
-                |> Helper.toRawCoord
+                |> Coord.minusTuple (Bounds.minimum bounds)
+                |> Coord.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 )
+                |> Coord.toRawCoord
     in
     { model | cursor = Cursor.setCursor (Bounds.minimum bounds) }
         |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
@@ -1073,7 +1070,7 @@ updateMeshes oldModel newModel =
             let
                 coord : Coord CellUnit
                 coord =
-                    Helper.fromRawCoord rawCoord
+                    Coord.fromRawCoord rawCoord
             in
             Grid.mesh
                 coord
@@ -1135,7 +1132,7 @@ viewBoundsUpdate ( model, cmd ) =
                 |> Units.worldToAscii
                 |> Grid.asciiToCellAndLocalCoord
                 |> Tuple.first
-                |> Helper.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
+                |> Coord.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
 
         bounds =
             Bounds.bounds min_ max_
@@ -1367,9 +1364,9 @@ contextMenuView : { userId : UserId, hidePoint : Coord AsciiUnit } -> FrontendLo
 contextMenuView { userId, hidePoint } loadedModel =
     let
         { x, y } =
-            Helper.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ) hidePoint
+            Coord.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ) hidePoint
                 |> Units.asciiToWorld
-                |> Helper.coordToPoint
+                |> Coord.coordToPoint
                 |> worldToScreen loadedModel
                 |> Point2d.unwrap
 
@@ -1909,14 +1906,14 @@ viewBoundingBox model =
         viewMin =
             screenToWorld model Point2d.origin
                 |> Point2d.translateBy
-                    (Helper.fromRawCoord ( -1, -1 )
+                    (Coord.fromRawCoord ( -1, -1 )
                         |> Units.cellToAscii
                         |> Units.asciiToWorld
-                        |> Helper.coordToVector2d
+                        |> Coord.coordToVector2d
                     )
 
         viewMax =
-            screenToWorld model (Helper.coordToPoint model.windowSize)
+            screenToWorld model (Coord.coordToPoint model.windowSize)
     in
     BoundingBox2d.from viewMin viewMax
 
@@ -1964,10 +1961,10 @@ canvasView model =
                         model.animationElapsedTime
                         (Dict.filter
                             (\key _ ->
-                                Helper.fromRawCoord key
+                                Coord.fromRawCoord key
                                     |> Units.cellToAscii
                                     |> Units.asciiToWorld
-                                    |> Helper.coordToPoint
+                                    |> Coord.coordToPoint
                                     |> (\p -> BoundingBox2d.contains p viewBounds_)
                             )
                             model.meshes

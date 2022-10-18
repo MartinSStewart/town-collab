@@ -1,5 +1,6 @@
 module NotifyMe exposing (Frequency(..), Model, ThreeHours, Validated, confirmSubmit, duration, emailConfirmed, frequencies, frequencyToString, inProgress, init, unsubscribed, unsubscribing, view)
 
+import Coord exposing (Coord)
 import Element exposing (Element)
 import Element.Background
 import Element.Border
@@ -7,7 +8,6 @@ import Element.Events
 import Element.Font
 import Element.Input exposing (OptionState(..))
 import EmailAddress exposing (EmailAddress)
-import Helper exposing (Coord)
 import Html
 import Html.Attributes
 import Html.Events
