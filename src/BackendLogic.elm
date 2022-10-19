@@ -1,10 +1,7 @@
 module BackendLogic exposing (Effect(..), init, notifyAdminWait, sendConfirmationEmailRateLimit, update, updateFromFrontend)
 
-import Array exposing (Array)
-import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
-import Cluster
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Dict
@@ -16,19 +13,14 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Image
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import NonemptyExtra as Nonempty
 import NotifyMe
-import Pixels
 import Quantity exposing (Quantity(..))
 import RecentChanges
 import SendGrid
-import Set
-import Shaders
 import String.Nonempty exposing (NonemptyString(..))
 import Time
 import Types exposing (..)
@@ -173,21 +165,6 @@ notifyAdmin model =
             Nothing ->
                 []
         )
-
-
-diffCells : BackendModel -> GridCell.Cell -> GridCell.Cell -> Array ( Maybe UserId, Ascii )
-diffCells model before after =
-    List.map2
-        (\before_ after_ ->
-            if before_ == after_ then
-                Tuple.mapFirst (always Nothing) after_
-
-            else
-                after_
-        )
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) before |> Debug.todo "")
-        (GridCell.flatten EverySet.empty (hiddenUsers Nothing model) after |> Debug.todo "")
-        |> Array.fromList
 
 
 backendUserId : UserId

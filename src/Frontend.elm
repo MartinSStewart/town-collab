@@ -539,10 +539,12 @@ updateLoaded msg model =
             ( resetTouchMove model |> updateLocalModel Change.LocalRedo, Cmd.none )
 
         CopyPressed ->
-            Debug.todo ""
+            -- TODO
+            ( model, Cmd.none )
 
         CutPressed ->
-            Debug.todo ""
+            -- TODO
+            ( model, Cmd.none )
 
         TouchMove touchPosition ->
             let
@@ -696,7 +698,8 @@ keyMsgCanvasUpdate key model =
     case key of
         Keyboard.Character "c" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                Debug.todo ""
+                -- TODO
+                ( model, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -704,7 +707,8 @@ keyMsgCanvasUpdate key model =
         Keyboard.Character "x" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 if cursorEnabled model then
-                    Debug.todo ""
+                    -- TODO
+                    ( model, Cmd.none )
 
                 else
                     ( model, Cmd.none )
