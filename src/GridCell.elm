@@ -91,6 +91,13 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
     let
         hidden =
             EverySet.union hiddenUsers hiddenUsersForAll
+
+        cellBounds : Bounds unit
+        cellBounds =
+            Nonempty
+                (Coord.fromRawCoord ( 0, 0 ))
+                [ Coord.fromRawCoord ( Units.cellSize - 1, Units.cellSize - 1 ) ]
+                |> Bounds.fromCoords
     in
     List.foldr
         (\({ userId, position, value } as item) state ->
@@ -112,8 +119,13 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                     Coord.toRawCoord position
                             in
                             { list =
-                                item
-                                    :: List.filter
+                                (if Bounds.contains position cellBounds then
+                                    [ item ]
+
+                                 else
+                                    []
+                                )
+                                    ++ List.filter
                                         (\item2 ->
                                             let
                                                 ( x2, y2 ) =

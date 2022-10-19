@@ -58,45 +58,49 @@ tests =
                             |> Debug.log "a"
                             |> Grid.getCell (Coord.fromRawCoord ( 0, 0 ))
                 in
-                Expect.fail "Cell not found"
+                case maybeCell of
+                    Just cell ->
+                        GridCell.flatten Set.empty Set.empty cell
+                            |> Expect.equal
+                                [ { position = Coord.fromRawCoord ( 0, 0 )
+                                  , userId = user0
+                                  , value = RailHorizontal
+                                  }
+                                ]
 
-        --case maybeCell of
-        --    Just cell ->
-        --        GridCell.flatten Set.empty Set.empty cell
-        --            |> Expect.equal
-        --                [ { position = Coord.fromRawCoord ( 0, 0 )
-        --                  , userId = user0
-        --                  , value = RailHorizontal
-        --                  }
-        --                ]
-        --
-        --    Nothing ->
-        --        Expect.fail "Cell not found"
-        --, test "Add house overlaps neighbor" <|
-        --    \_ ->
-        --        let
-        --            maybeCell : Maybe GridCell.Cell
-        --            maybeCell =
-        --                Grid.empty
-        --                    |> Grid.addChange
-        --                        { position = Coord.fromRawCoord ( 0, 0 )
-        --                        , change = RailHorizontal
-        --                        , userId = user0
-        --                        }
-        --                    |> Grid.getCell (Coord.fromRawCoord ( 0, 0 ))
-        --        in
-        --        case maybeCell of
-        --            Just cell ->
-        --                GridCell.flatten Set.empty Set.empty cell
-        --                    |> Expect.equal
-        --                        [ { position = Coord.fromRawCoord ( 0, 0 )
-        --                          , userId = user0
-        --                          , value = RailHorizontal
-        --                          }
-        --                        ]
-        --
-        --            Nothing ->
-        --                Expect.fail "Cell not found"
+                    Nothing ->
+                        Expect.fail "Cell not found"
+        , test "Add house overlaps neighbor" <|
+            \_ ->
+                let
+                    maybeCell : Maybe GridCell.Cell
+                    maybeCell =
+                        Grid.empty
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( 21, 8 )
+                                , change = House
+                                , userId = user0
+                                }
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( 22, 8 )
+                                , change = House
+                                , userId = user0
+                                }
+                            |> Debug.log "a"
+                            |> Grid.getCell (Coord.fromRawCoord ( 1, 0 ))
+                in
+                case maybeCell of
+                    Just cell ->
+                        GridCell.flatten Set.empty Set.empty cell
+                            |> Expect.equal
+                                [ { position = Coord.fromRawCoord ( 6, 8 )
+                                  , userId = user0
+                                  , value = House
+                                  }
+                                ]
+
+                    Nothing ->
+                        Expect.fail "Cell not found"
         ]
 
 
