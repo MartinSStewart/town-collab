@@ -166,7 +166,7 @@ init url key =
         { viewPoint, showNotifyMe, notifyMe, emailEvent, cmd } =
             let
                 defaultRoute =
-                    UrlHelper.internalRoute False Env.startPointAt
+                    UrlHelper.internalRoute False UrlHelper.startPointAt
             in
             case Url.Parser.parse UrlHelper.urlParser url of
                 Just (UrlHelper.InternalRoute a) ->
@@ -178,7 +178,7 @@ init url key =
                     }
 
                 Just (UrlHelper.EmailConfirmationRoute a) ->
-                    { viewPoint = Env.startPointAt
+                    { viewPoint = UrlHelper.startPointAt
                     , showNotifyMe = True
                     , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
                     , emailEvent = Just (ConfirmationEmailConfirmed_ a)
@@ -186,7 +186,7 @@ init url key =
                     }
 
                 Just (UrlHelper.EmailUnsubscribeRoute a) ->
-                    { viewPoint = Env.startPointAt
+                    { viewPoint = UrlHelper.startPointAt
                     , showNotifyMe = True
                     , notifyMe = NotifyMe.init |> NotifyMe.unsubscribing
                     , emailEvent = Just (UnsubscribeEmail a)
@@ -194,7 +194,7 @@ init url key =
                     }
 
                 Nothing ->
-                    { viewPoint = Env.startPointAt
+                    { viewPoint = UrlHelper.startPointAt
                     , showNotifyMe = False
                     , notifyMe = NotifyMe.init
                     , emailEvent = Nothing
