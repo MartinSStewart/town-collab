@@ -1,6 +1,5 @@
 port module Frontend exposing (app, init, update, updateFromBackend, view)
 
-import Ascii exposing (Ascii)
 import Audio exposing (AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
@@ -44,10 +43,11 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Shaders
 import Task
+import Tile exposing (Tile)
 import Time
 import Types exposing (..)
 import UiColors
-import Units exposing (AsciiUnit, CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel)
+import Units exposing (CellUnit, ScreenCoordinate, TileUnit, WorldCoordinate, WorldPixel)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -115,7 +115,7 @@ loadedInit loading loadingData =
             , localModel = LocalGrid.init loadingData
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
-            , viewPoint = Units.asciiToWorld loading.viewPoint |> Coord.coordToPoint
+            , viewPoint = Units.tileToWorld loading.viewPoint |> Coord.coordToPoint
             , viewPointLastInterval = Point2d.origin
             , cursor = cursor
             , texture = Nothing
@@ -151,7 +151,7 @@ loadedInit loading loadingData =
             , verticalWrap = WebGL.Texture.clampToEdge
             , flipY = False
             }
-            Ascii.textureData
+            "/texture.png"
             |> Task.attempt TextureLoaded
         , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
         ]
@@ -298,7 +298,7 @@ updateLoaded msg model =
                     Just (UrlHelper.InternalRoute { viewPoint, showNotifyMe }) ->
                         { model
                             | cursor = Cursor.setCursor viewPoint
-                            , viewPoint = Units.asciiToWorld viewPoint |> Coord.coordToPoint
+                            , viewPoint = Units.tileToWorld viewPoint |> Coord.coordToPoint
                             , showNotifyMe = showNotifyMe
                         }
 
@@ -400,9 +400,9 @@ updateLoaded msg model =
                     localModel =
                         LocalGrid.localModel model.localModel
 
-                    position : Coord AsciiUnit
+                    position : Coord TileUnit
                     position =
-                        screenToWorld model mousePosition |> Units.worldToAscii
+                        screenToWorld model mousePosition |> Units.worldToTile
 
                     maybeUserId =
                         selectionPoint
@@ -464,8 +464,8 @@ updateLoaded msg model =
                         case ( model.mouseLeft, model.tool ) of
                             ( MouseButtonDown mouseState, SelectTool ) ->
                                 Cursor.selection
-                                    (mouseState.start_ |> Units.worldToAscii)
-                                    (screenToWorld model mousePosition |> Units.worldToAscii)
+                                    (mouseState.start_ |> Units.worldToTile)
+                                    (screenToWorld model mousePosition |> Units.worldToTile)
 
                             _ ->
                                 model.cursor
@@ -476,9 +476,9 @@ updateLoaded msg model =
                                     localModel =
                                         LocalGrid.localModel model.localModel
 
-                                    position : Coord AsciiUnit
+                                    position : Coord TileUnit
                                     position =
-                                        screenToWorld model mousePosition |> Units.worldToAscii
+                                        screenToWorld model mousePosition |> Units.worldToTile
 
                                     hideUserId =
                                         selectionPoint
@@ -505,8 +505,8 @@ updateLoaded msg model =
                     { model | time = time, viewPointLastInterval = actualViewPoint_ }
 
                 ( model3, urlChange ) =
-                    if Units.worldToAscii actualViewPoint_ /= Units.worldToAscii model.viewPointLastInterval then
-                        Units.worldToAscii actualViewPoint_
+                    if Units.worldToTile actualViewPoint_ /= Units.worldToTile model.viewPointLastInterval then
+                        Units.worldToTile actualViewPoint_
                             |> UrlHelper.internalRoute model.showNotifyMe
                             |> UrlHelper.encodeUrl
                             |> (\a -> replaceUrl a model2)
@@ -588,8 +588,8 @@ updateLoaded msg model =
                                 case model.tool of
                                     SelectTool ->
                                         Cursor.selection
-                                            (mouseState.start_ |> Units.worldToAscii)
-                                            (screenToWorld model touchPosition |> Units.worldToAscii)
+                                            (mouseState.start_ |> Units.worldToTile)
+                                            (screenToWorld model touchPosition |> Units.worldToTile)
 
                                     _ ->
                                         model.cursor
@@ -665,7 +665,7 @@ updateLoaded msg model =
 
 closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 closeNotifyMe model =
-    UrlHelper.internalRoute False (Units.worldToAscii (actualViewPoint model))
+    UrlHelper.internalRoute False (Units.worldToTile (actualViewPoint model))
         |> UrlHelper.encodeUrl
         |> (\a -> pushUrl a { model | showNotifyMe = False, notifyMeModel = NotifyMe.init })
 
@@ -756,7 +756,7 @@ keyMsgCanvasUpdate key model =
                     | cursor =
                         Cursor.moveCursor
                             (keyDown Keyboard.Shift model)
-                            ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                            ( Units.tileUnit -1, Units.tileUnit 0 )
                             model.cursor
                   }
                 , Cmd.none
@@ -771,7 +771,7 @@ keyMsgCanvasUpdate key model =
                     | cursor =
                         Cursor.moveCursor
                             (keyDown Keyboard.Shift model)
-                            ( Units.asciiUnit 1, Units.asciiUnit 0 )
+                            ( Units.tileUnit 1, Units.tileUnit 0 )
                             model.cursor
                   }
                 , Cmd.none
@@ -786,7 +786,7 @@ keyMsgCanvasUpdate key model =
                     | cursor =
                         Cursor.moveCursor
                             (keyDown Keyboard.Shift model)
-                            ( Units.asciiUnit 0, Units.asciiUnit -1 )
+                            ( Units.tileUnit 0, Units.tileUnit -1 )
                             model.cursor
                   }
                 , Cmd.none
@@ -801,7 +801,7 @@ keyMsgCanvasUpdate key model =
                     | cursor =
                         Cursor.moveCursor
                             (keyDown Keyboard.Shift model)
-                            ( Units.asciiUnit 0, Units.asciiUnit 1 )
+                            ( Units.tileUnit 0, Units.tileUnit 1 )
                             model.cursor
                   }
                 , Cmd.none
@@ -816,7 +816,7 @@ keyMsgCanvasUpdate key model =
                     newCursor =
                         Cursor.moveCursor
                             False
-                            ( Units.asciiUnit -1, Units.asciiUnit 0 )
+                            ( Units.tileUnit -1, Units.tileUnit 0 )
                             model.cursor
                 in
                 ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
@@ -860,7 +860,7 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.cursor
 
                     else if isSmallDistance then
-                        screenToWorld model mousePosition |> Units.worldToAscii |> Cursor.setCursor
+                        screenToWorld model mousePosition |> Units.worldToTile |> Cursor.setCursor
 
                     else
                         model.cursor
@@ -885,7 +885,7 @@ mainMouseButtonUp mousePosition mouseState model =
             ( model_, Cmd.none )
 
 
-highlightUser : UserId -> Coord AsciiUnit -> FrontendLoaded -> FrontendLoaded
+highlightUser : UserId -> Coord TileUnit -> FrontendLoaded -> FrontendLoaded
 highlightUser highlightUserId highlightPoint model =
     { model
         | highlightContextMenu =
@@ -927,13 +927,13 @@ updateLocalModel msg model =
     }
 
 
-clearTextSelection : Bounds AsciiUnit -> FrontendLoaded -> FrontendLoaded
+clearTextSelection : Bounds TileUnit -> FrontendLoaded -> FrontendLoaded
 clearTextSelection bounds model =
     let
         ( w, h ) =
             Bounds.maximum bounds
                 |> Coord.minusTuple (Bounds.minimum bounds)
-                |> Coord.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 )
+                |> Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 )
                 |> Coord.toRawCoord
     in
     { model | cursor = Cursor.setCursor (Bounds.minimum bounds) }
@@ -965,7 +965,7 @@ worldToScreen model =
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
-selectionPoint : Coord AsciiUnit -> EverySet UserId -> EverySet UserId -> Grid -> Maybe { userId : UserId, value : Ascii }
+selectionPoint : Coord TileUnit -> EverySet UserId -> EverySet UserId -> Grid -> Maybe { userId : UserId, value : Tile }
 selectionPoint position hiddenUsers hiddenUsersForAll grid =
     let
         ( cellPosition, localPosition ) =
@@ -1003,11 +1003,11 @@ changeText : String -> FrontendLoaded -> FrontendLoaded
 changeText text model =
     case String.toList text of
         head :: _ ->
-            case Ascii.fromChar head of
+            case Tile.fromChar head of
                 Just ascii ->
                     let
                         model_ =
-                            if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 2) then
+                            if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
                                 updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
 
                             else
@@ -1129,11 +1129,11 @@ viewBoundsUpdate ( model, cmd ) =
             viewBoundingBox model |> BoundingBox2d.extrema
 
         min_ =
-            Point2d.xy minX minY |> Units.worldToAscii |> Grid.asciiToCellAndLocalCoord |> Tuple.first
+            Point2d.xy minX minY |> Units.worldToTile |> Grid.asciiToCellAndLocalCoord |> Tuple.first
 
         max_ =
             Point2d.xy maxX maxY
-                |> Units.worldToAscii
+                |> Units.worldToTile
                 |> Grid.asciiToCellAndLocalCoord
                 |> Tuple.first
                 |> Coord.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
@@ -1364,12 +1364,12 @@ view _ model =
     }
 
 
-contextMenuView : { userId : UserId, hidePoint : Coord AsciiUnit } -> FrontendLoaded -> Element FrontendMsg_
+contextMenuView : { userId : UserId, hidePoint : Coord TileUnit } -> FrontendLoaded -> Element FrontendMsg_
 contextMenuView { userId, hidePoint } loadedModel =
     let
         { x, y } =
-            Coord.addTuple ( Units.asciiUnit 1, Units.asciiUnit 1 ) hidePoint
-                |> Units.asciiToWorld
+            Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 ) hidePoint
+                |> Units.tileToWorld
                 |> Coord.coordToPoint
                 |> worldToScreen loadedModel
                 |> Point2d.unwrap
@@ -1911,8 +1911,8 @@ viewBoundingBox model =
             screenToWorld model Point2d.origin
                 |> Point2d.translateBy
                     (Coord.fromRawCoord ( -1, -1 )
-                        |> Units.cellToAscii
-                        |> Units.asciiToWorld
+                        |> Units.cellToTile
+                        |> Units.tileToWorld
                         |> Coord.coordToVector2d
                     )
 
@@ -1948,7 +1948,7 @@ canvasView model =
                     0
     in
     WebGL.toHtmlWith
-        [ WebGL.alpha False, WebGL.antialias ]
+        [ WebGL.alpha False, WebGL.antialias, WebGL.clearColor 0.8 1 0.7 1 ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
@@ -1966,8 +1966,8 @@ canvasView model =
                         (Dict.filter
                             (\key _ ->
                                 Coord.fromRawCoord key
-                                    |> Units.cellToAscii
-                                    |> Units.asciiToWorld
+                                    |> Units.cellToTile
+                                    |> Units.tileToWorld
                                     |> Coord.coordToPoint
                                     |> (\p -> BoundingBox2d.contains p viewBounds_)
                             )

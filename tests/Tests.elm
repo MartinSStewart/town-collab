@@ -1,12 +1,13 @@
 module Tests exposing (..)
 
-import Ascii exposing (Ascii(..))
 import Coord exposing (Coord)
+import Dict
 import EverySet as Set
 import Expect
 import Grid
 import GridCell
 import Test exposing (Test, describe, test)
+import Tile exposing (Tile(..))
 import Time
 import UrlHelper exposing (ConfirmEmailKey(..), UnsubscribeEmailKey(..))
 import User
@@ -83,6 +84,37 @@ tests =
                                 }
                             |> Grid.addChange
                                 { position = Coord.fromRawCoord ( 22, 8 )
+                                , change = House
+                                , userId = user0
+                                }
+                            |> Debug.log "a"
+                            |> Grid.getCell (Coord.fromRawCoord ( 1, 0 ))
+                in
+                case maybeCell of
+                    Just cell ->
+                        GridCell.flatten Set.empty Set.empty cell
+                            |> Expect.equal
+                                [ { position = Coord.fromRawCoord ( 6, 8 )
+                                  , userId = user0
+                                  , value = House
+                                  }
+                                ]
+
+                    Nothing ->
+                        Expect.fail "Cell not found"
+        , test "Undo redo" <|
+            \_ ->
+                let
+                    maybeCell : Maybe GridCell.Cell
+                    maybeCell =
+                        Grid.empty
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( 0, 0 )
+                                , change = House
+                                , userId = user0
+                                }
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( 8, 8 )
                                 , change = House
                                 , userId = user0
                                 }

@@ -25,7 +25,7 @@ import String.Nonempty exposing (NonemptyString(..))
 import Time
 import Types exposing (..)
 import Undo
-import Units exposing (AsciiUnit, CellUnit)
+import Units exposing (CellUnit, TileUnit)
 import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..))
 import User exposing (UserId)
 

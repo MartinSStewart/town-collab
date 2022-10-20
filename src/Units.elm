@@ -1,30 +1,29 @@
 module Units exposing
-    ( AsciiUnit
-    , CellUnit
+    ( CellUnit
     , LocalUnit
     , ScreenCoordinate
+    , TileUnit
     , WorldCoordinate
     , WorldPixel
-    , asciiToWorld
-    , asciiUnit
     , cellSize
-    , cellToAscii
-    , cellToAscii_
+    , cellToTile
     , cellUnit
     , inWorldUnits
     , localUnit
     , pixelToWorldPixel
     , screenFrame
-    , worldToAscii
+    , tileToWorld
+    , tileUnit
+    , worldToTile
     , worldUnit
     )
 
-import Ascii
 import Coord exposing (Coord)
 import Frame2d exposing (Frame2d)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
+import Tile
 import Vector2d exposing (Vector2d)
 
 
@@ -32,8 +31,8 @@ type WorldPixel
     = WorldPixel Never
 
 
-type AsciiUnit
-    = AsciiUnit Never
+type TileUnit
+    = TileUnit Never
 
 
 type CellUnit
@@ -44,8 +43,8 @@ type LocalUnit
     = LocalUnit Never
 
 
-asciiUnit : number -> Quantity number AsciiUnit
-asciiUnit =
+tileUnit : number -> Quantity number TileUnit
+tileUnit =
     Quantity.Quantity
 
 
@@ -69,20 +68,20 @@ localUnit =
     Quantity.Quantity
 
 
-asciiToWorld : Coord AsciiUnit -> Coord WorldPixel
-asciiToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
+tileToWorld : Coord TileUnit -> Coord WorldPixel
+tileToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
     let
         ( w, h ) =
-            Ascii.size
+            Tile.size
     in
     ( Quantity.Quantity (Pixels.inPixels w * x), Quantity.Quantity (Pixels.inPixels h * y) )
 
 
-worldToAscii : Point2d WorldPixel WorldCoordinate -> Coord AsciiUnit
-worldToAscii point =
+worldToTile : Point2d WorldPixel WorldCoordinate -> Coord TileUnit
+worldToTile point =
     let
         ( w, h ) =
-            Ascii.size
+            Tile.size
 
         { x, y } =
             Point2d.unwrap point
@@ -95,14 +94,9 @@ cellSize =
     16
 
 
-cellToAscii : Coord CellUnit -> Coord AsciiUnit
-cellToAscii coord =
+cellToTile : Coord CellUnit -> Coord TileUnit
+cellToTile coord =
     Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
-
-
-cellToAscii_ : Point2d CellUnit WorldCoordinate -> Point2d AsciiUnit WorldCoordinate
-cellToAscii_ coord =
-    coord |> Point2d.at (Quantity.per (cellUnit 1) (asciiUnit (toFloat cellSize)))
 
 
 pixelToWorldPixel : Float -> Vector2d Pixels ScreenCoordinate -> Coord WorldPixel

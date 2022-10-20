@@ -6,7 +6,7 @@ import Dict exposing (Dict)
 import Grid
 import GridCell
 import NotifyMe
-import Units exposing (AsciiUnit, CellUnit)
+import Units exposing (CellUnit, TileUnit)
 import User exposing (UserId)
 
 
@@ -21,7 +21,7 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | LocalHideUser UserId (Coord AsciiUnit)
+    | LocalHideUser UserId (Coord TileUnit)
     | LocalUnhideUser UserId
     | LocalToggleUserVisibilityForAll UserId
 

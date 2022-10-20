@@ -9,24 +9,24 @@ module GridCell exposing
     , removeUser
     )
 
-import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import List.Nonempty exposing (Nonempty(..))
+import Tile exposing (Tile)
 import Units exposing (LocalUnit)
 import User exposing (RawUserId, UserId)
 
 
 type Cell
     = Cell
-        { history : List { userId : UserId, position : Coord LocalUnit, value : Ascii }
+        { history : List { userId : UserId, position : Coord LocalUnit, value : Tile }
         , undoPoint : Dict RawUserId Int
         }
 
 
-addValue : UserId -> Coord LocalUnit -> Ascii -> Cell -> Cell
+addValue : UserId -> Coord LocalUnit -> Tile -> Cell -> Cell
 addValue userId position line (Cell cell) =
     let
         userUndoPoint =
@@ -86,7 +86,7 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Coord LocalUnit, value : Ascii }
+flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Coord LocalUnit, value : Tile }
 flatten hiddenUsers hiddenUsersForAll (Cell cell) =
     let
         hidden =
@@ -110,7 +110,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                         if stepsLeft > 0 then
                             let
                                 data =
-                                    Ascii.getData value
+                                    Tile.getData value
 
                                 ( width, height ) =
                                     data.size
@@ -132,7 +132,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                                     Coord.toRawCoord item2.position
 
                                                 ( width2, height2 ) =
-                                                    (Ascii.getData item2.value).size
+                                                    (Tile.getData item2.value).size
                                             in
                                             ((x2 >= x && x2 < x + width) || (x >= x2 && x < x2 + width2))
                                                 && ((y2 >= y && y2 < y + height) || (y >= y2 && y < y2 + height2))

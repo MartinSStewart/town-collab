@@ -20,7 +20,6 @@ module Grid exposing
     , removeUser
     )
 
-import Ascii exposing (Ascii)
 import Bounds exposing (Bounds)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
@@ -30,6 +29,7 @@ import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Quantity exposing (Quantity(..))
+import Tile exposing (Tile)
 import Units exposing (CellUnit, LocalUnit)
 import User exposing (UserId)
 import WebGL
@@ -49,7 +49,7 @@ from =
     Grid
 
 
-asciiToCellAndLocalCoord : Coord Units.AsciiUnit -> ( Coord Units.CellUnit, Coord Units.LocalUnit )
+asciiToCellAndLocalCoord : Coord Units.TileUnit -> ( Coord Units.CellUnit, Coord Units.LocalUnit )
 asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
     let
         offset =
@@ -66,7 +66,7 @@ asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
     )
 
 
-cellAndLocalCoordToAscii : ( Coord Units.CellUnit, Coord Units.LocalUnit ) -> Coord Units.AsciiUnit
+cellAndLocalCoordToAscii : ( Coord Units.CellUnit, Coord Units.LocalUnit ) -> Coord Units.TileUnit
 cellAndLocalCoordToAscii ( cell, local ) =
     Coord.addTuple
         (Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
@@ -76,11 +76,11 @@ cellAndLocalCoordToAscii ( cell, local ) =
 
 
 type alias GridChange =
-    { position : Coord Units.AsciiUnit, change : Ascii, userId : UserId }
+    { position : Coord Units.TileUnit, change : Tile, userId : UserId }
 
 
 type alias LocalGridChange =
-    { position : Coord Units.AsciiUnit, change : Ascii }
+    { position : Coord Units.TileUnit, change : Tile }
 
 
 localChangeToChange : UserId -> LocalGridChange -> GridChange
@@ -236,11 +236,11 @@ type alias Vertex =
 
 mesh :
     Coord Units.CellUnit
-    -> List { userId : UserId, position : Coord Units.LocalUnit, value : Ascii }
+    -> List { userId : UserId, position : Coord Units.LocalUnit, value : Tile }
     -> WebGL.Mesh Vertex
 mesh cellPosition asciiValues =
     let
-        list : List { position : Coord Units.AsciiUnit, userId : UserId, value : Ascii }
+        list : List { position : Coord Units.TileUnit, userId : UserId, value : Tile }
         list =
             List.map
                 (\{ userId, position, value } ->
@@ -260,13 +260,13 @@ mesh cellPosition asciiValues =
         (\{ position, value } ->
             let
                 { topLeft, bottomRight } =
-                    Ascii.texturePosition value
+                    Tile.texturePosition value
 
                 ( Quantity x, Quantity y ) =
                     position
 
                 ( w, h ) =
-                    Ascii.size
+                    Tile.size
             in
             List.map
                 (\uv ->

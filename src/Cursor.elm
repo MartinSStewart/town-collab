@@ -1,6 +1,5 @@
 module Cursor exposing (Cursor, bounds, draw, fragmentShader, mesh, moveCursor, newLine, position, selection, setCursor, toMesh, updateMesh, vertexShader)
 
-import Ascii
 import Bounds exposing (Bounds)
 import Coord exposing (Coord)
 import Element
@@ -9,6 +8,7 @@ import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Quantity exposing (Quantity(..))
 import Shaders
+import Tile
 import Units
 import WebGL exposing (Shader)
 import WebGL.Settings
@@ -16,13 +16,13 @@ import WebGL.Settings
 
 type Cursor
     = Cursor
-        { position : Coord Units.AsciiUnit
-        , startingColumn : Quantity Int Units.AsciiUnit
-        , size : Coord Units.AsciiUnit
+        { position : Coord Units.TileUnit
+        , startingColumn : Quantity Int Units.TileUnit
+        , size : Coord Units.TileUnit
         }
 
 
-moveCursor : Bool -> ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Cursor -> Cursor
+moveCursor : Bool -> ( Quantity Int Units.TileUnit, Quantity Int Units.TileUnit ) -> Cursor -> Cursor
 moveCursor isShiftDown offset (Cursor cursor) =
     if isShiftDown then
         Cursor
@@ -35,29 +35,29 @@ moveCursor isShiftDown offset (Cursor cursor) =
         Cursor
             { cursor
                 | position = Coord.addTuple offset cursor.position
-                , size = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+                , size = ( Units.tileUnit 0, Units.tileUnit 0 )
             }
 
 
 newLine : Cursor -> Cursor
 newLine (Cursor cursor) =
     Cursor
-        { position = ( cursor.startingColumn, Tuple.second cursor.position |> Quantity.plus (Units.asciiUnit 1) )
+        { position = ( cursor.startingColumn, Tuple.second cursor.position |> Quantity.plus (Units.tileUnit 1) )
         , startingColumn = cursor.startingColumn
-        , size = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+        , size = ( Units.tileUnit 0, Units.tileUnit 0 )
         }
 
 
-setCursor : ( Quantity Int Units.AsciiUnit, Quantity Int Units.AsciiUnit ) -> Cursor
+setCursor : ( Quantity Int Units.TileUnit, Quantity Int Units.TileUnit ) -> Cursor
 setCursor setPosition =
     Cursor
         { position = setPosition
         , startingColumn = Tuple.first setPosition
-        , size = ( Units.asciiUnit 0, Units.asciiUnit 0 )
+        , size = ( Units.tileUnit 0, Units.tileUnit 0 )
         }
 
 
-position : Cursor -> Coord Units.AsciiUnit
+position : Cursor -> Coord Units.TileUnit
 position (Cursor cursor) =
     cursor.position
 
@@ -88,7 +88,7 @@ toMesh cursor =
             size cursor |> Coord.toRawCoord
 
         ( w, h ) =
-            Coord.toRawCoord Ascii.size
+            Coord.toRawCoord Tile.size
 
         ( v0, i0 ) =
             mesh 0
@@ -136,12 +136,12 @@ updateMesh oldModel newModel =
         { newModel | cursorMesh = toMesh newModel.cursor }
 
 
-size : Cursor -> Coord Units.AsciiUnit
+size : Cursor -> Coord Units.TileUnit
 size (Cursor cursor) =
     cursor.size
 
 
-selection : Coord Units.AsciiUnit -> Coord Units.AsciiUnit -> Cursor
+selection : Coord Units.TileUnit -> Coord Units.TileUnit -> Cursor
 selection start end =
     { position = end
     , size = Coord.minusTuple end start
@@ -150,7 +150,7 @@ selection start end =
         |> Cursor
 
 
-bounds : Cursor -> Bounds Units.AsciiUnit
+bounds : Cursor -> Bounds Units.TileUnit
 bounds (Cursor cursor) =
     let
         pos0 =
@@ -172,7 +172,7 @@ draw viewMatrix color model =
         fragmentShader
         model.cursorMesh
         { view = viewMatrix
-        , offset = bounds model.cursor |> Bounds.minimum |> Units.asciiToWorld |> Coord.coordToVec
+        , offset = bounds model.cursor |> Bounds.minimum |> Units.tileToWorld |> Coord.coordToVec
         , color = Shaders.colorToVec3 color
         }
 

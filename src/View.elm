@@ -8,20 +8,20 @@ import Units
 
 type View
     = View
-        { viewPoint : Coord Units.AsciiUnit
-        , viewSize : Coord Units.AsciiUnit
+        { viewPoint : Coord Units.TileUnit
+        , viewSize : Coord Units.TileUnit
         }
 
 
-view : { viewPoint : Coord Units.AsciiUnit, viewSize : Coord Units.AsciiUnit } -> View
+view : { viewPoint : Coord Units.TileUnit, viewSize : Coord Units.TileUnit } -> View
 view view_ =
     let
         viewPoint_ =
-            Coord.minTuple ( Units.asciiUnit 100, Units.asciiUnit 100 ) view_.viewPoint
-                |> Coord.maxTuple ( Units.asciiUnit -100, Units.asciiUnit -100 )
+            Coord.minTuple ( Units.tileUnit 100, Units.tileUnit 100 ) view_.viewPoint
+                |> Coord.maxTuple ( Units.tileUnit -100, Units.tileUnit -100 )
 
         maxSize =
-            Point2d.xy (Units.worldUnit 4000) (Units.worldUnit 2200) |> Units.worldToAscii
+            Point2d.xy (Units.worldUnit 4000) (Units.worldUnit 2200) |> Units.worldToTile
     in
     View
         { viewPoint = viewPoint_
