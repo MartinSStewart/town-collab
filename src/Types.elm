@@ -46,7 +46,7 @@ import Quantity exposing (Quantity, Rate)
 import RecentChanges exposing (RecentChanges)
 import SendGrid
 import Time
-import Units exposing (CellUnit, ScreenCoordinate, TileUnit, WorldCoordinate, WorldPixel)
+import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, WorldUnit)
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
 import User exposing (RawUserId, UserId)
@@ -69,7 +69,7 @@ type alias FrontendLoading =
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
     , time : Time.Posix
-    , viewPoint : Coord TileUnit
+    , viewPoint : Coord WorldUnit
     , mousePosition : Point2d Pixels ScreenCoordinate
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
@@ -78,7 +78,7 @@ type alias FrontendLoading =
 
 
 type alias Train =
-    { position : Point2d TileUnit TileUnit }
+    { position : Point2d WorldUnit WorldUnit }
 
 
 type alias FrontendLoaded =
@@ -104,7 +104,7 @@ type alias FrontendLoaded =
     , time : Time.Posix
     , lastTouchMove : Maybe Time.Posix
     , userHoverHighlighted : Maybe UserId
-    , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord TileUnit }
+    , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord WorldUnit }
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
@@ -118,7 +118,7 @@ type alias FrontendLoaded =
 type ToolType
     = DragTool
     | SelectTool
-    | HighlightTool (Maybe ( UserId, Coord TileUnit ))
+    | HighlightTool (Maybe ( UserId, Coord WorldUnit ))
 
 
 type MouseButtonState
@@ -134,7 +134,7 @@ type alias BackendModel =
     { grid : Grid
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
     , users : Dict RawUserId BackendUserData
-    , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord TileUnit }
+    , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord WorldUnit }
     , userChangesRecently : RecentChanges
     , subscribedEmails : List SubscribedEmail
     , pendingEmails : List PendingEmail
@@ -206,7 +206,7 @@ type FrontendMsg_
     | UserTagMouseExited UserId
     | HideForAllTogglePressed UserId
     | ToggleAdminEnabledPressed
-    | HideUserPressed { userId : UserId, hidePoint : Coord TileUnit }
+    | HideUserPressed { userId : UserId, hidePoint : Coord WorldUnit }
     | AnimationFrame Time.Posix
     | PressedCancelNotifyMe
     | PressedSubmitNotifyMe NotifyMe.Validated

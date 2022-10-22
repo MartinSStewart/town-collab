@@ -16,13 +16,13 @@ import WebGL.Settings
 
 type Cursor
     = Cursor
-        { position : Coord Units.TileUnit
-        , startingColumn : Quantity Int Units.TileUnit
-        , size : Coord Units.TileUnit
+        { position : Coord Units.WorldUnit
+        , startingColumn : Quantity Int Units.WorldUnit
+        , size : Coord Units.WorldUnit
         }
 
 
-moveCursor : Bool -> ( Quantity Int Units.TileUnit, Quantity Int Units.TileUnit ) -> Cursor -> Cursor
+moveCursor : Bool -> ( Quantity Int Units.WorldUnit, Quantity Int Units.WorldUnit ) -> Cursor -> Cursor
 moveCursor isShiftDown offset (Cursor cursor) =
     if isShiftDown then
         Cursor
@@ -48,7 +48,7 @@ newLine (Cursor cursor) =
         }
 
 
-setCursor : ( Quantity Int Units.TileUnit, Quantity Int Units.TileUnit ) -> Cursor
+setCursor : ( Quantity Int Units.WorldUnit, Quantity Int Units.WorldUnit ) -> Cursor
 setCursor setPosition =
     Cursor
         { position = setPosition
@@ -57,7 +57,7 @@ setCursor setPosition =
         }
 
 
-position : Cursor -> Coord Units.TileUnit
+position : Cursor -> Coord Units.WorldUnit
 position (Cursor cursor) =
     cursor.position
 
@@ -136,12 +136,12 @@ updateMesh oldModel newModel =
         { newModel | cursorMesh = toMesh newModel.cursor }
 
 
-size : Cursor -> Coord Units.TileUnit
+size : Cursor -> Coord Units.WorldUnit
 size (Cursor cursor) =
     cursor.size
 
 
-selection : Coord Units.TileUnit -> Coord Units.TileUnit -> Cursor
+selection : Coord Units.WorldUnit -> Coord Units.WorldUnit -> Cursor
 selection start end =
     { position = end
     , size = Coord.minusTuple end start
@@ -150,7 +150,7 @@ selection start end =
         |> Cursor
 
 
-bounds : Cursor -> Bounds Units.TileUnit
+bounds : Cursor -> Bounds Units.WorldUnit
 bounds (Cursor cursor) =
     let
         pos0 =

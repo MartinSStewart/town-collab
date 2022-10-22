@@ -2,18 +2,18 @@ module UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEm
 
 import Coord exposing (Coord)
 import Env
-import Units exposing (TileUnit)
+import Units exposing (WorldUnit)
 import Url.Builder
 import Url.Parser exposing ((</>), (<?>))
 import Url.Parser.Query
 
 
-startPointAt : Coord TileUnit
+startPointAt : Coord WorldUnit
 startPointAt =
     Coord.fromRawCoord ( 0, 0 )
 
 
-coordQueryParser : Url.Parser.Query.Parser (Coord TileUnit)
+coordQueryParser : Url.Parser.Query.Parser (Coord WorldUnit)
 coordQueryParser =
     Url.Parser.Query.map2
         (\maybeX maybeY ->
@@ -83,7 +83,7 @@ unsubscribe =
 
 
 type InternalRoute
-    = InternalRoute { showNotifyMe : Bool, viewPoint : Coord TileUnit }
+    = InternalRoute { showNotifyMe : Bool, viewPoint : Coord WorldUnit }
     | EmailConfirmationRoute ConfirmEmailKey
     | EmailUnsubscribeRoute UnsubscribeEmailKey
 
@@ -96,6 +96,6 @@ type UnsubscribeEmailKey
     = UnsubscribeEmailKey String
 
 
-internalRoute : Bool -> Coord TileUnit -> InternalRoute
+internalRoute : Bool -> Coord WorldUnit -> InternalRoute
 internalRoute showNotifyMe viewPoint =
     InternalRoute { showNotifyMe = showNotifyMe, viewPoint = viewPoint }

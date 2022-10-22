@@ -1,9 +1,11 @@
 module Tile exposing
-    ( Tile(..)
+    ( RailPath(..)
+    , Tile(..)
     , allTiles
     , fromChar
     , getData
     , hasCollision
+    , nearestRailT
     , size
     , texturePosition
     , tileToWorld
@@ -12,12 +14,13 @@ module Tile exposing
 
 import Coord exposing (Coord)
 import Dict exposing (Dict)
+import List.Extra as List
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
-import Units exposing (LocalUnit, TileUnit, WorldCoordinate, WorldPixel)
+import Units exposing (CellLocalUnit, TileLocalUnit, WorldCoordinate, WorldPixel, WorldUnit)
 
 
 charToTile : Dict Char Tile
@@ -35,7 +38,7 @@ size =
     ( Pixels.pixels 18, Pixels.pixels 18 )
 
 
-tileToWorld : Coord TileUnit -> Coord WorldPixel
+tileToWorld : Coord WorldUnit -> Coord WorldPixel
 tileToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
     let
         ( w, h ) =
@@ -44,7 +47,7 @@ tileToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
     ( Quantity.Quantity (Pixels.inPixels w * x), Quantity.Quantity (Pixels.inPixels h * y) )
 
 
-worldToTile : Point2d WorldPixel WorldCoordinate -> Coord TileUnit
+worldToTile : Point2d WorldPixel WorldCoordinate -> Coord WorldUnit
 worldToTile point =
     let
         ( w, h ) =
@@ -98,7 +101,17 @@ texturePosition tile =
 
 
 type alias TileData =
-    { texturePosition : ( Int, Int ), size : ( Int, Int ), collisionMask : CollisionMask, char : Char }
+    { texturePosition : ( Int, Int )
+    , size : ( Int, Int )
+    , collisionMask : CollisionMask
+    , char : Char
+    , railPath : RailPath
+    }
+
+
+type RailPath
+    = NoRailPath
+    | SingleRailPath (Float -> Point2d TileLocalUnit TileLocalUnit)
 
 
 allTiles : List Tile
@@ -129,7 +142,7 @@ type CollisionMask
     | CustomCollision (Set ( Int, Int ))
 
 
-hasCollision : Coord LocalUnit -> TileData -> Coord LocalUnit -> TileData -> Bool
+hasCollision : Coord CellLocalUnit -> TileData -> Coord CellLocalUnit -> TileData -> Bool
 hasCollision positionA tileA positionB tileB =
     let
         ( Quantity x, Quantity y ) =
@@ -176,6 +189,24 @@ hasCollision positionA tileA positionB tileB =
             Set.size intersection > 0
 
 
+nearestRailT :
+    Point2d TileLocalUnit TileLocalUnit
+    -> (Float -> Point2d TileLocalUnit TileLocalUnit)
+    -> { t : Float, distance : Quantity Float TileLocalUnit }
+nearestRailT position railPath =
+    List.range 0 20
+        |> List.map
+            (\a ->
+                let
+                    t =
+                        toFloat a / 20
+                in
+                { t = t, distance = Point2d.distanceFrom (railPath t) position }
+            )
+        |> Quantity.minimumBy .distance
+        |> Maybe.withDefault { t = 0, distance = Quantity.zero }
+
+
 getData : Tile -> TileData
 getData tile =
     case tile of
@@ -190,13 +221,24 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'h'
+            , railPath = NoRailPath
             }
 
         RailHorizontal ->
-            { texturePosition = ( 0, 0 ), size = ( 1, 1 ), collisionMask = DefaultCollision, char = 'r' }
+            { texturePosition = ( 0, 0 )
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = 'r'
+            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = t, y = 0.5 })
+            }
 
         RailVertical ->
-            { texturePosition = ( 1, 0 ), size = ( 1, 1 ), collisionMask = DefaultCollision, char = 'R' }
+            { texturePosition = ( 1, 0 )
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = 'R'
+            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = 0.5, y = t })
+            }
 
         RailBottomToRight ->
             { texturePosition = ( 3, 0 )
@@ -217,6 +259,14 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'q'
+            , railPath =
+                SingleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 0.5 + 3.5 * sin (t * pi / 2)
+                            , y = 0.5 + 3.5 * cos (t * pi / 2)
+                            }
+                    )
             }
 
         RailBottomToLeft ->
@@ -238,6 +288,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'w'
+            , railPath = NoRailPath
             }
 
         RailTopToRight ->
@@ -259,6 +310,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'a'
+            , railPath = NoRailPath
             }
 
         RailTopToLeft ->
@@ -280,10 +332,16 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 's'
+            , railPath = NoRailPath
             }
 
         RailCrossing ->
-            { texturePosition = ( 2, 0 ), size = ( 1, 1 ), collisionMask = DefaultCollision, char = 'e' }
+            { texturePosition = ( 2, 0 )
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = 'e'
+            , railPath = NoRailPath
+            }
 
         RailStrafeDown ->
             { texturePosition = ( 0, 8 )
@@ -304,6 +362,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'U'
+            , railPath = NoRailPath
             }
 
         RailStrafeUp ->
@@ -325,6 +384,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'J'
+            , railPath = NoRailPath
             }
 
         RailStrafeLeft ->
@@ -346,6 +406,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'I'
+            , railPath = NoRailPath
             }
 
         RailStrafeRight ->
@@ -367,6 +428,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'K'
+            , railPath = NoRailPath
             }
 
         TrainHouseRight ->
@@ -389,6 +451,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 't'
+            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = 1 + t * 3, y = 2.5 })
             }
 
         TrainHouseLeft ->
@@ -411,16 +474,37 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'T'
+            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = t * 3, y = 2.5 })
             }
 
         RailStrafeDownSmall ->
-            { texturePosition = ( 3, 15 ), size = ( 4, 2 ), collisionMask = DefaultCollision, char = 'u' }
+            { texturePosition = ( 3, 15 )
+            , size = ( 4, 2 )
+            , collisionMask = DefaultCollision
+            , char = 'u'
+            , railPath = NoRailPath
+            }
 
         RailStrafeUpSmall ->
-            { texturePosition = ( 7, 15 ), size = ( 4, 2 ), collisionMask = DefaultCollision, char = 'j' }
+            { texturePosition = ( 7, 15 )
+            , size = ( 4, 2 )
+            , collisionMask = DefaultCollision
+            , char = 'j'
+            , railPath = NoRailPath
+            }
 
         RailStrafeLeftSmall ->
-            { texturePosition = ( 11, 0 ), size = ( 2, 4 ), collisionMask = DefaultCollision, char = 'i' }
+            { texturePosition = ( 11, 0 )
+            , size = ( 2, 4 )
+            , collisionMask = DefaultCollision
+            , char = 'i'
+            , railPath = NoRailPath
+            }
 
         RailStrafeRightSmall ->
-            { texturePosition = ( 11, 4 ), size = ( 2, 4 ), collisionMask = DefaultCollision, char = 'k' }
+            { texturePosition = ( 11, 4 )
+            , size = ( 2, 4 )
+            , collisionMask = DefaultCollision
+            , char = 'k'
+            , railPath = NoRailPath
+            }

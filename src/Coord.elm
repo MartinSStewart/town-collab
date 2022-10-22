@@ -5,6 +5,7 @@ module Coord exposing
     , addTuple
     , area
     , divideTuple
+    , floorPoint
     , fromRawCoord
     , maxTuple
     , minTuple
@@ -90,6 +91,15 @@ roundPoint point2d =
             Point2d.unwrap point2d
     in
     fromRawCoord ( round x, round y )
+
+
+floorPoint : Point2d units coordinate -> Coord units
+floorPoint point2d =
+    let
+        { x, y } =
+            Point2d.unwrap point2d
+    in
+    fromRawCoord ( floor x, floor y )
 
 
 toVector2d : Coord units -> Vector2d units coordinate

@@ -1,10 +1,11 @@
 module Units exposing
-    ( CellUnit
-    , LocalUnit
+    ( CellLocalUnit
+    , CellUnit
     , ScreenCoordinate
-    , TileUnit
+    , TileLocalUnit
     , WorldCoordinate
     , WorldPixel
+    , WorldUnit
     , cellSize
     , cellToTile
     , cellUnit
@@ -28,19 +29,23 @@ type WorldPixel
     = WorldPixel Never
 
 
-type TileUnit
-    = TileUnit Never
+type WorldUnit
+    = WorldUnit Never
 
 
 type CellUnit
     = CellUnit Never
 
 
-type LocalUnit
+type CellLocalUnit
     = LocalUnit Never
 
 
-tileUnit : number -> Quantity number TileUnit
+type TileLocalUnit
+    = TileLocalUnit Never
+
+
+tileUnit : number -> Quantity number WorldUnit
 tileUnit =
     Quantity.Quantity
 
@@ -60,7 +65,7 @@ cellUnit =
     Quantity.Quantity
 
 
-localUnit : number -> Quantity number LocalUnit
+localUnit : number -> Quantity number CellLocalUnit
 localUnit =
     Quantity.Quantity
 
@@ -70,7 +75,7 @@ cellSize =
     16
 
 
-cellToTile : Coord CellUnit -> Coord TileUnit
+cellToTile : Coord CellUnit -> Coord WorldUnit
 cellToTile coord =
     Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
 

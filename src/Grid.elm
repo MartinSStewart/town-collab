@@ -6,7 +6,6 @@ module Grid exposing
     , addChange
     , allCells
     , allCellsDict
-    , asciiToCellAndLocalCoord
     , cellAndLocalCoordToAscii
     , changeCount
     , closeNeighborCells
@@ -18,6 +17,7 @@ module Grid exposing
     , moveUndoPoint
     , region
     , removeUser
+    , tileToCellAndLocalCoord
     )
 
 import Bounds exposing (Bounds)
@@ -30,7 +30,7 @@ import Math.Vector2 exposing (Vec2)
 import Pixels
 import Quantity exposing (Quantity(..))
 import Tile exposing (Tile)
-import Units exposing (CellUnit, LocalUnit)
+import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 import User exposing (UserId)
 import WebGL
 
@@ -49,8 +49,8 @@ from =
     Grid
 
 
-asciiToCellAndLocalCoord : Coord Units.TileUnit -> ( Coord Units.CellUnit, Coord Units.LocalUnit )
-asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
+tileToCellAndLocalCoord : Coord WorldUnit -> ( Coord CellUnit, Coord CellLocalUnit )
+tileToCellAndLocalCoord ( Quantity x, Quantity y ) =
     let
         offset =
             1000000
@@ -66,7 +66,7 @@ asciiToCellAndLocalCoord ( Quantity x, Quantity y ) =
     )
 
 
-cellAndLocalCoordToAscii : ( Coord Units.CellUnit, Coord Units.LocalUnit ) -> Coord Units.TileUnit
+cellAndLocalCoordToAscii : ( Coord CellUnit, Coord CellLocalUnit ) -> Coord WorldUnit
 cellAndLocalCoordToAscii ( cell, local ) =
     Coord.addTuple
         (Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
@@ -76,11 +76,11 @@ cellAndLocalCoordToAscii ( cell, local ) =
 
 
 type alias GridChange =
-    { position : Coord Units.TileUnit, change : Tile, userId : UserId }
+    { position : Coord WorldUnit, change : Tile, userId : UserId }
 
 
 type alias LocalGridChange =
-    { position : Coord Units.TileUnit, change : Tile }
+    { position : Coord WorldUnit, change : Tile }
 
 
 localChangeToChange : UserId -> LocalGridChange -> GridChange
@@ -102,7 +102,7 @@ moveUndoPoint userId undoPoint (Grid grid) =
         |> Grid
 
 
-changeCount : Coord Units.CellUnit -> Grid -> Int
+changeCount : Coord CellUnit -> Grid -> Int
 changeCount ( Quantity x, Quantity y ) (Grid grid) =
     case Dict.get ( x, y ) grid of
         Just cell ->
@@ -112,7 +112,7 @@ changeCount ( Quantity x, Quantity y ) (Grid grid) =
             0
 
 
-closeNeighborCells : Coord CellUnit -> Coord LocalUnit -> List ( Coord CellUnit, Coord LocalUnit )
+closeNeighborCells : Coord CellUnit -> Coord CellLocalUnit -> List ( Coord CellUnit, Coord CellLocalUnit )
 closeNeighborCells cellPosition localPosition =
     List.filterMap
         (\offset ->
@@ -175,9 +175,9 @@ addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
         ( cellPosition, localPosition ) =
-            asciiToCellAndLocalCoord change.position
+            tileToCellAndLocalCoord change.position
 
-        neighborCells_ : List ( Coord Units.CellUnit, Cell )
+        neighborCells_ : List ( Coord CellUnit, Cell )
         neighborCells_ =
             closeNeighborCells cellPosition localPosition
                 |> List.map
@@ -220,12 +220,12 @@ region bounds (Grid grid) =
     Dict.filter (\coord _ -> Bounds.contains (Coord.fromRawCoord coord) bounds) grid |> Grid
 
 
-getCell : Coord Units.CellUnit -> Grid -> Maybe Cell
+getCell : Coord CellUnit -> Grid -> Maybe Cell
 getCell ( Quantity x, Quantity y ) (Grid grid) =
     Dict.get ( x, y ) grid
 
 
-setCell : Coord Units.CellUnit -> Cell -> Grid -> Grid
+setCell : Coord CellUnit -> Cell -> Grid -> Grid
 setCell ( Quantity x, Quantity y ) value (Grid grid) =
     Dict.insert ( x, y ) value grid |> Grid
 
@@ -234,13 +234,10 @@ type alias Vertex =
     { position : Vec2, texturePosition : Vec2 }
 
 
-mesh :
-    Coord Units.CellUnit
-    -> List { userId : UserId, position : Coord Units.LocalUnit, value : Tile }
-    -> WebGL.Mesh Vertex
+mesh : Coord CellUnit -> List { userId : UserId, position : Coord CellLocalUnit, value : Tile } -> WebGL.Mesh Vertex
 mesh cellPosition tiles =
     let
-        list : List { position : Coord Units.TileUnit, userId : UserId, value : Tile }
+        list : List { position : Coord WorldUnit, userId : UserId, value : Tile }
         list =
             List.map
                 (\{ userId, position, value } ->

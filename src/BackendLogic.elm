@@ -25,7 +25,7 @@ import String.Nonempty exposing (NonemptyString(..))
 import Time
 import Types exposing (..)
 import Undo
-import Units exposing (CellUnit, TileUnit)
+import Units exposing (CellUnit, WorldUnit)
 import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..))
 import User exposing (UserId)
 
@@ -495,7 +495,7 @@ updateLocalChange ( userId, _ ) change model =
                 Just user ->
                     let
                         ( cellPosition, localPosition ) =
-                            Grid.asciiToCellAndLocalCoord localChange.position
+                            Grid.tileToCellAndLocalCoord localChange.position
                     in
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid

@@ -15,18 +15,18 @@ import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import List.Nonempty exposing (Nonempty(..))
 import Tile exposing (Tile)
-import Units exposing (LocalUnit)
+import Units exposing (CellLocalUnit)
 import User exposing (RawUserId, UserId)
 
 
 type Cell
     = Cell
-        { history : List { userId : UserId, position : Coord LocalUnit, value : Tile }
+        { history : List { userId : UserId, position : Coord CellLocalUnit, value : Tile }
         , undoPoint : Dict RawUserId Int
         }
 
 
-addValue : UserId -> Coord LocalUnit -> Tile -> Cell -> Cell
+addValue : UserId -> Coord CellLocalUnit -> Tile -> Cell -> Cell
 addValue userId position line (Cell cell) =
     let
         userUndoPoint =
@@ -86,7 +86,7 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Coord LocalUnit, value : Tile }
+flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Coord CellLocalUnit, value : Tile }
 flatten hiddenUsers hiddenUsersForAll (Cell cell) =
     let
         hidden =

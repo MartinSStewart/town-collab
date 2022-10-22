@@ -10,7 +10,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Time
 import Undo
-import Units exposing (CellUnit, LocalUnit)
+import Units exposing (CellLocalUnit, CellUnit)
 import User exposing (UserId)
 
 
@@ -70,7 +70,7 @@ updateFromBackend changes localModel_ =
     LocalModel.updateFromBackend config changes localModel_
 
 
-incrementUndoCurrent : Coord CellUnit -> Coord LocalUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
+incrementUndoCurrent : Coord CellUnit -> Coord CellLocalUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
 incrementUndoCurrent cellPosition localPosition undoCurrent =
     cellPosition
         :: List.map Tuple.first (Grid.closeNeighborCells cellPosition localPosition)
@@ -90,7 +90,7 @@ update_ msg model =
         LocalChange (LocalGridChange gridChange) ->
             let
                 ( cellPosition, localPosition ) =
-                    Grid.asciiToCellAndLocalCoord gridChange.position
+                    Grid.tileToCellAndLocalCoord gridChange.position
             in
             { model
                 | redoHistory = []
@@ -148,7 +148,7 @@ update_ msg model =
         ServerChange (ServerGridChange gridChange) ->
             if
                 Bounds.contains
-                    (Grid.asciiToCellAndLocalCoord gridChange.position |> Tuple.first)
+                    (Grid.tileToCellAndLocalCoord gridChange.position |> Tuple.first)
                     model.viewBounds
             then
                 { model | grid = Grid.addChange gridChange model.grid }

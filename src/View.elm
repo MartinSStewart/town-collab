@@ -8,12 +8,12 @@ import Units
 
 type View
     = View
-        { viewPoint : Coord Units.TileUnit
-        , viewSize : Coord Units.TileUnit
+        { viewPoint : Coord Units.WorldUnit
+        , viewSize : Coord Units.WorldUnit
         }
 
 
-view : { viewPoint : Coord Units.TileUnit, viewSize : Coord Units.TileUnit } -> View
+view : { viewPoint : Coord Units.WorldUnit, viewSize : Coord Units.WorldUnit } -> View
 view view_ =
     let
         viewPoint_ =
@@ -41,11 +41,11 @@ cellBounds (View view_) =
     { min =
         ( toFloat x - toFloat sx / 2 |> floor, toFloat y - toFloat sy / 2 |> floor )
             |> Coord.fromRawCoord
-            |> Grid.asciiToCellAndLocalCoord
+            |> Grid.tileToCellAndLocalCoord
             |> Tuple.first
     , max =
         ( toFloat x - toFloat sx / 2 |> ceiling, toFloat y - toFloat sy / 2 |> ceiling )
             |> Coord.fromRawCoord
-            |> Grid.asciiToCellAndLocalCoord
+            |> Grid.tileToCellAndLocalCoord
             |> Tuple.first
     }

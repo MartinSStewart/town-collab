@@ -44,11 +44,11 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Shaders
 import Task
-import Tile exposing (Tile(..))
+import Tile exposing (RailPath(..), Tile(..))
 import Time
 import Types exposing (..)
 import UiColors
-import Units exposing (CellUnit, ScreenCoordinate, TileUnit, WorldCoordinate, WorldPixel)
+import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -206,11 +206,11 @@ init url key =
         -- We only load in a portion of the grid since we don't know the window size yet. The rest will get loaded in later anyway.
         bounds =
             Bounds.bounds
-                (Grid.asciiToCellAndLocalCoord viewPoint
+                (Grid.tileToCellAndLocalCoord viewPoint
                     |> Tuple.first
                     |> Coord.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
                 )
-                (Grid.asciiToCellAndLocalCoord viewPoint
+                (Grid.tileToCellAndLocalCoord viewPoint
                     |> Tuple.first
                     |> Coord.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
                 )
@@ -402,7 +402,7 @@ updateLoaded msg model =
                     localModel =
                         LocalGrid.localModel model.localModel
 
-                    position : Coord TileUnit
+                    position : Coord WorldUnit
                     position =
                         screenToWorld model mousePosition |> Tile.worldToTile
 
@@ -478,7 +478,7 @@ updateLoaded msg model =
                                     localModel =
                                         LocalGrid.localModel model.localModel
 
-                                    position : Coord TileUnit
+                                    position : Coord WorldUnit
                                     position =
                                         screenToWorld model mousePosition |> Tile.worldToTile
 
@@ -645,9 +645,47 @@ updateLoaded msg model =
             )
 
         AnimationFrame time ->
+            let
+                localGrid : LocalGrid_
+                localGrid =
+                    LocalGrid.localModel model.localModel
+
+                moveTrain : Train -> Train
+                moveTrain train =
+                    let
+                        ( cellPos, localPos ) =
+                            Grid.tileToCellAndLocalCoord (Coord.floorPoint train.position)
+                    in
+                    case Grid.getCell cellPos localGrid.grid of
+                        Just cell ->
+                            GridCell.flatten EverySet.empty EverySet.empty cell
+                                |> List.filterMap
+                                    (\{ position, value } ->
+                                        case Tile.getData value |> .railPath of
+                                            NoRailPath ->
+                                                Nothing
+
+                                            SingleRailPath path ->
+                                                let
+                                                    { t, distance } =
+                                                        Tile.nearestRailT localPos path
+                                                in
+                                                { t = t
+                                                , distance = distance
+                                                , position = position
+                                                , tile = value
+                                                }
+                                                    |> Just
+                                    )
+                                |> Quantity.minimumBy .distance
+
+                        Nothing ->
+                            train
+            in
             ( { model
                 | time = time
                 , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
+                , trains = List.map moveTrain model.trains
               }
             , Cmd.none
             )
@@ -887,7 +925,7 @@ mainMouseButtonUp mousePosition mouseState model =
             ( model_, Cmd.none )
 
 
-highlightUser : UserId -> Coord TileUnit -> FrontendLoaded -> FrontendLoaded
+highlightUser : UserId -> Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
 highlightUser highlightUserId highlightPoint model =
     { model
         | highlightContextMenu =
@@ -929,7 +967,7 @@ updateLocalModel msg model =
     }
 
 
-clearTextSelection : Bounds TileUnit -> FrontendLoaded -> FrontendLoaded
+clearTextSelection : Bounds WorldUnit -> FrontendLoaded -> FrontendLoaded
 clearTextSelection bounds model =
     let
         ( w, h ) =
@@ -967,11 +1005,11 @@ worldToScreen model =
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
-selectionPoint : Coord TileUnit -> EverySet UserId -> EverySet UserId -> Grid -> Maybe { userId : UserId, value : Tile }
+selectionPoint : Coord WorldUnit -> EverySet UserId -> EverySet UserId -> Grid -> Maybe { userId : UserId, value : Tile }
 selectionPoint position hiddenUsers hiddenUsersForAll grid =
     let
         ( cellPosition, localPosition ) =
-            Grid.asciiToCellAndLocalCoord position
+            Grid.tileToCellAndLocalCoord position
     in
     case Grid.getCell cellPosition grid of
         Just cell ->
@@ -1026,11 +1064,7 @@ changeText text model =
                                 if tile == TrainHouseLeft || tile == TrainHouseRight then
                                     let
                                         v =
-                                            Tile.getData tile
-                                                |> .size
-                                                |> Coord.fromRawCoord
-                                                |> Coord.toVector2d
-                                                |> Vector2d.scaleBy 0.5
+                                            Vector2d.unsafe { x = 2, y = 2.5 }
                                     in
                                     { position =
                                         Cursor.position model.cursor
@@ -1151,12 +1185,12 @@ viewBoundsUpdate ( model, cmd ) =
             viewBoundingBox model |> BoundingBox2d.extrema
 
         min_ =
-            Point2d.xy minX minY |> Tile.worldToTile |> Grid.asciiToCellAndLocalCoord |> Tuple.first
+            Point2d.xy minX minY |> Tile.worldToTile |> Grid.tileToCellAndLocalCoord |> Tuple.first
 
         max_ =
             Point2d.xy maxX maxY
                 |> Tile.worldToTile
-                |> Grid.asciiToCellAndLocalCoord
+                |> Grid.tileToCellAndLocalCoord
                 |> Tuple.first
                 |> Coord.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
 
@@ -1386,7 +1420,7 @@ view _ model =
     }
 
 
-contextMenuView : { userId : UserId, hidePoint : Coord TileUnit } -> FrontendLoaded -> Element FrontendMsg_
+contextMenuView : { userId : UserId, hidePoint : Coord WorldUnit } -> FrontendLoaded -> Element FrontendMsg_
 contextMenuView { userId, hidePoint } loadedModel =
     let
         { x, y } =
