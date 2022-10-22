@@ -102,37 +102,22 @@ tests =
 
                     Nothing ->
                         Expect.fail "Cell not found"
-        , test "Undo redo" <|
+        , test "Collision test for default collision and custom collision mask" <|
             \_ ->
-                let
-                    maybeCell : Maybe GridCell.Cell
-                    maybeCell =
-                        Grid.empty
-                            |> Grid.addChange
-                                { position = Coord.fromRawCoord ( 0, 0 )
-                                , change = House
-                                , userId = user0
-                                }
-                            |> Grid.addChange
-                                { position = Coord.fromRawCoord ( 8, 8 )
-                                , change = House
-                                , userId = user0
-                                }
-                            |> Debug.log "a"
-                            |> Grid.getCell (Coord.fromRawCoord ( 1, 0 ))
-                in
-                case maybeCell of
-                    Just cell ->
-                        GridCell.flatten Set.empty Set.empty cell
-                            |> Expect.equal
-                                [ { position = Coord.fromRawCoord ( 6, 8 )
-                                  , userId = user0
-                                  , value = House
-                                  }
-                                ]
-
-                    Nothing ->
-                        Expect.fail "Cell not found"
+                Tile.hasCollision
+                    (Coord.fromRawCoord ( 0, 0 ))
+                    (Tile.getData RailHorizontal)
+                    (Coord.fromRawCoord ( 0, 0 ))
+                    (Tile.getData RailBottomToRight)
+                    |> Expect.false "No overlap expected"
+        , test "Collision test 2 for default collision and custom collision mask" <|
+            \_ ->
+                Tile.hasCollision
+                    (Coord.fromRawCoord ( 0, 0 ))
+                    (Tile.getData RailHorizontal)
+                    (Coord.fromRawCoord ( 1, 0 ))
+                    (Tile.getData RailBottomToRight)
+                    |> Expect.false "No overlap expected"
         ]
 
 

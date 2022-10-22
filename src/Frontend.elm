@@ -117,7 +117,7 @@ loadedInit loading loadingData =
             , trains = []
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
-            , viewPoint = Units.tileToWorld loading.viewPoint |> Coord.toPoint2d
+            , viewPoint = Tile.tileToWorld loading.viewPoint |> Coord.toPoint2d
             , viewPointLastInterval = Point2d.origin
             , cursor = cursor
             , texture = Nothing
@@ -300,7 +300,7 @@ updateLoaded msg model =
                     Just (UrlHelper.InternalRoute { viewPoint, showNotifyMe }) ->
                         { model
                             | cursor = Cursor.setCursor viewPoint
-                            , viewPoint = Units.tileToWorld viewPoint |> Coord.toPoint2d
+                            , viewPoint = Tile.tileToWorld viewPoint |> Coord.toPoint2d
                             , showNotifyMe = showNotifyMe
                         }
 
@@ -404,7 +404,7 @@ updateLoaded msg model =
 
                     position : Coord TileUnit
                     position =
-                        screenToWorld model mousePosition |> Units.worldToTile
+                        screenToWorld model mousePosition |> Tile.worldToTile
 
                     maybeUserId =
                         selectionPoint
@@ -466,8 +466,8 @@ updateLoaded msg model =
                         case ( model.mouseLeft, model.tool ) of
                             ( MouseButtonDown mouseState, SelectTool ) ->
                                 Cursor.selection
-                                    (mouseState.start_ |> Units.worldToTile)
-                                    (screenToWorld model mousePosition |> Units.worldToTile)
+                                    (mouseState.start_ |> Tile.worldToTile)
+                                    (screenToWorld model mousePosition |> Tile.worldToTile)
 
                             _ ->
                                 model.cursor
@@ -480,7 +480,7 @@ updateLoaded msg model =
 
                                     position : Coord TileUnit
                                     position =
-                                        screenToWorld model mousePosition |> Units.worldToTile
+                                        screenToWorld model mousePosition |> Tile.worldToTile
 
                                     hideUserId =
                                         selectionPoint
@@ -507,8 +507,8 @@ updateLoaded msg model =
                     { model | time = time, viewPointLastInterval = actualViewPoint_ }
 
                 ( model3, urlChange ) =
-                    if Units.worldToTile actualViewPoint_ /= Units.worldToTile model.viewPointLastInterval then
-                        Units.worldToTile actualViewPoint_
+                    if Tile.worldToTile actualViewPoint_ /= Tile.worldToTile model.viewPointLastInterval then
+                        Tile.worldToTile actualViewPoint_
                             |> UrlHelper.internalRoute model.showNotifyMe
                             |> UrlHelper.encodeUrl
                             |> (\a -> replaceUrl a model2)
@@ -590,8 +590,8 @@ updateLoaded msg model =
                                 case model.tool of
                                     SelectTool ->
                                         Cursor.selection
-                                            (mouseState.start_ |> Units.worldToTile)
-                                            (screenToWorld model touchPosition |> Units.worldToTile)
+                                            (mouseState.start_ |> Tile.worldToTile)
+                                            (screenToWorld model touchPosition |> Tile.worldToTile)
 
                                     _ ->
                                         model.cursor
@@ -667,7 +667,7 @@ updateLoaded msg model =
 
 closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 closeNotifyMe model =
-    UrlHelper.internalRoute False (Units.worldToTile (actualViewPoint model))
+    UrlHelper.internalRoute False (Tile.worldToTile (actualViewPoint model))
         |> UrlHelper.encodeUrl
         |> (\a -> pushUrl a { model | showNotifyMe = False, notifyMeModel = NotifyMe.init })
 
@@ -862,7 +862,7 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.cursor
 
                     else if isSmallDistance then
-                        screenToWorld model mousePosition |> Units.worldToTile |> Cursor.setCursor
+                        screenToWorld model mousePosition |> Tile.worldToTile |> Cursor.setCursor
 
                     else
                         model.cursor
@@ -1024,7 +1024,20 @@ changeText text model =
                         { model_
                             | trains =
                                 if tile == TrainHouseLeft || tile == TrainHouseRight then
-                                    { position = Cursor.position model.cursor |> Coord.toPoint2d } :: model_.trains
+                                    let
+                                        v =
+                                            Tile.getData tile
+                                                |> .size
+                                                |> Coord.fromRawCoord
+                                                |> Coord.toVector2d
+                                                |> Vector2d.scaleBy 0.5
+                                    in
+                                    { position =
+                                        Cursor.position model.cursor
+                                            |> Coord.toPoint2d
+                                            |> Point2d.translateBy v
+                                    }
+                                        :: model_.trains
 
                                 else
                                     model_.trains
@@ -1138,11 +1151,11 @@ viewBoundsUpdate ( model, cmd ) =
             viewBoundingBox model |> BoundingBox2d.extrema
 
         min_ =
-            Point2d.xy minX minY |> Units.worldToTile |> Grid.asciiToCellAndLocalCoord |> Tuple.first
+            Point2d.xy minX minY |> Tile.worldToTile |> Grid.asciiToCellAndLocalCoord |> Tuple.first
 
         max_ =
             Point2d.xy maxX maxY
-                |> Units.worldToTile
+                |> Tile.worldToTile
                 |> Grid.asciiToCellAndLocalCoord
                 |> Tuple.first
                 |> Coord.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
@@ -1378,7 +1391,7 @@ contextMenuView { userId, hidePoint } loadedModel =
     let
         { x, y } =
             Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 ) hidePoint
-                |> Units.tileToWorld
+                |> Tile.tileToWorld
                 |> Coord.toPoint2d
                 |> worldToScreen loadedModel
                 |> Point2d.unwrap
@@ -1921,7 +1934,7 @@ viewBoundingBox model =
                 |> Point2d.translateBy
                     (Coord.fromRawCoord ( -1, -1 )
                         |> Units.cellToTile
-                        |> Units.tileToWorld
+                        |> Tile.tileToWorld
                         |> Coord.toVector2d
                     )
 
@@ -1969,24 +1982,26 @@ canvasView model =
           else
             []
          )
-            ++ (Maybe.map
-                    (drawText
-                        (Dict.filter
-                            (\key _ ->
-                                Coord.fromRawCoord key
-                                    |> Units.cellToTile
-                                    |> Units.tileToWorld
-                                    |> Coord.toPoint2d
-                                    |> (\p -> BoundingBox2d.contains p viewBounds_)
+            ++ (case model.texture of
+                    Just texture ->
+                        drawText
+                            (Dict.filter
+                                (\key _ ->
+                                    Coord.fromRawCoord key
+                                        |> Units.cellToTile
+                                        |> Tile.tileToWorld
+                                        |> Coord.toPoint2d
+                                        |> (\p -> BoundingBox2d.contains p viewBounds_)
+                                )
+                                model.meshes
                             )
-                            model.meshes
-                        )
-                        viewMatrix
-                    )
-                    model.texture
-                    |> Maybe.withDefault []
+                            viewMatrix
+                            texture
+                            ++ drawTrains model.trains viewMatrix texture
+
+                    Nothing ->
+                        []
                )
-            ++ drawTrains model.trains viewMatrix
         )
 
 
@@ -2018,17 +2033,24 @@ drawText meshes viewMatrix texture =
             )
 
 
+drawTrains : List Train -> Mat4 -> Texture -> List WebGL.Entity
 drawTrains trains viewMatrix texture =
     List.map
         (\train ->
+            let
+                { x, y } =
+                    Point2d.unwrap train.position
+
+                ( Quantity w, Quantity h ) =
+                    Tile.size
+            in
             WebGL.entityWith
-                [ WebGL.Settings.cullFace WebGL.Settings.back
-                , Blend.add Blend.one Blend.oneMinusSrcAlpha
+                [ Blend.add Blend.one Blend.oneMinusSrcAlpha
                 ]
                 Shaders.vertexShader
-                Shaders.fragmentShader
+                Shaders.fragmentShader2
                 square
-                { view = viewMatrix
+                { view = Mat4.makeTranslate3 (x * w) (y * h) 0 |> Mat4.mul viewMatrix
                 , texture = texture
                 }
         )
@@ -2037,9 +2059,10 @@ drawTrains trains viewMatrix texture =
 
 square =
     WebGL.triangleFan
-        [ { position = Vec2.vec2 0 0, texturePosition = Vec2.vec2 0 0 }
-        , { position = Vec2.vec2 0 1, texturePosition = Vec2.vec2 0 1 }
-        , { position = Vec2.vec2 1 0, texturePosition = Vec2.vec2 1 0 }
+        [ { position = Vec2.vec2 -10 -10, texturePosition = Vec2.vec2 0 0 }
+        , { position = Vec2.vec2 -10 10, texturePosition = Vec2.vec2 0 1 }
+        , { position = Vec2.vec2 10 10, texturePosition = Vec2.vec2 1 1 }
+        , { position = Vec2.vec2 10 -10, texturePosition = Vec2.vec2 1 0 }
         ]
 
 

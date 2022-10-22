@@ -12,9 +12,7 @@ module Units exposing
     , localUnit
     , pixelToWorldPixel
     , screenFrame
-    , tileToWorld
     , tileUnit
-    , worldToTile
     , worldUnit
     )
 
@@ -22,8 +20,7 @@ import Coord exposing (Coord)
 import Frame2d exposing (Frame2d)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity, Rate)
-import Tile
+import Quantity exposing (Quantity(..), Rate)
 import Vector2d exposing (Vector2d)
 
 
@@ -66,27 +63,6 @@ cellUnit =
 localUnit : number -> Quantity number LocalUnit
 localUnit =
     Quantity.Quantity
-
-
-tileToWorld : Coord TileUnit -> Coord WorldPixel
-tileToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
-    let
-        ( w, h ) =
-            Tile.size
-    in
-    ( Quantity.Quantity (Pixels.inPixels w * x), Quantity.Quantity (Pixels.inPixels h * y) )
-
-
-worldToTile : Point2d WorldPixel WorldCoordinate -> Coord TileUnit
-worldToTile point =
-    let
-        ( w, h ) =
-            Tile.size
-
-        { x, y } =
-            Point2d.unwrap point
-    in
-    ( Quantity.Quantity (x / Pixels.inPixels w |> floor), Quantity.Quantity (y / Pixels.inPixels h |> floor) )
 
 
 cellSize : Int

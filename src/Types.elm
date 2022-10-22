@@ -17,6 +17,7 @@ module Types exposing
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
+    , Train
     )
 
 import Audio

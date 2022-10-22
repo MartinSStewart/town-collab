@@ -1,4 +1,4 @@
-module Shaders exposing (colorToVec3, fragmentShader, vertexShader)
+module Shaders exposing (colorToVec3, fragmentShader, fragmentShader2, vertexShader)
 
 import Element
 import Grid
@@ -46,3 +46,15 @@ void main () {
     gl_FragColor = texture2D(texture, vec2(vcoord.x / 256.0, (vcoord.y) / 512.0));
 }
     |]
+
+
+fragmentShader2 : Shader {} { u | texture : Texture } { vcoord : Vec2 }
+fragmentShader2 =
+    [glsl|
+precision mediump float;
+uniform sampler2D texture;
+varying vec2 vcoord;
+
+void main () {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+}|]

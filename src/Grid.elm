@@ -238,7 +238,7 @@ mesh :
     Coord Units.CellUnit
     -> List { userId : UserId, position : Coord Units.LocalUnit, value : Tile }
     -> WebGL.Mesh Vertex
-mesh cellPosition asciiValues =
+mesh cellPosition tiles =
     let
         list : List { position : Coord Units.TileUnit, userId : UserId, value : Tile }
         list =
@@ -249,7 +249,18 @@ mesh cellPosition asciiValues =
                     , value = value
                     }
                 )
-                asciiValues
+                tiles
+                |> List.sortBy
+                    (\{ position, value } ->
+                        let
+                            ( _, Quantity y ) =
+                                position
+
+                            ( _, height ) =
+                                Tile.getData value |> .size
+                        in
+                        y + height
+                    )
 
         indices : List ( Int, Int, Int )
         indices =

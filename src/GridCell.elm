@@ -111,12 +111,6 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                             let
                                 data =
                                     Tile.getData value
-
-                                ( width, height ) =
-                                    data.size
-
-                                ( x, y ) =
-                                    Coord.toRawCoord position
                             in
                             { list =
                                 (if Bounds.contains position cellBounds then
@@ -127,15 +121,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                 )
                                     ++ List.filter
                                         (\item2 ->
-                                            let
-                                                ( x2, y2 ) =
-                                                    Coord.toRawCoord item2.position
-
-                                                ( width2, height2 ) =
-                                                    (Tile.getData item2.value).size
-                                            in
-                                            ((x2 >= x && x2 < x + width) || (x >= x2 && x < x2 + width2))
-                                                && ((y2 >= y && y2 < y + height) || (y >= y2 && y < y2 + height2))
+                                            Tile.hasCollision position data item2.position (Tile.getData item2.value)
                                                 |> not
                                         )
                                         state.list
