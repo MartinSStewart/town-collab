@@ -4,9 +4,6 @@ module Coord exposing
     , absTuple
     , addTuple
     , area
-    , coordToPoint
-    , coordToVec
-    , coordToVector2d
     , divideTuple
     , fromRawCoord
     , maxTuple
@@ -14,7 +11,10 @@ module Coord exposing
     , minusTuple
     , multiplyTuple
     , roundPoint
+    , toPoint2d
     , toRawCoord
+    , toVec2d
+    , toVector2d
     , toggleSet
     )
 
@@ -73,13 +73,13 @@ absTuple ( x0, y0 ) =
     ( Quantity.abs x0, Quantity.abs y0 )
 
 
-coordToVec : Coord units -> Vec2
-coordToVec ( Quantity x, Quantity y ) =
+toVec2d : Coord units -> Vec2
+toVec2d ( Quantity x, Quantity y ) =
     Math.Vector2.vec2 (toFloat x) (toFloat y)
 
 
-coordToPoint : Coord units -> Point2d units coordinate
-coordToPoint ( x, y ) =
+toPoint2d : Coord units -> Point2d units coordinate
+toPoint2d ( x, y ) =
     Point2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
 
 
@@ -92,8 +92,8 @@ roundPoint point2d =
     fromRawCoord ( round x, round y )
 
 
-coordToVector2d : Coord units -> Vector2d units coordinate
-coordToVector2d ( x, y ) =
+toVector2d : Coord units -> Vector2d units coordinate
+toVector2d ( x, y ) =
     Vector2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
 
 

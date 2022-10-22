@@ -166,7 +166,7 @@ addToMax coord (Bounds bounds_) =
 
 boundsToBounds2d : Bounds units -> BoundingBox2d units coordinate
 boundsToBounds2d (Bounds bounds_) =
-    BoundingBox2d.from (Coord.coordToPoint bounds_.min) (Coord.coordToPoint bounds_.max)
+    BoundingBox2d.from (Coord.toPoint2d bounds_.min) (Coord.toPoint2d bounds_.max)
 
 
 coordRangeFold : (Coord units -> a -> a) -> (a -> a) -> Bounds units -> a -> a

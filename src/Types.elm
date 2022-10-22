@@ -76,9 +76,14 @@ type alias FrontendLoading =
     }
 
 
+type alias Train =
+    { position : Point2d TileUnit TileUnit }
+
+
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
+    , trains : List Train
     , meshes : Dict RawCellCoord (WebGL.Mesh Grid.Vertex)
     , cursorMesh : WebGL.Mesh { position : Vec2 }
     , viewPoint : Point2d WorldPixel WorldCoordinate

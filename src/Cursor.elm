@@ -172,7 +172,7 @@ draw viewMatrix color model =
         fragmentShader
         model.cursorMesh
         { view = viewMatrix
-        , offset = bounds model.cursor |> Bounds.minimum |> Units.tileToWorld |> Coord.coordToVec
+        , offset = bounds model.cursor |> Bounds.minimum |> Units.tileToWorld |> Coord.toVec2d
         , color = Shaders.colorToVec3 color
         }
 

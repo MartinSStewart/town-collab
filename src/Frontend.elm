@@ -37,13 +37,14 @@ import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector2 as Vec2
 import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Shaders
 import Task
-import Tile exposing (Tile)
+import Tile exposing (Tile(..))
 import Time
 import Types exposing (..)
 import UiColors
@@ -113,9 +114,10 @@ loadedInit loading loadingData =
         model =
             { key = loading.key
             , localModel = LocalGrid.init loadingData
+            , trains = []
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
-            , viewPoint = Units.tileToWorld loading.viewPoint |> Coord.coordToPoint
+            , viewPoint = Units.tileToWorld loading.viewPoint |> Coord.toPoint2d
             , viewPointLastInterval = Point2d.origin
             , cursor = cursor
             , texture = Nothing
@@ -298,7 +300,7 @@ updateLoaded msg model =
                     Just (UrlHelper.InternalRoute { viewPoint, showNotifyMe }) ->
                         { model
                             | cursor = Cursor.setCursor viewPoint
-                            , viewPoint = Units.tileToWorld viewPoint |> Coord.coordToPoint
+                            , viewPoint = Units.tileToWorld viewPoint |> Coord.toPoint2d
                             , showNotifyMe = showNotifyMe
                         }
 
@@ -1004,7 +1006,7 @@ changeText text model =
     case String.toList text of
         head :: _ ->
             case Tile.fromChar head of
-                Just ascii ->
+                Just tile ->
                     let
                         model_ =
                             if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
@@ -1016,10 +1018,17 @@ changeText text model =
                     updateLocalModel
                         (Change.LocalGridChange
                             { position = Cursor.position model.cursor
-                            , change = ascii
+                            , change = tile
                             }
                         )
-                        model_
+                        { model_
+                            | trains =
+                                if tile == TrainHouseLeft || tile == TrainHouseRight then
+                                    { position = Cursor.position model.cursor |> Coord.toPoint2d } :: model_.trains
+
+                                else
+                                    model_.trains
+                        }
 
                 Nothing ->
                     model
@@ -1370,7 +1379,7 @@ contextMenuView { userId, hidePoint } loadedModel =
         { x, y } =
             Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 ) hidePoint
                 |> Units.tileToWorld
-                |> Coord.coordToPoint
+                |> Coord.toPoint2d
                 |> worldToScreen loadedModel
                 |> Point2d.unwrap
 
@@ -1913,11 +1922,11 @@ viewBoundingBox model =
                     (Coord.fromRawCoord ( -1, -1 )
                         |> Units.cellToTile
                         |> Units.tileToWorld
-                        |> Coord.coordToVector2d
+                        |> Coord.toVector2d
                     )
 
         viewMax =
-            screenToWorld model (Coord.coordToPoint model.windowSize)
+            screenToWorld model (Coord.toPoint2d model.windowSize)
     in
     BoundingBox2d.from viewMin viewMax
 
@@ -1962,30 +1971,22 @@ canvasView model =
          )
             ++ (Maybe.map
                     (drawText
-                        model.animationElapsedTime
                         (Dict.filter
                             (\key _ ->
                                 Coord.fromRawCoord key
                                     |> Units.cellToTile
                                     |> Units.tileToWorld
-                                    |> Coord.coordToPoint
+                                    |> Coord.toPoint2d
                                     |> (\p -> BoundingBox2d.contains p viewBounds_)
                             )
                             model.meshes
-                        )
-                        (getHighlight model)
-                        (case model.tool of
-                            HighlightTool _ ->
-                                True
-
-                            _ ->
-                                False
                         )
                         viewMatrix
                     )
                     model.texture
                     |> Maybe.withDefault []
                )
+            ++ drawTrains model.trains viewMatrix
         )
 
 
@@ -1999,15 +2000,8 @@ getHighlight model =
             model.userHoverHighlighted
 
 
-drawText :
-    Duration
-    -> Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex)
-    -> Maybe UserId
-    -> Bool
-    -> Mat4
-    -> Texture
-    -> List WebGL.Entity
-drawText animationElapsedTime meshes userHighlighted showColors viewMatrix texture =
+drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Mat4 -> Texture -> List WebGL.Entity
+drawText meshes viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -2022,6 +2016,31 @@ drawText animationElapsedTime meshes userHighlighted showColors viewMatrix textu
                     , texture = texture
                     }
             )
+
+
+drawTrains trains viewMatrix texture =
+    List.map
+        (\train ->
+            WebGL.entityWith
+                [ WebGL.Settings.cullFace WebGL.Settings.back
+                , Blend.add Blend.one Blend.oneMinusSrcAlpha
+                ]
+                Shaders.vertexShader
+                Shaders.fragmentShader
+                square
+                { view = viewMatrix
+                , texture = texture
+                }
+        )
+        trains
+
+
+square =
+    WebGL.triangleFan
+        [ { position = Vec2.vec2 0 0, texturePosition = Vec2.vec2 0 0 }
+        , { position = Vec2.vec2 0 1, texturePosition = Vec2.vec2 0 1 }
+        , { position = Vec2.vec2 1 0, texturePosition = Vec2.vec2 1 0 }
+        ]
 
 
 subscriptions : AudioData -> FrontendModel_ -> Sub FrontendMsg_
