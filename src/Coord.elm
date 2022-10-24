@@ -14,7 +14,7 @@ module Coord exposing
     , roundPoint
     , toPoint2d
     , toRawCoord
-    , toVec2d
+    , toVec2
     , toVector2d
     , toggleSet
     )
@@ -74,8 +74,8 @@ absTuple ( x0, y0 ) =
     ( Quantity.abs x0, Quantity.abs y0 )
 
 
-toVec2d : Coord units -> Vec2
-toVec2d ( Quantity x, Quantity y ) =
+toVec2 : Coord units -> Vec2
+toVec2 ( Quantity x, Quantity y ) =
     Math.Vector2.vec2 (toFloat x) (toFloat y)
 
 

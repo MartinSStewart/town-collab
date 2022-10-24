@@ -28,6 +28,7 @@ import Change exposing (Change, ServerChange)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
+import Direction2d exposing (Direction2d)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
 import EverySet exposing (EverySet)
@@ -79,7 +80,7 @@ type alias FrontendLoading =
 
 
 type alias Train =
-    { position : Point2d WorldUnit WorldUnit, velocity : Vector2d WorldUnit WorldUnit }
+    { position : Point2d WorldUnit WorldUnit, direction : Direction2d WorldUnit }
 
 
 type alias FrontendLoaded =

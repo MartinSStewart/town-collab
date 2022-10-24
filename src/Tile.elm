@@ -8,6 +8,7 @@ module Tile exposing
     , nearestRailT
     , size
     , texturePosition
+    , texturePosition_
     , tileToWorld
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
@@ -82,23 +83,31 @@ type Tile
     | RailStrafeRightSmall
 
 
-texturePosition : Tile -> { topLeft : Vec2, bottomRight : Vec2 }
+texturePosition : Tile -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
 texturePosition tile =
+    let
+        data =
+            getData tile
+    in
+    texturePosition_ data.texturePosition data.size
+
+
+texturePosition_ : ( Int, Int ) -> ( Int, Int ) -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
+texturePosition_ position textureSize =
     let
         ( Quantity.Quantity tileW, Quantity.Quantity tileH ) =
             size
 
-        data =
-            getData tile
-
         ( x, y ) =
-            data.texturePosition
+            position
 
         ( w, h ) =
-            data.size
+            textureSize
     in
     { topLeft = Math.Vector2.vec2 (toFloat x * tileW) (toFloat y * tileH)
+    , topRight = Math.Vector2.vec2 (toFloat (x + w) * tileW) (toFloat y * tileH)
     , bottomRight = Math.Vector2.vec2 (toFloat (x + w) * tileW) (toFloat (y + h) * tileH)
+    , bottomLeft = Math.Vector2.vec2 (toFloat x * tileW) (toFloat (y + h) * tileH)
     }
 
 
@@ -196,21 +205,43 @@ nearestRailT :
     -> (Float -> Point2d TileLocalUnit TileLocalUnit)
     -> { t : Float, distance : Quantity Float TileLocalUnit }
 nearestRailT position railPath =
+    nearestRailTHelper 3 0 1 position railPath
+
+
+nearestRailTHelper :
+    Int
+    -> Float
+    -> Float
+    -> Point2d TileLocalUnit TileLocalUnit
+    -> (Float -> Point2d TileLocalUnit TileLocalUnit)
+    -> { t : Float, distance : Quantity Float TileLocalUnit }
+nearestRailTHelper stepsLeft minT maxT position railPath =
     let
         detail =
-            100
+            5
+
+        minimumList =
+            List.range 0 detail
+                |> List.map
+                    (\a ->
+                        let
+                            t =
+                                (toFloat a / detail) * (maxT - minT) + minT
+                        in
+                        { t = t, distance = Point2d.distanceFrom (railPath t) position }
+                    )
+                |> Quantity.sortBy .distance
     in
-    List.range 0 detail
-        |> List.map
-            (\a ->
-                let
-                    t =
-                        toFloat a / detail
-                in
-                { t = t, distance = Point2d.distanceFrom (railPath t) position }
-            )
-        |> Quantity.minimumBy .distance
-        |> Maybe.withDefault { t = 0, distance = Quantity.zero }
+    case minimumList of
+        first :: second :: _ ->
+            if stepsLeft <= 0 then
+                first
+
+            else
+                nearestRailTHelper (stepsLeft - 1) first.t second.t position railPath
+
+        _ ->
+            { t = 0, distance = Quantity.zero }
 
 
 getData : Tile -> TileData

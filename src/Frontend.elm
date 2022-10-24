@@ -1,5 +1,7 @@
 port module Frontend exposing (app, init, update, updateFromBackend, view)
 
+import Angle
+import Array exposing (Array)
 import Audio exposing (AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
@@ -11,6 +13,7 @@ import Change exposing (Change(..))
 import Coord exposing (Coord)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
+import Direction2d
 import Duration exposing (Duration)
 import Element exposing (Element)
 import Element.Background
@@ -20,7 +23,7 @@ import Element.Font
 import Element.Input
 import Env
 import EverySet exposing (EverySet)
-import Grid exposing (Grid)
+import Grid exposing (Grid, Vertex)
 import GridCell
 import Html exposing (Html)
 import Html.Attributes
@@ -654,7 +657,7 @@ updateLoaded msg model =
                 moveTrain train =
                     let
                         ( cellPos, localPos ) =
-                            Grid.worldToCellAndLocalPoint (Point2d.translateBy train.velocity train.position)
+                            Grid.worldToCellAndLocalPoint (Point2d.translateIn train.direction (Quantity 0.1) train.position)
 
                         flattenedCells : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
                         flattenedCells =
@@ -711,7 +714,6 @@ updateLoaded msg model =
                                                 , position = position
                                                 , path = path
                                                 }
-                                                    |> Debug.log "b"
                                                     |> Just
                                     )
                                 |> Quantity.minimumBy .distance
@@ -733,12 +735,9 @@ updateLoaded msg model =
                                             |> Grid.cellAndLocalPointToWorld cellPos
                                 in
                                 { position = newPosition
-                                , velocity =
-                                    Vector2d.from train.position newPosition
-                                        |> Vector2d.normalize
-                                        |> Vector2d.scaleBy 0.1
-                                        |> Vector2d.unwrap
-                                        |> Vector2d.unsafe
+                                , direction =
+                                    Direction2d.from train.position newPosition
+                                        |> Maybe.withDefault train.direction
                                 }
 
                             else
@@ -1128,13 +1127,13 @@ changeText text model =
                             | trains =
                                 if tile == TrainHouseLeft || tile == TrainHouseRight then
                                     let
-                                        ( offset, velocity ) =
+                                        ( offset, direction ) =
                                             if tile == TrainHouseLeft then
                                                 ( Tile.trainHouseLeftRailPath 0.5
                                                     |> Vector2d.from Point2d.origin
                                                     |> Vector2d.unwrap
                                                     |> Vector2d.unsafe
-                                                , Vector2d.unsafe { x = -0.1, y = 0 }
+                                                , Direction2d.negativeX
                                                 )
 
                                             else
@@ -1142,14 +1141,14 @@ changeText text model =
                                                     |> Vector2d.from Point2d.origin
                                                     |> Vector2d.unwrap
                                                     |> Vector2d.unsafe
-                                                , Vector2d.unsafe { x = 0.1, y = 0 }
+                                                , Direction2d.x
                                                 )
                                     in
                                     { position =
                                         Cursor.position model.cursor
                                             |> Coord.toPoint2d
                                             |> Point2d.translateBy offset
-                                    , velocity = velocity
+                                    , direction = direction
                                     }
                                         :: model_.trains
 
@@ -2143,13 +2142,14 @@ drawText meshes viewMatrix texture =
                     mesh
                     { view = viewMatrix
                     , texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
                     }
             )
 
 
 drawTrains : List Train -> Mat4 -> Texture -> List WebGL.Entity
 drawTrains trains viewMatrix texture =
-    List.map
+    List.concatMap
         (\train ->
             let
                 { x, y } =
@@ -2157,26 +2157,62 @@ drawTrains trains viewMatrix texture =
 
                 ( Quantity w, Quantity h ) =
                     Tile.size
+
+                trainFrame =
+                    Direction2d.angleFrom Direction2d.x train.direction
+                        |> Angle.inTurns
+                        |> (*) 20
+                        |> round
+                        |> modBy 20
             in
-            WebGL.entityWith
-                [ Blend.add Blend.one Blend.oneMinusSrcAlpha
-                ]
-                Shaders.vertexShader
-                Shaders.fragmentShader2
-                square
-                { view = Mat4.makeTranslate3 (x * w) (y * h) 0 |> Mat4.mul viewMatrix
-                , texture = texture
-                }
+            case Array.get trainFrame trainMeshes of
+                Just trainMesh_ ->
+                    [ WebGL.entityWith
+                        [ Blend.add Blend.one Blend.oneMinusSrcAlpha
+                        ]
+                        Shaders.vertexShader
+                        Shaders.fragmentShader
+                        trainMesh_
+                        { view = Mat4.makeTranslate3 (x * w) (y * h) 0 |> Mat4.mul viewMatrix
+                        , texture = texture
+                        , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
+                        }
+                    ]
+
+                Nothing ->
+                    []
         )
         trains
 
 
-square =
+trainFrames =
+    20
+
+
+trainMeshes : Array (WebGL.Mesh Vertex)
+trainMeshes =
+    List.range 0 (trainFrames - 1)
+        |> List.map trainMesh
+        |> Array.fromList
+
+
+trainMesh : Int -> WebGL.Mesh Vertex
+trainMesh frame =
+    let
+        ( Quantity w, Quantity h ) =
+            Tile.size
+
+        offsetY =
+            -3
+
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePosition_ ( 11, frame * 2 ) ( 2, 2 )
+    in
     WebGL.triangleFan
-        [ { position = Vec2.vec2 -2 -2, texturePosition = Vec2.vec2 0 0 }
-        , { position = Vec2.vec2 -2 2, texturePosition = Vec2.vec2 0 1 }
-        , { position = Vec2.vec2 2 2, texturePosition = Vec2.vec2 1 1 }
-        , { position = Vec2.vec2 2 -2, texturePosition = Vec2.vec2 1 0 }
+        [ { position = Vec2.vec2 -w (-h + offsetY), texturePosition = topLeft }
+        , { position = Vec2.vec2 w (-h + offsetY), texturePosition = topRight }
+        , { position = Vec2.vec2 w (h + offsetY), texturePosition = bottomRight }
+        , { position = Vec2.vec2 -w (h + offsetY), texturePosition = bottomLeft }
         ]
 
 

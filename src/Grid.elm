@@ -301,7 +301,7 @@ mesh cellPosition tiles =
     List.map
         (\{ position, value } ->
             let
-                { topLeft, bottomRight } =
+                { topLeft, topRight, bottomLeft, bottomRight } =
                     Tile.texturePosition value
 
                 ( Quantity x, Quantity y ) =
@@ -323,9 +323,9 @@ mesh cellPosition tiles =
                     }
                 )
                 [ topLeft
-                , Math.Vector2.vec2 (Math.Vector2.getX bottomRight) (Math.Vector2.getY topLeft)
+                , topRight
                 , bottomRight
-                , Math.Vector2.vec2 (Math.Vector2.getX topLeft) (Math.Vector2.getY bottomRight)
+                , bottomLeft
                 ]
         )
         list
