@@ -7,6 +7,7 @@ module Grid exposing
     , allCells
     , allCellsDict
     , cellAndLocalCoordToAscii
+    , cellAndLocalPointToWorld
     , changeCount
     , closeNeighborCells
     , empty
@@ -28,10 +29,12 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Pixels
+import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Tile exposing (Tile)
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 import User exposing (UserId)
+import Vector2d
 import WebGL
 
 
@@ -73,6 +76,15 @@ cellAndLocalCoordToAscii ( cell, local ) =
         (Coord.toRawCoord local |> Coord.fromRawCoord)
         |> Coord.toRawCoord
         |> Coord.fromRawCoord
+
+
+cellAndLocalPointToWorld : Coord CellUnit -> Point2d CellLocalUnit CellLocalUnit -> Point2d WorldUnit WorldUnit
+cellAndLocalPointToWorld cell local =
+    Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell
+        |> Coord.toPoint2d
+        |> Point2d.translateBy (Vector2d.from Point2d.origin local |> Vector2d.unwrap |> Vector2d.unsafe)
+        |> Point2d.unwrap
+        |> Point2d.unsafe
 
 
 type alias GridChange =

@@ -48,7 +48,7 @@ import Tile exposing (RailPath(..), Tile(..))
 import Time
 import Types exposing (..)
 import UiColors
-import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, WorldUnit)
+import Units exposing (CellUnit, ScreenCoordinate, TileLocalUnit, WorldCoordinate, WorldPixel, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -658,26 +658,57 @@ updateLoaded msg model =
                     in
                     case Grid.getCell cellPos localGrid.grid of
                         Just cell ->
-                            GridCell.flatten EverySet.empty EverySet.empty cell
-                                |> List.filterMap
-                                    (\{ position, value } ->
-                                        case Tile.getData value |> .railPath of
-                                            NoRailPath ->
-                                                Nothing
+                            let
+                                maybeNearestRailTile =
+                                    GridCell.flatten EverySet.empty EverySet.empty cell
+                                        |> List.filterMap
+                                            (\{ position, value } ->
+                                                case Tile.getData value |> .railPath of
+                                                    NoRailPath ->
+                                                        Nothing
 
-                                            SingleRailPath path ->
-                                                let
-                                                    { t, distance } =
-                                                        Tile.nearestRailT localPos path
-                                                in
-                                                { t = t
-                                                , distance = distance
-                                                , position = position
-                                                , tile = value
-                                                }
-                                                    |> Just
-                                    )
-                                |> Quantity.minimumBy .distance
+                                                    SingleRailPath path ->
+                                                        let
+                                                            tileLocalPos : Point2d TileLocalUnit TileLocalUnit
+                                                            tileLocalPos =
+                                                                localPos
+                                                                    |> Coord.minusTuple position
+                                                                    |> Coord.toRawCoord
+                                                                    |> Coord.fromRawCoord
+                                                                    |> Coord.toPoint2d
+
+                                                            { t, distance } =
+                                                                Tile.nearestRailT tileLocalPos path
+                                                        in
+                                                        { t = t
+                                                        , distance = distance
+                                                        , position = position
+                                                        , path = path
+                                                        }
+                                                            |> Just
+                                            )
+                                        |> Quantity.minimumBy .distance
+                            in
+                            case maybeNearestRailTile of
+                                Just nearestRailTile ->
+                                    if nearestRailTile.distance |> Quantity.lessThan (Quantity 0.1) then
+                                        { position =
+                                            Point2d.translateBy
+                                                (Vector2d.from
+                                                    Point2d.origin
+                                                    (nearestRailTile.path (nearestRailTile.t + 0.05))
+                                                    |> Vector2d.unwrap
+                                                    |> Vector2d.unsafe
+                                                )
+                                                (Coord.toPoint2d nearestRailTile.position)
+                                                |> Grid.cellAndLocalPointToWorld cellPos
+                                        }
+
+                                    else
+                                        train
+
+                                Nothing ->
+                                    train
 
                         Nothing ->
                             train
