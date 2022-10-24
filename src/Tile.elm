@@ -6,6 +6,7 @@ module Tile exposing
     , getData
     , hasCollision
     , nearestRailT
+    , pathDirection
     , size
     , texturePosition
     , texturePosition_
@@ -17,7 +18,7 @@ module Tile exposing
 
 import Coord exposing (Coord)
 import Dict exposing (Dict)
-import List.Extra as List
+import Direction2d exposing (Direction2d)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -81,6 +82,9 @@ type Tile
     | RailStrafeUpSmall
     | RailStrafeLeftSmall
     | RailStrafeRightSmall
+    | Sidewalk
+    | SidewalkHorizontalRailCrossing
+    | SidewalkVerticalRailCrossing
 
 
 texturePosition : Tile -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
@@ -123,6 +127,13 @@ type alias TileData =
 type RailPath
     = NoRailPath
     | SingleRailPath (Float -> Point2d TileLocalUnit TileLocalUnit)
+    | DoubleRailPath (Float -> Point2d TileLocalUnit TileLocalUnit) (Float -> Point2d TileLocalUnit TileLocalUnit)
+
+
+pathDirection : (Float -> Point2d TileLocalUnit TileLocalUnit) -> Float -> Direction2d TileLocalUnit
+pathDirection path t =
+    Direction2d.from (path (t - 0.001 |> max 1)) (path (t + 0.001 |> min 1))
+        |> Maybe.withDefault Direction2d.x
 
 
 allTiles : List Tile
@@ -145,6 +156,9 @@ allTiles =
     , RailStrafeDownSmall
     , RailStrafeLeftSmall
     , RailStrafeRightSmall
+    , Sidewalk
+    , SidewalkHorizontalRailCrossing
+    , SidewalkVerticalRailCrossing
     ]
 
 
@@ -203,9 +217,13 @@ hasCollision positionA tileA positionB tileB =
 nearestRailT :
     Point2d TileLocalUnit TileLocalUnit
     -> (Float -> Point2d TileLocalUnit TileLocalUnit)
-    -> { t : Float, distance : Quantity Float TileLocalUnit }
+    -> { t : Float, distance : Quantity Float TileLocalUnit, direction : Direction2d TileLocalUnit }
 nearestRailT position railPath =
-    nearestRailTHelper 3 0 1 position railPath
+    let
+        { t, distance } =
+            nearestRailTHelper 3 0 1 position railPath
+    in
+    { t = t, distance = distance, direction = pathDirection railPath t }
 
 
 nearestRailTHelper :
@@ -249,11 +267,14 @@ getData tile =
     case tile of
         House ->
             { texturePosition = ( 0, 1 )
-            , size = ( 3, 2 )
+            , size = ( 3, 3 )
             , collisionMask =
                 [ ( 0, 1 )
                 , ( 1, 1 )
                 , ( 2, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                , ( 2, 2 )
                 ]
                     |> Set.fromList
                     |> CustomCollision
@@ -398,7 +419,7 @@ getData tile =
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'e'
-            , railPath = NoRailPath
+            , railPath = DoubleRailPath (\t -> Point2d.unsafe { x = t, y = 0.5 }) (\t -> Point2d.unsafe { x = 0.5, y = t })
             }
 
         RailStrafeDown ->
@@ -565,6 +586,30 @@ getData tile =
             , collisionMask = DefaultCollision
             , char = 'k'
             , railPath = NoRailPath
+            }
+
+        Sidewalk ->
+            { texturePosition = ( 2, 4 )
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = 'z'
+            , railPath = NoRailPath
+            }
+
+        SidewalkHorizontalRailCrossing ->
+            { texturePosition = ( 0, 4 )
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = 'x'
+            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = t, y = 0.5 })
+            }
+
+        SidewalkVerticalRailCrossing ->
+            { texturePosition = ( 1, 4 )
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = 'X'
+            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = 0.5, y = t })
             }
 
 

@@ -685,63 +685,80 @@ updateLoaded msg model =
                                                 []
                                     )
 
+                        checkRailPath position path =
+                            let
+                                tileLocalPos : Point2d TileLocalUnit TileLocalUnit
+                                tileLocalPos =
+                                    Point2d.translateBy
+                                        (Vector2d.from
+                                            (Coord.toPoint2d position)
+                                            Point2d.origin
+                                        )
+                                        localPos
+                                        |> Point2d.unwrap
+                                        |> Point2d.unsafe
+
+                                { t, distance, direction } =
+                                    Tile.nearestRailT tileLocalPos path
+
+                                angleDifference : Float
+                                angleDifference =
+                                    Direction2d.angleFrom
+                                        direction
+                                        (train.direction |> Direction2d.unwrap |> Direction2d.unsafe)
+                                        |> Angle.inDegrees
+                                        |> abs
+                            in
+                            if
+                                (distance |> Quantity.lessThan (Quantity 0.5))
+                                    && (angleDifference < 40 || angleDifference > 50)
+                            then
+                                [ { t = t
+                                  , distance = distance
+                                  , position = position
+                                  , path = path
+                                  }
+                                ]
+
+                            else
+                                []
+
                         maybeNearestRailTile =
                             flattenedCells
-                                |> List.filterMap
+                                |> List.concatMap
                                     (\{ position, value } ->
                                         case Tile.getData value |> .railPath of
                                             NoRailPath ->
-                                                Nothing
+                                                []
 
                                             SingleRailPath path ->
-                                                let
-                                                    tileLocalPos : Point2d TileLocalUnit TileLocalUnit
-                                                    tileLocalPos =
-                                                        Point2d.translateBy
-                                                            (Vector2d.from
-                                                                (Coord.toPoint2d position)
-                                                                Point2d.origin
-                                                            )
-                                                            localPos
-                                                            |> Point2d.unwrap
-                                                            |> Point2d.unsafe
+                                                checkRailPath position path
 
-                                                    { t, distance } =
-                                                        Tile.nearestRailT tileLocalPos path
-                                                in
-                                                { t = t
-                                                , distance = distance
-                                                , position = position
-                                                , path = path
-                                                }
-                                                    |> Just
+                                            DoubleRailPath path1 path2 ->
+                                                checkRailPath position path1 ++ checkRailPath position path2
                                     )
                                 |> Quantity.minimumBy .distance
                     in
                     case maybeNearestRailTile of
                         Just nearestRailTile ->
-                            if nearestRailTile.distance |> Quantity.lessThan (Quantity 1) then
-                                let
-                                    newPosition : Point2d WorldUnit WorldUnit
-                                    newPosition =
-                                        Point2d.translateBy
-                                            (Vector2d.from
-                                                Point2d.origin
-                                                (nearestRailTile.path nearestRailTile.t)
-                                                |> Vector2d.unwrap
-                                                |> Vector2d.unsafe
-                                            )
-                                            (Coord.toPoint2d nearestRailTile.position)
-                                            |> Grid.cellAndLocalPointToWorld cellPos
-                                in
-                                { position = newPosition
-                                , direction =
-                                    Direction2d.from train.position newPosition
-                                        |> Maybe.withDefault train.direction
-                                }
-
-                            else
-                                train
+                            let
+                                newPosition : Point2d WorldUnit WorldUnit
+                                newPosition =
+                                    Point2d.translateBy
+                                        (Vector2d.from
+                                            Point2d.origin
+                                            (nearestRailTile.path nearestRailTile.t)
+                                            |> Vector2d.unwrap
+                                            |> Vector2d.unsafe
+                                        )
+                                        (Coord.toPoint2d nearestRailTile.position)
+                                        |> Grid.cellAndLocalPointToWorld cellPos
+                            in
+                            { position = newPosition
+                            , direction =
+                                Direction2d.from train.position newPosition
+                                    |> Maybe.withDefault train.direction
+                            }
 
                         Nothing ->
                             train
