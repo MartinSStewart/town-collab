@@ -9,6 +9,8 @@ module Tile exposing
     , size
     , texturePosition
     , tileToWorld
+    , trainHouseLeftRailPath
+    , trainHouseRightRailPath
     , worldToTile
     )
 
@@ -288,7 +290,18 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'w'
-            , railPath = NoRailPath
+            , railPath =
+                SingleRailPath
+                    (\t ->
+                        let
+                            t2 =
+                                1 - t
+                        in
+                        Point2d.unsafe
+                            { x = 0.5 + 3.5 * cos (t * pi / 2)
+                            , y = 0.5 + 3.5 * sin (t2 * pi / 2)
+                            }
+                    )
             }
 
         RailTopToRight ->
@@ -451,7 +464,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 't'
-            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = 1 + t * 3, y = 2.5 })
+            , railPath = SingleRailPath trainHouseRightRailPath
             }
 
         TrainHouseLeft ->
@@ -474,7 +487,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'T'
-            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = t * 3, y = 2.5 })
+            , railPath = SingleRailPath trainHouseLeftRailPath
             }
 
         RailStrafeDownSmall ->
@@ -508,3 +521,13 @@ getData tile =
             , char = 'k'
             , railPath = NoRailPath
             }
+
+
+trainHouseLeftRailPath : Float -> Point2d TileLocalUnit TileLocalUnit
+trainHouseLeftRailPath t =
+    Point2d.unsafe { x = t * 3, y = 2.5 }
+
+
+trainHouseRightRailPath : Float -> Point2d TileLocalUnit TileLocalUnit
+trainHouseRightRailPath t =
+    Point2d.unsafe { x = 1 + t * 3, y = 2.5 }

@@ -18,9 +18,11 @@ module Grid exposing
     , moveUndoPoint
     , region
     , removeUser
-    , tileToCellAndLocalCoord
+    , worldToCellAndLocalCoord
+    , worldToCellAndLocalPoint
     )
 
+import Basics.Extra
 import Bounds exposing (Bounds)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
@@ -52,8 +54,8 @@ from =
     Grid
 
 
-tileToCellAndLocalCoord : Coord WorldUnit -> ( Coord CellUnit, Coord CellLocalUnit )
-tileToCellAndLocalCoord ( Quantity x, Quantity y ) =
+worldToCellAndLocalCoord : Coord WorldUnit -> ( Coord CellUnit, Coord CellLocalUnit )
+worldToCellAndLocalCoord ( Quantity x, Quantity y ) =
     let
         offset =
             1000000
@@ -66,6 +68,26 @@ tileToCellAndLocalCoord ( Quantity x, Quantity y ) =
         ( modBy Units.cellSize x
         , modBy Units.cellSize y
         )
+    )
+
+
+worldToCellAndLocalPoint : Point2d WorldUnit WorldUnit -> ( Coord CellUnit, Point2d CellLocalUnit CellLocalUnit )
+worldToCellAndLocalPoint point =
+    let
+        offset =
+            1000000
+
+        { x, y } =
+            Point2d.unwrap point
+    in
+    ( Coord.fromRawCoord
+        ( (floor x + (Units.cellSize * offset)) // Units.cellSize - offset
+        , (floor y + (Units.cellSize * offset)) // Units.cellSize - offset
+        )
+    , { x = Basics.Extra.fractionalModBy Units.cellSize x
+      , y = Basics.Extra.fractionalModBy Units.cellSize y
+      }
+        |> Point2d.unsafe
     )
 
 
@@ -187,7 +209,7 @@ addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
         ( cellPosition, localPosition ) =
-            tileToCellAndLocalCoord change.position
+            worldToCellAndLocalCoord change.position
 
         neighborCells_ : List ( Coord CellUnit, Cell )
         neighborCells_ =

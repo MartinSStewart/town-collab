@@ -90,7 +90,7 @@ update_ msg model =
         LocalChange (LocalGridChange gridChange) ->
             let
                 ( cellPosition, localPosition ) =
-                    Grid.tileToCellAndLocalCoord gridChange.position
+                    Grid.worldToCellAndLocalCoord gridChange.position
             in
             { model
                 | redoHistory = []
@@ -148,7 +148,7 @@ update_ msg model =
         ServerChange (ServerGridChange gridChange) ->
             if
                 Bounds.contains
-                    (Grid.tileToCellAndLocalCoord gridChange.position |> Tuple.first)
+                    (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first)
                     model.viewBounds
             then
                 { model | grid = Grid.addChange gridChange model.grid }

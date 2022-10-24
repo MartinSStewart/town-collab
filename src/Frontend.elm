@@ -206,11 +206,11 @@ init url key =
         -- We only load in a portion of the grid since we don't know the window size yet. The rest will get loaded in later anyway.
         bounds =
             Bounds.bounds
-                (Grid.tileToCellAndLocalCoord viewPoint
+                (Grid.worldToCellAndLocalCoord viewPoint
                     |> Tuple.first
                     |> Coord.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
                 )
-                (Grid.tileToCellAndLocalCoord viewPoint
+                (Grid.worldToCellAndLocalCoord viewPoint
                     |> Tuple.first
                     |> Coord.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
                 )
@@ -654,61 +654,86 @@ updateLoaded msg model =
                 moveTrain train =
                     let
                         ( cellPos, localPos ) =
-                            Grid.tileToCellAndLocalCoord (Coord.floorPoint train.position)
+                            Grid.worldToCellAndLocalPoint (Point2d.translateBy train.velocity train.position)
+
+                        flattenedCells : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                        flattenedCells =
+                            ( cellPos, Coord.floorPoint localPos )
+                                :: Grid.closeNeighborCells cellPos (Coord.floorPoint localPos)
+                                |> List.concatMap
+                                    (\( neighborCellPos, neighborLocalPos ) ->
+                                        case Grid.getCell neighborCellPos localGrid.grid of
+                                            Just cell ->
+                                                let
+                                                    offset =
+                                                        Coord.floorPoint localPos
+                                                            |> Coord.minusTuple neighborLocalPos
+                                                in
+                                                GridCell.flatten EverySet.empty EverySet.empty cell
+                                                    |> List.map
+                                                        (\tile ->
+                                                            { userId = tile.userId
+                                                            , position = Coord.addTuple offset tile.position
+                                                            , value = tile.value
+                                                            }
+                                                        )
+
+                                            Nothing ->
+                                                []
+                                    )
+
+                        maybeNearestRailTile =
+                            flattenedCells
+                                |> Debug.log "a"
+                                |> List.filterMap
+                                    (\{ position, value } ->
+                                        case Tile.getData value |> .railPath of
+                                            NoRailPath ->
+                                                Nothing
+
+                                            SingleRailPath path ->
+                                                let
+                                                    tileLocalPos : Point2d TileLocalUnit TileLocalUnit
+                                                    tileLocalPos =
+                                                        Point2d.translateBy
+                                                            (Vector2d.from
+                                                                (Coord.toPoint2d position)
+                                                                Point2d.origin
+                                                            )
+                                                            localPos
+                                                            |> Point2d.unwrap
+                                                            |> Point2d.unsafe
+
+                                                    { t, distance } =
+                                                        Tile.nearestRailT tileLocalPos path
+                                                in
+                                                { t = t
+                                                , distance = distance
+                                                , position = position
+                                                , path = path
+                                                }
+                                                    |> Just
+                                    )
+                                |> Quantity.minimumBy .distance
                     in
-                    case Grid.getCell cellPos localGrid.grid of
-                        Just cell ->
-                            let
-                                maybeNearestRailTile =
-                                    GridCell.flatten EverySet.empty EverySet.empty cell
-                                        |> List.filterMap
-                                            (\{ position, value } ->
-                                                case Tile.getData value |> .railPath of
-                                                    NoRailPath ->
-                                                        Nothing
+                    case maybeNearestRailTile of
+                        Just nearestRailTile ->
+                            if nearestRailTile.distance |> Quantity.lessThan (Quantity 0.1) then
+                                { position =
+                                    Point2d.translateBy
+                                        (Vector2d.from
+                                            Point2d.origin
+                                            (nearestRailTile.path nearestRailTile.t)
+                                            |> Vector2d.unwrap
+                                            |> Vector2d.unsafe
+                                        )
+                                        (Coord.toPoint2d nearestRailTile.position)
+                                        |> Grid.cellAndLocalPointToWorld cellPos
+                                , velocity = train.velocity
+                                }
 
-                                                    SingleRailPath path ->
-                                                        let
-                                                            tileLocalPos : Point2d TileLocalUnit TileLocalUnit
-                                                            tileLocalPos =
-                                                                localPos
-                                                                    |> Coord.minusTuple position
-                                                                    |> Coord.toRawCoord
-                                                                    |> Coord.fromRawCoord
-                                                                    |> Coord.toPoint2d
-
-                                                            { t, distance } =
-                                                                Tile.nearestRailT tileLocalPos path
-                                                        in
-                                                        { t = t
-                                                        , distance = distance
-                                                        , position = position
-                                                        , path = path
-                                                        }
-                                                            |> Just
-                                            )
-                                        |> Quantity.minimumBy .distance
-                            in
-                            case maybeNearestRailTile of
-                                Just nearestRailTile ->
-                                    if nearestRailTile.distance |> Quantity.lessThan (Quantity 0.1) then
-                                        { position =
-                                            Point2d.translateBy
-                                                (Vector2d.from
-                                                    Point2d.origin
-                                                    (nearestRailTile.path (nearestRailTile.t + 0.05))
-                                                    |> Vector2d.unwrap
-                                                    |> Vector2d.unsafe
-                                                )
-                                                (Coord.toPoint2d nearestRailTile.position)
-                                                |> Grid.cellAndLocalPointToWorld cellPos
-                                        }
-
-                                    else
-                                        train
-
-                                Nothing ->
-                                    train
+                            else
+                                train
 
                         Nothing ->
                             train
@@ -1040,7 +1065,7 @@ selectionPoint : Coord WorldUnit -> EverySet UserId -> EverySet UserId -> Grid -
 selectionPoint position hiddenUsers hiddenUsersForAll grid =
     let
         ( cellPosition, localPosition ) =
-            Grid.tileToCellAndLocalCoord position
+            Grid.worldToCellAndLocalCoord position
     in
     case Grid.getCell cellPosition grid of
         Just cell ->
@@ -1094,13 +1119,28 @@ changeText text model =
                             | trains =
                                 if tile == TrainHouseLeft || tile == TrainHouseRight then
                                     let
-                                        v =
-                                            Vector2d.unsafe { x = 2, y = 2.5 }
+                                        ( offset, velocity ) =
+                                            if tile == TrainHouseLeft then
+                                                ( Tile.trainHouseLeftRailPath 0.5
+                                                    |> Vector2d.from Point2d.origin
+                                                    |> Vector2d.unwrap
+                                                    |> Vector2d.unsafe
+                                                , Vector2d.unsafe { x = -0.1, y = 0 }
+                                                )
+
+                                            else
+                                                ( Tile.trainHouseRightRailPath 0.5
+                                                    |> Vector2d.from Point2d.origin
+                                                    |> Vector2d.unwrap
+                                                    |> Vector2d.unsafe
+                                                , Vector2d.unsafe { x = 0.1, y = 0 }
+                                                )
                                     in
                                     { position =
                                         Cursor.position model.cursor
                                             |> Coord.toPoint2d
-                                            |> Point2d.translateBy v
+                                            |> Point2d.translateBy offset
+                                    , velocity = velocity
                                     }
                                         :: model_.trains
 
@@ -1216,12 +1256,12 @@ viewBoundsUpdate ( model, cmd ) =
             viewBoundingBox model |> BoundingBox2d.extrema
 
         min_ =
-            Point2d.xy minX minY |> Tile.worldToTile |> Grid.tileToCellAndLocalCoord |> Tuple.first
+            Point2d.xy minX minY |> Tile.worldToTile |> Grid.worldToCellAndLocalCoord |> Tuple.first
 
         max_ =
             Point2d.xy maxX maxY
                 |> Tile.worldToTile
-                |> Grid.tileToCellAndLocalCoord
+                |> Grid.worldToCellAndLocalCoord
                 |> Tuple.first
                 |> Coord.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
 
@@ -1406,14 +1446,14 @@ view _ model =
     { title =
         case model of
             Loading _ ->
-                "Ascii Collab"
+                "Town Collab"
 
             Loaded loadedModel ->
                 if lostConnection loadedModel then
-                    "Ascii Collab (offline)"
+                    "Town Collab (offline)"
 
                 else
-                    "Ascii Collab"
+                    "Town Collab"
     , body =
         [ case model of
             Loading loadingModel ->
@@ -2124,10 +2164,10 @@ drawTrains trains viewMatrix texture =
 
 square =
     WebGL.triangleFan
-        [ { position = Vec2.vec2 -10 -10, texturePosition = Vec2.vec2 0 0 }
-        , { position = Vec2.vec2 -10 10, texturePosition = Vec2.vec2 0 1 }
-        , { position = Vec2.vec2 10 10, texturePosition = Vec2.vec2 1 1 }
-        , { position = Vec2.vec2 10 -10, texturePosition = Vec2.vec2 1 0 }
+        [ { position = Vec2.vec2 -2 -2, texturePosition = Vec2.vec2 0 0 }
+        , { position = Vec2.vec2 -2 2, texturePosition = Vec2.vec2 0 1 }
+        , { position = Vec2.vec2 2 2, texturePosition = Vec2.vec2 1 1 }
+        , { position = Vec2.vec2 2 -2, texturePosition = Vec2.vec2 1 0 }
         ]
 
 
@@ -2152,10 +2192,6 @@ subscriptions _ model =
 
                         _ ->
                             Sub.none
-                    , if getHighlight loadedModel /= Nothing then
-                        Browser.Events.onAnimationFrame AnimationFrame
-
-                      else
-                        Sub.none
+                    , Browser.Events.onAnimationFrame AnimationFrame
                     ]
         ]

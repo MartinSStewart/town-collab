@@ -495,7 +495,7 @@ updateLocalChange ( userId, _ ) change model =
                 Just user ->
                     let
                         ( cellPosition, localPosition ) =
-                            Grid.tileToCellAndLocalCoord localChange.position
+                            Grid.worldToCellAndLocalCoord localChange.position
                     in
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid

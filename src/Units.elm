@@ -70,7 +70,7 @@ localUnit =
     Quantity.Quantity
 
 
-cellSize : Int
+cellSize : number
 cellSize =
     16
 

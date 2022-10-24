@@ -50,6 +50,7 @@ import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, 
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
 import User exposing (RawUserId, UserId)
+import Vector2d exposing (Vector2d)
 import WebGL
 import WebGL.Texture exposing (Texture)
 
@@ -78,7 +79,7 @@ type alias FrontendLoading =
 
 
 type alias Train =
-    { position : Point2d WorldUnit WorldUnit }
+    { position : Point2d WorldUnit WorldUnit, velocity : Vector2d WorldUnit WorldUnit }
 
 
 type alias FrontendLoaded =
