@@ -684,7 +684,6 @@ updateLoaded msg model =
 
                         maybeNearestRailTile =
                             flattenedCells
-                                |> Debug.log "a"
                                 |> List.filterMap
                                     (\{ position, value } ->
                                         case Tile.getData value |> .railPath of
@@ -712,24 +711,34 @@ updateLoaded msg model =
                                                 , position = position
                                                 , path = path
                                                 }
+                                                    |> Debug.log "b"
                                                     |> Just
                                     )
                                 |> Quantity.minimumBy .distance
                     in
                     case maybeNearestRailTile of
                         Just nearestRailTile ->
-                            if nearestRailTile.distance |> Quantity.lessThan (Quantity 0.1) then
-                                { position =
-                                    Point2d.translateBy
-                                        (Vector2d.from
-                                            Point2d.origin
-                                            (nearestRailTile.path nearestRailTile.t)
-                                            |> Vector2d.unwrap
-                                            |> Vector2d.unsafe
-                                        )
-                                        (Coord.toPoint2d nearestRailTile.position)
-                                        |> Grid.cellAndLocalPointToWorld cellPos
-                                , velocity = train.velocity
+                            if nearestRailTile.distance |> Quantity.lessThan (Quantity 1) then
+                                let
+                                    newPosition : Point2d WorldUnit WorldUnit
+                                    newPosition =
+                                        Point2d.translateBy
+                                            (Vector2d.from
+                                                Point2d.origin
+                                                (nearestRailTile.path nearestRailTile.t)
+                                                |> Vector2d.unwrap
+                                                |> Vector2d.unsafe
+                                            )
+                                            (Coord.toPoint2d nearestRailTile.position)
+                                            |> Grid.cellAndLocalPointToWorld cellPos
+                                in
+                                { position = newPosition
+                                , velocity =
+                                    Vector2d.from train.position newPosition
+                                        |> Vector2d.normalize
+                                        |> Vector2d.scaleBy 0.1
+                                        |> Vector2d.unwrap
+                                        |> Vector2d.unsafe
                                 }
 
                             else

@@ -196,12 +196,16 @@ nearestRailT :
     -> (Float -> Point2d TileLocalUnit TileLocalUnit)
     -> { t : Float, distance : Quantity Float TileLocalUnit }
 nearestRailT position railPath =
-    List.range 0 20
+    let
+        detail =
+            100
+    in
+    List.range 0 detail
         |> List.map
             (\a ->
                 let
                     t =
-                        toFloat a / 20
+                        toFloat a / detail
                 in
                 { t = t, distance = Point2d.distanceFrom (railPath t) position }
             )
@@ -265,8 +269,8 @@ getData tile =
                 SingleRailPath
                     (\t ->
                         Point2d.unsafe
-                            { x = 0.5 + 3.5 * sin (t * pi / 2)
-                            , y = 0.5 + 3.5 * cos (t * pi / 2)
+                            { x = 4 - 3.5 * sin (t * pi / 2)
+                            , y = 4 - 3.5 * cos (t * pi / 2)
                             }
                     )
             }
@@ -293,13 +297,9 @@ getData tile =
             , railPath =
                 SingleRailPath
                     (\t ->
-                        let
-                            t2 =
-                                1 - t
-                        in
                         Point2d.unsafe
-                            { x = 0.5 + 3.5 * cos (t * pi / 2)
-                            , y = 0.5 + 3.5 * sin (t2 * pi / 2)
+                            { x = 3.5 * sin (t * pi / 2)
+                            , y = 4 - 3.5 * cos (t * pi / 2)
                             }
                     )
             }
@@ -323,7 +323,14 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'a'
-            , railPath = NoRailPath
+            , railPath =
+                SingleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 4 - 3.5 * sin (t * pi / 2)
+                            , y = 3.5 * cos (t * pi / 2)
+                            }
+                    )
             }
 
         RailTopToLeft ->
@@ -345,7 +352,14 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 's'
-            , railPath = NoRailPath
+            , railPath =
+                SingleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 3.5 * sin (t * pi / 2)
+                            , y = 3.5 * cos (t * pi / 2)
+                            }
+                    )
             }
 
         RailCrossing ->
