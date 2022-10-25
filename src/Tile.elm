@@ -16,6 +16,7 @@ module Tile exposing
     , worldToTile
     )
 
+import Axis2d
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Direction2d exposing (Direction2d)
@@ -25,6 +26,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
 import Units exposing (CellLocalUnit, TileLocalUnit, WorldCoordinate, WorldPixel, WorldUnit)
+import Vector2d
 
 
 charToTile : Dict Char Tile
@@ -333,14 +335,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'q'
-            , railPath =
-                SingleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 4 - 3.5 * sin (t * pi / 2)
-                            , y = 4 - 3.5 * cos (t * pi / 2)
-                            }
-                    )
+            , railPath = SingleRailPath bottomToRight
             }
 
         RailBottomToLeft ->
@@ -362,14 +357,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'w'
-            , railPath =
-                SingleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 3.5 * sin (t * pi / 2)
-                            , y = 4 - 3.5 * cos (t * pi / 2)
-                            }
-                    )
+            , railPath = SingleRailPath bottomToLeftPath
             }
 
         RailTopToRight ->
@@ -391,14 +379,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'a'
-            , railPath =
-                SingleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 4 - 3.5 * sin (t * pi / 2)
-                            , y = 3.5 * cos (t * pi / 2)
-                            }
-                    )
+            , railPath = SingleRailPath topToRightPath
             }
 
         RailTopToLeft ->
@@ -420,14 +401,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 's'
-            , railPath =
-                SingleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 3.5 * sin (t * pi / 2)
-                            , y = 3.5 * cos (t * pi / 2)
-                            }
-                    )
+            , railPath = SingleRailPath topToLeftPath
             }
 
         RailCrossing ->
@@ -456,8 +430,8 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'U'
-            , railPath = NoRailPath
+            , char = 'n'
+            , railPath = SingleRailPath strafeDownPath
             }
 
         RailStrafeUp ->
@@ -478,8 +452,8 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'J'
-            , railPath = NoRailPath
+            , char = 'm'
+            , railPath = SingleRailPath strafeUpPath
             }
 
         RailStrafeLeft ->
@@ -500,8 +474,8 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'I'
-            , railPath = NoRailPath
+            , char = 'N'
+            , railPath = SingleRailPath strafeLeftPath
             }
 
         RailStrafeRight ->
@@ -522,8 +496,8 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'K'
-            , railPath = NoRailPath
+            , char = 'M'
+            , railPath = SingleRailPath strafeRightPath
             }
 
         TrainHouseRight ->
@@ -649,12 +623,7 @@ getData tile =
             , char = 'i'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 4 - 3.5 * sin (t * pi / 2)
-                            , y = 4 - 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    bottomToRight
                     (\t -> Point2d.unsafe { x = 1 + t * 3, y = 0.5 })
             }
 
@@ -679,12 +648,7 @@ getData tile =
             , char = 'o'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 3.5 * sin (t * pi / 2)
-                            , y = 4 - 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    bottomToLeftPath
                     (\t -> Point2d.unsafe { x = 3.5, y = 1 + t * 3 })
             }
 
@@ -709,12 +673,7 @@ getData tile =
             , char = 'k'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 4 - 3.5 * sin (t * pi / 2)
-                            , y = 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    topToRightPath
                     (\t -> Point2d.unsafe { x = 0.5, y = t * 3 })
             }
 
@@ -739,12 +698,7 @@ getData tile =
             , char = 'l'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 3.5 * sin (t * pi / 2)
-                            , y = 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    topToLeftPath
                     (\t -> Point2d.unsafe { x = t * 3, y = 3.5 })
             }
 
@@ -769,12 +723,7 @@ getData tile =
             , char = 'I'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 4 - 3.5 * sin (t * pi / 2)
-                            , y = 4 - 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    bottomToRight
                     (\t -> Point2d.unsafe { x = 0.5, y = 1 + t * 3 })
             }
 
@@ -799,12 +748,7 @@ getData tile =
             , char = 'O'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 3.5 * sin (t * pi / 2)
-                            , y = 4 - 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    bottomToLeftPath
                     (\t -> Point2d.unsafe { x = t * 3, y = 0.5 })
             }
 
@@ -829,16 +773,15 @@ getData tile =
             , char = 'K'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 4 - 3.5 * sin (t * pi / 2)
-                            , y = 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    topToRightPath
                     (\t -> Point2d.unsafe { x = 1 + t * 3, y = 3.5 })
             }
 
         RailTopToLeft_SplitDown ->
+            let
+                _ =
+                    abc
+            in
             { texturePosition = ( 7, 29 )
             , size = ( 4, 4 )
             , collisionMask =
@@ -859,14 +802,102 @@ getData tile =
             , char = 'L'
             , railPath =
                 DoubleRailPath
-                    (\t ->
-                        Point2d.unsafe
-                            { x = 3.5 * sin (t * pi / 2)
-                            , y = 3.5 * cos (t * pi / 2)
-                            }
-                    )
+                    topToLeftPath
                     (\t -> Point2d.unsafe { x = 3.5, y = t * 3 })
             }
+
+
+abc =
+    let
+        detail =
+            80
+    in
+    List.range 0 detail
+        |> List.map
+            (\a ->
+                strafeRightPath (toFloat a / detail)
+                    |> Point2d.unwrap
+                    |> (\{ x, y } -> ( x, y ))
+            )
+        |> Debug.log "abc"
+
+
+strafeDownPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeDownPath t =
+    let
+        t1 =
+            0.01
+
+        t1Speed =
+            5
+
+        t2 =
+            0.5
+    in
+    if t < t1 then
+        Point2d.unsafe { x = t * t1Speed, y = 0.5 }
+
+    else if t <= t2 then
+        bottomToLeftPath (t - t1)
+            |> Point2d.translateBy (Vector2d.unsafe { x = t1 * t1Speed, y = 0 })
+
+    else
+        let
+            { x, y } =
+                strafeDownPath (1 - t) |> Point2d.unwrap
+        in
+        Point2d.unsafe { x = 5 - x, y = 3 - y }
+
+
+strafeUpPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeUpPath t =
+    strafeDownPath t |> Point2d.mirrorAcross (Axis2d.translateBy (Vector2d.unsafe { x = 0, y = 1.5 }) Axis2d.x)
+
+
+strafeRightPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeRightPath t =
+    let
+        { x, y } =
+            strafeDownPath t |> Point2d.unwrap
+    in
+    Point2d.unsafe { x = y, y = x }
+
+
+strafeLeftPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeLeftPath t =
+    strafeRightPath t |> Point2d.mirrorAcross (Axis2d.translateBy (Vector2d.unsafe { x = 1.5, y = 0 }) Axis2d.y)
+
+
+topToLeftPath : Float -> Point2d TileLocalUnit TileLocalUnit
+topToLeftPath t =
+    Point2d.unsafe
+        { x = 3.5 * sin (t * pi / 2)
+        , y = 3.5 * cos (t * pi / 2)
+        }
+
+
+topToRightPath : Float -> Point2d TileLocalUnit TileLocalUnit
+topToRightPath t =
+    Point2d.unsafe
+        { x = 4 - 3.5 * sin (t * pi / 2)
+        , y = 3.5 * cos (t * pi / 2)
+        }
+
+
+bottomToLeftPath : Float -> Point2d TileLocalUnit TileLocalUnit
+bottomToLeftPath t =
+    Point2d.unsafe
+        { x = 3.5 * sin (t * pi / 2)
+        , y = 4 - 3.5 * cos (t * pi / 2)
+        }
+
+
+bottomToRight : Float -> Point2d TileLocalUnit TileLocalUnit
+bottomToRight t =
+    Point2d.unsafe
+        { x = 4 - 3.5 * sin (t * pi / 2)
+        , y = 4 - 3.5 * cos (t * pi / 2)
+        }
 
 
 trainHouseLeftRailPath : Float -> Point2d TileLocalUnit TileLocalUnit
