@@ -2,6 +2,7 @@ port module Frontend exposing (app, init, update, updateFromBackend, view)
 
 import Angle
 import Array exposing (Array)
+import AssocList
 import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
@@ -46,6 +47,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Shaders
+import Sound exposing (Sound(..))
 import Task
 import Tile exposing (RailPath(..), Tile(..))
 import Time
@@ -102,6 +104,7 @@ app =
         }
 
 
+audio : AudioData -> FrontendModel_ -> Audio
 audio audioData model =
     case model of
         Loaded loaded ->
@@ -113,9 +116,17 @@ audio audioData model =
 
 audioLoaded : FrontendLoaded -> Audio
 audioLoaded model =
-    case ( model.popSound, model.lastTilePlaced ) of
-        ( Just (Ok popSound), Just time ) ->
-            Audio.audio popSound time |> Audio.scaleVolume 0.2
+    let
+        playSound =
+            Sound.play model.sounds
+    in
+    case model.lastTilePlaced of
+        Just { time, overwroteTiles } ->
+            if overwroteTiles then
+                playSound CrackleSound time |> Audio.scaleVolume 0.2
+
+            else
+                playSound PopSound time |> Audio.scaleVolume 0.2
 
         _ ->
             Audio.silence
@@ -160,7 +171,7 @@ loadedInit loading loadingData =
             , notifyMeModel = loading.notifyMeModel
             , textAreaText = ""
             , lastTilePlaced = Nothing
-            , popSound = loading.popSound
+            , sounds = loading.sounds
             }
     in
     ( updateMeshes model model
@@ -244,7 +255,7 @@ init url key =
         , mousePosition = Point2d.origin
         , showNotifyMe = showNotifyMe
         , notifyMeModel = notifyMe
-        , popSound = Nothing
+        , sounds = AssocList.empty
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (ConnectToBackend bounds emailEvent)
@@ -259,7 +270,7 @@ init url key =
         , Task.perform ShortIntervalElapsed Time.now
         , cmd
         ]
-    , Audio.loadAudio PopSoundLoaded "/pop.mp3"
+    , Sound.load SoundLoaded
     )
 
 
@@ -282,8 +293,8 @@ update msg model =
                 GotDevicePixelRatio devicePixelRatio ->
                     devicePixelRatioUpdate devicePixelRatio loadingModel |> Tuple.mapFirst Loading
 
-                PopSoundLoaded result ->
-                    ( Loading { loadingModel | popSound = Just result }, Cmd.none )
+                SoundLoaded sound result ->
+                    ( Loading { loadingModel | sounds = AssocList.insert sound result loadingModel.sounds }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -796,8 +807,8 @@ updateLoaded msg model =
         NotifyMeModelChanged notifyMeModel ->
             ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
 
-        PopSoundLoaded result ->
-            ( { model | popSound = Just result }, Cmd.none )
+        SoundLoaded sound result ->
+            ( { model | sounds = AssocList.insert sound result model.sounds }, Cmd.none )
 
 
 closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1149,46 +1160,58 @@ changeText text model =
 
                             else
                                 model
-                    in
-                    updateLocalModel
-                        (Change.LocalGridChange
-                            { position = Cursor.position model.cursor
-                            , change = tile
-                            }
-                        )
-                        { model_
-                            | trains =
-                                if tile == TrainHouseLeft || tile == TrainHouseRight then
-                                    let
-                                        ( offset, direction ) =
-                                            if tile == TrainHouseLeft then
-                                                ( Tile.trainHouseLeftRailPath 0.5
-                                                    |> Vector2d.from Point2d.origin
-                                                    |> Vector2d.unwrap
-                                                    |> Vector2d.unsafe
-                                                , Direction2d.negativeX
-                                                )
 
-                                            else
-                                                ( Tile.trainHouseRightRailPath 0.5
-                                                    |> Vector2d.from Point2d.origin
-                                                    |> Vector2d.unwrap
-                                                    |> Vector2d.unsafe
-                                                , Direction2d.x
-                                                )
-                                    in
-                                    { position =
-                                        Cursor.position model.cursor
-                                            |> Coord.toPoint2d
-                                            |> Point2d.translateBy offset
-                                    , direction = direction
+                        ( cellPos, localPos ) =
+                            Grid.worldToCellAndLocalCoord (Cursor.position model.cursor)
+
+                        neighborCells =
+                            ( cellPos, localPos ) :: Grid.closeNeighborCells cellPos localPos
+
+                        oldGrid =
+                            LocalGrid.localModel model_.localModel |> .grid
+
+                        model3 =
+                            updateLocalModel
+                                (Change.LocalGridChange
+                                    { position = Cursor.position model.cursor
+                                    , change = tile
                                     }
-                                        :: model_.trains
+                                )
+                                { model_
+                                    | trains =
+                                        if tile == TrainHouseLeft || tile == TrainHouseRight then
+                                            let
+                                                ( offset, direction ) =
+                                                    if tile == TrainHouseLeft then
+                                                        ( Tile.trainHouseLeftRailPath 0.5
+                                                            |> Vector2d.from Point2d.origin
+                                                            |> Vector2d.unwrap
+                                                            |> Vector2d.unsafe
+                                                        , Direction2d.negativeX
+                                                        )
 
-                                else
-                                    model_.trains
-                            , lastTilePlaced = Just model.time
-                        }
+                                                    else
+                                                        ( Tile.trainHouseRightRailPath 0.5
+                                                            |> Vector2d.from Point2d.origin
+                                                            |> Vector2d.unwrap
+                                                            |> Vector2d.unsafe
+                                                        , Direction2d.x
+                                                        )
+                                            in
+                                            { position =
+                                                Cursor.position model.cursor
+                                                    |> Coord.toPoint2d
+                                                    |> Point2d.translateBy offset
+                                            , direction = direction
+                                            }
+                                                :: model_.trains
+
+                                        else
+                                            model_.trains
+                                    , lastTilePlaced = Just { time = model.time, overwroteTiles = True }
+                                }
+                    in
+                    model3
 
                 Nothing ->
                     model

@@ -20,6 +20,7 @@ module Types exposing
     , Train
     )
 
+import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
@@ -46,6 +47,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
 import RecentChanges exposing (RecentChanges)
 import SendGrid
+import Sound exposing (Sound)
 import Time
 import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, WorldUnit)
 import Url exposing (Url)
@@ -75,7 +77,7 @@ type alias FrontendLoading =
     , mousePosition : Point2d Pixels ScreenCoordinate
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
-    , popSound : Maybe (Result Audio.LoadError Audio.Source)
+    , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     }
 
 
@@ -113,8 +115,8 @@ type alias FrontendLoaded =
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
     , textAreaText : String
-    , lastTilePlaced : Maybe Time.Posix
-    , popSound : Maybe (Result Audio.LoadError Audio.Source)
+    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool }
+    , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     }
 
 
@@ -214,7 +216,7 @@ type FrontendMsg_
     | PressedCancelNotifyMe
     | PressedSubmitNotifyMe NotifyMe.Validated
     | NotifyMeModelChanged NotifyMe.Model
-    | PopSoundLoaded (Result Audio.LoadError Audio.Source)
+    | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
 
 
 type ToBackend
