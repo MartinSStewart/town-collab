@@ -113,6 +113,7 @@ type alias FrontendLoaded =
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
     , textAreaText : String
+    , lastTilePlaced : Maybe Time.Posix
     , popSound : Maybe (Result Audio.LoadError Audio.Source)
     }
 

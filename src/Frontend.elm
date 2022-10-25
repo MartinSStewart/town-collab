@@ -2,7 +2,7 @@ port module Frontend exposing (app, init, update, updateFromBackend, view)
 
 import Angle
 import Array exposing (Array)
-import Audio exposing (AudioCmd, AudioData)
+import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest(..))
@@ -103,7 +103,22 @@ app =
 
 
 audio audioData model =
-    Audio.silence
+    case model of
+        Loaded loaded ->
+            audioLoaded loaded
+
+        Loading _ ->
+            Audio.silence
+
+
+audioLoaded : FrontendLoaded -> Audio
+audioLoaded model =
+    case ( model.popSound, model.lastTilePlaced ) of
+        ( Just (Ok popSound), Just time ) ->
+            Audio.audio popSound time |> Audio.scaleVolume 0.2
+
+        _ ->
+            Audio.silence
 
 
 loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
@@ -144,6 +159,7 @@ loadedInit loading loadingData =
             , showNotifyMe = loading.showNotifyMe
             , notifyMeModel = loading.notifyMeModel
             , textAreaText = ""
+            , lastTilePlaced = Nothing
             , popSound = loading.popSound
             }
     in
@@ -1171,6 +1187,7 @@ changeText text model =
 
                                 else
                                     model_.trains
+                            , lastTilePlaced = Just model.time
                         }
 
                 Nothing ->
