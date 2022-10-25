@@ -778,10 +778,6 @@ getData tile =
             }
 
         RailTopToLeft_SplitDown ->
-            let
-                _ =
-                    abc
-            in
             { texturePosition = ( 7, 29 )
             , size = ( 4, 4 )
             , collisionMask =
