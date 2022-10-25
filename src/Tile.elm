@@ -551,7 +551,7 @@ getData tile =
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
             , char = 'u'
-            , railPath = NoRailPath
+            , railPath = SingleRailPath strafeDownSmallPath
             }
 
         RailStrafeUpSmall ->
@@ -559,7 +559,7 @@ getData tile =
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
             , char = 'j'
-            , railPath = NoRailPath
+            , railPath = SingleRailPath strafeUpSmallPath
             }
 
         RailStrafeLeftSmall ->
@@ -567,7 +567,7 @@ getData tile =
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
             , char = 'U'
-            , railPath = NoRailPath
+            , railPath = SingleRailPath strafeLeftSmallPath
             }
 
         RailStrafeRightSmall ->
@@ -575,7 +575,7 @@ getData tile =
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
             , char = 'J'
-            , railPath = NoRailPath
+            , railPath = SingleRailPath strafeRightSmallPath
             }
 
         Sidewalk ->
@@ -807,19 +807,50 @@ getData tile =
             }
 
 
-abc =
+strafeDownSmallPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeDownSmallPath t =
     let
-        detail =
-            80
+        t1 =
+            0.05
+
+        t1Speed =
+            4
+
+        t2 =
+            0.5
     in
-    List.range 0 detail
-        |> List.map
-            (\a ->
-                strafeRightPath (toFloat a / detail)
-                    |> Point2d.unwrap
-                    |> (\{ x, y } -> ( x, y ))
-            )
-        |> Debug.log "abc"
+    if t < t1 then
+        Point2d.unsafe { x = t * t1Speed, y = 0.5 }
+
+    else if t <= t2 then
+        bottomToLeftPath (0.76 * (t - t1))
+            |> Point2d.translateBy (Vector2d.unsafe { x = t1 * t1Speed, y = 0 })
+
+    else
+        let
+            { x, y } =
+                strafeDownSmallPath (1 - t) |> Point2d.unwrap
+        in
+        Point2d.unsafe { x = 4 - x, y = 2 - y }
+
+
+strafeUpSmallPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeUpSmallPath t =
+    strafeDownSmallPath t |> Point2d.mirrorAcross (Axis2d.translateBy (Vector2d.unsafe { x = 0, y = 1 }) Axis2d.x)
+
+
+strafeRightSmallPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeRightSmallPath t =
+    let
+        { x, y } =
+            strafeDownSmallPath t |> Point2d.unwrap
+    in
+    Point2d.unsafe { x = y, y = x }
+
+
+strafeLeftSmallPath : Float -> Point2d TileLocalUnit TileLocalUnit
+strafeLeftSmallPath t =
+    strafeRightSmallPath t |> Point2d.mirrorAcross (Axis2d.translateBy (Vector2d.unsafe { x = 1, y = 0 }) Axis2d.y)
 
 
 strafeDownPath : Float -> Point2d TileLocalUnit TileLocalUnit
