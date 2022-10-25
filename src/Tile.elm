@@ -85,6 +85,14 @@ type Tile
     | Sidewalk
     | SidewalkHorizontalRailCrossing
     | SidewalkVerticalRailCrossing
+    | RailBottomToRight_SplitLeft
+    | RailBottomToLeft_SplitUp
+    | RailTopToRight_SplitDown
+    | RailTopToLeft_SplitRight
+    | RailBottomToRight_SplitUp
+    | RailBottomToLeft_SplitRight
+    | RailTopToRight_SplitLeft
+    | RailTopToLeft_SplitDown
 
 
 texturePosition : Tile -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
@@ -159,6 +167,14 @@ allTiles =
     , Sidewalk
     , SidewalkHorizontalRailCrossing
     , SidewalkVerticalRailCrossing
+    , RailBottomToRight_SplitLeft
+    , RailBottomToLeft_SplitUp
+    , RailTopToRight_SplitDown
+    , RailTopToLeft_SplitRight
+    , RailBottomToRight_SplitUp
+    , RailBottomToLeft_SplitRight
+    , RailTopToRight_SplitLeft
+    , RailTopToLeft_SplitDown
     ]
 
 
@@ -573,18 +589,18 @@ getData tile =
             }
 
         RailStrafeLeftSmall ->
-            { texturePosition = ( 11, 0 )
+            { texturePosition = ( 0, 21 )
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
-            , char = 'i'
+            , char = 'U'
             , railPath = NoRailPath
             }
 
         RailStrafeRightSmall ->
-            { texturePosition = ( 11, 4 )
+            { texturePosition = ( 0, 25 )
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
-            , char = 'k'
+            , char = 'J'
             , railPath = NoRailPath
             }
 
@@ -610,6 +626,246 @@ getData tile =
             , collisionMask = DefaultCollision
             , char = 'X'
             , railPath = SingleRailPath (\t -> Point2d.unsafe { x = 0.5, y = t })
+            }
+
+        RailBottomToRight_SplitLeft ->
+            { texturePosition = ( 3, 17 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 1, 0 )
+                , ( 2, 0 )
+                , ( 3, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                , ( 2, 1 )
+                , ( 3, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                , ( 0, 3 )
+                , ( 1, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'i'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 4 - 3.5 * sin (t * pi / 2)
+                            , y = 4 - 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = 1 + t * 3, y = 0.5 })
+            }
+
+        RailBottomToLeft_SplitUp ->
+            { texturePosition = ( 7, 17 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 0, 0 )
+                , ( 1, 0 )
+                , ( 2, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                , ( 2, 1 )
+                , ( 3, 1 )
+                , ( 2, 2 )
+                , ( 3, 2 )
+                , ( 2, 3 )
+                , ( 3, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'o'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 3.5 * sin (t * pi / 2)
+                            , y = 4 - 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = 3.5, y = 1 + t * 3 })
+            }
+
+        RailTopToRight_SplitDown ->
+            { texturePosition = ( 3, 21 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 0, 0 )
+                , ( 1, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                , ( 2, 2 )
+                , ( 3, 2 )
+                , ( 1, 3 )
+                , ( 2, 3 )
+                , ( 3, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'k'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 4 - 3.5 * sin (t * pi / 2)
+                            , y = 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = 0.5, y = t * 3 })
+            }
+
+        RailTopToLeft_SplitRight ->
+            { texturePosition = ( 7, 21 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 2, 0 )
+                , ( 3, 0 )
+                , ( 2, 1 )
+                , ( 3, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                , ( 2, 2 )
+                , ( 3, 2 )
+                , ( 0, 3 )
+                , ( 1, 3 )
+                , ( 2, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'l'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 3.5 * sin (t * pi / 2)
+                            , y = 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = t * 3, y = 3.5 })
+            }
+
+        RailBottomToRight_SplitUp ->
+            { texturePosition = ( 3, 25 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 1, 0 )
+                , ( 2, 0 )
+                , ( 3, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                , ( 2, 1 )
+                , ( 3, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                , ( 0, 3 )
+                , ( 1, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'I'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 4 - 3.5 * sin (t * pi / 2)
+                            , y = 4 - 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = 0.5, y = 1 + t * 3 })
+            }
+
+        RailBottomToLeft_SplitRight ->
+            { texturePosition = ( 7, 25 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 0, 0 )
+                , ( 1, 0 )
+                , ( 2, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                , ( 2, 1 )
+                , ( 3, 1 )
+                , ( 2, 2 )
+                , ( 3, 2 )
+                , ( 2, 3 )
+                , ( 3, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'O'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 3.5 * sin (t * pi / 2)
+                            , y = 4 - 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = t * 3, y = 0.5 })
+            }
+
+        RailTopToRight_SplitLeft ->
+            { texturePosition = ( 3, 29 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 0, 0 )
+                , ( 1, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                , ( 2, 2 )
+                , ( 3, 2 )
+                , ( 1, 3 )
+                , ( 2, 3 )
+                , ( 3, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'K'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 4 - 3.5 * sin (t * pi / 2)
+                            , y = 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = 1 + t * 3, y = 3.5 })
+            }
+
+        RailTopToLeft_SplitDown ->
+            { texturePosition = ( 7, 29 )
+            , size = ( 4, 4 )
+            , collisionMask =
+                [ ( 2, 0 )
+                , ( 3, 0 )
+                , ( 2, 1 )
+                , ( 3, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                , ( 2, 2 )
+                , ( 3, 2 )
+                , ( 0, 3 )
+                , ( 1, 3 )
+                , ( 2, 3 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'L'
+            , railPath =
+                DoubleRailPath
+                    (\t ->
+                        Point2d.unsafe
+                            { x = 3.5 * sin (t * pi / 2)
+                            , y = 3.5 * cos (t * pi / 2)
+                            }
+                    )
+                    (\t -> Point2d.unsafe { x = 3.5, y = t * 3 })
             }
 
 
