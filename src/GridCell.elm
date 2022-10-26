@@ -14,7 +14,7 @@ import Coord exposing (Coord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import List.Nonempty exposing (Nonempty(..))
-import Tile exposing (Tile)
+import Tile exposing (Tile(..))
 import Units exposing (CellLocalUnit)
 import User exposing (RawUserId, UserId)
 
@@ -113,7 +113,7 @@ flatten hiddenUsers hiddenUsersForAll (Cell cell) =
                                     Tile.getData value
                             in
                             { list =
-                                (if Bounds.contains position cellBounds then
+                                (if Bounds.contains position cellBounds && value /= EmptyTile then
                                     [ item ]
 
                                  else

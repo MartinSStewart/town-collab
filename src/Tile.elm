@@ -66,7 +66,8 @@ worldToTile point =
 
 
 type Tile
-    = House
+    = EmptyTile
+    | House
     | RailHorizontal
     | RailVertical
     | RailBottomToRight
@@ -148,7 +149,8 @@ pathDirection path t =
 
 allTiles : List Tile
 allTiles =
-    [ House
+    [ EmptyTile
+    , House
     , RailHorizontal
     , RailVertical
     , RailBottomToRight
@@ -283,6 +285,14 @@ nearestRailTHelper stepsLeft minT maxT position railPath =
 getData : Tile -> TileData
 getData tile =
     case tile of
+        EmptyTile ->
+            { texturePosition = ( 0, 5 )
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = ' '
+            , railPath = NoRailPath
+            }
+
         House ->
             { texturePosition = ( 0, 1 )
             , size = ( 3, 3 )
