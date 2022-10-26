@@ -23,6 +23,7 @@ type Cell
     = Cell
         { history : List { userId : UserId, position : Coord CellLocalUnit, value : Tile }
         , undoPoint : Dict RawUserId Int
+        , cache : List { userId : UserId, position : Coord CellLocalUnit, value : Tile }
         }
 
 
@@ -57,7 +58,73 @@ addValue userId position line (Cell cell) =
                 (User.rawId userId)
                 (userUndoPoint + 1)
                 cell.undoPoint
+        , cache = cell.cache
         }
+        |> updateCache
+
+
+updateCache : Cell -> Cell
+updateCache (Cell cell) =
+    let
+        hiddenUsers =
+            EverySet.empty
+
+        hiddenUsersForAll =
+            EverySet.empty
+
+        hidden =
+            EverySet.union hiddenUsers hiddenUsersForAll
+
+        cellBounds : Bounds unit
+        cellBounds =
+            Nonempty
+                (Coord.fromRawCoord ( 0, 0 ))
+                [ Coord.fromRawCoord ( Units.cellSize - 1, Units.cellSize - 1 ) ]
+                |> Bounds.fromCoords
+    in
+    { history = cell.history
+    , undoPoint = cell.undoPoint
+    , cache =
+        List.foldr
+            (\({ userId, position, value } as item) state ->
+                if EverySet.member userId hidden then
+                    state
+
+                else
+                    case Dict.get (User.rawId userId) state.undoPoint of
+                        Just stepsLeft ->
+                            if stepsLeft > 0 then
+                                let
+                                    data =
+                                        Tile.getData value
+                                in
+                                { list =
+                                    (if Bounds.contains position cellBounds && value /= EmptyTile then
+                                        [ item ]
+
+                                     else
+                                        []
+                                    )
+                                        ++ List.filter
+                                            (\item2 ->
+                                                Tile.hasCollision position data item2.position (Tile.getData item2.value)
+                                                    |> not
+                                            )
+                                            state.list
+                                , undoPoint = Dict.insert (User.rawId userId) (stepsLeft - 1) state.undoPoint
+                                }
+
+                            else
+                                state
+
+                        Nothing ->
+                            state
+            )
+            { list = [], undoPoint = cell.undoPoint }
+            cell.history
+            |> .list
+    }
+        |> Cell
 
 
 removeUser : UserId -> Cell -> Cell
@@ -65,7 +132,9 @@ removeUser userId (Cell cell) =
     Cell
         { history = List.filter (.userId >> (==) userId) cell.history
         , undoPoint = Dict.remove (User.rawId userId) cell.undoPoint
+        , cache = cell.cache
         }
+        |> updateCache
 
 
 hasChangesBy : UserId -> Cell -> Bool
@@ -78,7 +147,9 @@ moveUndoPoint userId moveAmount (Cell cell) =
     Cell
         { history = cell.history
         , undoPoint = Dict.update (User.rawId userId) (Maybe.map ((+) moveAmount)) cell.undoPoint
+        , cache = flatten EverySet.empty EverySet.empty (Cell cell)
         }
+        |> updateCache
 
 
 changeCount : Cell -> Int
@@ -88,57 +159,9 @@ changeCount (Cell { history }) =
 
 flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Coord CellLocalUnit, value : Tile }
 flatten hiddenUsers hiddenUsersForAll (Cell cell) =
-    let
-        hidden =
-            EverySet.union hiddenUsers hiddenUsersForAll
-
-        cellBounds : Bounds unit
-        cellBounds =
-            Nonempty
-                (Coord.fromRawCoord ( 0, 0 ))
-                [ Coord.fromRawCoord ( Units.cellSize - 1, Units.cellSize - 1 ) ]
-                |> Bounds.fromCoords
-    in
-    List.foldr
-        (\({ userId, position, value } as item) state ->
-            if EverySet.member userId hidden then
-                state
-
-            else
-                case Dict.get (User.rawId userId) state.undoPoint of
-                    Just stepsLeft ->
-                        if stepsLeft > 0 then
-                            let
-                                data =
-                                    Tile.getData value
-                            in
-                            { list =
-                                (if Bounds.contains position cellBounds && value /= EmptyTile then
-                                    [ item ]
-
-                                 else
-                                    []
-                                )
-                                    ++ List.filter
-                                        (\item2 ->
-                                            Tile.hasCollision position data item2.position (Tile.getData item2.value)
-                                                |> not
-                                        )
-                                        state.list
-                            , undoPoint = Dict.insert (User.rawId userId) (stepsLeft - 1) state.undoPoint
-                            }
-
-                        else
-                            state
-
-                    Nothing ->
-                        state
-        )
-        { list = [], undoPoint = cell.undoPoint }
-        cell.history
-        |> .list
+    cell.cache
 
 
 empty : Cell
 empty =
-    Cell { history = [], undoPoint = Dict.empty }
+    Cell { history = [], undoPoint = Dict.empty, cache = [] }
