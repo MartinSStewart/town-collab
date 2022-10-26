@@ -18,7 +18,6 @@ module Types exposing
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
-    , Train
     )
 
 import AssocList
@@ -52,6 +51,7 @@ import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
 import Tile exposing (Tile)
 import Time
+import Train exposing (Train)
 import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, WorldUnit)
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
@@ -83,10 +83,6 @@ type alias FrontendLoading =
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , loadingData : Maybe LoadingData_
     }
-
-
-type alias Train =
-    { position : Point2d WorldUnit WorldUnit, direction : Direction2d WorldUnit }
 
 
 type alias FrontendLoaded =

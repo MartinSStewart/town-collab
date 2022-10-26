@@ -50,8 +50,9 @@ import Random
 import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound(..))
 import Task
-import Tile exposing (RailPath(..), Tile(..))
+import Tile exposing (RailPathType(..), Tile(..))
 import Time
+import Train exposing (Train)
 import Types exposing (..)
 import UiColors
 import Units exposing (CellUnit, ScreenCoordinate, TileLocalUnit, WorldCoordinate, WorldPixel, WorldUnit)
@@ -453,8 +454,6 @@ updateLoaded msg model =
                     maybeUserId =
                         selectionPoint
                             position
-                            localModel.hiddenUsers
-                            localModel.adminHiddenUsers
                             localModel.grid
                             |> Maybe.map .userId
                 in
@@ -529,8 +528,6 @@ updateLoaded msg model =
                                     hideUserId =
                                         selectionPoint
                                             position
-                                            localModel.hiddenUsers
-                                            localModel.adminHiddenUsers
                                             localModel.grid
                                             |> Maybe.map .userId
                                 in
@@ -693,121 +690,11 @@ updateLoaded msg model =
                 localGrid : LocalGrid_
                 localGrid =
                     LocalGrid.localModel model.localModel
-
-                moveTrain : Train -> Train
-                moveTrain train =
-                    let
-                        ( cellPos, localPos ) =
-                            Grid.worldToCellAndLocalPoint (Point2d.translateIn train.direction (Quantity 0.1) train.position)
-
-                        flattenedCells : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
-                        flattenedCells =
-                            ( cellPos, Coord.floorPoint localPos )
-                                :: Grid.closeNeighborCells cellPos (Coord.floorPoint localPos)
-                                |> List.concatMap
-                                    (\( neighborCellPos, neighborLocalPos ) ->
-                                        case Grid.getCell neighborCellPos localGrid.grid of
-                                            Just cell ->
-                                                let
-                                                    offset =
-                                                        Coord.floorPoint localPos
-                                                            |> Coord.minusTuple neighborLocalPos
-                                                in
-                                                GridCell.flatten EverySet.empty EverySet.empty cell
-                                                    |> List.map
-                                                        (\tile ->
-                                                            { userId = tile.userId
-                                                            , position = Coord.addTuple offset tile.position
-                                                            , value = tile.value
-                                                            }
-                                                        )
-
-                                            Nothing ->
-                                                []
-                                    )
-
-                        checkRailPath position path =
-                            let
-                                tileLocalPos : Point2d TileLocalUnit TileLocalUnit
-                                tileLocalPos =
-                                    Point2d.translateBy
-                                        (Vector2d.from
-                                            (Coord.toPoint2d position)
-                                            Point2d.origin
-                                        )
-                                        localPos
-                                        |> Point2d.unwrap
-                                        |> Point2d.unsafe
-
-                                { t, distance, direction } =
-                                    Tile.nearestRailT tileLocalPos path
-
-                                angleDifference : Float
-                                angleDifference =
-                                    Direction2d.angleFrom
-                                        direction
-                                        (train.direction |> Direction2d.unwrap |> Direction2d.unsafe)
-                                        |> Angle.inDegrees
-                                        |> abs
-                            in
-                            if
-                                (distance |> Quantity.lessThan (Quantity 0.5))
-                                    && (angleDifference < 40 || angleDifference > 50)
-                            then
-                                [ { t = t
-                                  , distance = distance
-                                  , position = position
-                                  , path = path
-                                  }
-                                ]
-
-                            else
-                                []
-
-                        maybeNearestRailTile =
-                            flattenedCells
-                                |> List.concatMap
-                                    (\{ position, value } ->
-                                        case Tile.getData value |> .railPath of
-                                            NoRailPath ->
-                                                []
-
-                                            SingleRailPath path ->
-                                                checkRailPath position path
-
-                                            DoubleRailPath path1 path2 ->
-                                                checkRailPath position path1 ++ checkRailPath position path2
-                                    )
-                                |> Quantity.minimumBy .distance
-                    in
-                    case maybeNearestRailTile of
-                        Just nearestRailTile ->
-                            let
-                                newPosition : Point2d WorldUnit WorldUnit
-                                newPosition =
-                                    Point2d.translateBy
-                                        (Vector2d.from
-                                            Point2d.origin
-                                            (nearestRailTile.path nearestRailTile.t)
-                                            |> Vector2d.unwrap
-                                            |> Vector2d.unsafe
-                                        )
-                                        (Coord.toPoint2d nearestRailTile.position)
-                                        |> Grid.cellAndLocalPointToWorld cellPos
-                            in
-                            { position = newPosition
-                            , direction =
-                                Direction2d.from train.position newPosition
-                                    |> Maybe.withDefault train.direction
-                            }
-
-                        Nothing ->
-                            train
             in
             ( { model
                 | time = time
                 , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
-                , trains = List.map moveTrain model.trains
+                , trains = List.map (Train.moveTrain localGrid.grid) model.trains
                 , removedTileParticles =
                     List.filter
                         (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
@@ -1131,15 +1018,15 @@ worldToScreen model =
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
-selectionPoint : Coord WorldUnit -> EverySet UserId -> EverySet UserId -> Grid -> Maybe { userId : UserId, value : Tile }
-selectionPoint position hiddenUsers hiddenUsersForAll grid =
+selectionPoint : Coord WorldUnit -> Grid -> Maybe { userId : UserId, value : Tile }
+selectionPoint position grid =
     let
         ( cellPosition, localPosition ) =
             Grid.worldToCellAndLocalCoord position
     in
     case Grid.getCell cellPosition grid of
         Just cell ->
-            GridCell.flatten hiddenUsers hiddenUsersForAll cell
+            GridCell.flatten cell
                 |> List.find (.position >> (==) localPosition)
                 |> Maybe.map (\{ userId, value } -> { userId = userId, value = value })
 
@@ -1201,28 +1088,21 @@ changeText text model =
                                     | trains =
                                         if tile == TrainHouseLeft || tile == TrainHouseRight then
                                             let
-                                                ( offset, direction ) =
+                                                ( path, speed ) =
                                                     if tile == TrainHouseLeft then
-                                                        ( Tile.trainHouseLeftRailPath 0.5
-                                                            |> Vector2d.from Point2d.origin
-                                                            |> Vector2d.unwrap
-                                                            |> Vector2d.unsafe
-                                                        , Direction2d.negativeX
+                                                        ( Tile.trainHouseLeftRailPath
+                                                        , Quantity -0.1
                                                         )
 
                                                     else
-                                                        ( Tile.trainHouseRightRailPath 0.5
-                                                            |> Vector2d.from Point2d.origin
-                                                            |> Vector2d.unwrap
-                                                            |> Vector2d.unsafe
-                                                        , Direction2d.x
+                                                        ( Tile.trainHouseRightRailPath
+                                                        , Quantity 0.1
                                                         )
                                             in
-                                            { position =
-                                                Cursor.position model.cursor
-                                                    |> Coord.toPoint2d
-                                                    |> Point2d.translateBy offset
-                                            , direction = direction
+                                            { position = Cursor.position model.cursor
+                                            , path = path
+                                            , t = 0.5
+                                            , speed = speed
                                             }
                                                 :: model2.trains
 
@@ -1240,11 +1120,11 @@ changeText text model =
                                     let
                                         oldCell : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
                                         oldCell =
-                                            Grid.getCell neighborCellPos oldGrid |> Maybe.map (GridCell.flatten EverySet.empty EverySet.empty) |> Maybe.withDefault []
+                                            Grid.getCell neighborCellPos oldGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
 
                                         newCell : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
                                         newCell =
-                                            Grid.getCell neighborCellPos newGrid |> Maybe.map (GridCell.flatten EverySet.empty EverySet.empty) |> Maybe.withDefault []
+                                            Grid.getCell neighborCellPos newGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
                                     in
                                     List.foldl
                                         (\item state ->
@@ -1424,7 +1304,7 @@ updateMeshes oldModel newModel =
             in
             Grid.mesh
                 coord
-                (GridCell.flatten newHidden newHiddenForAll newCell)
+                (GridCell.flatten newCell)
 
         hiddenUnchanged : Bool
         hiddenUnchanged =
@@ -2374,14 +2254,26 @@ drawTrains trains viewMatrix texture =
     List.concatMap
         (\train ->
             let
+                railData =
+                    Tile.railPathData train.path
+
                 { x, y } =
-                    Point2d.unwrap train.position
+                    Grid.localTilePointPlusWorld train.position (railData.path train.t) |> Point2d.unwrap
 
                 ( Quantity w, Quantity h ) =
                     Tile.size
 
                 trainFrame =
-                    Direction2d.angleFrom Direction2d.x train.direction
+                    Direction2d.angleFrom
+                        Direction2d.x
+                        (Tile.pathDirection railData.path train.t
+                            |> (if Quantity.lessThanZero train.speed then
+                                    Direction2d.reverse
+
+                                else
+                                    identity
+                               )
+                        )
                         |> Angle.inTurns
                         |> (*) 20
                         |> round
@@ -2395,7 +2287,7 @@ drawTrains trains viewMatrix texture =
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         trainMesh_
-                        { view = Mat4.makeTranslate3 (x * w) (y * h) 0 |> Mat4.mul viewMatrix
+                        { view = Mat4.makeTranslate3 (x * toFloat w) (y * toFloat h) 0 |> Mat4.mul viewMatrix
                         , texture = texture
                         , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
                         }

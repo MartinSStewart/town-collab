@@ -147,7 +147,7 @@ moveUndoPoint userId moveAmount (Cell cell) =
     Cell
         { history = cell.history
         , undoPoint = Dict.update (User.rawId userId) (Maybe.map ((+) moveAmount)) cell.undoPoint
-        , cache = flatten EverySet.empty EverySet.empty (Cell cell)
+        , cache = cell.cache
         }
         |> updateCache
 
@@ -157,8 +157,8 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : EverySet UserId -> EverySet UserId -> Cell -> List { userId : UserId, position : Coord CellLocalUnit, value : Tile }
-flatten hiddenUsers hiddenUsersForAll (Cell cell) =
+flatten : Cell -> List { userId : UserId, position : Coord CellLocalUnit, value : Tile }
+flatten (Cell cell) =
     cell.cache
 
 

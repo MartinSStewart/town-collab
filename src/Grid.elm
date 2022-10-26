@@ -15,6 +15,9 @@ module Grid exposing
     , getCell
     , getIndices
     , localChangeToChange
+    , localTileCoordPlusWorld
+    , localTilePointPlusCellLocalCoord
+    , localTilePointPlusWorld
     , mesh
     , moveUndoPoint
     , region
@@ -33,7 +36,7 @@ import Pixels
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Tile exposing (Tile)
-import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
+import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import User exposing (UserId)
 import Vector2d
 import WebGL
@@ -51,6 +54,24 @@ empty =
 from : Dict ( Int, Int ) Cell -> Grid
 from =
     Grid
+
+
+localTileCoordPlusWorld : Coord WorldUnit -> Coord TileLocalUnit -> Coord WorldUnit
+localTileCoordPlusWorld world local =
+    Coord.toRawCoord local |> Coord.fromRawCoord |> Coord.addTuple world
+
+
+localTilePointPlusWorld : Coord WorldUnit -> Point2d TileLocalUnit TileLocalUnit -> Point2d WorldUnit WorldUnit
+localTilePointPlusWorld world local =
+    Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d world)
+
+
+localTilePointPlusCellLocalCoord :
+    Coord CellLocalUnit
+    -> Point2d TileLocalUnit TileLocalUnit
+    -> Point2d CellLocalUnit CellLocalUnit
+localTilePointPlusCellLocalCoord cellLocal local =
+    Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d cellLocal)
 
 
 worldToCellAndLocalCoord : Coord WorldUnit -> ( Coord CellUnit, Coord CellLocalUnit )

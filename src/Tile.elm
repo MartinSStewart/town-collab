@@ -1,5 +1,8 @@
 module Tile exposing
-    ( RailPath(..)
+    ( Direction(..)
+    , RailData
+    , RailPath(..)
+    , RailPathType(..)
     , Tile(..)
     , allTiles
     , fromChar
@@ -7,6 +10,8 @@ module Tile exposing
     , hasCollision
     , nearestRailT
     , pathDirection
+    , railPathData
+    , reverseDirection
     , size
     , texturePosition
     , texturePosition_
@@ -16,6 +21,7 @@ module Tile exposing
     , worldToTile
     )
 
+import Angle
 import Axis2d
 import Coord exposing (Coord)
 import Dict exposing (Dict)
@@ -98,6 +104,260 @@ type Tile
     | RailTopToLeft_SplitDown
 
 
+type Direction
+    = Left
+    | Right
+    | Up
+    | Down
+
+
+reverseDirection : Direction -> Direction
+reverseDirection direction =
+    case direction of
+        Left ->
+            Right
+
+        Right ->
+            Left
+
+        Up ->
+            Down
+
+        Down ->
+            Up
+
+
+type RailPath
+    = RailPathHorizontal { offsetX : Int, offsetY : Int, length : Int }
+    | RailPathVertical { offsetX : Int, offsetY : Int, length : Int }
+    | RailPathBottomToRight
+    | RailPathBottomToLeft
+    | RailPathTopToRight
+    | RailPathTopToLeft
+    | RailPathStrafeDown
+    | RailPathStrafeUp
+    | RailPathStrafeLeft
+    | RailPathStrafeRight
+    | RailPathStrafeDownSmall
+    | RailPathStrafeUpSmall
+    | RailPathStrafeLeftSmall
+    | RailPathStrafeRightSmall
+
+
+trackTurnRadius : number
+trackTurnRadius =
+    4
+
+
+turnLength =
+    trackTurnRadius * pi / 2
+
+
+type alias RailData =
+    { path : Float -> Point2d TileLocalUnit TileLocalUnit
+    , distanceToT : Quantity Float TileLocalUnit -> Float
+    , tToDistance : Float -> Quantity Float TileLocalUnit
+    , startExitDirection : Direction
+    , endExitDirection : Direction
+    }
+
+
+pathExitDirection path =
+    pathStartEndDirection 0.99 1 path
+
+
+pathStartDirection path =
+    pathStartEndDirection 0.01 0 path
+
+
+pathStartEndDirection t1 t2 path =
+    let
+        angle =
+            Direction2d.from (path t1) (path t2)
+                |> Maybe.withDefault Direction2d.x
+                |> Direction2d.toAngle
+                |> Angle.inDegrees
+    in
+    if angle < -135 then
+        Left
+
+    else if angle < -45 then
+        Up
+
+    else if angle < 45 then
+        Right
+
+    else if angle < 135 then
+        Down
+
+    else
+        Left
+
+
+railPathBottomToRight =
+    { path = bottomToRightPath
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
+    , startExitDirection = pathStartDirection bottomToRightPath
+    , endExitDirection = pathExitDirection bottomToRightPath
+    }
+
+
+railPathBottomToLeft =
+    { path = bottomToLeftPath
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
+    , startExitDirection = pathStartDirection bottomToLeftPath
+    , endExitDirection = pathExitDirection bottomToLeftPath
+    }
+
+
+railPathTopToRight =
+    { path = topToRightPath
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
+    , startExitDirection = pathStartDirection topToRightPath
+    , endExitDirection = pathExitDirection topToRightPath
+    }
+
+
+railPathTopToLeft =
+    { path = topToLeftPath
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
+    , startExitDirection = pathStartDirection topToLeftPath
+    , endExitDirection = pathExitDirection topToLeftPath
+    }
+
+
+railPathStrafeDown =
+    { path = strafeDownPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeDownPath
+    , endExitDirection = pathExitDirection strafeDownPath
+    }
+
+
+railPathStrafeUp =
+    { path = strafeUpPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeUpPath
+    , endExitDirection = pathExitDirection strafeUpPath
+    }
+
+
+railPathStrafeLeft =
+    { path = strafeLeftPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeLeftPath
+    , endExitDirection = pathExitDirection strafeLeftPath
+    }
+
+
+railPathStrafeRight =
+    { path = strafeRightPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeRightPath
+    , endExitDirection = pathExitDirection strafeRightPath
+    }
+
+
+railPathStrafeDownSmall =
+    { path = strafeDownSmallPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeDownSmallPath
+    , endExitDirection = pathExitDirection strafeDownSmallPath
+    }
+
+
+railPathStrafeUpSmall =
+    { path = strafeUpSmallPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeUpSmallPath
+    , endExitDirection = pathExitDirection strafeUpSmallPath
+    }
+
+
+railPathStrafeLeftSmall =
+    { path = strafeLeftSmallPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeLeftSmallPath
+    , endExitDirection = pathExitDirection strafeLeftSmallPath
+    }
+
+
+railPathStrafeRightSmall =
+    { path = strafeRightSmallPath
+    , distanceToT = \_ -> Debug.todo ""
+    , tToDistance = \_ -> Debug.todo ""
+    , startExitDirection = pathStartDirection strafeRightSmallPath
+    , endExitDirection = pathExitDirection strafeRightSmallPath
+    }
+
+
+railPathData : RailPath -> RailData
+railPathData railPath =
+    case railPath of
+        RailPathHorizontal { offsetX, offsetY, length } ->
+            { path = \t -> Point2d.unsafe { x = t * toFloat length + toFloat offsetX, y = toFloat offsetY + 0.5 }
+            , distanceToT = \(Quantity distance) -> distance / toFloat length
+            , tToDistance = \t -> toFloat length * t |> Quantity
+            , startExitDirection = Left
+            , endExitDirection = Right
+            }
+
+        RailPathVertical { offsetX, offsetY, length } ->
+            { path = \t -> Point2d.unsafe { x = toFloat offsetX + 0.5, y = t * toFloat length + toFloat offsetY }
+            , distanceToT = \(Quantity distance) -> distance / toFloat length
+            , tToDistance = \t -> toFloat length * t |> Quantity
+            , startExitDirection = Up
+            , endExitDirection = Down
+            }
+
+        RailPathBottomToRight ->
+            railPathBottomToRight
+
+        RailPathBottomToLeft ->
+            railPathBottomToLeft
+
+        RailPathTopToRight ->
+            railPathTopToRight
+
+        RailPathTopToLeft ->
+            railPathTopToLeft
+
+        RailPathStrafeDown ->
+            railPathStrafeDown
+
+        RailPathStrafeUp ->
+            railPathStrafeUp
+
+        RailPathStrafeLeft ->
+            railPathStrafeLeft
+
+        RailPathStrafeRight ->
+            railPathStrafeRight
+
+        RailPathStrafeDownSmall ->
+            railPathStrafeDownSmall
+
+        RailPathStrafeUpSmall ->
+            railPathStrafeUpSmall
+
+        RailPathStrafeLeftSmall ->
+            railPathStrafeLeftSmall
+
+        RailPathStrafeRightSmall ->
+            railPathStrafeRightSmall
+
+
 texturePosition : Tile -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
 texturePosition tile =
     let
@@ -131,14 +391,14 @@ type alias TileData =
     , size : ( Int, Int )
     , collisionMask : CollisionMask
     , char : Char
-    , railPath : RailPath
+    , railPath : RailPathType
     }
 
 
-type RailPath
+type RailPathType
     = NoRailPath
-    | SingleRailPath (Float -> Point2d TileLocalUnit TileLocalUnit)
-    | DoubleRailPath (Float -> Point2d TileLocalUnit TileLocalUnit) (Float -> Point2d TileLocalUnit TileLocalUnit)
+    | SingleRailPath RailPath
+    | DoubleRailPath RailPath RailPath
 
 
 pathDirection : (Float -> Point2d TileLocalUnit TileLocalUnit) -> Float -> Direction2d TileLocalUnit
@@ -315,7 +575,7 @@ getData tile =
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'r'
-            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = t, y = 0.5 })
+            , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
             }
 
         RailVertical ->
@@ -323,7 +583,7 @@ getData tile =
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'R'
-            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = 0.5, y = t })
+            , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
             }
 
         RailBottomToRight ->
@@ -345,7 +605,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'q'
-            , railPath = SingleRailPath bottomToRight
+            , railPath = SingleRailPath RailPathBottomToRight
             }
 
         RailBottomToLeft ->
@@ -367,7 +627,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'w'
-            , railPath = SingleRailPath bottomToLeftPath
+            , railPath = SingleRailPath RailPathBottomToLeft
             }
 
         RailTopToRight ->
@@ -389,7 +649,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'a'
-            , railPath = SingleRailPath topToRightPath
+            , railPath = SingleRailPath RailPathTopToRight
             }
 
         RailTopToLeft ->
@@ -411,7 +671,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 's'
-            , railPath = SingleRailPath topToLeftPath
+            , railPath = SingleRailPath RailPathTopToLeft
             }
 
         RailCrossing ->
@@ -419,7 +679,10 @@ getData tile =
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'e'
-            , railPath = DoubleRailPath (\t -> Point2d.unsafe { x = t, y = 0.5 }) (\t -> Point2d.unsafe { x = 0.5, y = t })
+            , railPath =
+                DoubleRailPath
+                    (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
+                    (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
             }
 
         RailStrafeDown ->
@@ -441,7 +704,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'n'
-            , railPath = SingleRailPath strafeDownPath
+            , railPath = SingleRailPath RailPathStrafeDown
             }
 
         RailStrafeUp ->
@@ -463,7 +726,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'm'
-            , railPath = SingleRailPath strafeUpPath
+            , railPath = SingleRailPath RailPathStrafeUp
             }
 
         RailStrafeLeft ->
@@ -485,7 +748,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'N'
-            , railPath = SingleRailPath strafeLeftPath
+            , railPath = SingleRailPath RailPathStrafeLeft
             }
 
         RailStrafeRight ->
@@ -507,7 +770,7 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , char = 'M'
-            , railPath = SingleRailPath strafeRightPath
+            , railPath = SingleRailPath RailPathStrafeRight
             }
 
         TrainHouseRight ->
@@ -561,7 +824,7 @@ getData tile =
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
             , char = 'u'
-            , railPath = SingleRailPath strafeDownSmallPath
+            , railPath = SingleRailPath RailPathStrafeDownSmall
             }
 
         RailStrafeUpSmall ->
@@ -569,7 +832,7 @@ getData tile =
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
             , char = 'j'
-            , railPath = SingleRailPath strafeUpSmallPath
+            , railPath = SingleRailPath RailPathStrafeUpSmall
             }
 
         RailStrafeLeftSmall ->
@@ -577,7 +840,7 @@ getData tile =
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
             , char = 'U'
-            , railPath = SingleRailPath strafeLeftSmallPath
+            , railPath = SingleRailPath RailPathStrafeLeftSmall
             }
 
         RailStrafeRightSmall ->
@@ -585,7 +848,7 @@ getData tile =
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
             , char = 'J'
-            , railPath = SingleRailPath strafeRightSmallPath
+            , railPath = SingleRailPath RailPathStrafeRightSmall
             }
 
         Sidewalk ->
@@ -601,7 +864,7 @@ getData tile =
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'x'
-            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = t, y = 0.5 })
+            , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
             }
 
         SidewalkVerticalRailCrossing ->
@@ -609,7 +872,7 @@ getData tile =
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'X'
-            , railPath = SingleRailPath (\t -> Point2d.unsafe { x = 0.5, y = t })
+            , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
             }
 
         RailBottomToRight_SplitLeft ->
@@ -633,8 +896,8 @@ getData tile =
             , char = 'i'
             , railPath =
                 DoubleRailPath
-                    bottomToRight
-                    (\t -> Point2d.unsafe { x = 1 + t * 3, y = 0.5 })
+                    RailPathBottomToRight
+                    (RailPathHorizontal { offsetX = 1, offsetY = 0, length = 3 })
             }
 
         RailBottomToLeft_SplitUp ->
@@ -658,8 +921,8 @@ getData tile =
             , char = 'o'
             , railPath =
                 DoubleRailPath
-                    bottomToLeftPath
-                    (\t -> Point2d.unsafe { x = 3.5, y = 1 + t * 3 })
+                    RailPathBottomToLeft
+                    (RailPathVertical { offsetX = 3, offsetY = 1, length = 3 })
             }
 
         RailTopToRight_SplitDown ->
@@ -683,8 +946,8 @@ getData tile =
             , char = 'k'
             , railPath =
                 DoubleRailPath
-                    topToRightPath
-                    (\t -> Point2d.unsafe { x = 0.5, y = t * 3 })
+                    RailPathTopToRight
+                    (RailPathVertical { offsetX = 0, offsetY = 0, length = 3 })
             }
 
         RailTopToLeft_SplitRight ->
@@ -708,8 +971,8 @@ getData tile =
             , char = 'l'
             , railPath =
                 DoubleRailPath
-                    topToLeftPath
-                    (\t -> Point2d.unsafe { x = t * 3, y = 3.5 })
+                    RailPathTopToLeft
+                    (RailPathHorizontal { offsetX = 0, offsetY = 3, length = 3 })
             }
 
         RailBottomToRight_SplitUp ->
@@ -733,8 +996,8 @@ getData tile =
             , char = 'I'
             , railPath =
                 DoubleRailPath
-                    bottomToRight
-                    (\t -> Point2d.unsafe { x = 0.5, y = 1 + t * 3 })
+                    RailPathBottomToRight
+                    (RailPathVertical { offsetX = 0, offsetY = 1, length = 3 })
             }
 
         RailBottomToLeft_SplitRight ->
@@ -758,8 +1021,8 @@ getData tile =
             , char = 'O'
             , railPath =
                 DoubleRailPath
-                    bottomToLeftPath
-                    (\t -> Point2d.unsafe { x = t * 3, y = 0.5 })
+                    RailPathBottomToLeft
+                    (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 })
             }
 
         RailTopToRight_SplitLeft ->
@@ -783,8 +1046,8 @@ getData tile =
             , char = 'K'
             , railPath =
                 DoubleRailPath
-                    topToRightPath
-                    (\t -> Point2d.unsafe { x = 1 + t * 3, y = 3.5 })
+                    RailPathTopToRight
+                    (RailPathHorizontal { offsetX = 1, offsetY = 3, length = 3 })
             }
 
         RailTopToLeft_SplitDown ->
@@ -808,8 +1071,8 @@ getData tile =
             , char = 'L'
             , railPath =
                 DoubleRailPath
-                    topToLeftPath
-                    (\t -> Point2d.unsafe { x = 3.5, y = t * 3 })
+                    RailPathTopToLeft
+                    (RailPathVertical { offsetX = 3, offsetY = 0, length = 3 })
             }
 
 
@@ -908,40 +1171,40 @@ strafeLeftPath t =
 topToLeftPath : Float -> Point2d TileLocalUnit TileLocalUnit
 topToLeftPath t =
     Point2d.unsafe
-        { x = 3.5 * sin (t * pi / 2)
-        , y = 3.5 * cos (t * pi / 2)
+        { x = (trackTurnRadius - 0.5) * sin (t * pi / 2)
+        , y = (trackTurnRadius - 0.5) * cos (t * pi / 2)
         }
 
 
 topToRightPath : Float -> Point2d TileLocalUnit TileLocalUnit
 topToRightPath t =
     Point2d.unsafe
-        { x = 4 - 3.5 * sin (t * pi / 2)
-        , y = 3.5 * cos (t * pi / 2)
+        { x = trackTurnRadius - (trackTurnRadius - 0.5) * sin (t * pi / 2)
+        , y = (trackTurnRadius - 0.5) * cos (t * pi / 2)
         }
 
 
 bottomToLeftPath : Float -> Point2d TileLocalUnit TileLocalUnit
 bottomToLeftPath t =
     Point2d.unsafe
-        { x = 3.5 * sin (t * pi / 2)
-        , y = 4 - 3.5 * cos (t * pi / 2)
+        { x = (trackTurnRadius - 0.5) * sin (t * pi / 2)
+        , y = trackTurnRadius - (trackTurnRadius - 0.5) * cos (t * pi / 2)
         }
 
 
-bottomToRight : Float -> Point2d TileLocalUnit TileLocalUnit
-bottomToRight t =
+bottomToRightPath : Float -> Point2d TileLocalUnit TileLocalUnit
+bottomToRightPath t =
     Point2d.unsafe
-        { x = 4 - 3.5 * sin (t * pi / 2)
-        , y = 4 - 3.5 * cos (t * pi / 2)
+        { x = trackTurnRadius - (trackTurnRadius - 0.5) * sin (t * pi / 2)
+        , y = trackTurnRadius - (trackTurnRadius - 0.5) * cos (t * pi / 2)
         }
 
 
-trainHouseLeftRailPath : Float -> Point2d TileLocalUnit TileLocalUnit
-trainHouseLeftRailPath t =
-    Point2d.unsafe { x = t * 3, y = 2.5 }
+trainHouseLeftRailPath : RailPath
+trainHouseLeftRailPath =
+    RailPathHorizontal { offsetX = 0, offsetY = 2, length = 3 }
 
 
-trainHouseRightRailPath : Float -> Point2d TileLocalUnit TileLocalUnit
-trainHouseRightRailPath t =
-    Point2d.unsafe { x = 1 + t * 3, y = 2.5 }
+trainHouseRightRailPath : RailPath
+trainHouseRightRailPath =
+    RailPathHorizontal { offsetX = 1, offsetY = 2, length = 3 }
