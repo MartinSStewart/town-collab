@@ -13,6 +13,7 @@ module Types exposing
     , LoadingData_
     , MouseButtonState(..)
     , PendingEmail
+    , RemovedTileParticle
     , SubscribedEmail
     , ToBackend(..)
     , ToFrontend(..)
@@ -47,7 +48,9 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
 import RecentChanges exposing (RecentChanges)
 import SendGrid
+import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
+import Tile exposing (Tile)
 import Time
 import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, WorldUnit)
 import Url exposing (Url)
@@ -72,12 +75,13 @@ type alias FrontendLoading =
     , windowSize : Coord Pixels
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
-    , time : Time.Posix
+    , time : Maybe Time.Posix
     , viewPoint : Coord WorldUnit
     , mousePosition : Point2d Pixels ScreenCoordinate
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
+    , loadingData : Maybe LoadingData_
     }
 
 
@@ -106,6 +110,7 @@ type alias FrontendLoaded =
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
+    , startTime : Time.Posix
     , lastTouchMove : Maybe Time.Posix
     , userHoverHighlighted : Maybe UserId
     , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord WorldUnit }
@@ -117,7 +122,13 @@ type alias FrontendLoaded =
     , textAreaText : String
     , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
+    , removedTileParticles : List RemovedTileParticle
+    , debrisMesh : WebGL.Mesh DebrisVertex
     }
+
+
+type alias RemovedTileParticle =
+    { time : Time.Posix, position : Coord WorldUnit, tile : Tile }
 
 
 type ToolType

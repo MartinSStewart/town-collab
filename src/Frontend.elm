@@ -46,7 +46,8 @@ import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
-import Shaders
+import Random
+import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound(..))
 import Task
 import Tile exposing (RailPath(..), Tile(..))
@@ -132,8 +133,17 @@ audioLoaded model =
             Audio.silence
 
 
-loadedInit : FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
-loadedInit loading loadingData =
+tryLoading : FrontendLoading -> ( FrontendModel_, Cmd FrontendMsg_ )
+tryLoading frontendLoading =
+    Maybe.map2
+        (\time loadingData -> loadedInit time frontendLoading loadingData)
+        frontendLoading.time
+        frontendLoading.loadingData
+        |> Maybe.withDefault ( Loading frontendLoading, Cmd.none )
+
+
+loadedInit : Time.Posix -> FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
+loadedInit time loading loadingData =
     let
         cursor : Cursor
         cursor =
@@ -160,7 +170,8 @@ loadedInit loading loadingData =
             , pendingChanges = []
             , tool = DragTool
             , undoAddLast = Time.millisToPosix 0
-            , time = loading.time
+            , time = time
+            , startTime = time
             , lastTouchMove = Nothing
             , userHoverHighlighted = Nothing
             , highlightContextMenu = Nothing
@@ -172,6 +183,8 @@ loadedInit loading loadingData =
             , textAreaText = ""
             , lastTilePlaced = Nothing
             , sounds = loading.sounds
+            , removedTileParticles = []
+            , debrisMesh = WebGL.triangleFan []
             }
     in
     ( updateMeshes model model
@@ -250,12 +263,13 @@ init url key =
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
         , devicePixelRatio = Quantity 1
         , zoomFactor = 1
-        , time = Time.millisToPosix 0
+        , time = Nothing
         , viewPoint = viewPoint
         , mousePosition = Point2d.origin
         , showNotifyMe = showNotifyMe
         , notifyMeModel = notifyMe
         , sounds = AssocList.empty
+        , loadingData = Nothing
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (ConnectToBackend bounds emailEvent)
@@ -288,7 +302,7 @@ update msg model =
                     windowResizedUpdate windowSize loadingModel |> Tuple.mapFirst Loading
 
                 ShortIntervalElapsed time ->
-                    ( Loading { loadingModel | time = time }, Cmd.none )
+                    tryLoading { loadingModel | time = Just time }
 
                 GotDevicePixelRatio devicePixelRatio ->
                     devicePixelRatioUpdate devicePixelRatio loadingModel |> Tuple.mapFirst Loading
@@ -794,6 +808,10 @@ updateLoaded msg model =
                 | time = time
                 , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                 , trains = List.map moveTrain model.trains
+                , removedTileParticles =
+                    List.filter
+                        (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
+                        model.removedTileParticles
               }
             , Cmd.none
             )
@@ -1154,7 +1172,7 @@ changeText text model =
             case Tile.fromChar head of
                 Just tile ->
                     let
-                        model_ =
+                        model2 =
                             if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
                                 updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
 
@@ -1164,11 +1182,13 @@ changeText text model =
                         ( cellPos, localPos ) =
                             Grid.worldToCellAndLocalCoord (Cursor.position model.cursor)
 
+                        neighborCells : List ( Coord CellUnit, Coord Units.CellLocalUnit )
                         neighborCells =
                             ( cellPos, localPos ) :: Grid.closeNeighborCells cellPos localPos
 
+                        oldGrid : Grid
                         oldGrid =
-                            LocalGrid.localModel model_.localModel |> .grid
+                            LocalGrid.localModel model2.localModel |> .grid
 
                         model3 =
                             updateLocalModel
@@ -1177,7 +1197,7 @@ changeText text model =
                                     , change = tile
                                     }
                                 )
-                                { model_
+                                { model2
                                     | trains =
                                         if tile == TrainHouseLeft || tile == TrainHouseRight then
                                             let
@@ -1204,20 +1224,154 @@ changeText text model =
                                                     |> Point2d.translateBy offset
                                             , direction = direction
                                             }
-                                                :: model_.trains
+                                                :: model2.trains
 
                                         else
-                                            model_.trains
-                                    , lastTilePlaced = Just { time = model.time, overwroteTiles = True }
+                                            model2.trains
                                 }
+
+                        newGrid : Grid
+                        newGrid =
+                            LocalGrid.localModel model3.localModel |> .grid
+
+                        removedTiles =
+                            List.concatMap
+                                (\( neighborCellPos, _ ) ->
+                                    let
+                                        oldCell : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                                        oldCell =
+                                            Grid.getCell neighborCellPos oldGrid |> Maybe.map (GridCell.flatten EverySet.empty EverySet.empty) |> Maybe.withDefault []
+
+                                        newCell : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                                        newCell =
+                                            Grid.getCell neighborCellPos newGrid |> Maybe.map (GridCell.flatten EverySet.empty EverySet.empty) |> Maybe.withDefault []
+                                    in
+                                    List.foldl
+                                        (\item state ->
+                                            if List.any ((==) item) newCell then
+                                                state
+
+                                            else
+                                                { time = model.time
+                                                , tile = item.value
+                                                , position = Grid.cellAndLocalCoordToAscii ( neighborCellPos, item.position )
+                                                }
+                                                    :: state
+                                        )
+                                        []
+                                        oldCell
+                                )
+                                neighborCells
                     in
-                    model3
+                    { model3
+                        | lastTilePlaced =
+                            Just { time = model.time, overwroteTiles = List.isEmpty removedTiles |> not }
+                        , removedTileParticles = removedTiles ++ model3.removedTileParticles
+                        , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
+                    }
 
                 Nothing ->
                     model
 
         [] ->
             model
+
+
+createDebrisMesh : Time.Posix -> List RemovedTileParticle -> WebGL.Mesh DebrisVertex
+createDebrisMesh appStartTime removedTiles =
+    let
+        list : List RemovedTileParticle
+        list =
+            removedTiles
+                |> List.sortBy
+                    (\{ position, tile } ->
+                        let
+                            ( _, Quantity y ) =
+                                position
+
+                            ( _, height ) =
+                                Tile.getData tile |> .size
+                        in
+                        y + height
+                    )
+
+        indices : List ( Int, Int, Int )
+        indices =
+            List.map
+                (\{ tile } ->
+                    let
+                        ( textureW, textureH ) =
+                            Tile.getData tile |> .size
+                    in
+                    textureW * textureH
+                )
+                list
+                |> List.sum
+                |> (+) -1
+                |> List.range 0
+                |> List.concatMap Grid.getIndices
+    in
+    List.map
+        (\{ position, tile, time } ->
+            let
+                data =
+                    Tile.getData tile
+
+                ( Quantity x, Quantity y ) =
+                    position
+
+                ( w, h ) =
+                    Tile.size
+
+                ( textureX, textureY ) =
+                    data.texturePosition
+
+                ( textureW, textureH ) =
+                    data.size
+            in
+            List.concatMap
+                (\x2 ->
+                    List.concatMap
+                        (\y2 ->
+                            let
+                                { topLeft, topRight, bottomLeft, bottomRight } =
+                                    Tile.texturePosition_ ( textureX + x2, textureY + y2 ) ( 1, 1 )
+
+                                ( ( randomX, randomY ), _ ) =
+                                    Random.step
+                                        (Random.map2 Tuple.pair (Random.float -40 40) (Random.float -40 40))
+                                        (Random.initialSeed (Time.posixToMillis time + x2 * 3 + y2 * 5))
+                            in
+                            List.map
+                                (\uv ->
+                                    let
+                                        offset =
+                                            Vec2.vec2
+                                                ((x + x2) * Pixels.inPixels w |> toFloat)
+                                                ((y + y2) * Pixels.inPixels h |> toFloat)
+                                    in
+                                    { position = Vec2.sub (Vec2.add offset uv) topLeft
+                                    , initialSpeed =
+                                        Vec2.vec2
+                                            ((toFloat x2 + 0.5 - toFloat textureW / 2) * 100 + randomX)
+                                            (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
+                                    , texturePosition = uv
+                                    , startTime = Duration.from appStartTime time |> Duration.inSeconds
+                                    }
+                                )
+                                [ topLeft
+                                , topRight
+                                , bottomRight
+                                , bottomLeft
+                                ]
+                        )
+                        (List.range 0 (textureH - 1))
+                )
+                (List.range 0 (textureW - 1))
+        )
+        list
+        |> List.concat
+        |> (\vertices -> WebGL.indexedTriangles vertices indices)
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -1392,7 +1546,7 @@ updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Cmd Fronte
 updateFromBackend msg model =
     case ( model, msg ) of
         ( Loading loading, LoadingData loadingData ) ->
-            loadedInit loading loadingData
+            tryLoading { loading | loadingData = Just loadingData }
 
         ( Loaded loaded, _ ) ->
             updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
@@ -2168,6 +2322,17 @@ canvasView model =
                             viewMatrix
                             texture
                             ++ drawTrains model.trains viewMatrix texture
+                            ++ [ WebGL.entityWith
+                                    [ Blend.add Blend.one Blend.oneMinusSrcAlpha ]
+                                    Shaders.debrisVertexShader
+                                    Shaders.fragmentShader
+                                    model.debrisMesh
+                                    { view = viewMatrix
+                                    , texture = texture
+                                    , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
+                                    , time = Duration.from model.startTime model.time |> Duration.inSeconds
+                                    }
+                               ]
 
                     Nothing ->
                         []

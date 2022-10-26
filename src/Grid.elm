@@ -13,6 +13,7 @@ module Grid exposing
     , empty
     , from
     , getCell
+    , getIndices
     , localChangeToChange
     , mesh
     , moveUndoPoint
@@ -27,8 +28,6 @@ import Bounds exposing (Bounds)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
-import List.Extra as List
-import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Point2d exposing (Point2d)

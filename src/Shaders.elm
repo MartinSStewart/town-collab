@@ -1,4 +1,4 @@
-module Shaders exposing (colorToVec3, fragmentShader, vertexShader)
+module Shaders exposing (DebrisVertex, colorToVec3, debrisVertexShader, fragmentShader, vertexShader)
 
 import Element
 import Grid
@@ -47,3 +47,27 @@ void main () {
     gl_FragColor = texture2D(texture, vcoord / textureSize);
 }
     |]
+
+
+type alias DebrisVertex =
+    { position : Vec2, texturePosition : Vec2, initialSpeed : Vec2, startTime : Float }
+
+
+debrisVertexShader : Shader DebrisVertex { u | view : Mat4, time : Float } { vcoord : Vec2 }
+debrisVertexShader =
+    [glsl|
+attribute vec2 position;
+attribute vec2 initialSpeed;
+attribute vec2 texturePosition;
+attribute float startTime;
+uniform mat4 view;
+uniform float time;
+varying vec2 vcoord;
+
+void main () {
+    float seconds = time - startTime;
+    gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
+    vcoord = texturePosition;
+}
+
+|]
