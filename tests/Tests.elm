@@ -6,9 +6,12 @@ import EverySet as Set
 import Expect
 import Grid
 import GridCell
+import Point2d
+import Quantity exposing (Quantity(..))
 import Test exposing (Test, describe, test)
-import Tile exposing (Tile(..))
+import Tile exposing (Direction(..), RailPath(..), Tile(..))
 import Time
+import Train
 import UrlHelper exposing (ConfirmEmailKey(..), UnsubscribeEmailKey(..))
 import User
 
@@ -61,7 +64,7 @@ tests =
                 in
                 case maybeCell of
                     Just cell ->
-                        GridCell.flatten Set.empty Set.empty cell
+                        GridCell.flatten cell
                             |> Expect.equal
                                 [ { position = Coord.fromRawCoord ( 0, 0 )
                                   , userId = user0
@@ -87,12 +90,11 @@ tests =
                                 , change = House
                                 , userId = user0
                                 }
-                            |> Debug.log "a"
                             |> Grid.getCell (Coord.fromRawCoord ( 1, 0 ))
                 in
                 case maybeCell of
                     Just cell ->
-                        GridCell.flatten Set.empty Set.empty cell
+                        GridCell.flatten cell
                             |> Expect.equal
                                 [ { position = Coord.fromRawCoord ( 6, 8 )
                                   , userId = user0
@@ -109,7 +111,7 @@ tests =
                     (Tile.getData RailHorizontal)
                     (Coord.fromRawCoord ( 0, 0 ))
                     (Tile.getData RailBottomToRight)
-                    |> Expect.false "No overlap expected"
+                    |> Expect.equal False
         , test "Collision test 2 for default collision and custom collision mask" <|
             \_ ->
                 Tile.hasCollision
@@ -117,7 +119,52 @@ tests =
                     (Tile.getData RailHorizontal)
                     (Coord.fromRawCoord ( 1, 0 ))
                     (Tile.getData RailBottomToRight)
-                    |> Expect.false "No overlap expected"
+                    |> Expect.equal False
+        , test "Move train" <|
+            \_ ->
+                let
+                    grid =
+                        Grid.empty
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( 0, 0 )
+                                , change = TrainHouseLeft
+                                , userId = user0
+                                }
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( -4, 2 )
+                                , change = RailBottomToRight
+                                , userId = user0
+                                }
+                in
+                --Train.findNextTile
+                --    (Point2d.unsafe { x = 0, y = 2.5 })
+                --    grid
+                --    (Quantity -3)
+                --    Left
+                --    [ ( Coord.fromRawCoord ( 0, 0 ), Coord.fromRawCoord ( 0, 0 ) )
+                --    , ( Coord.fromRawCoord ( -1, 0 ), Coord.fromRawCoord ( 0, 0 ) )
+                --    ]
+                --    |> Expect.equal
+                --        (Just
+                --            { position = Coord.fromRawCoord ( -4, 2 )
+                --            , path = RailPathBottomToRight
+                --            , t = 0
+                --            , speed = Quantity 3
+                --            }
+                --        )
+                Train.moveTrain
+                    grid
+                    { position = Coord.fromRawCoord ( 0, 0 )
+                    , path = Tile.trainHouseLeftRailPath
+                    , t = 0.5
+                    , speed = Quantity -3
+                    }
+                    |> Expect.equal
+                        { position = Coord.fromRawCoord ( -4, 2 )
+                        , path = RailPathBottomToRight
+                        , t = 0.238732414637843
+                        , speed = Quantity 3
+                        }
         ]
 
 

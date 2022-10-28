@@ -1,15 +1,12 @@
-module Train exposing (Train, moveTrain)
+module Train exposing (Train, findNextTile, moveTrain)
 
-import Angle
 import Coord exposing (Coord)
-import Direction2d exposing (Direction2d)
 import Grid exposing (Grid)
 import GridCell
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity)
+import Quantity exposing (Quantity(..))
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
-import Vector2d
 
 
 type alias Train =
@@ -18,7 +15,7 @@ type alias Train =
 
 moveTrain : Grid -> Train -> Train
 moveTrain grid train =
-    moveTrainHelper train.speed grid train
+    moveTrainHelper (Quantity.abs train.speed) grid train
 
 
 moveTrainHelper : Quantity Float TileLocalUnit -> Grid -> Train -> Train
@@ -31,7 +28,15 @@ moveTrainHelper distanceLeft grid train =
             tToDistance train.t
 
         newT =
-            Quantity.plus distanceLeft currentDistance |> distanceToT
+            Quantity.plus
+                (if Quantity.lessThanZero train.speed then
+                    Quantity.negate distanceLeft
+
+                 else
+                    distanceLeft
+                )
+                currentDistance
+                |> distanceToT
     in
     if newT < 0 || newT > 1 then
         let
@@ -40,7 +45,7 @@ moveTrainHelper distanceLeft grid train =
 
             distanceTravelled : Quantity Float TileLocalUnit
             distanceTravelled =
-                tToDistance newT2 |> Quantity.minus currentDistance
+                tToDistance newT2 |> Quantity.minus currentDistance |> Quantity.abs
 
             position : Point2d WorldUnit WorldUnit
             position =
@@ -53,7 +58,7 @@ moveTrainHelper distanceLeft grid train =
             findNextTile
                 position
                 grid
-                train
+                train.speed
                 (if newT2 == 1 then
                     endExitDirection
 
@@ -77,24 +82,24 @@ moveTrainHelper distanceLeft grid train =
 findNextTile :
     Point2d WorldUnit WorldUnit
     -> Grid
-    -> Train
+    -> Quantity Float TileLocalUnit
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
     -> Maybe Train
-findNextTile position grid train direction list =
+findNextTile position grid speed direction list =
     case list of
         ( neighborCellPos, _ ) :: rest ->
             case Grid.getCell neighborCellPos grid of
                 Just cell ->
-                    case findNextTileHelper neighborCellPos position train direction (GridCell.flatten cell) of
+                    case findNextTileHelper neighborCellPos position speed direction (GridCell.flatten cell) of
                         Just newTrain ->
                             Just newTrain
 
                         Nothing ->
-                            findNextTile position grid train direction rest
+                            findNextTile position grid speed direction rest
 
                 Nothing ->
-                    findNextTile position grid train direction rest
+                    findNextTile position grid speed direction rest
 
         [] ->
             Nothing
@@ -103,17 +108,17 @@ findNextTile position grid train direction list =
 findNextTileHelper :
     Coord CellUnit
     -> Point2d WorldUnit WorldUnit
-    -> Train
+    -> Quantity Float TileLocalUnit
     -> Direction
     -> List { b | position : Coord CellLocalUnit, value : Tile }
     -> Maybe Train
-findNextTileHelper neighborCellPos position train direction tiles =
+findNextTileHelper neighborCellPos position speed direction tiles =
     case tiles of
         tile :: rest ->
             let
                 maybeNewTrain =
                     List.filterMap
-                        (checkPath tile neighborCellPos position train.speed direction)
+                        (checkPath tile neighborCellPos position speed direction)
                         (case Tile.getData tile.value |> .railPath of
                             NoRailPath ->
                                 []
@@ -131,12 +136,20 @@ findNextTileHelper neighborCellPos position train direction tiles =
                     Just newTrain
 
                 Nothing ->
-                    findNextTileHelper neighborCellPos position train direction rest
+                    findNextTileHelper neighborCellPos position speed direction rest
 
         [] ->
             Nothing
 
 
+checkPath :
+    { a | position : Coord CellLocalUnit }
+    -> Coord CellUnit
+    -> Point2d WorldUnit WorldUnit
+    -> Quantity Float TileLocalUnit
+    -> Direction
+    -> RailPath
+    -> Maybe Train
 checkPath tile neighborCellPos position speed direction railPath =
     let
         railData : RailData
