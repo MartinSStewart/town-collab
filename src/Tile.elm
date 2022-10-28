@@ -232,8 +232,8 @@ railPathTopToLeft =
 
 railPathStrafeDown =
     { path = strafeDownPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeDownPath
     , endExitDirection = pathExitDirection strafeDownPath
     }
@@ -241,8 +241,8 @@ railPathStrafeDown =
 
 railPathStrafeUp =
     { path = strafeUpPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeUpPath
     , endExitDirection = pathExitDirection strafeUpPath
     }
@@ -250,8 +250,8 @@ railPathStrafeUp =
 
 railPathStrafeLeft =
     { path = strafeLeftPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeLeftPath
     , endExitDirection = pathExitDirection strafeLeftPath
     }
@@ -259,8 +259,8 @@ railPathStrafeLeft =
 
 railPathStrafeRight =
     { path = strafeRightPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / turnLength
+    , tToDistance = \t -> turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeRightPath
     , endExitDirection = pathExitDirection strafeRightPath
     }
@@ -268,8 +268,8 @@ railPathStrafeRight =
 
 railPathStrafeDownSmall =
     { path = strafeDownSmallPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
+    , tToDistance = \t -> 0.76 * turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeDownSmallPath
     , endExitDirection = pathExitDirection strafeDownSmallPath
     }
@@ -277,8 +277,8 @@ railPathStrafeDownSmall =
 
 railPathStrafeUpSmall =
     { path = strafeUpSmallPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
+    , tToDistance = \t -> 0.76 * turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeUpSmallPath
     , endExitDirection = pathExitDirection strafeUpSmallPath
     }
@@ -286,8 +286,8 @@ railPathStrafeUpSmall =
 
 railPathStrafeLeftSmall =
     { path = strafeLeftSmallPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
+    , tToDistance = \t -> 0.76 * turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeLeftSmallPath
     , endExitDirection = pathExitDirection strafeLeftSmallPath
     }
@@ -295,8 +295,8 @@ railPathStrafeLeftSmall =
 
 railPathStrafeRightSmall =
     { path = strafeRightSmallPath
-    , distanceToT = \_ -> Debug.todo ""
-    , tToDistance = \_ -> Debug.todo ""
+    , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
+    , tToDistance = \t -> 0.76 * turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeRightSmallPath
     , endExitDirection = pathExitDirection strafeRightSmallPath
     }
