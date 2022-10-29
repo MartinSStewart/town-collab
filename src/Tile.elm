@@ -72,6 +72,7 @@ type Tile
     | RailBottomToLeft_SplitRight
     | RailTopToRight_SplitLeft
     | RailTopToLeft_SplitDown
+    | PostOffice
 
 
 type Direction
@@ -424,6 +425,7 @@ allTiles =
     , RailBottomToLeft_SplitRight
     , RailTopToRight_SplitLeft
     , RailTopToLeft_SplitDown
+    , PostOffice
     ]
 
 
@@ -1011,6 +1013,31 @@ getData tile =
                     RailPathTopToLeft
                     (RailPathVertical { offsetX = 3, offsetY = 0, length = 3 })
             }
+
+        PostOffice ->
+            { texturePosition = ( 0, 33 )
+            , size = ( 4, 5 )
+            , collisionMask = postOfficeCollision
+            , char = 'p'
+            , railPath =
+                SingleRailPath
+                    (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
+            }
+
+
+postOfficeCollision =
+    collsionRectangle 0 1 4 4
+
+
+collsionRectangle x y width height =
+    List.range x (x + width - 1)
+        |> List.concatMap
+            (\x2 ->
+                List.range y (y + height - 1)
+                    |> List.map (Tuple.pair x2)
+            )
+        |> Set.fromList
+        |> CustomCollision
 
 
 strafeDownSmallPath : Float -> Point2d TileLocalUnit TileLocalUnit

@@ -8,7 +8,6 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
-import Vector2d
 
 
 type alias Train =
