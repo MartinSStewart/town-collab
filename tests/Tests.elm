@@ -1,17 +1,15 @@
 module Tests exposing (..)
 
 import Coord exposing (Coord)
-import Dict
-import EverySet as Set
-import Expect
+import Duration
+import Expect exposing (Expectation)
 import Grid
 import GridCell
-import Point2d
 import Quantity exposing (Quantity(..))
 import Test exposing (Test, describe, test)
 import Tile exposing (Direction(..), RailPath(..), Tile(..))
 import Time
-import Train
+import Train exposing (Train)
 import UrlHelper exposing (ConfirmEmailKey(..), UnsubscribeEmailKey(..))
 import User
 
@@ -136,23 +134,8 @@ tests =
                                 , userId = user0
                                 }
                 in
-                --Train.findNextTile
-                --    (Point2d.unsafe { x = 0, y = 2.5 })
-                --    grid
-                --    (Quantity -3)
-                --    Left
-                --    [ ( Coord.fromRawCoord ( 0, 0 ), Coord.fromRawCoord ( 0, 0 ) )
-                --    , ( Coord.fromRawCoord ( -1, 0 ), Coord.fromRawCoord ( 0, 0 ) )
-                --    ]
-                --    |> Expect.equal
-                --        (Just
-                --            { position = Coord.fromRawCoord ( -4, 2 )
-                --            , path = RailPathBottomToRight
-                --            , t = 0
-                --            , speed = Quantity 3
-                --            }
-                --        )
                 Train.moveTrain
+                    Duration.second
                     grid
                     { position = Coord.fromRawCoord ( 0, 0 )
                     , path = Tile.trainHouseLeftRailPath
@@ -165,7 +148,75 @@ tests =
                         , t = 0.238732414637843
                         , speed = Quantity 3
                         }
+        , test "Move train with small steps equals single large step" <|
+            \_ ->
+                let
+                    grid =
+                        Grid.empty
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( 0, 0 )
+                                , change = TrainHouseLeft
+                                , userId = user0
+                                }
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( -1, 2 )
+                                , change = RailHorizontal
+                                , userId = user0
+                                }
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( -2, 2 )
+                                , change = RailHorizontal
+                                , userId = user0
+                                }
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( -6, 2 )
+                                , change = RailBottomToRight
+                                , userId = user0
+                                }
+                            |> Grid.addChange
+                                { position = Coord.fromRawCoord ( -6, 6 )
+                                , change = RailTopToRight
+                                , userId = user0
+                                }
+
+                    smallSteps : Train
+                    smallSteps =
+                        List.range 1 180
+                            |> List.foldl
+                                (\_ train -> Train.moveTrain (Duration.seconds (1 / 60)) grid train)
+                                { position = Coord.fromRawCoord ( 0, 0 )
+                                , path = Tile.trainHouseLeftRailPath
+                                , t = 0.5
+                                , speed = Quantity -5
+                                }
+
+                    largeStep : Train
+                    largeStep =
+                        Train.moveTrain
+                            (Duration.seconds 3)
+                            grid
+                            { position = Coord.fromRawCoord ( 0, 0 )
+                            , path = Tile.trainHouseLeftRailPath
+                            , t = 0.5
+                            , speed = Quantity -5
+                            }
+                in
+                trainsApproximatelyEqual smallSteps largeStep
         ]
+
+
+trainsApproximatelyEqual : Train -> Train -> Expectation
+trainsApproximatelyEqual expected actual =
+    if
+        (expected.path == actual.path)
+            && (expected.speed == actual.speed)
+            && (expected.position == actual.position)
+            && (abs (expected.t - actual.t) < 0.01)
+    then
+        Expect.pass
+
+    else
+        Expect.equal expected actual
 
 
 unsubscribeKey =

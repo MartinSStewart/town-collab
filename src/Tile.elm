@@ -194,6 +194,7 @@ pathStartEndDirection t1 t2 path =
         Left
 
 
+railPathBottomToRight : RailData
 railPathBottomToRight =
     { path = bottomToRightPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -203,6 +204,7 @@ railPathBottomToRight =
     }
 
 
+railPathBottomToLeft : RailData
 railPathBottomToLeft =
     { path = bottomToLeftPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -212,6 +214,7 @@ railPathBottomToLeft =
     }
 
 
+railPathTopToRight : RailData
 railPathTopToRight =
     { path = topToRightPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -221,6 +224,7 @@ railPathTopToRight =
     }
 
 
+railPathTopToLeft : RailData
 railPathTopToLeft =
     { path = topToLeftPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -230,6 +234,7 @@ railPathTopToLeft =
     }
 
 
+railPathStrafeDown : RailData
 railPathStrafeDown =
     { path = strafeDownPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -239,6 +244,7 @@ railPathStrafeDown =
     }
 
 
+railPathStrafeUp : RailData
 railPathStrafeUp =
     { path = strafeUpPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -248,6 +254,7 @@ railPathStrafeUp =
     }
 
 
+railPathStrafeLeft : RailData
 railPathStrafeLeft =
     { path = strafeLeftPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -257,6 +264,7 @@ railPathStrafeLeft =
     }
 
 
+railPathStrafeRight : RailData
 railPathStrafeRight =
     { path = strafeRightPath
     , distanceToT = \(Quantity distance) -> distance / turnLength
@@ -266,6 +274,7 @@ railPathStrafeRight =
     }
 
 
+railPathStrafeDownSmall : RailData
 railPathStrafeDownSmall =
     { path = strafeDownSmallPath
     , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
@@ -275,6 +284,7 @@ railPathStrafeDownSmall =
     }
 
 
+railPathStrafeUpSmall : RailData
 railPathStrafeUpSmall =
     { path = strafeUpSmallPath
     , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
@@ -284,6 +294,7 @@ railPathStrafeUpSmall =
     }
 
 
+railPathStrafeLeftSmall : RailData
 railPathStrafeLeftSmall =
     { path = strafeLeftSmallPath
     , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
@@ -293,6 +304,7 @@ railPathStrafeLeftSmall =
     }
 
 
+railPathStrafeRightSmall : RailData
 railPathStrafeRightSmall =
     { path = strafeRightSmallPath
     , distanceToT = \(Quantity distance) -> distance / (0.76 * turnLength)
@@ -403,7 +415,7 @@ type RailPathType
 
 pathDirection : (Float -> Point2d TileLocalUnit TileLocalUnit) -> Float -> Direction2d TileLocalUnit
 pathDirection path t =
-    Direction2d.from (path (t - 0.001 |> max 1)) (path (t + 0.001 |> min 1))
+    Direction2d.from (path (t - 0.01 |> max 0)) (path (t + 0.01 |> min 1))
         |> Maybe.withDefault Direction2d.x
 
 

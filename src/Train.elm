@@ -1,21 +1,22 @@
-module Train exposing (Train, findNextTile, moveTrain)
+module Train exposing (Train, moveTrain)
 
 import Coord exposing (Coord)
+import Duration exposing (Duration, Seconds)
 import Grid exposing (Grid)
 import GridCell
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity(..))
+import Quantity exposing (Quantity(..), Rate)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 
 
 type alias Train =
-    { position : Coord WorldUnit, path : RailPath, t : Float, speed : Quantity Float TileLocalUnit }
+    { position : Coord WorldUnit, path : RailPath, t : Float, speed : Quantity Float (Rate TileLocalUnit Seconds) }
 
 
-moveTrain : Grid -> Train -> Train
-moveTrain grid train =
-    moveTrainHelper (Quantity.abs train.speed) grid train
+moveTrain : Duration -> Grid -> Train -> Train
+moveTrain timeElapsed grid train =
+    moveTrainHelper (Quantity.abs train.speed |> Quantity.for timeElapsed) grid train
 
 
 moveTrainHelper : Quantity Float TileLocalUnit -> Grid -> Train -> Train
@@ -82,7 +83,7 @@ moveTrainHelper distanceLeft grid train =
 findNextTile :
     Point2d WorldUnit WorldUnit
     -> Grid
-    -> Quantity Float TileLocalUnit
+    -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
     -> Maybe Train
@@ -108,7 +109,7 @@ findNextTile position grid speed direction list =
 findNextTileHelper :
     Coord CellUnit
     -> Point2d WorldUnit WorldUnit
-    -> Quantity Float TileLocalUnit
+    -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List { b | position : Coord CellLocalUnit, value : Tile }
     -> Maybe Train
@@ -146,7 +147,7 @@ checkPath :
     { a | position : Coord CellLocalUnit }
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
-    -> Quantity Float TileLocalUnit
+    -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> RailPath
     -> Maybe Train

@@ -694,7 +694,7 @@ updateLoaded msg model =
             ( { model
                 | time = time
                 , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
-                , trains = List.map (Train.moveTrain localGrid.grid) model.trains
+                , trains = List.map (Train.moveTrain (Duration.from model.time time) localGrid.grid) model.trains
                 , removedTileParticles =
                     List.filter
                         (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
@@ -1091,12 +1091,12 @@ changeText text model =
                                                 ( path, speed ) =
                                                     if tile == TrainHouseLeft then
                                                         ( Tile.trainHouseLeftRailPath
-                                                        , Quantity -0.1
+                                                        , Quantity -5
                                                         )
 
                                                     else
                                                         ( Tile.trainHouseRightRailPath
-                                                        , Quantity 0.1
+                                                        , Quantity 5
                                                         )
                                             in
                                             { position = Cursor.position model.cursor
@@ -2317,7 +2317,7 @@ trainMesh frame =
             Tile.size
 
         offsetY =
-            -3
+            -5
 
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePosition_ ( 11, frame * 2 ) ( 2, 2 )
