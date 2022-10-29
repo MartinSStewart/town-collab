@@ -110,19 +110,45 @@ audio : AudioData -> FrontendModel_ -> Audio
 audio audioData model =
     case model of
         Loaded loaded ->
-            audioLoaded loaded
+            audioLoaded audioData loaded
 
         Loading _ ->
             Audio.silence
 
 
-audioLoaded : FrontendLoaded -> Audio
-audioLoaded model =
+audioLoaded : AudioData -> FrontendLoaded -> Audio
+audioLoaded audioData model =
     let
         playSound =
             Sound.play model.sounds
+
+        playWithConfig =
+            Sound.playWithConfig audioData model.sounds
+
+        noiseLevel : Float
+        noiseLevel =
+            List.map (\train -> Quantity.unwrap train.speed / Train.maxSpeed |> abs) model.trains |> List.sum
+
+        trainSounds =
+            List.map
+                (\train ->
+                    playWithConfig
+                        (\duration ->
+                            { loop = Just { loopStart = Quantity.zero, loopEnd = duration }
+                            , playbackRate =
+                                (Quantity.unwrap train.speed / Train.maxSpeed)
+                                    |> abs
+                            , startAt = Quantity.zero
+                            }
+                        )
+                        ChugaChuga
+                        (Time.millisToPosix 0)
+                )
+                model.trains
+                |> Audio.group
+                |> Audio.scaleVolume (0.5 / (noiseLevel + 1))
     in
-    case model.lastTilePlaced of
+    [ case model.lastTilePlaced of
         Just { time, overwroteTiles } ->
             if overwroteTiles then
                 playSound CrackleSound time |> Audio.scaleVolume 0.2
@@ -132,6 +158,19 @@ audioLoaded model =
 
         _ ->
             Audio.silence
+    , trainSounds
+    ]
+        |> Audio.group
+
+
+
+--volume : FrontendLoaded -> Coord WorldUnit -> Float
+--volume model position =
+--    if viewBoundingBox model |> BoundingBox2d.isContainedIn (Coord.toPoint2d position) then
+--        1
+--
+--    else
+--        0
 
 
 tryLoading : FrontendLoading -> ( FrontendModel_, Cmd FrontendMsg_ )

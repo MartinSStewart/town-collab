@@ -1,4 +1,4 @@
-module Train exposing (Train, moveTrain)
+module Train exposing (Train, maxSpeed, moveTrain)
 
 import Coord exposing (Coord)
 import Duration exposing (Duration, Seconds)
