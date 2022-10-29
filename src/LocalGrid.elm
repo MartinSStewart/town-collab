@@ -9,6 +9,7 @@ import Grid exposing (Grid)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Time
+import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit)
 import User exposing (UserId)
@@ -44,6 +45,7 @@ init :
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
+    , trains : List Train
     }
     -> LocalModel Change LocalGrid
 init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds } =

@@ -18,6 +18,7 @@ import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
 import Env
 import EverySet exposing (EverySet)
+import Frontend
 import Grid exposing (Grid)
 import GridCell
 import Lamdera exposing (ClientId, SessionId)
@@ -31,6 +32,7 @@ import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
 import Time
+import Train
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
@@ -54,6 +56,7 @@ subscriptions _ =
     Sub.batch
         [ Lamdera.onDisconnect UserDisconnected
         , Time.every (notifyAdminWait |> Duration.inMilliseconds) NotifyAdminTimeElapsed
+        , Time.every 3000 WorldUpdateTimeElapsed
         ]
 
 
@@ -69,6 +72,7 @@ init =
     , secretLinkCounter = 0
     , errors = []
     , trains = []
+    , lastWorldUpdate = Nothing
     }
 
 
@@ -157,6 +161,23 @@ update msg model =
 
                 Err error ->
                     ( addError time (SendGridError email error) model, Cmd.none )
+
+        WorldUpdateTimeElapsed time ->
+            let
+                newTrains =
+                    case model.lastWorldUpdate of
+                        Just lastWorldUpdate ->
+                            List.map (Train.moveTrain (Duration.from lastWorldUpdate time) model.grid) model.trains
+
+                        Nothing ->
+                            model.trains
+            in
+            ( { model
+                | lastWorldUpdate = Just time
+                , trains = newTrains
+              }
+            , Lamdera.broadcast (TrainUpdate newTrains)
+            )
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -534,6 +555,9 @@ updateLocalChange ( userId, _ ) change model =
                     let
                         ( cellPosition, localPosition ) =
                             Grid.worldToCellAndLocalCoord localChange.position
+
+                        maybeTrain =
+                            Frontend.handleAddingTrain localChange.change localChange.position
                     in
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
@@ -546,6 +570,15 @@ updateLocalChange ( userId, _ ) change model =
                                     cellPosition
                                     (Grid.getCell cellPosition model.grid |> Maybe.withDefault GridCell.empty)
                                     model.userChangesRecently
+                        , trains =
+                            (case maybeTrain of
+                                Just train ->
+                                    [ train ]
+
+                                Nothing ->
+                                    []
+                            )
+                                ++ model.trains
                       }
                         |> updateUser
                             userId
@@ -680,6 +713,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             , redoHistory = user.redoHistory
             , undoCurrent = user.undoCurrent
             , viewBounds = viewBounds
+            , trains = model.trains
             }
     in
     case getUserFromSessionId sessionId model of

@@ -153,6 +153,7 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
     , trains : List Train
+    , lastWorldUpdate : Maybe Time.Posix
     }
 
 
@@ -241,6 +242,7 @@ type BackendMsg
     | ConfirmationEmailSent SessionId Time.Posix (Result SendGrid.Error ())
     | ChangeEmailSent Time.Posix EmailAddress (Result SendGrid.Error ())
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
+    | WorldUpdateTimeElapsed Time.Posix
 
 
 type ToFrontend
@@ -249,6 +251,7 @@ type ToFrontend
     | NotifyMeEmailSent { isSuccessful : Bool }
     | NotifyMeConfirmed
     | UnsubscribeEmailConfirmed
+    | TrainUpdate (List Train)
 
 
 type EmailEvent
@@ -265,4 +268,5 @@ type alias LoadingData_ =
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
+    , trains : List Train
     }

@@ -1,4 +1,4 @@
-port module Frontend exposing (app, init, update, updateFromBackend, view)
+port module Frontend exposing (app, handleAddingTrain, init, update, updateFromBackend, view)
 
 import Angle
 import Array exposing (Array)
@@ -154,7 +154,7 @@ loadedInit time loading loadingData =
         model =
             { key = loading.key
             , localModel = LocalGrid.init loadingData
-            , trains = []
+            , trains = loadingData.trains
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
             , viewPoint = Tile.tileToWorld loading.viewPoint |> Coord.toPoint2d
@@ -1086,28 +1086,14 @@ changeText text model =
                                 )
                                 { model2
                                     | trains =
-                                        if tile == TrainHouseLeft || tile == TrainHouseRight then
-                                            let
-                                                ( path, speed ) =
-                                                    if tile == TrainHouseLeft then
-                                                        ( Tile.trainHouseLeftRailPath
-                                                        , Quantity -5
-                                                        )
+                                        (case handleAddingTrain tile (Cursor.position model.cursor) of
+                                            Just train ->
+                                                [ train ]
 
-                                                    else
-                                                        ( Tile.trainHouseRightRailPath
-                                                        , Quantity 5
-                                                        )
-                                            in
-                                            { position = Cursor.position model.cursor
-                                            , path = path
-                                            , t = 0.5
-                                            , speed = speed
-                                            }
-                                                :: model2.trains
-
-                                        else
-                                            model2.trains
+                                            Nothing ->
+                                                []
+                                        )
+                                            ++ model2.trains
                                 }
 
                         newGrid : Grid
@@ -1155,6 +1141,32 @@ changeText text model =
 
         [] ->
             model
+
+
+handleAddingTrain : Tile -> Coord WorldUnit -> Maybe Train
+handleAddingTrain tile position =
+    if tile == TrainHouseLeft || tile == TrainHouseRight then
+        let
+            ( path, speed ) =
+                if tile == TrainHouseLeft then
+                    ( Tile.trainHouseLeftRailPath
+                    , Quantity -5
+                    )
+
+                else
+                    ( Tile.trainHouseRightRailPath
+                    , Quantity 5
+                    )
+        in
+        { position = position
+        , path = path
+        , t = 0.5
+        , speed = speed
+        }
+            |> Just
+
+    else
+        Nothing
 
 
 createDebrisMesh : Time.Posix -> List RemovedTileParticle -> WebGL.Mesh DebrisVertex
@@ -1456,6 +1468,9 @@ updateLoadedFromBackend msg model =
 
         UnsubscribeEmailConfirmed ->
             ( { model | notifyMeModel = NotifyMe.unsubscribed model.notifyMeModel }, Cmd.none )
+
+        TrainUpdate trains ->
+            ( { model | trains = trains }, Cmd.none )
 
 
 textarea : FrontendLoaded -> Element.Attribute FrontendMsg_
