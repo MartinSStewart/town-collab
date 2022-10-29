@@ -109,6 +109,7 @@ type alias FrontendLoaded =
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
+    , lastTrainWhistle : Maybe Time.Posix
     }
 
 

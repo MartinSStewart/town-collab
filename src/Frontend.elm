@@ -174,6 +174,12 @@ audioLoaded audioData model =
         _ ->
             Audio.silence
     , trainSounds
+    , case model.lastTrainWhistle of
+        Just time ->
+            playSound TrainWhistleSound time |> Audio.scaleVolume 0.2
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
 
@@ -276,6 +282,7 @@ loadedInit time loading loadingData =
             , sounds = loading.sounds
             , removedTileParticles = []
             , debrisMesh = WebGL.triangleFan []
+            , lastTrainWhistle = Nothing
             }
     in
     ( updateMeshes model model
@@ -632,10 +639,33 @@ updateLoaded msg model =
 
                     else
                         ( model2, Cmd.none )
+
+                viewBounds =
+                    viewBoundingBox_ model
+
+                playTrainWhistle =
+                    (case model.lastTrainWhistle of
+                        Just whistleTime ->
+                            Duration.from whistleTime time |> Quantity.greaterThan (Duration.seconds 120)
+
+                        Nothing ->
+                            True
+                    )
+                        && List.any (\train -> BoundingBox2d.contains (Train.actualPosition train) viewBounds) model.trains
+
+                model4 =
+                    { model3
+                        | lastTrainWhistle =
+                            if playTrainWhistle then
+                                Just time
+
+                            else
+                                model.lastTrainWhistle
+                    }
             in
-            case List.Nonempty.fromList model3.pendingChanges of
+            case List.Nonempty.fromList model4.pendingChanges of
                 Just nonempty ->
-                    ( { model3 | pendingChanges = [] }
+                    ( { model4 | pendingChanges = [] }
                     , Cmd.batch
                         [ GridChange nonempty |> Lamdera.sendToBackend
                         , urlChange
@@ -643,7 +673,7 @@ updateLoaded msg model =
                     )
 
                 Nothing ->
-                    ( model3, urlChange )
+                    ( model4, urlChange )
 
         ZoomFactorPressed zoomFactor ->
             ( resetTouchMove model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
