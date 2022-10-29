@@ -30,10 +30,7 @@ urlParser =
     Url.Parser.oneOf
         [ Url.Parser.top
             <?> coordQueryParser
-            |> Url.Parser.map (internalRoute False)
-        , Url.Parser.s notifyMe
-            <?> coordQueryParser
-            |> Url.Parser.map (internalRoute True)
+            |> Url.Parser.map internalRoute
         , Url.Parser.s notifyMeConfirmation
             </> Url.Parser.string
             |> Url.Parser.map (ConfirmEmailKey >> EmailConfirmationRoute)
@@ -52,12 +49,7 @@ encodeUrl route =
                     Coord.toRawCoord internalRoute_.viewPoint
             in
             Url.Builder.relative
-                (if internalRoute_.showNotifyMe then
-                    [ notifyMe ]
-
-                 else
-                    [ "/" ]
-                )
+                [ "/" ]
                 [ Url.Builder.int "x" x, Url.Builder.int "y" y ]
 
         EmailConfirmationRoute (ConfirmEmailKey key) ->
@@ -83,7 +75,7 @@ unsubscribe =
 
 
 type InternalRoute
-    = InternalRoute { showNotifyMe : Bool, viewPoint : Coord WorldUnit }
+    = InternalRoute { viewPoint : Coord WorldUnit }
     | EmailConfirmationRoute ConfirmEmailKey
     | EmailUnsubscribeRoute UnsubscribeEmailKey
 
@@ -96,6 +88,6 @@ type UnsubscribeEmailKey
     = UnsubscribeEmailKey String
 
 
-internalRoute : Bool -> Coord WorldUnit -> InternalRoute
-internalRoute showNotifyMe viewPoint =
-    InternalRoute { showNotifyMe = showNotifyMe, viewPoint = viewPoint }
+internalRoute : Coord WorldUnit -> InternalRoute
+internalRoute viewPoint =
+    InternalRoute { viewPoint = viewPoint }

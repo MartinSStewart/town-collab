@@ -42,7 +42,6 @@ import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
-import NotifyMe
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -55,7 +54,7 @@ import Time
 import Train exposing (Train)
 import Types exposing (..)
 import UiColors
-import Units exposing (CellUnit, TileLocalUnit, WorldPixel, WorldUnit)
+import Units exposing (CellUnit, TileLocalUnit, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -203,7 +202,7 @@ loadedInit time loading loadingData =
             , trains = loadingData.trains
             , meshes = Dict.empty
             , cursorMesh = Cursor.toMesh cursor
-            , viewPoint = Tile.tileToWorld loading.viewPoint |> Coord.toPoint2d
+            , viewPoint = Coord.toPoint2d loading.viewPoint
             , viewPointLastInterval = Point2d.origin
             , cursor = cursor
             , texture = Nothing
@@ -225,8 +224,6 @@ loadedInit time loading loadingData =
             , adminEnabled = False
             , animationElapsedTime = Duration.seconds 0
             , ignoreNextUrlChanged = False
-            , showNotifyMe = loading.showNotifyMe
-            , notifyMeModel = loading.notifyMeModel
             , textAreaText = ""
             , lastTilePlaced = Nothing
             , sounds = loading.sounds
@@ -255,41 +252,29 @@ loadedInit time loading loadingData =
 init : Url -> Browser.Navigation.Key -> ( FrontendModel_, Cmd FrontendMsg_, AudioCmd FrontendMsg_ )
 init url key =
     let
-        { viewPoint, showNotifyMe, notifyMe, emailEvent, cmd } =
+        { viewPoint, cmd } =
             let
                 defaultRoute =
-                    UrlHelper.internalRoute False UrlHelper.startPointAt
+                    UrlHelper.internalRoute UrlHelper.startPointAt
             in
             case Url.Parser.parse UrlHelper.urlParser url of
                 Just (UrlHelper.InternalRoute a) ->
                     { viewPoint = a.viewPoint
-                    , showNotifyMe = a.showNotifyMe
-                    , notifyMe = NotifyMe.init
-                    , emailEvent = Nothing
                     , cmd = Cmd.none
                     }
 
                 Just (UrlHelper.EmailConfirmationRoute a) ->
                     { viewPoint = UrlHelper.startPointAt
-                    , showNotifyMe = True
-                    , notifyMe = NotifyMe.init |> NotifyMe.emailConfirmed
-                    , emailEvent = Just (ConfirmationEmailConfirmed_ a)
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
                 Just (UrlHelper.EmailUnsubscribeRoute a) ->
                     { viewPoint = UrlHelper.startPointAt
-                    , showNotifyMe = True
-                    , notifyMe = NotifyMe.init |> NotifyMe.unsubscribing
-                    , emailEvent = Just (UnsubscribeEmail a)
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
                 Nothing ->
                     { viewPoint = UrlHelper.startPointAt
-                    , showNotifyMe = False
-                    , notifyMe = NotifyMe.init
-                    , emailEvent = Nothing
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
@@ -308,18 +293,16 @@ init url key =
     ( Loading
         { key = key
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
-        , devicePixelRatio = Quantity 1
+        , devicePixelRatio = 1
         , zoomFactor = 1
         , time = Nothing
         , viewPoint = viewPoint
         , mousePosition = Point2d.origin
-        , showNotifyMe = showNotifyMe
-        , notifyMeModel = notifyMe
         , sounds = AssocList.empty
         , loadingData = Nothing
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend (ConnectToBackend bounds emailEvent)
+        [ Lamdera.sendToBackend (ConnectToBackend bounds)
         , Task.perform
             (\{ viewport } ->
                 WindowResized
@@ -388,11 +371,10 @@ updateLoaded msg model =
 
               else
                 case Url.Parser.parse UrlHelper.urlParser url of
-                    Just (UrlHelper.InternalRoute { viewPoint, showNotifyMe }) ->
+                    Just (UrlHelper.InternalRoute { viewPoint }) ->
                         { model
                             | cursor = Cursor.setCursor viewPoint
-                            , viewPoint = Tile.tileToWorld viewPoint |> Coord.toPoint2d
-                            , showNotifyMe = showNotifyMe
+                            , viewPoint = viewPoint |> Coord.toPoint2d
                         }
 
                     _ ->
@@ -495,7 +477,7 @@ updateLoaded msg model =
 
                     position : Coord WorldUnit
                     position =
-                        screenToWorld model mousePosition |> Tile.worldToTile
+                        screenToWorld model mousePosition |> Coord.floorPoint
 
                     maybeUserId =
                         selectionPoint
@@ -555,8 +537,8 @@ updateLoaded msg model =
                         case ( model.mouseLeft, model.tool ) of
                             ( MouseButtonDown mouseState, SelectTool ) ->
                                 Cursor.selection
-                                    (mouseState.start_ |> Tile.worldToTile)
-                                    (screenToWorld model mousePosition |> Tile.worldToTile)
+                                    (mouseState.start_ |> Coord.floorPoint)
+                                    (screenToWorld model mousePosition |> Coord.floorPoint)
 
                             _ ->
                                 model.cursor
@@ -569,7 +551,7 @@ updateLoaded msg model =
 
                                     position : Coord WorldUnit
                                     position =
-                                        screenToWorld model mousePosition |> Tile.worldToTile
+                                        screenToWorld model mousePosition |> Coord.floorPoint
 
                                     hideUserId =
                                         selectionPoint
@@ -594,9 +576,10 @@ updateLoaded msg model =
                     { model | time = time, viewPointLastInterval = actualViewPoint_ }
 
                 ( model3, urlChange ) =
-                    if Tile.worldToTile actualViewPoint_ /= Tile.worldToTile model.viewPointLastInterval then
-                        Tile.worldToTile actualViewPoint_
-                            |> UrlHelper.internalRoute model.showNotifyMe
+                    if actualViewPoint_ /= model.viewPointLastInterval then
+                        actualViewPoint_
+                            |> Coord.floorPoint
+                            |> UrlHelper.internalRoute
                             |> UrlHelper.encodeUrl
                             |> (\a -> replaceUrl a model2)
 
@@ -677,8 +660,8 @@ updateLoaded msg model =
                                 case model.tool of
                                     SelectTool ->
                                         Cursor.selection
-                                            (mouseState.start_ |> Tile.worldToTile)
-                                            (screenToWorld model touchPosition |> Tile.worldToTile)
+                                            (Coord.floorPoint mouseState.start_)
+                                            (screenToWorld model touchPosition |> Coord.floorPoint)
 
                                     _ ->
                                         model.cursor
@@ -749,24 +732,8 @@ updateLoaded msg model =
             , Cmd.none
             )
 
-        PressedCancelNotifyMe ->
-            closeNotifyMe model
-
-        PressedSubmitNotifyMe validated ->
-            ( { model | notifyMeModel = NotifyMe.inProgress model.notifyMeModel }, Lamdera.sendToBackend (NotifyMeSubmitted validated) )
-
-        NotifyMeModelChanged notifyMeModel ->
-            ( { model | notifyMeModel = notifyMeModel }, Cmd.none )
-
         SoundLoaded sound result ->
             ( { model | sounds = AssocList.insert sound result model.sounds }, Cmd.none )
-
-
-closeNotifyMe : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
-closeNotifyMe model =
-    UrlHelper.internalRoute False (Tile.worldToTile (actualViewPoint model))
-        |> UrlHelper.encodeUrl
-        |> (\a -> pushUrl a { model | showNotifyMe = False, notifyMeModel = NotifyMe.init })
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -781,11 +748,8 @@ pushUrl url model =
 
 cursorEnabled : FrontendLoaded -> Bool
 cursorEnabled model =
-    case ( model.tool, model.showNotifyMe ) of
-        ( HighlightTool _, _ ) ->
-            False
-
-        ( _, True ) ->
+    case model.tool of
+        HighlightTool _ ->
             False
 
         _ ->
@@ -959,7 +923,7 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.cursor
 
                     else if isSmallDistance then
-                        screenToWorld model mousePosition |> Tile.worldToTile |> Cursor.setCursor
+                        screenToWorld model mousePosition |> Coord.floorPoint |> Cursor.setCursor
 
                     else
                         model.cursor
@@ -1040,19 +1004,22 @@ clearTextSelection bounds model =
         |> (\m -> { m | cursor = model.cursor })
 
 
-screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldPixel WorldPixel
+screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
 screenToWorld model =
     let
+        ( Quantity tileW, _ ) =
+            Units.tileSize
+
         ( w, h ) =
             model.windowSize
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at (Quantity.divideBy (toFloat model.zoomFactor) model.devicePixelRatio)
+        >> Point2d.at (abc model)
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
-worldToScreen : FrontendLoaded -> Point2d WorldPixel WorldPixel -> Point2d Pixels Pixels
+worldToScreen : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Point2d Pixels Pixels
 worldToScreen model =
     let
         ( w, h ) =
@@ -1060,8 +1027,16 @@ worldToScreen model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << Point2d.at_ (Quantity.divideBy (toFloat model.zoomFactor) model.devicePixelRatio)
+        << Point2d.at_ (abc model)
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
+
+
+abc model =
+    let
+        ( Quantity tileW, _ ) =
+            Units.tileSize
+    in
+    model.devicePixelRatio / (toFloat model.zoomFactor * tileW) |> Quantity
 
 
 selectionPoint : Coord WorldUnit -> Grid -> Maybe { userId : UserId, value : Tile }
@@ -1086,13 +1061,13 @@ windowResizedUpdate windowSize model =
 
 
 devicePixelRatioUpdate :
-    Quantity Float (Rate WorldPixel Pixels)
-    -> { b | devicePixelRatio : Quantity Float (Rate WorldPixel Pixels), zoomFactor : Int }
-    -> ( { b | devicePixelRatio : Quantity Float (Rate WorldPixel Pixels), zoomFactor : Int }, Cmd msg )
+    Float
+    -> { b | devicePixelRatio : Float, zoomFactor : Int }
+    -> ( { b | devicePixelRatio : Float, zoomFactor : Int }, Cmd msg )
 devicePixelRatioUpdate devicePixelRatio model =
     ( { model
         | devicePixelRatio = devicePixelRatio
-        , zoomFactor = toFloat model.zoomFactor * Quantity.ratio devicePixelRatio model.devicePixelRatio |> round
+        , zoomFactor = 1
       }
     , Cmd.none
     )
@@ -1259,7 +1234,7 @@ createDebrisMesh appStartTime removedTiles =
                     position
 
                 ( w, h ) =
-                    Tile.size
+                    Units.tileSize
 
                 ( textureX, textureY ) =
                     data.texturePosition
@@ -1413,11 +1388,11 @@ viewBoundsUpdate ( model, cmd ) =
             viewBoundingBox model |> BoundingBox2d.extrema
 
         min_ =
-            Point2d.xy minX minY |> Tile.worldToTile |> Grid.worldToCellAndLocalCoord |> Tuple.first
+            Point2d.xy minX minY |> Coord.floorPoint |> Grid.worldToCellAndLocalCoord |> Tuple.first
 
         max_ =
             Point2d.xy maxX maxY
-                |> Tile.worldToTile
+                |> Coord.floorPoint
                 |> Grid.worldToCellAndLocalCoord
                 |> Tuple.first
                 |> Coord.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
@@ -1447,19 +1422,19 @@ offsetViewPoint :
     FrontendLoaded
     -> Point2d Pixels Pixels
     -> Point2d Pixels Pixels
-    -> Point2d WorldPixel WorldPixel
-offsetViewPoint { windowSize, viewPoint, devicePixelRatio, zoomFactor } mouseStart mouseCurrent =
+    -> Point2d WorldUnit WorldUnit
+offsetViewPoint ({ windowSize, viewPoint, devicePixelRatio, zoomFactor } as model) mouseStart mouseCurrent =
     let
-        delta : Vector2d WorldPixel WorldPixel
+        delta : Vector2d WorldUnit WorldUnit
         delta =
             Vector2d.from mouseCurrent mouseStart
-                |> Vector2d.at (Quantity.divideBy (toFloat zoomFactor) devicePixelRatio)
+                |> Vector2d.at (abc model)
                 |> Vector2d.placeIn (Units.screenFrame viewPoint)
     in
     Point2d.translateBy delta viewPoint
 
 
-actualViewPoint : FrontendLoaded -> Point2d WorldPixel WorldPixel
+actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
     case ( model.mouseLeft, model.mouseMiddle ) of
         ( _, MouseButtonDown { start, current } ) ->
@@ -1506,14 +1481,8 @@ updateLoadedFromBackend msg model =
             , Cmd.none
             )
 
-        NotifyMeEmailSent result ->
-            ( { model | notifyMeModel = NotifyMe.confirmSubmit result model.notifyMeModel }, Cmd.none )
-
-        NotifyMeConfirmed ->
-            ( { model | notifyMeModel = NotifyMe.emailConfirmed model.notifyMeModel }, Cmd.none )
-
         UnsubscribeEmailConfirmed ->
-            ( { model | notifyMeModel = NotifyMe.unsubscribed model.notifyMeModel }, Cmd.none )
+            ( model, Cmd.none )
 
         TrainUpdate trains ->
             ( { model | trains = trains }, Cmd.none )
@@ -1582,27 +1551,6 @@ lostConnection model =
 
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
 view _ model =
-    let
-        notifyMeView : { a | showNotifyMe : Bool, notifyMeModel : NotifyMe.Model } -> Element.Attribute FrontendMsg_
-        notifyMeView a =
-            Element.inFront
-                (if a.showNotifyMe then
-                    (case model of
-                        Loading loading ->
-                            NotifyMe.view loading
-
-                        Loaded loaded ->
-                            NotifyMe.view loaded
-                    )
-                        NotifyMeModelChanged
-                        PressedSubmitNotifyMe
-                        PressedCancelNotifyMe
-                        a.notifyMeModel
-
-                 else
-                    Element.none
-                )
-    in
     { title =
         case model of
             Loading _ ->
@@ -1620,7 +1568,6 @@ view _ model =
                 Element.layout
                     [ Element.width Element.fill
                     , Element.height Element.fill
-                    , notifyMeView loadingModel
                     ]
                     (Element.text "Loading")
 
@@ -1641,7 +1588,6 @@ view _ model =
                                 Nothing ->
                                     []
                            )
-                        ++ [ notifyMeView loadedModel ]
                     )
                     (Element.html (canvasView loadedModel))
         , Html.node "style"
@@ -1656,7 +1602,6 @@ contextMenuView { userId, hidePoint } loadedModel =
     let
         { x, y } =
             Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 ) hidePoint
-                |> Tile.tileToWorld
                 |> Coord.toPoint2d
                 |> worldToScreen loadedModel
                 |> Point2d.unwrap
@@ -2164,9 +2109,6 @@ toolbarButton attributes onPress isEnabled label =
 findPixelPerfectSize : FrontendLoaded -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
 findPixelPerfectSize frontendModel =
     let
-        (Quantity pixelRatio) =
-            frontendModel.devicePixelRatio
-
         findValue : Quantity Int Pixels -> ( Int, Int )
         findValue value =
             List.range 0 9
@@ -2175,12 +2117,12 @@ findPixelPerfectSize frontendModel =
                     (\v ->
                         let
                             a =
-                                toFloat v * pixelRatio
+                                toFloat v * frontendModel.devicePixelRatio
                         in
                         a == toFloat (round a) && modBy 2 (round a) == 0
                     )
-                |> Maybe.map (\v -> ( v, toFloat v * pixelRatio |> round ))
-                |> Maybe.withDefault ( Pixels.inPixels value, toFloat (Pixels.inPixels value) * pixelRatio |> round )
+                |> Maybe.map (\v -> ( v, toFloat v * frontendModel.devicePixelRatio |> round ))
+                |> Maybe.withDefault ( Pixels.inPixels value, toFloat (Pixels.inPixels value) * frontendModel.devicePixelRatio |> round )
 
         ( w, actualW ) =
             findValue (Tuple.first frontendModel.windowSize)
@@ -2191,7 +2133,7 @@ findPixelPerfectSize frontendModel =
     { canvasSize = ( w, h ), actualCanvasSize = ( actualW, actualH ) }
 
 
-viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldPixel WorldPixel
+viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewBoundingBox model =
     let
         viewMin =
@@ -2199,7 +2141,6 @@ viewBoundingBox model =
                 |> Point2d.translateBy
                     (Coord.fromRawCoord ( -1, -1 )
                         |> Units.cellToTile
-                        |> Tile.tileToWorld
                         |> Coord.toVector2d
                     )
 
@@ -2224,14 +2165,17 @@ canvasView model =
         { canvasSize, actualCanvasSize } =
             findPixelPerfectSize model
 
+        ( Quantity tileW, Quantity tileH ) =
+            Units.tileSize
+
         { x, y } =
             Point2d.unwrap (actualViewPoint model)
 
         viewMatrix =
             Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                 |> Mat4.translate3
-                    (negate <| toFloat <| round x)
-                    (negate <| toFloat <| round y)
+                    (negate <| toFloat <| round (x * tileW))
+                    (negate <| toFloat <| round (y * tileH))
                     0
     in
     WebGL.toHtmlWith
@@ -2254,7 +2198,6 @@ canvasView model =
                                 (\key _ ->
                                     Coord.fromRawCoord key
                                         |> Units.cellToTile
-                                        |> Tile.tileToWorld
                                         |> Coord.toPoint2d
                                         |> (\p -> BoundingBox2d.contains p viewBounds_)
                                 )
@@ -2322,7 +2265,7 @@ drawTrains trains viewMatrix texture =
                     Grid.localTilePointPlusWorld train.position (railData.path train.t) |> Point2d.unwrap
 
                 ( Quantity w, Quantity h ) =
-                    Tile.size
+                    Units.tileSize
 
                 trainFrame =
                     Direction2d.angleFrom
@@ -2375,7 +2318,7 @@ trainMesh : Int -> WebGL.Mesh Vertex
 trainMesh frame =
     let
         ( Quantity w, Quantity h ) =
-            Tile.size
+            Units.tileSize
 
         offsetY =
             -5
@@ -2394,8 +2337,7 @@ trainMesh frame =
 subscriptions : AudioData -> FrontendModel_ -> Sub FrontendMsg_
 subscriptions _ model =
     Sub.batch
-        [ martinsstewart_elm_device_pixel_ratio_from_js
-            (Units.worldUnit >> Quantity.per Pixels.pixel >> GotDevicePixelRatio)
+        [ martinsstewart_elm_device_pixel_ratio_from_js GotDevicePixelRatio
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
         , case model of
             Loading _ ->

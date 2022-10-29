@@ -88,7 +88,7 @@ toMesh cursor =
             size cursor |> Coord.toRawCoord
 
         ( w, h ) =
-            Coord.toRawCoord Tile.size
+            Coord.toRawCoord Units.tileSize
 
         ( v0, i0 ) =
             mesh 0
@@ -172,7 +172,11 @@ draw viewMatrix color model =
         fragmentShader
         model.cursorMesh
         { view = viewMatrix
-        , offset = bounds model.cursor |> Bounds.minimum |> Tile.tileToWorld |> Coord.toVec2
+        , offset =
+            bounds model.cursor
+                |> Bounds.minimum
+                |> Coord.multiplyTuple (Tuple.mapBoth Quantity.unwrap Quantity.unwrap Units.tileSize)
+                |> Coord.toVec2
         , color = Shaders.colorToVec3 color
         }
 

@@ -2,17 +2,15 @@ module Units exposing
     ( CellLocalUnit
     , CellUnit
     , TileLocalUnit
-    , WorldPixel
     , WorldUnit
     , cellSize
     , cellToTile
     , cellUnit
-    , inWorldUnits
     , localUnit
     , pixelToWorldPixel
     , screenFrame
+    , tileSize
     , tileUnit
-    , worldUnit
     )
 
 import Coord exposing (Coord)
@@ -21,10 +19,6 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Vector2d exposing (Vector2d)
-
-
-type WorldPixel
-    = WorldPixel Never
 
 
 type WorldUnit
@@ -48,16 +42,6 @@ tileUnit =
     Quantity.Quantity
 
 
-worldUnit : number -> Quantity number WorldPixel
-worldUnit =
-    Quantity.Quantity
-
-
-inWorldUnits : Quantity Int WorldPixel -> Int
-inWorldUnits (Quantity.Quantity value) =
-    value
-
-
 cellUnit : number -> Quantity number CellUnit
 cellUnit =
     Quantity.Quantity
@@ -78,15 +62,23 @@ cellToTile coord =
     Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
 
 
-pixelToWorldPixel : Float -> Vector2d Pixels Pixels -> Coord WorldPixel
+pixelToWorldPixel : Float -> Vector2d Pixels Pixels -> Coord WorldUnit
 pixelToWorldPixel devicePixelRatio v =
     let
+        ( Quantity w, Quantity h ) =
+            tileSize
+
         { x, y } =
             Vector2d.unwrap v
     in
-    ( x * devicePixelRatio |> round |> worldUnit, y * devicePixelRatio |> round |> worldUnit )
+    ( x * devicePixelRatio / w |> round |> tileUnit, y * devicePixelRatio / h |> round |> tileUnit )
 
 
-screenFrame : Point2d WorldPixel WorldPixel -> Frame2d WorldPixel WorldPixel { defines : Pixels }
+tileSize : ( Quantity number Pixels, Quantity number Pixels )
+tileSize =
+    ( Pixels.pixels 18, Pixels.pixels 18 )
+
+
+screenFrame : Point2d WorldUnit WorldUnit -> Frame2d WorldUnit WorldUnit { defines : Pixels }
 screenFrame viewPoint =
     Frame2d.atPoint viewPoint

@@ -5,7 +5,6 @@ import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import Grid
 import GridCell
-import NotifyMe
 import Units exposing (CellUnit, WorldUnit)
 import User exposing (UserId)
 

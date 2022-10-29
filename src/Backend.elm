@@ -25,9 +25,6 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import NotifyMe
-import Quantity exposing (Quantity(..))
-import RecentChanges
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
@@ -66,9 +63,6 @@ init =
     , userSessions = Dict.empty
     , users = Dict.empty
     , usersHiddenRecently = []
-    , userChangesRecently = RecentChanges.init
-    , subscribedEmails = []
-    , pendingEmails = []
     , secretLinkCounter = 0
     , errors = []
     , trains = []
@@ -128,29 +122,6 @@ update msg model =
         NotifyAdminEmailSent ->
             ( model, Cmd.none )
 
-        ConfirmationEmailSent sessionId timeSent result ->
-            ( case result of
-                Ok () ->
-                    model
-
-                Err error ->
-                    case Env.adminEmail of
-                        Just adminEmail ->
-                            addError timeSent (SendGridError adminEmail error) model
-
-                        Nothing ->
-                            model
-            , broadcast
-                (\sessionId_ _ ->
-                    if sessionId_ == sessionId then
-                        NotifyMeEmailSent { isSuccessful = result == Ok () } |> Just
-
-                    else
-                        Nothing
-                )
-                model
-            )
-
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend time sessionId clientId toBackendMsg model
 
@@ -192,7 +163,7 @@ notifyAdmin model =
             User.rawId >> String.fromInt
 
         fullUrl point =
-            Env.domain ++ "/" ++ UrlHelper.encodeUrl (UrlHelper.internalRoute False point)
+            Env.domain ++ "/" ++ UrlHelper.encodeUrl (UrlHelper.internalRoute point)
 
         hidden =
             List.map
@@ -308,22 +279,8 @@ updateFromFrontend :
     -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend currentTime sessionId clientId msg model =
     case msg of
-        ConnectToBackend requestData maybeEmailEvent ->
-            let
-                ( newModel, cmd ) =
-                    requestDataUpdate sessionId clientId requestData model
-            in
-            (case maybeEmailEvent of
-                Just (ConfirmationEmailConfirmed_ key) ->
-                    confirmationEmailConfirmed sessionId currentTime key newModel
-
-                Just (UnsubscribeEmail key) ->
-                    unsubscribeEmail clientId key newModel
-
-                Nothing ->
-                    ( newModel, Cmd.none )
-            )
-                |> Tuple.mapSecond (\cmd2 -> Cmd.batch [ cmd, cmd2 ])
+        ConnectToBackend requestData ->
+            requestDataUpdate sessionId clientId requestData model
 
         GridChange changes ->
             case getUserFromSessionId sessionId model of
@@ -381,126 +338,10 @@ updateFromFrontend currentTime sessionId clientId msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        NotifyMeSubmitted validated ->
-            case Dict.get sessionId model.userSessions of
-                Just { userId } ->
-                    sendConfirmationEmail validated model sessionId userId currentTime
-
-                Nothing ->
-                    ( model, Cmd.none )
-
-
-confirmationEmailConfirmed : SessionId -> Time.Posix -> ConfirmEmailKey -> BackendModel -> ( BackendModel, Cmd BackendMsg )
-confirmationEmailConfirmed sessionId currentTime confirmEmailKey model =
-    case List.find (.key >> (==) confirmEmailKey) model.pendingEmails of
-        Just pending ->
-            let
-                ( key, model2 ) =
-                    generateKey UnsubscribeEmailKey model
-
-                originalSessionId =
-                    Dict.toList model.userSessions
-                        |> List.find (\( _, { userId } ) -> pending.userId == userId)
-                        |> Maybe.map Tuple.first
-            in
-            ( { model2
-                | pendingEmails = List.filter (.key >> (/=) confirmEmailKey) model2.pendingEmails
-                , subscribedEmails =
-                    model2.subscribedEmails
-                        |> List.filter (.email >> (/=) pending.email)
-                        |> (::)
-                            { email = pending.email
-                            , frequency = pending.frequency
-                            , confirmTime = currentTime
-                            , userId = pending.userId
-                            , unsubscribeKey = key
-                            }
-              }
-            , broadcast
-                (\sessionId_ _ ->
-                    if sessionId_ == sessionId || Just sessionId_ == originalSessionId then
-                        Just NotifyMeConfirmed
-
-                    else
-                        Nothing
-                )
-                model
-            )
-
-        Nothing ->
-            ( model, Cmd.none )
-
-
-unsubscribeEmail : ClientId -> UnsubscribeEmailKey -> BackendModel -> ( BackendModel, Cmd BackendMsg )
-unsubscribeEmail clientId unsubscribeEmailKey model =
-    case List.find (.unsubscribeKey >> (==) unsubscribeEmailKey) model.subscribedEmails of
-        Just _ ->
-            ( { model
-                | subscribedEmails = List.filter (.unsubscribeKey >> (/=) unsubscribeEmailKey) model.subscribedEmails
-              }
-            , Lamdera.sendToFrontend clientId UnsubscribeEmailConfirmed
-            )
-
-        Nothing ->
-            ( model, Cmd.none )
-
 
 sendConfirmationEmailRateLimit : Duration
 sendConfirmationEmailRateLimit =
     Duration.seconds 10
-
-
-sendConfirmationEmail : NotifyMe.Validated -> BackendModel -> SessionId -> UserId -> Time.Posix -> ( BackendModel, Cmd BackendMsg )
-sendConfirmationEmail validated model sessionId userId time =
-    let
-        tooEarly =
-            case List.find (.email >> (==) validated.email) model.pendingEmails of
-                Just { creationTime } ->
-                    Duration.from creationTime time
-                        |> Quantity.lessThanOrEqualTo sendConfirmationEmailRateLimit
-
-                Nothing ->
-                    False
-    in
-    if tooEarly then
-        ( model, Cmd.none )
-
-    else
-        let
-            ( key, model2 ) =
-                generateKey ConfirmEmailKey model
-
-            content =
-                Email.Html.div []
-                    [ Email.Html.a
-                        [ Email.Html.Attributes.href
-                            (Env.domain ++ "/" ++ UrlHelper.encodeUrl (EmailConfirmationRoute key))
-                        ]
-                        [ Email.Html.text "Click this link" ]
-                    , Email.Html.text
-                        " to confirm you want to be notified about changes people make on ascii-collab."
-                    , Email.Html.br [] []
-                    , Email.Html.text "If this email was sent to you in error, you can safely ignore it."
-                    ]
-        in
-        ( { model2
-            | pendingEmails =
-                model2.pendingEmails
-                    |> List.filter (.email >> (/=) validated.email)
-                    |> (::)
-                        { email = validated.email
-                        , frequency = validated.frequency
-                        , creationTime = time
-                        , key = key
-                        , userId = userId
-                        }
-          }
-        , sendEmail
-            (ConfirmationEmailSent sessionId time)
-            (NonemptyString 'C' "onfirm ascii-collab notifications")
-            content
-            validated.email
-        )
 
 
 generateKey : (String -> keyType) -> { a | secretLinkCounter : Int } -> ( keyType, { a | secretLinkCounter : Int } )
@@ -532,12 +373,6 @@ updateLocalChange ( userId, _ ) change model =
                             in
                             ( { model
                                 | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
-                                , userChangesRecently =
-                                    if userId == backendUserId then
-                                        model.userChangesRecently
-
-                                    else
-                                        RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
                               }
                                 |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
@@ -561,15 +396,6 @@ updateLocalChange ( userId, _ ) change model =
                     in
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
-                        , userChangesRecently =
-                            if userId == backendUserId then
-                                model.userChangesRecently
-
-                            else
-                                RecentChanges.addChange
-                                    cellPosition
-                                    (Grid.getCell cellPosition model.grid |> Maybe.withDefault GridCell.empty)
-                                    model.userChangesRecently
                         , trains =
                             (case maybeTrain of
                                 Just train ->
@@ -605,12 +431,6 @@ updateLocalChange ( userId, _ ) change model =
                             in
                             ( { model
                                 | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
-                                , userChangesRecently =
-                                    if userId == backendUserId then
-                                        model.userChangesRecently
-
-                                    else
-                                        RecentChanges.undoRedoChange undoMoveAmount model.grid model.userChangesRecently
                               }
                                 |> updateUser userId (always newUser)
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just

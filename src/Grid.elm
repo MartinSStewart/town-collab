@@ -328,7 +328,7 @@ mesh cellPosition tiles =
                     position
 
                 ( w, h ) =
-                    Tile.size
+                    Units.tileSize
             in
             List.map
                 (\uv ->

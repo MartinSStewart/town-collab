@@ -12,13 +12,10 @@ module Tile exposing
     , pathDirection
     , railPathData
     , reverseDirection
-    , size
     , texturePosition
     , texturePosition_
-    , tileToWorld
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
-    , worldToTile
     )
 
 import Angle
@@ -31,7 +28,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
-import Units exposing (CellLocalUnit, TileLocalUnit, WorldPixel, WorldUnit)
+import Units exposing (CellLocalUnit, TileLocalUnit, WorldUnit)
 import Vector2d
 
 
@@ -43,32 +40,6 @@ charToTile =
 fromChar : Char -> Maybe Tile
 fromChar char =
     Dict.get char charToTile
-
-
-size : ( Quantity number Pixels, Quantity number Pixels )
-size =
-    ( Pixels.pixels 18, Pixels.pixels 18 )
-
-
-tileToWorld : Coord WorldUnit -> Coord WorldPixel
-tileToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
-    let
-        ( w, h ) =
-            size
-    in
-    ( Quantity.Quantity (Pixels.inPixels w * x), Quantity.Quantity (Pixels.inPixels h * y) )
-
-
-worldToTile : Point2d WorldPixel WorldPixel -> Coord WorldUnit
-worldToTile point =
-    let
-        ( w, h ) =
-            size
-
-        { x, y } =
-            Point2d.unwrap point
-    in
-    ( Quantity.Quantity (x / Pixels.inPixels w |> floor), Quantity.Quantity (y / Pixels.inPixels h |> floor) )
 
 
 type Tile
@@ -383,7 +354,7 @@ texturePosition_ : ( Int, Int ) -> ( Int, Int ) -> { topLeft : Vec2, topRight : 
 texturePosition_ position textureSize =
     let
         ( Quantity.Quantity tileW, Quantity.Quantity tileH ) =
-            size
+            Units.tileSize
 
         ( x, y ) =
             position
