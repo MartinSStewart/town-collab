@@ -124,9 +124,12 @@ audioLoaded audioData model =
         playWithConfig =
             Sound.playWithConfig audioData model.sounds
 
+        movingTrains =
+            List.filter (\train -> abs (Quantity.unwrap train.speed) > 0.1) model.trains
+
         noiseLevel : Float
         noiseLevel =
-            List.map (\train -> Quantity.unwrap train.speed / Train.maxSpeed |> abs) model.trains |> List.sum
+            List.map (\train -> Quantity.unwrap train.speed / Train.maxSpeed |> abs) movingTrains |> List.sum
 
         trainSounds =
             List.map
@@ -135,15 +138,14 @@ audioLoaded audioData model =
                         (\duration ->
                             { loop = Just { loopStart = Quantity.zero, loopEnd = duration }
                             , playbackRate =
-                                (Quantity.unwrap train.speed / Train.maxSpeed)
-                                    |> abs
+                                0.9 * (abs (Quantity.unwrap train.speed) / Train.maxSpeed) + 0.1
                             , startAt = Quantity.zero
                             }
                         )
                         ChugaChuga
                         (Time.millisToPosix 0)
                 )
-                model.trains
+                movingTrains
                 |> Audio.group
                 |> Audio.scaleVolume (0.5 / (noiseLevel + 1))
     in
