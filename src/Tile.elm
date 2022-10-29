@@ -31,7 +31,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
-import Units exposing (CellLocalUnit, TileLocalUnit, WorldCoordinate, WorldPixel, WorldUnit)
+import Units exposing (CellLocalUnit, TileLocalUnit, WorldPixel, WorldUnit)
 import Vector2d
 
 
@@ -59,7 +59,7 @@ tileToWorld ( Quantity.Quantity x, Quantity.Quantity y ) =
     ( Quantity.Quantity (Pixels.inPixels w * x), Quantity.Quantity (Pixels.inPixels h * y) )
 
 
-worldToTile : Point2d WorldPixel WorldCoordinate -> Coord WorldUnit
+worldToTile : Point2d WorldPixel WorldPixel -> Coord WorldUnit
 worldToTile point =
     let
         ( w, h ) =

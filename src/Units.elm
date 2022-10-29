@@ -1,9 +1,7 @@
 module Units exposing
     ( CellLocalUnit
     , CellUnit
-    , ScreenCoordinate
     , TileLocalUnit
-    , WorldCoordinate
     , WorldPixel
     , WorldUnit
     , cellSize
@@ -80,7 +78,7 @@ cellToTile coord =
     Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
 
 
-pixelToWorldPixel : Float -> Vector2d Pixels ScreenCoordinate -> Coord WorldPixel
+pixelToWorldPixel : Float -> Vector2d Pixels Pixels -> Coord WorldPixel
 pixelToWorldPixel devicePixelRatio v =
     let
         { x, y } =
@@ -89,14 +87,6 @@ pixelToWorldPixel devicePixelRatio v =
     ( x * devicePixelRatio |> round |> worldUnit, y * devicePixelRatio |> round |> worldUnit )
 
 
-screenFrame : Point2d WorldPixel WorldCoordinate -> Frame2d WorldPixel WorldCoordinate { defines : ScreenCoordinate }
+screenFrame : Point2d WorldPixel WorldPixel -> Frame2d WorldPixel WorldPixel { defines : Pixels }
 screenFrame viewPoint =
     Frame2d.atPoint viewPoint
-
-
-type ScreenCoordinate
-    = ScreenCoordinate Never
-
-
-type WorldCoordinate
-    = WorldCoordinate Never

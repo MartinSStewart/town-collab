@@ -55,7 +55,7 @@ import Time
 import Train exposing (Train)
 import Types exposing (..)
 import UiColors
-import Units exposing (CellUnit, ScreenCoordinate, TileLocalUnit, WorldCoordinate, WorldPixel, WorldUnit)
+import Units exposing (CellUnit, TileLocalUnit, WorldPixel, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -164,9 +164,16 @@ audioLoaded audioData model =
 
 
 
---volume : FrontendLoaded -> Coord WorldUnit -> Float
+--volume : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Float
 --volume model position =
---    if viewBoundingBox model |> BoundingBox2d.isContainedIn (Coord.toPoint2d position) then
+--    let
+--        { minX, minY, maxX, maxY } =
+--            BoundingBox2d.extrema (viewBoundingBox model)
+--
+--        { x, y } =
+--            Point2d.unwrap position
+--    in
+--    if BoundingBox2d.isContainedIn (Coord.toPoint2d position |> Tile.worldToTile) then
 --        1
 --
 --    else
@@ -923,8 +930,8 @@ keyMsgCanvasUpdate key model =
 
 
 mainMouseButtonUp :
-    Point2d Pixels ScreenCoordinate
-    -> { a | start : Point2d Pixels ScreenCoordinate }
+    Point2d Pixels Pixels
+    -> { a | start : Point2d Pixels Pixels }
     -> FrontendLoaded
     -> ( FrontendLoaded, Cmd FrontendMsg_ )
 mainMouseButtonUp mousePosition mouseState model =
@@ -1033,7 +1040,7 @@ clearTextSelection bounds model =
         |> (\m -> { m | cursor = model.cursor })
 
 
-screenToWorld : FrontendLoaded -> Point2d Pixels ScreenCoordinate -> Point2d WorldPixel WorldCoordinate
+screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldPixel WorldPixel
 screenToWorld model =
     let
         ( w, h ) =
@@ -1045,7 +1052,7 @@ screenToWorld model =
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
-worldToScreen : FrontendLoaded -> Point2d WorldPixel WorldCoordinate -> Point2d Pixels ScreenCoordinate
+worldToScreen : FrontendLoaded -> Point2d WorldPixel WorldPixel -> Point2d Pixels Pixels
 worldToScreen model =
     let
         ( w, h ) =
@@ -1438,12 +1445,12 @@ viewBoundsUpdate ( model, cmd ) =
 
 offsetViewPoint :
     FrontendLoaded
-    -> Point2d Pixels ScreenCoordinate
-    -> Point2d Pixels ScreenCoordinate
-    -> Point2d WorldPixel WorldCoordinate
+    -> Point2d Pixels Pixels
+    -> Point2d Pixels Pixels
+    -> Point2d WorldPixel WorldPixel
 offsetViewPoint { windowSize, viewPoint, devicePixelRatio, zoomFactor } mouseStart mouseCurrent =
     let
-        delta : Vector2d WorldPixel WorldCoordinate
+        delta : Vector2d WorldPixel WorldPixel
         delta =
             Vector2d.from mouseCurrent mouseStart
                 |> Vector2d.at (Quantity.divideBy (toFloat zoomFactor) devicePixelRatio)
@@ -1452,7 +1459,7 @@ offsetViewPoint { windowSize, viewPoint, devicePixelRatio, zoomFactor } mouseSta
     Point2d.translateBy delta viewPoint
 
 
-actualViewPoint : FrontendLoaded -> Point2d WorldPixel WorldCoordinate
+actualViewPoint : FrontendLoaded -> Point2d WorldPixel WorldPixel
 actualViewPoint model =
     case ( model.mouseLeft, model.mouseMiddle ) of
         ( _, MouseButtonDown { start, current } ) ->
@@ -2184,7 +2191,7 @@ findPixelPerfectSize frontendModel =
     { canvasSize = ( w, h ), actualCanvasSize = ( actualW, actualH ) }
 
 
-viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldPixel WorldCoordinate
+viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldPixel WorldPixel
 viewBoundingBox model =
     let
         viewMin =

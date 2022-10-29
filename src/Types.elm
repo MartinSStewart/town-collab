@@ -52,7 +52,7 @@ import Sound exposing (Sound)
 import Tile exposing (Tile)
 import Time
 import Train exposing (Train)
-import Units exposing (CellUnit, ScreenCoordinate, WorldCoordinate, WorldPixel, WorldUnit)
+import Units exposing (CellUnit, WorldPixel, WorldUnit)
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
 import User exposing (RawUserId, UserId)
@@ -77,7 +77,7 @@ type alias FrontendLoading =
     , zoomFactor : Int
     , time : Maybe Time.Posix
     , viewPoint : Coord WorldUnit
-    , mousePosition : Point2d Pixels ScreenCoordinate
+    , mousePosition : Point2d Pixels Pixels
     , showNotifyMe : Bool
     , notifyMeModel : NotifyMe.Model
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
@@ -91,8 +91,8 @@ type alias FrontendLoaded =
     , trains : List Train
     , meshes : Dict RawCellCoord (WebGL.Mesh Grid.Vertex)
     , cursorMesh : WebGL.Mesh { position : Vec2 }
-    , viewPoint : Point2d WorldPixel WorldCoordinate
-    , viewPointLastInterval : Point2d WorldPixel WorldCoordinate
+    , viewPoint : Point2d WorldPixel WorldPixel
+    , viewPointLastInterval : Point2d WorldPixel WorldPixel
     , cursor : Cursor
     , texture : Maybe Texture
     , pressedKeys : List Keyboard.Key
@@ -100,7 +100,7 @@ type alias FrontendLoaded =
     , devicePixelRatio : Quantity Float (Rate WorldPixel Pixels)
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
-    , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels ScreenCoordinate )
+    , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels Pixels )
     , mouseMiddle : MouseButtonState
     , pendingChanges : List Change.LocalChange
     , tool : ToolType
@@ -134,11 +134,11 @@ type ToolType
 
 
 type MouseButtonState
-    = MouseButtonUp { current : Point2d Pixels ScreenCoordinate }
+    = MouseButtonUp { current : Point2d Pixels Pixels }
     | MouseButtonDown
-        { start : Point2d Pixels ScreenCoordinate
-        , start_ : Point2d WorldPixel WorldCoordinate
-        , current : Point2d Pixels ScreenCoordinate
+        { start : Point2d Pixels Pixels
+        , start_ : Point2d WorldPixel WorldPixel
+        , current : Point2d Pixels Pixels
         }
 
 
@@ -203,10 +203,10 @@ type FrontendMsg_
     | GotDevicePixelRatio (Quantity Float (Rate WorldPixel Pixels))
     | UserTyped String
     | TextAreaFocused
-    | MouseDown Button (Point2d Pixels ScreenCoordinate)
-    | MouseUp Button (Point2d Pixels ScreenCoordinate)
-    | MouseMove (Point2d Pixels ScreenCoordinate)
-    | TouchMove (Point2d Pixels ScreenCoordinate)
+    | MouseDown Button (Point2d Pixels Pixels)
+    | MouseUp Button (Point2d Pixels Pixels)
+    | MouseMove (Point2d Pixels Pixels)
+    | TouchMove (Point2d Pixels Pixels)
     | ShortIntervalElapsed Time.Posix
     | VeryShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
