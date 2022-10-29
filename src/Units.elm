@@ -7,7 +7,6 @@ module Units exposing
     , cellToTile
     , cellUnit
     , localUnit
-    , pixelToWorldPixel
     , screenFrame
     , tileSize
     , tileUnit
@@ -18,7 +17,6 @@ import Frame2d exposing (Frame2d)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
-import Vector2d exposing (Vector2d)
 
 
 type WorldUnit
@@ -60,18 +58,6 @@ cellSize =
 cellToTile : Coord CellUnit -> Coord WorldUnit
 cellToTile coord =
     Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
-
-
-pixelToWorldPixel : Float -> Vector2d Pixels Pixels -> Coord WorldUnit
-pixelToWorldPixel devicePixelRatio v =
-    let
-        ( Quantity w, Quantity h ) =
-            tileSize
-
-        { x, y } =
-            Vector2d.unwrap v
-    in
-    ( x * devicePixelRatio / w |> round |> tileUnit, y * devicePixelRatio / h |> round |> tileUnit )
 
 
 tileSize : ( Quantity number Pixels, Quantity number Pixels )

@@ -1,4 +1,4 @@
-module Train exposing (Train, maxSpeed, moveTrain)
+module Train exposing (Train, actualPosition, maxSpeed, moveTrain)
 
 import Coord exposing (Coord)
 import Duration exposing (Duration, Seconds)
@@ -8,6 +8,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
+import Vector2d
 
 
 type alias Train =
@@ -16,6 +17,15 @@ type alias Train =
     , t : Float
     , speed : Quantity Float (Rate TileLocalUnit Seconds)
     }
+
+
+actualPosition : Train -> Point2d WorldUnit WorldUnit
+actualPosition train =
+    let
+        { path } =
+            Tile.railPathData train.path
+    in
+    Grid.localTilePointPlusWorld train.position (path train.t)
 
 
 acceleration =

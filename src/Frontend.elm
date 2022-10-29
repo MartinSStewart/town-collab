@@ -125,11 +125,26 @@ audioLoaded audioData model =
             Sound.playWithConfig audioData model.sounds
 
         movingTrains =
-            List.filter (\train -> abs (Quantity.unwrap train.speed) > 0.1) model.trains
+            List.filterMap
+                (\train ->
+                    if abs (Quantity.unwrap train.speed) > 0.1 then
+                        let
+                            position =
+                                Train.actualPosition train
+                        in
+                        Just
+                            { playbackRate = 0.9 * (abs (Quantity.unwrap train.speed) / Train.maxSpeed) + 0.1
+                            , volume = volume model position * Quantity.unwrap train.speed / Train.maxSpeed |> abs
+                            }
 
-        noiseLevel : Float
-        noiseLevel =
-            List.map (\train -> Quantity.unwrap train.speed / Train.maxSpeed |> abs) movingTrains |> List.sum
+                    else
+                        Nothing
+                )
+                model.trains
+
+        volumeOffset : Float
+        volumeOffset =
+            0.5 / ((List.map .volume movingTrains |> List.sum) + 1)
 
         trainSounds =
             List.map
@@ -137,17 +152,16 @@ audioLoaded audioData model =
                     playWithConfig
                         (\duration ->
                             { loop = Just { loopStart = Quantity.zero, loopEnd = duration }
-                            , playbackRate =
-                                0.9 * (abs (Quantity.unwrap train.speed) / Train.maxSpeed) + 0.1
+                            , playbackRate = train.playbackRate
                             , startAt = Quantity.zero
                             }
                         )
                         ChugaChuga
                         (Time.millisToPosix 0)
+                        |> Audio.scaleVolume (train.volume * volumeOffset)
                 )
                 movingTrains
                 |> Audio.group
-                |> Audio.scaleVolume (0.5 / (noiseLevel + 1))
     in
     [ case model.lastTilePlaced of
         Just { time, overwroteTiles } ->
@@ -164,21 +178,52 @@ audioLoaded audioData model =
         |> Audio.group
 
 
+volume : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Float
+volume model position =
+    let
+        boundingBox =
+            viewBoundingBox_ model
+    in
+    if BoundingBox2d.contains position boundingBox then
+        1
 
---volume : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Float
---volume model position =
---    let
---        { minX, minY, maxX, maxY } =
---            BoundingBox2d.extrema (viewBoundingBox model)
---
---        { x, y } =
---            Point2d.unwrap position
---    in
---    if BoundingBox2d.isContainedIn (Coord.toPoint2d position |> Tile.worldToTile) then
---        1
---
---    else
---        0
+    else
+        let
+            extrema =
+                BoundingBox2d.extrema boundingBox
+
+            (Quantity minX) =
+                extrema.minX
+
+            (Quantity minY) =
+                extrema.minY
+
+            (Quantity maxX) =
+                extrema.maxX
+
+            (Quantity maxY) =
+                extrema.maxY
+
+            { x, y } =
+                Point2d.unwrap position
+
+            distance : Float
+            distance =
+                if x > minX && x < maxX then
+                    min (abs (minY - y)) (abs (maxY - y))
+
+                else
+                    min (abs (minX - x)) (abs (maxX - x))
+        in
+        if distance > maxVolumeDistance then
+            0
+
+        else
+            ((maxVolumeDistance - distance) / maxVolumeDistance) ^ 2
+
+
+maxVolumeDistance =
+    10
 
 
 tryLoading : FrontendLoading -> ( FrontendModel_, Cmd FrontendMsg_ )
@@ -1069,7 +1114,6 @@ devicePixelRatioUpdate :
 devicePixelRatioUpdate devicePixelRatio model =
     ( { model
         | devicePixelRatio = devicePixelRatio
-        , zoomFactor = 1
       }
     , Cmd.none
     )
@@ -2152,6 +2196,11 @@ viewBoundingBox model =
     BoundingBox2d.from viewMin viewMax
 
 
+viewBoundingBox_ : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
+viewBoundingBox_ model =
+    BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
+
+
 canvasView : FrontendLoaded -> Html FrontendMsg_
 canvasView model =
     let
@@ -2264,7 +2313,7 @@ drawTrains trains viewMatrix texture =
                     Tile.railPathData train.path
 
                 { x, y } =
-                    Grid.localTilePointPlusWorld train.position (railData.path train.t) |> Point2d.unwrap
+                    Train.actualPosition train |> Point2d.unwrap
 
                 ( Quantity w, Quantity h ) =
                     Units.tileSize

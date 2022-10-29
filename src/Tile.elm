@@ -8,7 +8,6 @@ module Tile exposing
     , fromChar
     , getData
     , hasCollision
-    , nearestRailT
     , pathDirection
     , railPathData
     , reverseDirection
@@ -133,14 +132,17 @@ type alias RailData =
     }
 
 
+pathExitDirection : (Float -> Point2d units coordinates) -> Direction
 pathExitDirection path =
     pathStartEndDirection 0.99 1 path
 
 
+pathStartDirection : (Float -> Point2d units coordinates) -> Direction
 pathStartDirection path =
     pathStartEndDirection 0.01 0 path
 
 
+pathStartEndDirection : Float -> Float -> (Float -> Point2d units coordinates) -> Direction
 pathStartEndDirection t1 t2 path =
     let
         angle =
@@ -475,54 +477,6 @@ hasCollision positionA tileA positionB tileB =
                         |> Set.intersect setA
             in
             Set.size intersection > 0
-
-
-nearestRailT :
-    Point2d TileLocalUnit TileLocalUnit
-    -> (Float -> Point2d TileLocalUnit TileLocalUnit)
-    -> { t : Float, distance : Quantity Float TileLocalUnit, direction : Direction2d TileLocalUnit }
-nearestRailT position railPath =
-    let
-        { t, distance } =
-            nearestRailTHelper 3 0 1 position railPath
-    in
-    { t = t, distance = distance, direction = pathDirection railPath t }
-
-
-nearestRailTHelper :
-    Int
-    -> Float
-    -> Float
-    -> Point2d TileLocalUnit TileLocalUnit
-    -> (Float -> Point2d TileLocalUnit TileLocalUnit)
-    -> { t : Float, distance : Quantity Float TileLocalUnit }
-nearestRailTHelper stepsLeft minT maxT position railPath =
-    let
-        detail =
-            5
-
-        minimumList =
-            List.range 0 detail
-                |> List.map
-                    (\a ->
-                        let
-                            t =
-                                (toFloat a / detail) * (maxT - minT) + minT
-                        in
-                        { t = t, distance = Point2d.distanceFrom (railPath t) position }
-                    )
-                |> Quantity.sortBy .distance
-    in
-    case minimumList of
-        first :: second :: _ ->
-            if stepsLeft <= 0 then
-                first
-
-            else
-                nearestRailTHelper (stepsLeft - 1) first.t second.t position railPath
-
-        _ ->
-            { t = 0, distance = Quantity.zero }
 
 
 getData : Tile -> TileData
