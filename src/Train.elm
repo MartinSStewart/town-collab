@@ -11,12 +11,55 @@ import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 
 
 type alias Train =
-    { position : Coord WorldUnit, path : RailPath, t : Float, speed : Quantity Float (Rate TileLocalUnit Seconds) }
+    { position : Coord WorldUnit
+    , path : RailPath
+    , t : Float
+    , speed : Quantity Float (Rate TileLocalUnit Seconds)
+    }
+
+
+acceleration =
+    1
+
+
+maxSpeed =
+    5
 
 
 moveTrain : Duration -> Grid -> Train -> Train
 moveTrain timeElapsed grid train =
-    moveTrainHelper (Quantity.abs train.speed |> Quantity.for timeElapsed) grid train
+    let
+        timeElapsed_ =
+            Duration.inSeconds timeElapsed
+
+        trainSpeed =
+            Quantity.unwrap train.speed
+
+        newSpeed =
+            (if trainSpeed > 0 then
+                trainSpeed + acceleration * timeElapsed_
+
+             else
+                trainSpeed - acceleration * timeElapsed_
+            )
+                |> clamp -maxSpeed maxSpeed
+
+        timeUntilMaxSpeed =
+            (maxSpeed - abs trainSpeed) / acceleration
+
+        distance =
+            (if timeUntilMaxSpeed > timeElapsed_ then
+                abs (trainSpeed * timeElapsed_)
+                    + (0.5 * acceleration * timeElapsed_ ^ 2)
+
+             else
+                abs (trainSpeed * timeUntilMaxSpeed)
+                    + (0.5 * acceleration * timeUntilMaxSpeed ^ 2)
+                    + ((timeElapsed_ - timeUntilMaxSpeed) * maxSpeed)
+            )
+                |> Quantity
+    in
+    moveTrainHelper distance grid { train | speed = Quantity newSpeed }
 
 
 moveTrainHelper : Quantity Float TileLocalUnit -> Grid -> Train -> Train
@@ -74,7 +117,15 @@ moveTrainHelper distanceLeft grid train =
                 moveTrainHelper (distanceLeft |> Quantity.minus distanceTravelled) grid newTrain
 
             Nothing ->
-                { train | t = newT2 }
+                { train
+                    | t = newT2
+                    , speed =
+                        if Quantity.lessThanZero train.speed then
+                            Quantity -0.1
+
+                        else
+                            Quantity 0.1
+                }
 
     else
         { train | t = newT }

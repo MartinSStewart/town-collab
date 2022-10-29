@@ -56,7 +56,7 @@ subscriptions _ =
     Sub.batch
         [ Lamdera.onDisconnect UserDisconnected
         , Time.every (notifyAdminWait |> Duration.inMilliseconds) NotifyAdminTimeElapsed
-        , Time.every 3000 WorldUpdateTimeElapsed
+        , Time.every 1000 WorldUpdateTimeElapsed
         ]
 
 

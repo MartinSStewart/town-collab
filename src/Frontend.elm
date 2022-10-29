@@ -1150,12 +1150,12 @@ handleAddingTrain tile position =
             ( path, speed ) =
                 if tile == TrainHouseLeft then
                     ( Tile.trainHouseLeftRailPath
-                    , Quantity -5
+                    , Quantity -0.1
                     )
 
                 else
                     ( Tile.trainHouseRightRailPath
-                    , Quantity 5
+                    , Quantity 0.1
                     )
         in
         { position = position

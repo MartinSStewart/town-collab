@@ -140,13 +140,13 @@ tests =
                     { position = Coord.fromRawCoord ( 0, 0 )
                     , path = Tile.trainHouseLeftRailPath
                     , t = 0.5
-                    , speed = Quantity -3
+                    , speed = Quantity -5
                     }
                     |> Expect.equal
                         { position = Coord.fromRawCoord ( -4, 2 )
                         , path = RailPathBottomToRight
-                        , t = 0.238732414637843
-                        , speed = Quantity 3
+                        , t = 0.5570423008216338
+                        , speed = Quantity 5
                         }
         , test "Move train with small steps equals single large step" <|
             \_ ->
@@ -181,24 +181,24 @@ tests =
 
                     smallSteps : Train
                     smallSteps =
-                        List.range 1 180
+                        List.range 1 240
                             |> List.foldl
                                 (\_ train -> Train.moveTrain (Duration.seconds (1 / 60)) grid train)
                                 { position = Coord.fromRawCoord ( 0, 0 )
                                 , path = Tile.trainHouseLeftRailPath
                                 , t = 0.5
-                                , speed = Quantity -5
+                                , speed = Quantity -0.1
                                 }
 
                     largeStep : Train
                     largeStep =
                         Train.moveTrain
-                            (Duration.seconds 3)
+                            (Duration.seconds 4)
                             grid
                             { position = Coord.fromRawCoord ( 0, 0 )
                             , path = Tile.trainHouseLeftRailPath
                             , t = 0.5
-                            , speed = Quantity -5
+                            , speed = Quantity -0.1
                             }
                 in
                 trainsApproximatelyEqual smallSteps largeStep
@@ -209,7 +209,7 @@ trainsApproximatelyEqual : Train -> Train -> Expectation
 trainsApproximatelyEqual expected actual =
     if
         (expected.path == actual.path)
-            && (expected.speed == actual.speed)
+            && (expected.speed |> Quantity.minus actual.speed |> Quantity.abs |> Quantity.lessThan (Quantity 0.01))
             && (expected.position == actual.position)
             && (abs (expected.t - actual.t) < 0.01)
     then
