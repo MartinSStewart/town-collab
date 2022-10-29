@@ -79,7 +79,7 @@ type alias FrontendLoading =
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
-    , trains : List Train
+    , trains : AssocList.Dict (Id TrainId) Train
     , meshes : Dict RawCellCoord (WebGL.Mesh Grid.Vertex)
     , cursorMesh : WebGL.Mesh { position : Vec2 }
     , viewPoint : Point2d WorldUnit WorldUnit
@@ -141,7 +141,7 @@ type alias BackendModel =
     , usersHiddenRecently : List { reporter : Id UserId, hiddenUser : Id UserId, hidePoint : Coord WorldUnit }
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
-    , trains : List Train
+    , trains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) Mail
     }
@@ -150,12 +150,14 @@ type alias BackendModel =
 type alias Mail =
     { message : String
     , status : MailStatus
+    , sender : Id UserId
     , recipient : Id UserId
     }
 
 
 type MailStatus
-    = MailInTransit (Id TrainId)
+    = MailWaitingPickup
+    | MailInTransit (Id TrainId)
     | MailReceived
 
 
@@ -228,7 +230,7 @@ type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | TrainUpdate (List Train)
+    | TrainUpdate (AssocList.Dict (Id TrainId) Train)
 
 
 type EmailEvent
@@ -244,5 +246,5 @@ type alias LoadingData_ =
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
-    , trains : List Train
+    , trains : AssocList.Dict (Id TrainId) Train
     }

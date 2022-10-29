@@ -37,15 +37,15 @@ localModel localModel_ =
 
 
 init :
-    { user : Id UserId
-    , grid : Grid
-    , hiddenUsers : EverySet (Id UserId)
-    , adminHiddenUsers : EverySet (Id UserId)
-    , undoHistory : List (Dict RawCellCoord Int)
-    , redoHistory : List (Dict RawCellCoord Int)
-    , undoCurrent : Dict RawCellCoord Int
-    , viewBounds : Bounds CellUnit
-    , trains : List Train
+    { a
+        | user : Id UserId
+        , grid : Grid
+        , hiddenUsers : EverySet (Id UserId)
+        , adminHiddenUsers : EverySet (Id UserId)
+        , undoHistory : List (Dict RawCellCoord Int)
+        , redoHistory : List (Dict RawCellCoord Int)
+        , undoCurrent : Dict RawCellCoord Int
+        , viewBounds : Bounds CellUnit
     }
     -> LocalModel Change LocalGrid
 init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds } =

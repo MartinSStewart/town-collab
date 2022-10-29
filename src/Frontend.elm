@@ -32,7 +32,7 @@ import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Touch
 import Icons
-import Id exposing (Id, UserId)
+import Id exposing (Id, TrainId, UserId)
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -126,7 +126,7 @@ audioLoaded audioData model =
 
         movingTrains =
             List.filterMap
-                (\train ->
+                (\( _, train ) ->
                     if abs (Quantity.unwrap train.speed) > 0.1 then
                         let
                             position =
@@ -140,7 +140,7 @@ audioLoaded audioData model =
                     else
                         Nothing
                 )
-                model.trains
+                (AssocList.toList model.trains)
 
         volumeOffset : Float
         volumeOffset =
@@ -651,7 +651,9 @@ updateLoaded msg model =
                         Nothing ->
                             True
                     )
-                        && List.any (\train -> BoundingBox2d.contains (Train.actualPosition train) viewBounds) model.trains
+                        && List.any
+                            (\( _, train ) -> BoundingBox2d.contains (Train.actualPosition train) viewBounds)
+                            (AssocList.toList model.trains)
 
                 model4 =
                     { model3
@@ -800,7 +802,10 @@ updateLoaded msg model =
             ( { model
                 | time = time
                 , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
-                , trains = List.map (Train.moveTrain (Duration.from model.time time) localGrid.grid) model.trains
+                , trains =
+                    AssocList.map
+                        (\_ train -> Train.moveTrain (Duration.from model.time time) localGrid.grid train)
+                        model.trains
                 , removedTileParticles =
                     List.filter
                         (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
@@ -1181,17 +1186,7 @@ changeText text model =
                                     , change = tile
                                     }
                                 )
-                                { model2
-                                    | trains =
-                                        (case handleAddingTrain tile (Cursor.position model.cursor) of
-                                            Just train ->
-                                                [ train ]
-
-                                            Nothing ->
-                                                []
-                                        )
-                                            ++ model2.trains
-                                }
+                                model2
 
                         newGrid : Grid
                         newGrid =
@@ -2334,10 +2329,10 @@ drawText meshes viewMatrix texture =
             )
 
 
-drawTrains : List Train -> Mat4 -> Texture -> List WebGL.Entity
+drawTrains : AssocList.Dict (Id TrainId) Train -> Mat4 -> Texture -> List WebGL.Entity
 drawTrains trains viewMatrix texture =
     List.concatMap
-        (\train ->
+        (\( _, train ) ->
             let
                 railData =
                     Tile.railPathData train.path
@@ -2381,7 +2376,7 @@ drawTrains trains viewMatrix texture =
                 Nothing ->
                     []
         )
-        trains
+        (AssocList.toList trains)
 
 
 trainFrames =

@@ -66,7 +66,7 @@ init =
     , usersHiddenRecently = []
     , secretLinkCounter = 0
     , errors = []
-    , trains = []
+    , trains = AssocList.empty
     , lastWorldUpdate = Nothing
     , mail = AssocList.empty
     }
@@ -140,7 +140,9 @@ update msg model =
                 newTrains =
                     case model.lastWorldUpdate of
                         Just lastWorldUpdate ->
-                            List.map (Train.moveTrain (Duration.from lastWorldUpdate time) model.grid) model.trains
+                            AssocList.map
+                                (\_ train -> Train.moveTrain (Duration.from lastWorldUpdate time) model.grid train)
+                                model.trains
 
                         Nothing ->
                             model.trains
@@ -399,14 +401,12 @@ updateLocalChange ( userId, _ ) change model =
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
                         , trains =
-                            (case maybeTrain of
+                            case maybeTrain of
                                 Just train ->
-                                    [ train ]
+                                    AssocList.insert (AssocList.size model.trains |> Id.fromInt) train model.trains
 
                                 Nothing ->
-                                    []
-                            )
-                                ++ model.trains
+                                    model.trains
                       }
                         |> updateUser
                             userId
