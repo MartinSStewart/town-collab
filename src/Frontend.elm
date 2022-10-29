@@ -32,6 +32,7 @@ import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Touch
 import Icons
+import Id exposing (Id, UserId)
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -58,7 +59,6 @@ import Units exposing (CellUnit, TileLocalUnit, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
-import User exposing (UserId(..))
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
 import WebGL.Settings
@@ -1025,7 +1025,7 @@ mainMouseButtonUp mousePosition mouseState model =
             ( model_, Cmd.none )
 
 
-highlightUser : UserId -> Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
+highlightUser : Id UserId -> Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
 highlightUser highlightUserId highlightPoint model =
     { model
         | highlightContextMenu =
@@ -1116,7 +1116,7 @@ abc model =
     model.devicePixelRatio / (toFloat model.zoomFactor * tileW) |> Quantity
 
 
-selectionPoint : Coord WorldUnit -> Grid -> Maybe { userId : UserId, value : Tile }
+selectionPoint : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, value : Tile }
 selectionPoint position grid =
     let
         ( cellPosition, localPosition ) =
@@ -1201,11 +1201,11 @@ changeText text model =
                             List.concatMap
                                 (\( neighborCellPos, _ ) ->
                                     let
-                                        oldCell : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                                        oldCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
                                         oldCell =
                                             Grid.getCell neighborCellPos oldGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
 
-                                        newCell : List { userId : UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                                        newCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
                                         newCell =
                                             Grid.getCell neighborCellPos newGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
                                     in
@@ -1384,11 +1384,11 @@ updateMeshes oldModel newModel =
                     |> EverySet.fromList
                 )
 
-        oldHidden : EverySet UserId
+        oldHidden : EverySet (Id UserId)
         oldHidden =
             LocalGrid.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
 
-        oldHiddenForAll : EverySet UserId
+        oldHiddenForAll : EverySet (Id UserId)
         oldHiddenForAll =
             LocalGrid.localModel oldModel.localModel |> .adminHiddenUsers |> showHighlighted oldModel
 
@@ -1396,11 +1396,11 @@ updateMeshes oldModel newModel =
         newCells =
             LocalGrid.localModel newModel.localModel |> .grid |> Grid.allCellsDict
 
-        newHidden : EverySet UserId
+        newHidden : EverySet (Id UserId)
         newHidden =
             LocalGrid.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
 
-        newHiddenForAll : EverySet UserId
+        newHiddenForAll : EverySet (Id UserId)
         newHiddenForAll =
             LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
 
@@ -1419,7 +1419,7 @@ updateMeshes oldModel newModel =
         hiddenUnchanged =
             oldHidden == newHidden && oldHiddenForAll == newHiddenForAll
 
-        hiddenChanges : List UserId
+        hiddenChanges : List (Id UserId)
         hiddenChanges =
             EverySet.union (EverySet.diff newHidden oldHidden) (EverySet.diff oldHidden newHidden)
                 |> EverySet.union (EverySet.diff newHiddenForAll oldHiddenForAll)
@@ -1673,7 +1673,7 @@ view _ model =
     }
 
 
-contextMenuView : { userId : UserId, hidePoint : Coord WorldUnit } -> FrontendLoaded -> Element FrontendMsg_
+contextMenuView : { userId : Id UserId, hidePoint : Coord WorldUnit } -> FrontendLoaded -> Element FrontendMsg_
 contextMenuView { userId, hidePoint } loadedModel =
     let
         { x, y } =
@@ -1736,7 +1736,7 @@ isAdmin model =
     currentUserId model |> Just |> (==) Env.adminUserId |> (&&) model.adminEnabled
 
 
-currentUserId : FrontendLoaded -> UserId
+currentUserId : FrontendLoaded -> Id UserId
 currentUserId =
     .localModel >> LocalGrid.localModel >> .user
 
@@ -1772,7 +1772,7 @@ userListView model =
                 )
                 (colorSquareInner userId)
 
-        colorSquareInner : UserId -> Element FrontendMsg_
+        colorSquareInner : Id UserId -> Element FrontendMsg_
         colorSquareInner userId =
             Element.el
                 [ Element.width (Element.px 20)
@@ -1784,7 +1784,7 @@ userListView model =
                 (if isAdmin model then
                     Element.paragraph
                         [ Element.Font.size 9, Element.spacing 0, Element.moveDown 1, Element.moveRight 1 ]
-                        [ User.rawId userId |> String.fromInt |> Element.text ]
+                        [ Id.toInt userId |> String.fromInt |> Element.text ]
 
                  else
                     Element.none
@@ -1816,12 +1816,12 @@ userListView model =
                 )
                 localModel.user
 
-        baseTag : Bool -> Bool -> Element FrontendMsg_ -> UserId -> Element FrontendMsg_
+        baseTag : Bool -> Bool -> Element FrontendMsg_ -> Id UserId -> Element FrontendMsg_
         baseTag isFirst isLast content userId =
             Element.row
                 [ Element.width Element.fill
                 , "User Id: "
-                    ++ String.fromInt (User.rawId userId)
+                    ++ String.fromInt (Id.toInt userId)
                     |> Element.text
                     |> Element.el [ Element.htmlAttribute <| Html.Attributes.style "visibility" "collapse" ]
                     |> Element.behindContent
@@ -1855,7 +1855,7 @@ userListView model =
                         []
                    )
 
-        hiddenUserTag : Bool -> Bool -> UserId -> Element FrontendMsg_
+        hiddenUserTag : Bool -> Bool -> Id UserId -> Element FrontendMsg_
         hiddenUserTag isFirst isLast userId =
             Element.Input.button
                 (Element.Events.onMouseEnter (UserTagMouseEntered userId)
@@ -1893,7 +1893,7 @@ userListView model =
                             a
                    )
 
-        hiddenUserForAllTag : Bool -> Bool -> UserId -> Element FrontendMsg_
+        hiddenUserForAllTag : Bool -> Bool -> Id UserId -> Element FrontendMsg_
         hiddenUserForAllTag isFirst isLast userId =
             Element.Input.button
                 (Element.Events.onMouseEnter (UserTagMouseEntered userId)
@@ -1922,12 +1922,12 @@ userListView model =
                 )
             ]
 
-        hiddenUserList : List UserId
+        hiddenUserList : List (Id UserId)
         hiddenUserList =
             EverySet.diff localModel.hiddenUsers localModel.adminHiddenUsers
                 |> EverySet.toList
 
-        isActive : UserId -> Bool
+        isActive : Id UserId -> Bool
         isActive userId =
             (model.userHoverHighlighted == Just userId)
                 || (case model.tool of
@@ -1949,7 +1949,7 @@ userListView model =
                             otherUser
                     )
 
-        hiddenusersForAllList : List UserId
+        hiddenusersForAllList : List (Id UserId)
         hiddenusersForAllList =
             EverySet.toList localModel.adminHiddenUsers
 
@@ -2305,7 +2305,7 @@ canvasView model =
         )
 
 
-getHighlight : FrontendLoaded -> Maybe UserId
+getHighlight : FrontendLoaded -> Maybe (Id UserId)
 getHighlight model =
     case model.highlightContextMenu of
         Just { userId } ->

@@ -31,13 +31,13 @@ import Bounds exposing (Bounds)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
+import Id exposing (Id, UserId)
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Tile exposing (Tile)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
-import User exposing (UserId)
 import Vector2d
 import WebGL
 
@@ -130,14 +130,14 @@ cellAndLocalPointToWorld cell local =
 
 
 type alias GridChange =
-    { position : Coord WorldUnit, change : Tile, userId : UserId }
+    { position : Coord WorldUnit, change : Tile, userId : Id UserId }
 
 
 type alias LocalGridChange =
     { position : Coord WorldUnit, change : Tile }
 
 
-localChangeToChange : UserId -> LocalGridChange -> GridChange
+localChangeToChange : Id UserId -> LocalGridChange -> GridChange
 localChangeToChange userId change_ =
     { position = change_.position
     , change = change_.change
@@ -145,7 +145,7 @@ localChangeToChange userId change_ =
     }
 
 
-moveUndoPoint : UserId -> Dict RawCellCoord Int -> Grid -> Grid
+moveUndoPoint : Id UserId -> Dict RawCellCoord Int -> Grid -> Grid
 moveUndoPoint userId undoPoint (Grid grid) =
     Dict.foldl
         (\coord moveAmount newGrid ->
@@ -288,10 +288,10 @@ type alias Vertex =
     { position : Vec2, texturePosition : Vec2 }
 
 
-mesh : Coord CellUnit -> List { userId : UserId, position : Coord CellLocalUnit, value : Tile } -> WebGL.Mesh Vertex
+mesh : Coord CellUnit -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile } -> WebGL.Mesh Vertex
 mesh cellPosition tiles =
     let
-        list : List { position : Coord WorldUnit, userId : UserId, value : Tile }
+        list : List { position : Coord WorldUnit, userId : Id UserId, value : Tile }
         list =
             List.map
                 (\{ userId, position, value } ->
@@ -360,7 +360,7 @@ getIndices indexOffset =
     ]
 
 
-removeUser : UserId -> Grid -> Grid
+removeUser : Id UserId -> Grid -> Grid
 removeUser userId grid =
     allCellsDict grid
         |> Dict.map (\_ cell -> GridCell.removeUser userId cell)

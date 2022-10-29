@@ -5,8 +5,8 @@ import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import Grid
 import GridCell
+import Id exposing (Id, UserId)
 import Units exposing (CellUnit, WorldUnit)
-import User exposing (UserId)
 
 
 type Change
@@ -20,9 +20,9 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | LocalHideUser UserId (Coord WorldUnit)
-    | LocalUnhideUser UserId
-    | LocalToggleUserVisibilityForAll UserId
+    | LocalHideUser (Id UserId) (Coord WorldUnit)
+    | LocalUnhideUser (Id UserId)
+    | LocalToggleUserVisibilityForAll (Id UserId)
 
 
 type ClientChange
@@ -31,5 +31,5 @@ type ClientChange
 
 type ServerChange
     = ServerGridChange Grid.GridChange
-    | ServerUndoPoint { userId : UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerToggleUserVisibilityForAll UserId
+    | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
+    | ServerToggleUserVisibilityForAll (Id UserId)

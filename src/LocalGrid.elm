@@ -6,13 +6,13 @@ import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
+import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Time
 import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit)
-import User exposing (UserId)
 
 
 type LocalGrid
@@ -23,9 +23,9 @@ type alias LocalGrid_ =
     { grid : Grid
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
-    , user : UserId
-    , hiddenUsers : EverySet UserId
-    , adminHiddenUsers : EverySet UserId
+    , user : Id UserId
+    , hiddenUsers : EverySet (Id UserId)
+    , adminHiddenUsers : EverySet (Id UserId)
     , viewBounds : Bounds CellUnit
     , undoCurrent : Dict RawCellCoord Int
     }
@@ -37,10 +37,10 @@ localModel localModel_ =
 
 
 init :
-    { user : UserId
+    { user : Id UserId
     , grid : Grid
-    , hiddenUsers : EverySet UserId
-    , adminHiddenUsers : EverySet UserId
+    , hiddenUsers : EverySet (Id UserId)
+    , adminHiddenUsers : EverySet (Id UserId)
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int

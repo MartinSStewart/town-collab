@@ -32,6 +32,7 @@ import EmailAddress exposing (EmailAddress)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import Html.Events.Extra.Mouse exposing (Button)
+import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
@@ -49,7 +50,6 @@ import Train exposing (Train)
 import Units exposing (CellUnit, WorldUnit)
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
-import User exposing (RawUserId, UserId)
 import WebGL
 import WebGL.Texture exposing (Texture)
 
@@ -99,8 +99,8 @@ type alias FrontendLoaded =
     , time : Time.Posix
     , startTime : Time.Posix
     , lastTouchMove : Maybe Time.Posix
-    , userHoverHighlighted : Maybe UserId
-    , highlightContextMenu : Maybe { userId : UserId, hidePoint : Coord WorldUnit }
+    , userHoverHighlighted : Maybe (Id UserId)
+    , highlightContextMenu : Maybe { userId : Id UserId, hidePoint : Coord WorldUnit }
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
@@ -120,7 +120,7 @@ type alias RemovedTileParticle =
 type ToolType
     = DragTool
     | SelectTool
-    | HighlightTool (Maybe ( UserId, Coord WorldUnit ))
+    | HighlightTool (Maybe ( Id UserId, Coord WorldUnit ))
 
 
 type MouseButtonState
@@ -134,14 +134,29 @@ type MouseButtonState
 
 type alias BackendModel =
     { grid : Grid
-    , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : UserId }
-    , users : Dict RawUserId BackendUserData
-    , usersHiddenRecently : List { reporter : UserId, hiddenUser : UserId, hidePoint : Coord WorldUnit }
+    , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : Id UserId }
+    , users :
+        -- Key is Id UserId
+        Dict Int BackendUserData
+    , usersHiddenRecently : List { reporter : Id UserId, hiddenUser : Id UserId, hidePoint : Coord WorldUnit }
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
     , trains : List Train
     , lastWorldUpdate : Maybe Time.Posix
+    , mail : AssocList.Dict (Id MailId) Mail
     }
+
+
+type alias Mail =
+    { message : String
+    , status : MailStatus
+    , recipient : Id UserId
+    }
+
+
+type MailStatus
+    = MailInTransit (Id TrainId)
+    | MailReceived
 
 
 type BackendError
@@ -149,7 +164,7 @@ type BackendError
 
 
 type alias BackendUserData =
-    { hiddenUsers : EverySet UserId
+    { hiddenUsers : EverySet (Id UserId)
     , hiddenForAll : Bool
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
@@ -184,12 +199,12 @@ type FrontendMsg_
     | RedoPressed
     | CopyPressed
     | CutPressed
-    | UnhideUserPressed UserId
-    | UserTagMouseEntered UserId
-    | UserTagMouseExited UserId
-    | HideForAllTogglePressed UserId
+    | UnhideUserPressed (Id UserId)
+    | UserTagMouseEntered (Id UserId)
+    | UserTagMouseExited (Id UserId)
+    | HideForAllTogglePressed (Id UserId)
     | ToggleAdminEnabledPressed
-    | HideUserPressed { userId : UserId, hidePoint : Coord WorldUnit }
+    | HideUserPressed { userId : Id UserId, hidePoint : Coord WorldUnit }
     | AnimationFrame Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
 
@@ -221,10 +236,10 @@ type EmailEvent
 
 
 type alias LoadingData_ =
-    { user : UserId
+    { user : Id UserId
     , grid : Grid
-    , hiddenUsers : EverySet UserId
-    , adminHiddenUsers : EverySet UserId
+    , hiddenUsers : EverySet (Id UserId)
+    , adminHiddenUsers : EverySet (Id UserId)
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int

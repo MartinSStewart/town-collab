@@ -4,8 +4,8 @@ module Env exposing (..)
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 import EmailAddress exposing (EmailAddress)
+import Id exposing (Id, UserId)
 import SendGrid
-import User exposing (UserId)
 
 
 adminUserId_ : String
@@ -13,9 +13,9 @@ adminUserId_ =
     "0"
 
 
-adminUserId : Maybe UserId
+adminUserId : Maybe (Id UserId)
 adminUserId =
-    String.toInt adminUserId_ |> Maybe.map User.userId
+    String.toInt adminUserId_ |> Maybe.map Id.fromInt
 
 
 isProduction_ : String

@@ -7,6 +7,7 @@ module Backend exposing
     , updateFromFrontend
     )
 
+import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), ServerChange(..))
 import Coord exposing (Coord, RawCellCoord)
@@ -21,6 +22,7 @@ import EverySet exposing (EverySet)
 import Frontend
 import Grid exposing (Grid)
 import GridCell
+import Id exposing (Id, UserId)
 import Lamdera exposing (ClientId, SessionId)
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
@@ -34,7 +36,6 @@ import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..))
-import User exposing (UserId)
 
 
 app =
@@ -67,6 +68,7 @@ init =
     , errors = []
     , trains = []
     , lastWorldUpdate = Nothing
+    , mail = AssocList.empty
     }
 
 
@@ -160,7 +162,7 @@ notifyAdmin : BackendModel -> ( BackendModel, Cmd BackendMsg )
 notifyAdmin model =
     let
         idToString =
-            User.rawId >> String.fromInt
+            Id.toInt >> String.fromInt
 
         fullUrl point =
             Env.domain ++ "/" ++ UrlHelper.encodeUrl (UrlHelper.internalRoute point)
@@ -199,16 +201,16 @@ notifyAdmin model =
         )
 
 
-backendUserId : UserId
+backendUserId : Id UserId
 backendUserId =
-    User.userId -1
+    Id.fromInt -1
 
 
-getUserFromSessionId : SessionId -> BackendModel -> Maybe ( UserId, BackendUserData )
+getUserFromSessionId : SessionId -> BackendModel -> Maybe ( Id UserId, BackendUserData )
 getUserFromSessionId sessionId model =
     case Dict.get sessionId model.userSessions of
         Just { userId } ->
-            case Dict.get (User.rawId userId) model.users of
+            case Dict.get (Id.toInt userId) model.users of
                 Just user ->
                     Just ( userId, user )
 
@@ -220,7 +222,7 @@ getUserFromSessionId sessionId model =
 
 
 broadcastLocalChange :
-    ( UserId, BackendUserData )
+    ( Id UserId, BackendUserData )
     -> Nonempty Change.LocalChange
     -> BackendModel
     -> ( BackendModel, Cmd BackendMsg )
@@ -355,14 +357,14 @@ generateKey keyType model =
 
 
 updateLocalChange :
-    ( UserId, BackendUserData )
+    ( Id UserId, BackendUserData )
     -> Change.LocalChange
     -> BackendModel
     -> ( BackendModel, Maybe ServerChange )
 updateLocalChange ( userId, _ ) change model =
     case change of
         Change.LocalUndo ->
-            case Dict.get (User.rawId userId) model.users of
+            case Dict.get (Id.toInt userId) model.users of
                 Just user ->
                     case Undo.undo user of
                         Just newUser ->
@@ -385,7 +387,7 @@ updateLocalChange ( userId, _ ) change model =
                     ( model, Nothing )
 
         Change.LocalGridChange localChange ->
-            case Dict.get (User.rawId userId) model.users of
+            case Dict.get (Id.toInt userId) model.users of
                 Just user ->
                     let
                         ( cellPosition, localPosition ) =
@@ -421,7 +423,7 @@ updateLocalChange ( userId, _ ) change model =
                     ( model, Nothing )
 
         Change.LocalRedo ->
-            case Dict.get (User.rawId userId) model.users of
+            case Dict.get (Id.toInt userId) model.users of
                 Just user ->
                     case Undo.redo user of
                         Just newUser ->
@@ -449,7 +451,7 @@ updateLocalChange ( userId, _ ) change model =
             ( if userId == hideUserId then
                 model
 
-              else if Dict.member (User.rawId hideUserId) model.users then
+              else if Dict.member (Id.toInt hideUserId) model.users then
                 updateUser
                     userId
                     (\user -> { user | hiddenUsers = Coord.toggleSet hideUserId user.hiddenUsers })
@@ -496,24 +498,24 @@ updateLocalChange ( userId, _ ) change model =
                 ( model, Nothing )
 
 
-updateUser : UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
+updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
 updateUser userId updateUserFunc model =
-    { model | users = Dict.update (User.rawId userId) (Maybe.map updateUserFunc) model.users }
+    { model | users = Dict.update (Id.toInt userId) (Maybe.map updateUserFunc) model.users }
 
 
 {-| Gets globally hidden users known to a specific user.
 -}
 hiddenUsers :
-    Maybe UserId
+    Maybe (Id UserId)
     -> { a | users : Dict.Dict Int { b | hiddenForAll : Bool } }
-    -> EverySet UserId
+    -> EverySet (Id UserId)
 hiddenUsers userId model =
     model.users
         |> Dict.toList
         |> List.filterMap
             (\( userId_, { hiddenForAll } ) ->
-                if hiddenForAll && userId /= Just (User.userId userId_) then
-                    Just (User.userId userId_)
+                if hiddenForAll && userId /= Just (Id.fromInt userId_) then
+                    Just (Id.fromInt userId_)
 
                 else
                     Nothing
@@ -557,7 +559,7 @@ requestDataUpdate sessionId clientId viewBounds model =
         Nothing ->
             let
                 userId =
-                    Dict.size model.users |> User.userId
+                    Dict.size model.users |> Id.fromInt
 
                 ( newModel, userData ) =
                     { model
@@ -576,7 +578,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             )
 
 
-createUser : UserId -> BackendModel -> ( BackendModel, BackendUserData )
+createUser : Id UserId -> BackendModel -> ( BackendModel, BackendUserData )
 createUser userId model =
     let
         userBackendData : BackendUserData
@@ -588,7 +590,7 @@ createUser userId model =
             , undoCurrent = Dict.empty
             }
     in
-    ( { model | users = Dict.insert (User.rawId userId) userBackendData model.users }, userBackendData )
+    ( { model | users = Dict.insert (Id.toInt userId) userBackendData model.users }, userBackendData )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg
