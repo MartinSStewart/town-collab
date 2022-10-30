@@ -1,12 +1,16 @@
 module Train exposing (Train, actualPosition, maxSpeed, moveTrain)
 
+import AssocList
 import Coord exposing (Coord)
 import Duration exposing (Duration, Seconds)
 import Grid exposing (Grid)
 import GridCell
+import Id exposing (Id, MailId, UserId)
+import Mail exposing (MailStatus(..))
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
-import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile)
+import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
+import Time
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 
 
@@ -15,6 +19,7 @@ type alias Train =
     , path : RailPath
     , t : Float
     , speed : Quantity Float (Rate TileLocalUnit Seconds)
+    , stoppedAtPostOffice : Maybe { time : Time.Posix, userId : Id UserId }
     }
 
 
@@ -35,11 +40,16 @@ maxSpeed =
     5
 
 
-moveTrain : Duration -> Grid -> Train -> Train
-moveTrain timeElapsed grid train =
+moveTrain :
+    Time.Posix
+    -> Time.Posix
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
+    -> Train
+    -> Train
+moveTrain startTime endTime state train =
     let
         timeElapsed_ =
-            Duration.inSeconds timeElapsed
+            Duration.inSeconds (Duration.from startTime endTime)
 
         trainSpeed =
             Quantity.unwrap train.speed
@@ -68,11 +78,16 @@ moveTrain timeElapsed grid train =
             )
                 |> Quantity
     in
-    moveTrainHelper distance grid { train | speed = Quantity newSpeed }
+    moveTrainHelper startTime distance state { train | speed = Quantity newSpeed }
 
 
-moveTrainHelper : Quantity Float TileLocalUnit -> Grid -> Train -> Train
-moveTrainHelper distanceLeft grid train =
+moveTrainHelper :
+    Time.Posix
+    -> Quantity Float TileLocalUnit
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
+    -> Train
+    -> Train
+moveTrainHelper time distanceLeft state train =
     let
         { path, distanceToT, tToDistance, startExitDirection, endExitDirection } =
             Tile.railPathData train.path
@@ -90,96 +105,124 @@ moveTrainHelper distanceLeft grid train =
                 )
                 currentDistance
                 |> distanceToT
+
+        newTClamped =
+            clamp 0 1 newT
+
+        reachedTileEnd () =
+            let
+                distanceTravelled : Quantity Float TileLocalUnit
+                distanceTravelled =
+                    tToDistance newTClamped |> Quantity.minus currentDistance |> Quantity.abs
+
+                position : Point2d WorldUnit WorldUnit
+                position =
+                    path newTClamped |> Grid.localTilePointPlusWorld train.position
+
+                ( cellPos, localPos ) =
+                    Grid.worldToCellAndLocalPoint position
+            in
+            case
+                findNextTile
+                    time
+                    position
+                    state
+                    train.speed
+                    (if newTClamped == 1 then
+                        endExitDirection
+
+                     else
+                        startExitDirection
+                    )
+                    (( cellPos, Coord.floorPoint localPos )
+                        :: Grid.closeNeighborCells cellPos (Coord.floorPoint localPos)
+                    )
+            of
+                Just newTrain ->
+                    moveTrainHelper time (distanceLeft |> Quantity.minus distanceTravelled) state newTrain
+
+                Nothing ->
+                    { train
+                        | t = newTClamped
+                        , speed =
+                            if Quantity.lessThanZero train.speed then
+                                Quantity -0.1
+
+                            else
+                                Quantity 0.1
+                    }
     in
-    if newT < 0 || newT > 1 then
-        let
-            newT2 =
-                clamp 0 1 newT
+    case train.stoppedAtPostOffice of
+        Just stoppedAtPostOffice ->
+            if newT < 0 || newT > 1 then
+                if Duration.from stoppedAtPostOffice.time time |> Quantity.greaterThan (Duration.seconds 3) then
+                    reachedTileEnd ()
 
-            distanceTravelled : Quantity Float TileLocalUnit
-            distanceTravelled =
-                tToDistance newT2 |> Quantity.minus currentDistance |> Quantity.abs
+                else
+                    { train
+                        | t = newTClamped
+                        , speed =
+                            if Quantity.lessThanZero train.speed then
+                                Quantity -0.1
 
-            position : Point2d WorldUnit WorldUnit
-            position =
-                path newT2 |> Grid.localTilePointPlusWorld train.position
+                            else
+                                Quantity 0.1
+                    }
 
-            ( cellPos, localPos ) =
-                Grid.worldToCellAndLocalPoint position
-        in
-        case
-            findNextTile
-                position
-                grid
-                train.speed
-                (if newT2 == 1 then
-                    endExitDirection
+            else
+                { train | t = newTClamped }
 
-                 else
-                    startExitDirection
-                )
-                (( cellPos, Coord.floorPoint localPos )
-                    :: Grid.closeNeighborCells cellPos (Coord.floorPoint localPos)
-                )
-        of
-            Just newTrain ->
-                moveTrainHelper (distanceLeft |> Quantity.minus distanceTravelled) grid newTrain
+        Nothing ->
+            if newT < 0 || newT > 1 then
+                reachedTileEnd ()
 
-            Nothing ->
-                { train
-                    | t = newT2
-                    , speed =
-                        if Quantity.lessThanZero train.speed then
-                            Quantity -0.1
-
-                        else
-                            Quantity 0.1
-                }
-
-    else
-        { train | t = newT }
+            else
+                { train | t = newTClamped }
 
 
 findNextTile :
-    Point2d WorldUnit WorldUnit
-    -> Grid
+    Time.Posix
+    -> Point2d WorldUnit WorldUnit
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
     -> Maybe Train
-findNextTile position grid speed direction list =
+findNextTile time position state speed direction list =
     case list of
         ( neighborCellPos, _ ) :: rest ->
-            case Grid.getCell neighborCellPos grid of
+            case Grid.getCell neighborCellPos state.grid of
                 Just cell ->
-                    case findNextTileHelper neighborCellPos position speed direction (GridCell.flatten cell) of
+                    case findNextTileHelper time neighborCellPos position speed direction state (GridCell.flatten cell) of
                         Just newTrain ->
                             Just newTrain
 
                         Nothing ->
-                            findNextTile position grid speed direction rest
+                            findNextTile time position state speed direction rest
 
                 Nothing ->
-                    findNextTile position grid speed direction rest
+                    findNextTile time position state speed direction rest
 
         [] ->
             Nothing
 
 
 findNextTileHelper :
-    Coord CellUnit
+    Time.Posix
+    -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
-    -> List { b | position : Coord CellLocalUnit, value : Tile }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
+    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
     -> Maybe Train
-findNextTileHelper neighborCellPos position speed direction tiles =
+findNextTileHelper time neighborCellPos position speed direction state tiles =
     case tiles of
         tile :: rest ->
             let
                 maybeNewTrain =
                     List.filterMap
-                        (checkPath tile neighborCellPos position speed direction)
+                        (checkPath time tile state.mail neighborCellPos position speed direction)
                         (case Tile.getData tile.value |> .railPath of
                             NoRailPath ->
                                 []
@@ -197,21 +240,23 @@ findNextTileHelper neighborCellPos position speed direction tiles =
                     Just newTrain
 
                 Nothing ->
-                    findNextTileHelper neighborCellPos position speed direction rest
+                    findNextTileHelper time neighborCellPos position speed direction state rest
 
         [] ->
             Nothing
 
 
 checkPath :
-    { a | position : Coord CellLocalUnit }
+    Time.Posix
+    -> { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    -> AssocList.Dict (Id MailId) { a | status : MailStatus, sender : Id UserId }
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> RailPath
     -> Maybe Train
-checkPath tile neighborCellPos position speed direction railPath =
+checkPath time tile mail neighborCellPos position speed direction railPath =
     let
         railData : RailData
         railData =
@@ -234,6 +279,18 @@ checkPath tile neighborCellPos position speed direction railPath =
 
         validDirection1 =
             Tile.reverseDirection direction == railData.endExitDirection
+
+        stoppedAtPostOffice () =
+            if
+                (tile.value == PostOffice)
+                    && List.any
+                        (\mail_ -> tile.userId == mail_.sender && mail_.status == MailWaitingPickup)
+                        (AssocList.values mail)
+            then
+                Just { time = time, userId = tile.userId }
+
+            else
+                Nothing
     in
     if (Point2d.distanceFrom worldPoint0 position |> Quantity.lessThan (Units.tileUnit 0.1)) && validDirection0 then
         { position =
@@ -241,6 +298,7 @@ checkPath tile neighborCellPos position speed direction railPath =
         , t = 0
         , speed = Quantity.abs speed
         , path = railPath
+        , stoppedAtPostOffice = stoppedAtPostOffice ()
         }
             |> Just
 
@@ -250,6 +308,7 @@ checkPath tile neighborCellPos position speed direction railPath =
         , t = 1
         , speed = Quantity.abs speed |> Quantity.negate
         , path = railPath
+        , stoppedAtPostOffice = stoppedAtPostOffice ()
         }
             |> Just
 

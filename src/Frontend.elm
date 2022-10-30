@@ -283,6 +283,8 @@ loadedInit time loading loadingData =
             , removedTileParticles = []
             , debrisMesh = WebGL.triangleFan []
             , lastTrainWhistle = Nothing
+            , mail = loadingData.mail
+            , showMailEditor = True
             }
     in
     ( updateMeshes model model
@@ -804,7 +806,13 @@ updateLoaded msg model =
                 , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                 , trains =
                     AssocList.map
-                        (\_ train -> Train.moveTrain (Duration.from model.time time) localGrid.grid train)
+                        (\_ train ->
+                            Train.moveTrain
+                                model.time
+                                time
+                                { grid = localGrid.grid, mail = AssocList.empty }
+                                train
+                        )
                         model.trains
                 , removedTileParticles =
                     List.filter
@@ -1089,9 +1097,6 @@ clearTextSelection bounds model =
 screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
 screenToWorld model =
     let
-        ( Quantity tileW, _ ) =
-            Units.tileSize
-
         ( w, h ) =
             model.windowSize
     in
@@ -1254,6 +1259,7 @@ handleAddingTrain tile position =
         , path = path
         , t = 0.5
         , speed = speed
+        , stoppedAtPostOffice = Nothing
         }
             |> Just
 

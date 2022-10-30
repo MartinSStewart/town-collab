@@ -15,16 +15,13 @@ import Crypto.Hash
 import Dict
 import Duration exposing (Duration)
 import Email.Html
-import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
 import Env
 import EverySet exposing (EverySet)
 import Frontend
 import Grid exposing (Grid)
-import GridCell
 import Id exposing (Id, UserId)
 import Lamdera exposing (ClientId, SessionId)
-import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import SendGrid exposing (Email)
@@ -141,7 +138,7 @@ update msg model =
                     case model.lastWorldUpdate of
                         Just lastWorldUpdate ->
                             AssocList.map
-                                (\_ train -> Train.moveTrain (Duration.from lastWorldUpdate time) model.grid train)
+                                (\_ train -> Train.moveTrain lastWorldUpdate time model train)
                                 model.trains
 
                         Nothing ->
@@ -526,6 +523,7 @@ hiddenUsers userId model =
 requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 requestDataUpdate sessionId clientId viewBounds model =
     let
+        loadingData : ( Id UserId, BackendUserData ) -> LoadingData_
         loadingData ( userId, user ) =
             { user = userId
             , grid = Grid.region viewBounds model.grid
@@ -536,6 +534,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             , undoCurrent = user.undoCurrent
             , viewBounds = viewBounds
             , trains = model.trains
+            , mail = AssocList.map (\_ mail -> { status = mail.status, sender = mail.sender }) model.mail
             }
     in
     case getUserFromSessionId sessionId model of

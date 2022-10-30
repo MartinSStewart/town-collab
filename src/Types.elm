@@ -38,6 +38,7 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
+import Mail exposing (BackendMail, FrontendMail)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -110,6 +111,8 @@ type alias FrontendLoaded =
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Time.Posix
+    , mail : AssocList.Dict (Id MailId) FrontendMail
+    , showMailEditor : Bool
     }
 
 
@@ -143,22 +146,8 @@ type alias BackendModel =
     , errors : List ( Time.Posix, BackendError )
     , trains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
-    , mail : AssocList.Dict (Id MailId) Mail
+    , mail : AssocList.Dict (Id MailId) BackendMail
     }
-
-
-type alias Mail =
-    { message : String
-    , status : MailStatus
-    , sender : Id UserId
-    , recipient : Id UserId
-    }
-
-
-type MailStatus
-    = MailWaitingPickup
-    | MailInTransit (Id TrainId)
-    | MailReceived
 
 
 type BackendError
@@ -247,4 +236,5 @@ type alias LoadingData_ =
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
     , trains : AssocList.Dict (Id TrainId) Train
+    , mail : AssocList.Dict (Id MailId) FrontendMail
     }
