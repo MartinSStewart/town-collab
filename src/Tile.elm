@@ -12,6 +12,7 @@ module Tile exposing
     , railPathData
     , reverseDirection
     , texturePosition
+    , texturePositionPixels
     , texturePosition_
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
@@ -356,19 +357,32 @@ texturePosition tile =
 texturePosition_ : ( Int, Int ) -> ( Int, Int ) -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
 texturePosition_ position textureSize =
     let
-        ( Quantity.Quantity tileW, Quantity.Quantity tileH ) =
-            Units.tileSize
-
         ( x, y ) =
             position
 
         ( w, h ) =
             textureSize
     in
-    { topLeft = Math.Vector2.vec2 (toFloat x * tileW) (toFloat y * tileH)
-    , topRight = Math.Vector2.vec2 (toFloat (x + w) * tileW) (toFloat y * tileH)
-    , bottomRight = Math.Vector2.vec2 (toFloat (x + w) * tileW) (toFloat (y + h) * tileH)
-    , bottomLeft = Math.Vector2.vec2 (toFloat x * tileW) (toFloat (y + h) * tileH)
+    { topLeft = Math.Vector2.vec2 (toFloat x * Units.tileSize) (toFloat y * Units.tileSize)
+    , topRight = Math.Vector2.vec2 (toFloat (x + w) * Units.tileSize) (toFloat y * Units.tileSize)
+    , bottomRight = Math.Vector2.vec2 (toFloat (x + w) * Units.tileSize) (toFloat (y + h) * Units.tileSize)
+    , bottomLeft = Math.Vector2.vec2 (toFloat x * Units.tileSize) (toFloat (y + h) * Units.tileSize)
+    }
+
+
+texturePositionPixels : ( Int, Int ) -> ( Int, Int ) -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
+texturePositionPixels position textureSize =
+    let
+        ( x, y ) =
+            position
+
+        ( w, h ) =
+            textureSize
+    in
+    { topLeft = Math.Vector2.vec2 (toFloat x) (toFloat y)
+    , topRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat y)
+    , bottomRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat (y + h))
+    , bottomLeft = Math.Vector2.vec2 (toFloat x) (toFloat (y + h))
     }
 
 

@@ -87,37 +87,34 @@ toMesh cursor =
         ( cw_, ch_ ) =
             size cursor |> Coord.toRawCoord
 
-        ( w, h ) =
-            Coord.toRawCoord Units.tileSize
-
         ( v0, i0 ) =
             mesh 0
                 (if cw_ > 0 then
                     0
 
                  else
-                    toFloat <| abs cw_ * w
+                    toFloat <| abs cw_ * Units.tileSize
                 )
                 (if ch_ > 0 then
                     0
 
                  else
-                    toFloat <| abs ch_ * h
+                    toFloat <| abs ch_ * Units.tileSize
                 )
-                (toFloat w)
-                (toFloat h)
+                Units.tileSize
+                Units.tileSize
 
         ( v1, i1 ) =
-            mesh 4 0 0 thickness (toFloat <| ch * h)
+            mesh 4 0 0 thickness (toFloat <| ch * Units.tileSize)
 
         ( v2, i2 ) =
-            mesh 8 (toFloat <| cw * w - thickness) 0 thickness (toFloat <| ch * h)
+            mesh 8 (toFloat <| cw * Units.tileSize - thickness) 0 thickness (toFloat <| ch * Units.tileSize)
 
         ( v3, i3 ) =
-            mesh 12 0 0 (toFloat <| cw * w) thickness
+            mesh 12 0 0 (toFloat <| cw * Units.tileSize) thickness
 
         ( v4, i4 ) =
-            mesh 16 0 (toFloat <| ch * h - thickness) (toFloat <| cw * w) thickness
+            mesh 16 0 (toFloat <| ch * Units.tileSize - thickness) (toFloat <| cw * Units.tileSize) thickness
     in
     WebGL.indexedTriangles
         (v0 ++ v1 ++ v2 ++ v3 ++ v4)
@@ -175,7 +172,7 @@ draw viewMatrix color model =
         , offset =
             bounds model.cursor
                 |> Bounds.minimum
-                |> Coord.multiplyTuple (Tuple.mapBoth Quantity.unwrap Quantity.unwrap Units.tileSize)
+                |> Coord.multiplyTuple ( Units.tileSize, Units.tileSize )
                 |> Coord.toVec2
         , color = Shaders.colorToVec3 color
         }

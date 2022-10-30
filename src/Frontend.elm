@@ -1013,6 +1013,13 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.cursor
 
                     else if isSmallDistance then
+                        let
+                            grid =
+                                LocalGrid.localModel model.localModel
+
+                            tile =
+                                Grid.getTile (screenToWorld model mousePosition |> Coord.floorPoint) grid
+                        in
                         screenToWorld model mousePosition |> Coord.floorPoint |> Cursor.setCursor
 
                     else
@@ -1119,11 +1126,7 @@ worldToScreen model =
 
 
 abc model =
-    let
-        ( Quantity tileW, _ ) =
-            Units.tileSize
-    in
-    model.devicePixelRatio / (toFloat model.zoomFactor * tileW) |> Quantity
+    model.devicePixelRatio / (toFloat model.zoomFactor * Units.tileSize) |> Quantity
 
 
 selectionPoint : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, value : Tile }
@@ -1310,9 +1313,6 @@ createDebrisMesh appStartTime removedTiles =
                 ( Quantity x, Quantity y ) =
                     position
 
-                ( w, h ) =
-                    Units.tileSize
-
                 ( textureX, textureY ) =
                     data.texturePosition
 
@@ -1337,8 +1337,8 @@ createDebrisMesh appStartTime removedTiles =
                                     let
                                         offset =
                                             Vec2.vec2
-                                                ((x + x2) * Pixels.inPixels w |> toFloat)
-                                                ((y + y2) * Pixels.inPixels h |> toFloat)
+                                                ((x + x2) * Units.tileSize |> toFloat)
+                                                ((y + y2) * Units.tileSize |> toFloat)
                                     in
                                     { position = Vec2.sub (Vec2.add offset uv) topLeft
                                     , initialSpeed =
@@ -1641,7 +1641,7 @@ view _ model =
                     "Town Collab"
     , body =
         [ case model of
-            Loading loadingModel ->
+            Loading _ ->
                 Element.layout
                     [ Element.width Element.fill
                     , Element.height Element.fill
@@ -2247,17 +2247,14 @@ canvasView model =
         { canvasSize, actualCanvasSize } =
             findPixelPerfectSize model
 
-        ( Quantity tileW, Quantity tileH ) =
-            Units.tileSize
-
         { x, y } =
             Point2d.unwrap (actualViewPoint model)
 
         viewMatrix =
             Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                 |> Mat4.translate3
-                    (negate <| toFloat <| round (x * tileW))
-                    (negate <| toFloat <| round (y * tileH))
+                    (negate <| toFloat <| round (x * Units.tileSize))
+                    (negate <| toFloat <| round (y * Units.tileSize))
                     0
     in
     WebGL.toHtmlWith
@@ -2275,6 +2272,10 @@ canvasView model =
          )
             ++ (case model.texture of
                     Just texture ->
+                        let
+                            textureSize =
+                                WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
+                        in
                         drawText
                             (Dict.filter
                                 (\key _ ->
@@ -2295,10 +2296,41 @@ canvasView model =
                                     model.debrisMesh
                                     { view = viewMatrix
                                     , texture = texture
-                                    , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
+                                    , textureSize = textureSize
                                     , time = Duration.from model.startTime model.time |> Duration.inSeconds
                                     }
                                ]
+                            ++ (if model.showMailEditor then
+                                    let
+                                        zoomFactor : Float
+                                        zoomFactor =
+                                            min
+                                                (toFloat windowWidth / mailWidth)
+                                                (toFloat windowHeight / mailHeight)
+                                                |> floor
+                                                |> toFloat
+                                    in
+                                    [ WebGL.entity
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        mailMesh
+                                        { texture = texture
+                                        , textureSize = textureSize
+                                        , view =
+                                            Mat4.makeScale3
+                                                (zoomFactor * 2 / toFloat windowWidth)
+                                                (zoomFactor * -2 / toFloat windowHeight)
+                                                1
+                                                |> Mat4.translate3
+                                                    (mailWidth / -2 |> round |> toFloat)
+                                                    (mailHeight / -2 |> round |> toFloat)
+                                                    0
+                                        }
+                                    ]
+
+                                else
+                                    []
+                               )
 
                     Nothing ->
                         []
@@ -2346,9 +2378,6 @@ drawTrains trains viewMatrix texture =
                 { x, y } =
                     Train.actualPosition train |> Point2d.unwrap
 
-                ( Quantity w, Quantity h ) =
-                    Units.tileSize
-
                 trainFrame =
                     Direction2d.angleFrom
                         Direction2d.x
@@ -2373,7 +2402,7 @@ drawTrains trains viewMatrix texture =
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         trainMesh_
-                        { view = Mat4.makeTranslate3 (x * toFloat w) (y * toFloat h) 0 |> Mat4.mul viewMatrix
+                        { view = Mat4.makeTranslate3 (x * Units.tileSize) (y * Units.tileSize) 0 |> Mat4.mul viewMatrix
                         , texture = texture
                         , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
                         }
@@ -2399,9 +2428,6 @@ trainMeshes =
 trainMesh : Int -> WebGL.Mesh Vertex
 trainMesh frame =
     let
-        ( Quantity w, Quantity h ) =
-            Units.tileSize
-
         offsetY =
             -5
 
@@ -2409,10 +2435,32 @@ trainMesh frame =
             Tile.texturePosition_ ( 11, frame * 2 ) ( 2, 2 )
     in
     WebGL.triangleFan
-        [ { position = Vec2.vec2 -w (-h + offsetY), texturePosition = topLeft }
-        , { position = Vec2.vec2 w (-h + offsetY), texturePosition = topRight }
-        , { position = Vec2.vec2 w (h + offsetY), texturePosition = bottomRight }
-        , { position = Vec2.vec2 -w (h + offsetY), texturePosition = bottomLeft }
+        [ { position = Vec2.vec2 -Units.tileSize (-Units.tileSize + offsetY), texturePosition = topLeft }
+        , { position = Vec2.vec2 Units.tileSize (-Units.tileSize + offsetY), texturePosition = topRight }
+        , { position = Vec2.vec2 Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomRight }
+        , { position = Vec2.vec2 -Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomLeft }
+        ]
+
+
+mailWidth =
+    270
+
+
+mailHeight =
+    144
+
+
+mailMesh : WebGL.Mesh Vertex
+mailMesh =
+    let
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePositionPixels ( 234, 0 ) ( mailWidth, mailHeight )
+    in
+    WebGL.triangleFan
+        [ { position = Vec2.vec2 0 0, texturePosition = topLeft }
+        , { position = Vec2.vec2 mailWidth 0, texturePosition = topRight }
+        , { position = Vec2.vec2 mailWidth mailHeight, texturePosition = bottomRight }
+        , { position = Vec2.vec2 0 mailHeight, texturePosition = bottomLeft }
         ]
 
 

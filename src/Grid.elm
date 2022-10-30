@@ -14,6 +14,7 @@ module Grid exposing
     , from
     , getCell
     , getIndices
+    , getTile
     , localChangeToChange
     , localTileCoordPlusWorld
     , localTilePointPlusCellLocalCoord
@@ -326,17 +327,14 @@ mesh cellPosition tiles =
 
                 ( Quantity x, Quantity y ) =
                     position
-
-                ( w, h ) =
-                    Units.tileSize
             in
             List.map
                 (\uv ->
                     let
                         offset =
                             Math.Vector2.vec2
-                                (x * Pixels.inPixels w |> toFloat)
-                                (y * Pixels.inPixels h |> toFloat)
+                                (x * Units.tileSize |> toFloat)
+                                (y * Units.tileSize |> toFloat)
                     in
                     { position = Math.Vector2.sub (Math.Vector2.add offset uv) topLeft
                     , texturePosition = uv
@@ -365,3 +363,8 @@ removeUser userId grid =
     allCellsDict grid
         |> Dict.map (\_ cell -> GridCell.removeUser userId cell)
         |> from
+
+
+getTile : Coord WorldUnit -> Grid -> { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+getTile coord grid =
+    0

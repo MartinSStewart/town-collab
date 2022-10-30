@@ -60,9 +60,9 @@ cellToTile coord =
     Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
 
 
-tileSize : ( Quantity number Pixels, Quantity number Pixels )
+tileSize : number
 tileSize =
-    ( Pixels.pixels 18, Pixels.pixels 18 )
+    18
 
 
 screenFrame : Point2d WorldUnit WorldUnit -> Frame2d WorldUnit WorldUnit { defines : Pixels }
