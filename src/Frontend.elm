@@ -165,8 +165,11 @@ audioLoaded audioData model =
                 |> Audio.group
     in
     [ case model.lastTilePlaced of
-        Just { time, overwroteTiles } ->
-            if overwroteTiles then
+        Just { time, overwroteTiles, tile } ->
+            if tile == EmptyTile then
+                playSound EraseSound time |> Audio.scaleVolume 0.2
+
+            else if overwroteTiles then
                 playSound CrackleSound time |> Audio.scaleVolume 0.2
 
             else
@@ -1177,7 +1180,11 @@ changeText text model =
                     in
                     { model3
                         | lastTilePlaced =
-                            Just { time = model.time, overwroteTiles = List.isEmpty removedTiles |> not }
+                            Just
+                                { time = model.time
+                                , overwroteTiles = List.isEmpty removedTiles |> not
+                                , tile = tile
+                                }
                         , removedTileParticles = removedTiles ++ model3.removedTileParticles
                         , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
                     }

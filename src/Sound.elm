@@ -11,6 +11,7 @@ type Sound
     | CrackleSound
     | TrainWhistleSound
     | ChugaChuga
+    | EraseSound
 
 
 allSounds =
@@ -18,6 +19,7 @@ allSounds =
     , CrackleSound
     , TrainWhistleSound
     , ChugaChuga
+    , EraseSound
     ]
 
 
@@ -63,6 +65,9 @@ load onLoad =
 
                 ChugaChuga ->
                     "/chuga-chuga.mp3"
+
+                EraseSound ->
+                    "/erase.mp3"
             )
                 |> Audio.loadAudio (onLoad sound)
         )

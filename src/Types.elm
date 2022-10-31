@@ -106,7 +106,7 @@ type alias FrontendLoaded =
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
     , textAreaText : String
-    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool }
+    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool, tile : Tile }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
