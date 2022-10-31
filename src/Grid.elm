@@ -366,7 +366,7 @@ removeUser userId grid =
         |> from
 
 
-getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, value : Tile }
+getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, value : Tile, position : Coord WorldUnit }
 getTile coord grid =
     let
         ( cellPos, localPos ) =
@@ -382,9 +382,15 @@ getTile coord grid =
                                 (\{ value, position } ->
                                     Tile.hasCollisionWithCoord localPos2 position (Tile.getData value)
                                 )
+                            |> Maybe.map
+                                (\tile ->
+                                    { userId = tile.userId
+                                    , value = tile.value
+                                    , position = cellAndLocalCoordToAscii ( cellPos2, tile.position )
+                                    }
+                                )
 
                     Nothing ->
                         Nothing
             )
         |> List.head
-        |> Maybe.map (\{ value, userId } -> { userId = userId, value = value })

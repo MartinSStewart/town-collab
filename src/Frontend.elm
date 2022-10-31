@@ -41,7 +41,7 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
-import Mail
+import Mail exposing (ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Pixels exposing (Pixels)
@@ -288,7 +288,7 @@ loadedInit time loading loadingData =
             , debrisMesh = WebGL.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
-            , showMailEditor = False
+            , showMailEditor = MailEditorClosed
             , mailEditor = Mail.initEditor loadingData.mailEditor
             }
     in
@@ -517,56 +517,78 @@ updateLoaded msg model =
                 model_ =
                     resetTouchMove model
             in
-            ( if button == MainButton then
-                { model_
-                    | mouseLeft =
-                        MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
-                    , mailEditor =
-                        if model_.showMailEditor then
-                            let
-                                ( windowWidth, windowHeight ) =
-                                    actualCanvasSize
+            case model.showMailEditor of
+                MailEditorOpening { startTime, startPosition } ->
+                    if
+                        (button == MainButton)
+                            && (Duration.from startTime model.time |> Quantity.greaterThan Mail.openAnimationLength)
+                    then
+                        let
+                            ( windowWidth, windowHeight ) =
+                                actualCanvasSize
 
-                                { canvasSize, actualCanvasSize } =
-                                    findPixelPerfectSize model
-                            in
-                            Mail.mouseDownMailEditor windowWidth windowHeight model_ mousePosition model.mailEditor
+                            { canvasSize, actualCanvasSize } =
+                                findPixelPerfectSize model
 
-                        else
-                            model.mailEditor
-                }
+                            { newMailEditor, shouldClose } =
+                                Mail.mouseDownMailEditor windowWidth windowHeight model_ mousePosition model.mailEditor
+                        in
+                        ( { model_
+                            | mouseLeft =
+                                MouseButtonDown
+                                    { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                            , mailEditor = newMailEditor
+                            , showMailEditor =
+                                if shouldClose then
+                                    MailEditorClosing { startTime = model.time, startPosition = startPosition }
 
-              else if button == MiddleButton then
-                { model_
-                    | mouseMiddle =
-                        MouseButtonDown
-                            { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
-                }
+                                else
+                                    model.showMailEditor
+                          }
+                        , Cmd.none
+                        )
 
-              else if button == SecondButton then
-                let
-                    localModel =
-                        LocalGrid.localModel model.localModel
+                    else
+                        ( model_, Cmd.none )
 
-                    position : Coord WorldUnit
-                    position =
-                        screenToWorld model mousePosition |> Coord.floorPoint
+                _ ->
+                    ( if button == MainButton then
+                        { model_
+                            | mouseLeft =
+                                MouseButtonDown
+                                    { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                        }
 
-                    maybeUserId =
-                        Grid.getTile position localModel.grid |> Maybe.map .userId
-                in
-                case maybeUserId of
-                    Just userId ->
-                        highlightUser userId position model_
+                      else if button == MiddleButton then
+                        { model_
+                            | mouseMiddle =
+                                MouseButtonDown
+                                    { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                        }
 
-                    Nothing ->
-                        { model_ | highlightContextMenu = Nothing }
+                      else if button == SecondButton then
+                        let
+                            localModel =
+                                LocalGrid.localModel model.localModel
 
-              else
-                model_
-            , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
-            )
+                            position : Coord WorldUnit
+                            position =
+                                screenToWorld model mousePosition |> Coord.floorPoint
+
+                            maybeUserId =
+                                Grid.getTile position localModel.grid |> Maybe.map .userId
+                        in
+                        case maybeUserId of
+                            Just userId ->
+                                highlightUser userId position model_
+
+                            Nothing ->
+                                { model_ | highlightContextMenu = Nothing }
+
+                      else
+                        model_
+                    , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
+                    )
 
         MouseUp button mousePosition ->
             case ( button, model.mouseLeft, model.mouseMiddle ) of
@@ -577,7 +599,7 @@ updateLoaded msg model =
                     ( { model
                         | mouseMiddle = MouseButtonUp { current = mousePosition }
                         , viewPoint =
-                            if model.showMailEditor then
+                            if Mail.mailEditorIsOpen model.showMailEditor then
                                 model.viewPoint
 
                             else
@@ -851,7 +873,7 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if model.showMailEditor then
+                if Mail.mailEditorIsOpen model.showMailEditor then
                     ( { model | mailEditor = Mail.undoMailEditor model.mailEditor }, Cmd.none )
 
                 else
@@ -862,7 +884,7 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "Z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if model.showMailEditor then
+                if Mail.mailEditorIsOpen model.showMailEditor then
                     ( { model | mailEditor = Mail.redoMailEditor model.mailEditor }, Cmd.none )
 
                 else
@@ -944,7 +966,20 @@ keyMsgCanvasUpdate key model =
             )
 
         Keyboard.Escape ->
-            ( { model | showMailEditor = False }, Cmd.none )
+            ( { model
+                | showMailEditor =
+                    case model.showMailEditor of
+                        MailEditorOpening { startPosition } ->
+                            MailEditorClosing { startTime = model.time, startPosition = startPosition }
+
+                        MailEditorClosing _ ->
+                            MailEditorClosed
+
+                        MailEditorClosed ->
+                            MailEditorClosed
+              }
+            , Cmd.none
+            )
 
         _ ->
             ( model, Cmd.none )
@@ -966,7 +1001,7 @@ mainMouseButtonUp mousePosition mouseState model =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
                 , viewPoint =
-                    case ( model.showMailEditor, model.mouseMiddle, model.tool ) of
+                    case ( Mail.mailEditorIsOpen model.showMailEditor, model.mouseMiddle, model.tool ) of
                         ( False, MouseButtonUp _, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
@@ -981,20 +1016,23 @@ mainMouseButtonUp mousePosition mouseState model =
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
     in
-    ( if isSmallDistance then
+    ( if isSmallDistance && not (Mail.mailEditorIsOpen model.showMailEditor) then
         let
             localModel : LocalGrid_
             localModel =
                 LocalGrid.localModel model2.localModel
 
-            maybeTile : Maybe { userId : Id UserId, value : Tile }
+            maybeTile : Maybe { userId : Id UserId, value : Tile, position : Coord WorldUnit }
             maybeTile =
                 Grid.getTile (screenToWorld model2 mousePosition |> Coord.floorPoint) localModel.grid
         in
         case maybeTile of
             Just tile ->
                 if tile.userId == localModel.user && tile.value == PostOffice then
-                    { model2 | showMailEditor = True }
+                    { model2
+                        | showMailEditor =
+                            MailEditorOpening { startTime = model.time, startPosition = tile.position }
+                    }
 
                 else
                     { model2
@@ -1466,7 +1504,7 @@ offsetViewPoint ({ windowSize, viewPoint, devicePixelRatio, zoomFactor } as mode
 
 actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
-    case ( model.showMailEditor, model.mouseLeft, model.mouseMiddle ) of
+    case ( Mail.mailEditorIsOpen model.showMailEditor, model.mouseLeft, model.mouseMiddle ) of
         ( False, _, MouseButtonDown { start, current } ) ->
             offsetViewPoint model start current
 
@@ -2200,24 +2238,20 @@ canvasView model =
                                     , time = Duration.from model.startTime model.time |> Duration.inSeconds
                                     }
                                ]
-                            ++ (if model.showMailEditor then
-                                    Mail.drawMail
-                                        texture
-                                        (case model.mouseLeft of
-                                            MouseButtonDown { current } ->
-                                                current
+                            ++ Mail.drawMail
+                                texture
+                                (case model.mouseLeft of
+                                    MouseButtonDown { current } ->
+                                        current
 
-                                            MouseButtonUp { current } ->
-                                                current
-                                        )
-                                        windowWidth
-                                        windowHeight
-                                        model
-                                        model.mailEditor
-
-                                else
-                                    []
-                               )
+                                    MouseButtonUp { current } ->
+                                        current
+                                )
+                                windowWidth
+                                windowHeight
+                                model
+                                model.mailEditor
+                                model.showMailEditor
 
                     Nothing ->
                         []
