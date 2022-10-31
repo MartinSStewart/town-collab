@@ -848,14 +848,22 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel Change.LocalUndo model, Cmd.none )
+                if model.showMailEditor then
+                    ( { model | mailEditor = Mail.undoMailEditor model.mailEditor }, Cmd.none )
+
+                else
+                    ( updateLocalModel Change.LocalUndo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
         Keyboard.Character "Z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel Change.LocalRedo model, Cmd.none )
+                if model.showMailEditor then
+                    ( { model | mailEditor = Mail.redoMailEditor model.mailEditor }, Cmd.none )
+
+                else
+                    ( updateLocalModel Change.LocalRedo model, Cmd.none )
 
             else
                 ( model, Cmd.none )

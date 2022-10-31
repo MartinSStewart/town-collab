@@ -10,6 +10,8 @@ module Mail exposing
     , initEditor
     , initEditorData
     , mouseDownMailEditor
+    , redoMailEditor
+    , undoMailEditor
     )
 
 import Coord exposing (Coord)
@@ -51,11 +53,16 @@ type MailStatus
 
 
 type alias MailEditor =
-    { recipient : Maybe (Id UserId)
-    , content : List { position : Coord MailPixelUnit, image : Image }
-    , mesh : WebGL.Mesh Vertex
+    { mesh : WebGL.Mesh Vertex
     , currentImage : Image
+    , undo : List EditorState
+    , current : EditorState
+    , redo : List EditorState
     }
+
+
+type alias EditorState =
+    { content : List { position : Coord MailPixelUnit, image : Image }, recipient : Maybe (Id UserId) }
 
 
 type alias MailEditorData =
@@ -72,8 +79,9 @@ type Image
 
 initEditor : MailEditorData -> MailEditor
 initEditor data =
-    { recipient = data.recipient
-    , content = data.content
+    { current = { content = data.content, recipient = data.recipient }
+    , undo = []
+    , redo = []
     , mesh = mesh data.content
     , currentImage = BlueStamp
     }
@@ -126,13 +134,48 @@ mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
         imageData =
             getImageData mailEditor.currentImage
 
-        newContent =
-            mailEditor.content ++ [ { position = mailCoord, image = BlueStamp } ]
+        oldEditorState =
+            mailEditor.current
+
+        newEditorState =
+            { oldEditorState | content = oldEditorState.content ++ [ { position = mailCoord, image = BlueStamp } ] }
     in
     { mailEditor
-        | content = newContent
-        , mesh = mesh newContent
+        | current = newEditorState
+        , undo = oldEditorState :: List.take 50 mailEditor.undo
+        , redo = []
+        , mesh = mesh newEditorState.content
     }
+
+
+undoMailEditor : MailEditor -> MailEditor
+undoMailEditor mailEditor =
+    case mailEditor.undo of
+        head :: rest ->
+            { mailEditor
+                | undo = rest
+                , current = head
+                , mesh = mesh head.content
+                , redo = mailEditor.current :: mailEditor.redo
+            }
+
+        [] ->
+            mailEditor
+
+
+redoMailEditor : MailEditor -> MailEditor
+redoMailEditor mailEditor =
+    case mailEditor.redo of
+        head :: rest ->
+            { mailEditor
+                | redo = rest
+                , current = head
+                , mesh = mesh head.content
+                , undo = mailEditor.current :: mailEditor.undo
+            }
+
+        [] ->
+            mailEditor
 
 
 mailWidth =
