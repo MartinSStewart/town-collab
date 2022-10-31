@@ -173,10 +173,10 @@ coordRangeFold : (Coord units -> a -> a) -> (a -> a) -> Bounds units -> a -> a
 coordRangeFold foldFunc rowChangeFunc (Bounds bounds_) initialValue =
     let
         ( x0, y0 ) =
-            Coord.toRawCoord bounds_.min
+            Coord.toTuple bounds_.min
 
         ( x1, y1 ) =
-            Coord.toRawCoord bounds_.max
+            Coord.toTuple bounds_.max
     in
     coordRangeFoldHelper foldFunc rowChangeFunc x0 x1 y0 y1 x0 y0 initialValue
 
@@ -219,10 +219,10 @@ coordRangeFoldReverse : (Coord units -> a -> a) -> (a -> a) -> Bounds units -> a
 coordRangeFoldReverse foldFunc rowChangeFunc (Bounds bounds_) initialValue =
     let
         ( x0, y0 ) =
-            Coord.toRawCoord bounds_.min
+            Coord.toTuple bounds_.min
 
         ( x1, y1 ) =
-            Coord.toRawCoord bounds_.max
+            Coord.toTuple bounds_.max
     in
     coordRangeFoldReverseHelper foldFunc rowChangeFunc x0 x1 y0 y1 x1 y1 initialValue
 

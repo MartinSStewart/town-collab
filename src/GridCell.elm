@@ -78,8 +78,8 @@ updateCache (Cell cell) =
         cellBounds : Bounds unit
         cellBounds =
             Nonempty
-                (Coord.fromRawCoord ( 0, 0 ))
-                [ Coord.fromRawCoord ( Units.cellSize - 1, Units.cellSize - 1 ) ]
+                (Coord.fromTuple ( 0, 0 ))
+                [ Coord.fromTuple ( Units.cellSize - 1, Units.cellSize - 1 ) ]
                 |> Bounds.fromCoords
     in
     { history = cell.history

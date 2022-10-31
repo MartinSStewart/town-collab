@@ -81,11 +81,11 @@ toMesh cursor =
 
         ( cw, ch ) =
             size cursor
-                |> Coord.toRawCoord
+                |> Coord.toTuple
                 |> Tuple.mapBoth (abs >> (+) 1) (abs >> (+) 1)
 
         ( cw_, ch_ ) =
-            size cursor |> Coord.toRawCoord
+            size cursor |> Coord.toTuple
 
         ( v0, i0 ) =
             mesh 0

@@ -1,4 +1,13 @@
-module Shaders exposing (DebrisVertex, colorToVec3, debrisVertexShader, fragmentShader, vertexShader)
+module Shaders exposing
+    ( DebrisVertex
+    , SimpleVertex
+    , colorToVec3
+    , debrisVertexShader
+    , fragmentShader
+    , simpleFragmentShader
+    , simpleVertexShader
+    , vertexShader
+    )
 
 import Element
 import Grid
@@ -10,6 +19,10 @@ import WebGL exposing (Shader)
 import WebGL.Texture exposing (Texture)
 
 
+type alias SimpleVertex =
+    { position : Vec2 }
+
+
 colorToVec3 : Element.Color -> Math.Vector3.Vec3
 colorToVec3 color =
     let
@@ -19,32 +32,63 @@ colorToVec3 color =
     Math.Vector3.vec3 red green blue
 
 
-vertexShader : Shader Grid.Vertex { u | view : Mat4 } { vcoord : Vec2 }
+vertexShader : Shader Grid.Vertex { u | view : Mat4, textureSize : Vec2 } { vcoord : Vec2 }
 vertexShader =
     [glsl|
 attribute vec2 position;
 attribute vec2 texturePosition;
 uniform mat4 view;
+uniform vec2 textureSize;
 varying vec2 vcoord;
 
 void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
-    vcoord = texturePosition;
+    vcoord = texturePosition / textureSize;
 }
 
 |]
 
 
-fragmentShader : Shader {} { u | texture : Texture, textureSize : Vec2 } { vcoord : Vec2 }
-fragmentShader =
+simpleVertexShader : Shader SimpleVertex { u | view : Mat4, texturePosition : Vec2, textureScale : Vec2, textureSize : Vec2 } { vcoord : Vec2 }
+simpleVertexShader =
     [glsl|
-precision mediump float;
-uniform sampler2D texture;
+attribute vec2 position;
+uniform mat4 view;
+uniform vec2 texturePosition;
+uniform vec2 textureScale;
 uniform vec2 textureSize;
 varying vec2 vcoord;
 
 void main () {
-    gl_FragColor = texture2D(texture, vcoord / textureSize);
+    gl_Position = view * vec4(position * textureScale, 0.0, 1.0);
+    vcoord = (texturePosition + position * textureScale) / textureSize;
+}
+
+|]
+
+
+fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2 }
+fragmentShader =
+    [glsl|
+precision mediump float;
+uniform sampler2D texture;
+varying vec2 vcoord;
+
+void main () {
+    gl_FragColor = texture2D(texture, vcoord);
+}
+    |]
+
+
+simpleFragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2 }
+simpleFragmentShader =
+    [glsl|
+precision mediump float;
+uniform sampler2D texture;
+varying vec2 vcoord;
+
+void main () {
+    gl_FragColor = texture2D(texture, vcoord) * vec4(1.0, 1.0, 1.0, 0.5);
 }
     |]
 

@@ -41,6 +41,7 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
+import Mail
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Pixels exposing (Pixels)
@@ -55,7 +56,7 @@ import Time
 import Train exposing (Train)
 import Types exposing (..)
 import UiColors
-import Units exposing (CellUnit, TileLocalUnit, WorldUnit)
+import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -285,7 +286,7 @@ loadedInit time loading loadingData =
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
             , showMailEditor = False
-            , mailEditor = loadingData.mailEditor
+            , mailEditor = Mail.initEditor loadingData.mailEditor
             }
     in
     ( updateMeshes model model
@@ -518,6 +519,19 @@ updateLoaded msg model =
                     | mouseLeft =
                         MouseButtonDown
                             { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                    , mailEditor =
+                        if model_.showMailEditor then
+                            let
+                                ( windowWidth, windowHeight ) =
+                                    actualCanvasSize
+
+                                { canvasSize, actualCanvasSize } =
+                                    findPixelPerfectSize model
+                            in
+                            Mail.mouseDownMailEditor windowWidth windowHeight model_ mousePosition model.mailEditor
+
+                        else
+                            model.mailEditor
                 }
 
               else if button == MiddleButton then
@@ -1034,7 +1048,7 @@ clearTextSelection bounds model =
             Bounds.maximum bounds
                 |> Coord.minusTuple (Bounds.minimum bounds)
                 |> Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 )
-                |> Coord.toRawCoord
+                |> Coord.toTuple
     in
     { model | cursor = Cursor.setCursor (Bounds.minimum bounds) }
         |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
@@ -1049,7 +1063,7 @@ screenToWorld model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at (abc model)
+        >> Point2d.at (scaleForScreenToWorld model)
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
@@ -1061,11 +1075,11 @@ worldToScreen model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << Point2d.at_ (abc model)
+        << Point2d.at_ (scaleForScreenToWorld model)
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
-abc model =
+scaleForScreenToWorld model =
     model.devicePixelRatio / (toFloat model.zoomFactor * Units.tileSize) |> Quantity
 
 
@@ -1334,7 +1348,7 @@ updateMeshes oldModel newModel =
             let
                 coord : Coord CellUnit
                 coord =
-                    Coord.fromRawCoord rawCoord
+                    Coord.fromTuple rawCoord
             in
             Grid.mesh
                 coord
@@ -1429,7 +1443,7 @@ offsetViewPoint ({ windowSize, viewPoint, devicePixelRatio, zoomFactor } as mode
         delta : Vector2d WorldUnit WorldUnit
         delta =
             Vector2d.from mouseCurrent mouseStart
-                |> Vector2d.at (abc model)
+                |> Vector2d.at (scaleForScreenToWorld model)
                 |> Vector2d.placeIn (Units.screenFrame viewPoint)
     in
     Point2d.translateBy delta viewPoint
@@ -2096,7 +2110,7 @@ viewBoundingBox model =
         viewMin =
             screenToWorld model Point2d.origin
                 |> Point2d.translateBy
-                    (Coord.fromRawCoord ( -1, -1 )
+                    (Coord.fromTuple ( -1, -1 )
                         |> Units.cellToTile
                         |> Coord.toVector2d
                     )
@@ -2147,14 +2161,10 @@ canvasView model =
         (Cursor.draw viewMatrix (Element.rgba 1 0 1 0.5) model
             :: (case model.texture of
                     Just texture ->
-                        let
-                            textureSize =
-                                WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
-                        in
                         drawText
                             (Dict.filter
                                 (\key _ ->
-                                    Coord.fromRawCoord key
+                                    Coord.fromTuple key
                                         |> Units.cellToTile
                                         |> Coord.toPoint2d
                                         |> (\p -> BoundingBox2d.contains p viewBounds_)
@@ -2171,37 +2181,24 @@ canvasView model =
                                     model.debrisMesh
                                     { view = viewMatrix
                                     , texture = texture
-                                    , textureSize = textureSize
+                                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                                     , time = Duration.from model.startTime model.time |> Duration.inSeconds
                                     }
                                ]
                             ++ (if model.showMailEditor then
-                                    let
-                                        zoomFactor : Float
-                                        zoomFactor =
-                                            min
-                                                (toFloat windowWidth / mailWidth)
-                                                (toFloat windowHeight / mailHeight)
-                                                |> floor
-                                                |> toFloat
-                                    in
-                                    [ WebGL.entity
-                                        Shaders.vertexShader
-                                        Shaders.fragmentShader
-                                        mailMesh
-                                        { texture = texture
-                                        , textureSize = textureSize
-                                        , view =
-                                            Mat4.makeScale3
-                                                (zoomFactor * 2 / toFloat windowWidth)
-                                                (zoomFactor * -2 / toFloat windowHeight)
-                                                1
-                                                |> Mat4.translate3
-                                                    (mailWidth / -2 |> round |> toFloat)
-                                                    (mailHeight / -2 |> round |> toFloat)
-                                                    0
-                                        }
-                                    ]
+                                    Mail.drawMail
+                                        texture
+                                        (case model.mouseLeft of
+                                            MouseButtonDown { current } ->
+                                                current
+
+                                            MouseButtonUp { current } ->
+                                                current
+                                        )
+                                        windowWidth
+                                        windowHeight
+                                        model
+                                        model.mailEditor
 
                                 else
                                     []
@@ -2227,7 +2224,7 @@ drawText meshes viewMatrix texture =
                     mesh
                     { view = viewMatrix
                     , texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
+                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                     }
             )
 
@@ -2269,7 +2266,7 @@ drawTrains trains viewMatrix texture =
                         trainMesh_
                         { view = Mat4.makeTranslate3 (x * Units.tileSize) (y * Units.tileSize) 0 |> Mat4.mul viewMatrix
                         , texture = texture
-                        , textureSize = WebGL.Texture.size texture |> Coord.fromRawCoord |> Coord.toVec2
+                        , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                         }
                     ]
 
@@ -2304,28 +2301,6 @@ trainMesh frame =
         , { position = Vec2.vec2 Units.tileSize (-Units.tileSize + offsetY), texturePosition = topRight }
         , { position = Vec2.vec2 Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomRight }
         , { position = Vec2.vec2 -Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomLeft }
-        ]
-
-
-mailWidth =
-    270
-
-
-mailHeight =
-    144
-
-
-mailMesh : WebGL.Mesh Vertex
-mailMesh =
-    let
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels ( 234, 0 ) ( mailWidth, mailHeight )
-    in
-    WebGL.triangleFan
-        [ { position = Vec2.vec2 0 0, texturePosition = topLeft }
-        , { position = Vec2.vec2 mailWidth 0, texturePosition = topRight }
-        , { position = Vec2.vec2 mailWidth mailHeight, texturePosition = bottomRight }
-        , { position = Vec2.vec2 0 mailHeight, texturePosition = bottomLeft }
         ]
 
 

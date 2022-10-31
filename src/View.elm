@@ -33,19 +33,19 @@ cellBounds : View -> { min : Coord Units.CellUnit, max : Coord Units.CellUnit }
 cellBounds (View view_) =
     let
         ( sx, sy ) =
-            Coord.toRawCoord view_.viewSize
+            Coord.toTuple view_.viewSize
 
         ( x, y ) =
-            Coord.toRawCoord view_.viewPoint
+            Coord.toTuple view_.viewPoint
     in
     { min =
         ( toFloat x - toFloat sx / 2 |> floor, toFloat y - toFloat sy / 2 |> floor )
-            |> Coord.fromRawCoord
+            |> Coord.fromTuple
             |> Grid.worldToCellAndLocalCoord
             |> Tuple.first
     , max =
         ( toFloat x - toFloat sx / 2 |> ceiling, toFloat y - toFloat sy / 2 |> ceiling )
-            |> Coord.fromRawCoord
+            |> Coord.fromTuple
             |> Grid.worldToCellAndLocalCoord
             |> Tuple.first
     }

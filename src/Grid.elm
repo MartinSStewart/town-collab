@@ -60,7 +60,7 @@ from =
 
 localTileCoordPlusWorld : Coord WorldUnit -> Coord TileLocalUnit -> Coord WorldUnit
 localTileCoordPlusWorld world local =
-    Coord.toRawCoord local |> Coord.fromRawCoord |> Coord.addTuple world
+    Coord.toTuple local |> Coord.fromTuple |> Coord.addTuple world
 
 
 localTilePointPlusWorld : Coord WorldUnit -> Point2d TileLocalUnit TileLocalUnit -> Point2d WorldUnit WorldUnit
@@ -82,11 +82,11 @@ worldToCellAndLocalCoord ( Quantity x, Quantity y ) =
         offset =
             1000000
     in
-    ( Coord.fromRawCoord
+    ( Coord.fromTuple
         ( (x + (Units.cellSize * offset)) // Units.cellSize - offset
         , (y + (Units.cellSize * offset)) // Units.cellSize - offset
         )
-    , Coord.fromRawCoord
+    , Coord.fromTuple
         ( modBy Units.cellSize x
         , modBy Units.cellSize y
         )
@@ -102,7 +102,7 @@ worldToCellAndLocalPoint point =
         { x, y } =
             Point2d.unwrap point
     in
-    ( Coord.fromRawCoord
+    ( Coord.fromTuple
         ( (floor x + (Units.cellSize * offset)) // Units.cellSize - offset
         , (floor y + (Units.cellSize * offset)) // Units.cellSize - offset
         )
@@ -117,9 +117,9 @@ cellAndLocalCoordToAscii : ( Coord CellUnit, Coord CellLocalUnit ) -> Coord Worl
 cellAndLocalCoordToAscii ( cell, local ) =
     Coord.addTuple
         (Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
-        (Coord.toRawCoord local |> Coord.fromRawCoord)
-        |> Coord.toRawCoord
-        |> Coord.fromRawCoord
+        (Coord.toTuple local |> Coord.fromTuple)
+        |> Coord.toTuple
+        |> Coord.fromTuple
 
 
 cellAndLocalPointToWorld : Coord CellUnit -> Point2d CellLocalUnit CellLocalUnit -> Point2d WorldUnit WorldUnit
@@ -174,7 +174,7 @@ closeNeighborCells cellPosition localPosition =
         (\offset ->
             let
                 ( Quantity x, Quantity y ) =
-                    Coord.fromRawCoord offset
+                    Coord.fromTuple offset
                         |> Coord.multiplyTuple ( maxSize, maxSize )
                         |> Coord.addTuple localPosition
 
@@ -202,11 +202,11 @@ closeNeighborCells cellPosition localPosition =
 
                 newCellPos : Coord CellUnit
                 newCellPos =
-                    Coord.fromRawCoord offset |> Coord.addTuple cellPosition
+                    Coord.fromTuple offset |> Coord.addTuple cellPosition
             in
             if ( a, b ) == offset then
                 ( newCellPos
-                , Coord.fromRawCoord
+                , Coord.fromTuple
                     ( localX - Units.cellSize * a
                     , localY - Units.cellSize * b
                     )
@@ -273,7 +273,7 @@ allCellsDict (Grid grid) =
 
 region : Bounds CellUnit -> Grid -> Grid
 region bounds (Grid grid) =
-    Dict.filter (\coord _ -> Bounds.contains (Coord.fromRawCoord coord) bounds) grid |> Grid
+    Dict.filter (\coord _ -> Bounds.contains (Coord.fromTuple coord) bounds) grid |> Grid
 
 
 getCell : Coord CellUnit -> Grid -> Maybe Cell

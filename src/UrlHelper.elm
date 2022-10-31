@@ -10,7 +10,7 @@ import Url.Parser.Query
 
 startPointAt : Coord WorldUnit
 startPointAt =
-    Coord.fromRawCoord ( 0, 0 )
+    Coord.fromTuple ( 0, 0 )
 
 
 coordQueryParser : Url.Parser.Query.Parser (Coord WorldUnit)
@@ -46,7 +46,7 @@ encodeUrl route =
         InternalRoute internalRoute_ ->
             let
                 ( x, y ) =
-                    Coord.toRawCoord internalRoute_.viewPoint
+                    Coord.toTuple internalRoute_.viewPoint
             in
             Url.Builder.relative
                 [ "/" ]

@@ -1,6 +1,7 @@
 module Units exposing
     ( CellLocalUnit
     , CellUnit
+    , MailPixelUnit
     , TileLocalUnit
     , WorldUnit
     , cellSize
@@ -35,6 +36,10 @@ type TileLocalUnit
     = TileLocalUnit Never
 
 
+type MailPixelUnit
+    = MailUnit Never
+
+
 tileUnit : number -> Quantity number WorldUnit
 tileUnit =
     Quantity.Quantity
@@ -57,7 +62,7 @@ cellSize =
 
 cellToTile : Coord CellUnit -> Coord WorldUnit
 cellToTile coord =
-    Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toRawCoord |> Coord.fromRawCoord
+    Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toTuple |> Coord.fromTuple
 
 
 tileSize : number

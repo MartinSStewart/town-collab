@@ -53,18 +53,18 @@ tests =
                     maybeCell =
                         Grid.empty
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( 0, 0 )
+                                { position = Coord.fromTuple ( 0, 0 )
                                 , change = RailHorizontal
                                 , userId = user0
                                 }
                             |> Debug.log "a"
-                            |> Grid.getCell (Coord.fromRawCoord ( 0, 0 ))
+                            |> Grid.getCell (Coord.fromTuple ( 0, 0 ))
                 in
                 case maybeCell of
                     Just cell ->
                         GridCell.flatten cell
                             |> Expect.equal
-                                [ { position = Coord.fromRawCoord ( 0, 0 )
+                                [ { position = Coord.fromTuple ( 0, 0 )
                                   , userId = user0
                                   , value = RailHorizontal
                                   }
@@ -79,22 +79,22 @@ tests =
                     maybeCell =
                         Grid.empty
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( 21, 8 )
+                                { position = Coord.fromTuple ( 21, 8 )
                                 , change = House
                                 , userId = user0
                                 }
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( 22, 8 )
+                                { position = Coord.fromTuple ( 22, 8 )
                                 , change = House
                                 , userId = user0
                                 }
-                            |> Grid.getCell (Coord.fromRawCoord ( 1, 0 ))
+                            |> Grid.getCell (Coord.fromTuple ( 1, 0 ))
                 in
                 case maybeCell of
                     Just cell ->
                         GridCell.flatten cell
                             |> Expect.equal
-                                [ { position = Coord.fromRawCoord ( 6, 8 )
+                                [ { position = Coord.fromTuple ( 6, 8 )
                                   , userId = user0
                                   , value = House
                                   }
@@ -105,17 +105,17 @@ tests =
         , test "Collision test for default collision and custom collision mask" <|
             \_ ->
                 Tile.hasCollision
-                    (Coord.fromRawCoord ( 0, 0 ))
+                    (Coord.fromTuple ( 0, 0 ))
                     (Tile.getData RailHorizontal)
-                    (Coord.fromRawCoord ( 0, 0 ))
+                    (Coord.fromTuple ( 0, 0 ))
                     (Tile.getData RailBottomToRight)
                     |> Expect.equal False
         , test "Collision test 2 for default collision and custom collision mask" <|
             \_ ->
                 Tile.hasCollision
-                    (Coord.fromRawCoord ( 0, 0 ))
+                    (Coord.fromTuple ( 0, 0 ))
                     (Tile.getData RailHorizontal)
-                    (Coord.fromRawCoord ( 1, 0 ))
+                    (Coord.fromTuple ( 1, 0 ))
                     (Tile.getData RailBottomToRight)
                     |> Expect.equal False
         , test "Move train" <|
@@ -124,12 +124,12 @@ tests =
                     grid =
                         Grid.empty
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( 0, 0 )
+                                { position = Coord.fromTuple ( 0, 0 )
                                 , change = TrainHouseLeft
                                 , userId = user0
                                 }
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( -4, 2 )
+                                { position = Coord.fromTuple ( -4, 2 )
                                 , change = RailBottomToRight
                                 , userId = user0
                                 }
@@ -137,13 +137,13 @@ tests =
                 Train.moveTrain
                     Duration.second
                     grid
-                    { position = Coord.fromRawCoord ( 0, 0 )
+                    { position = Coord.fromTuple ( 0, 0 )
                     , path = Tile.trainHouseLeftRailPath
                     , t = 0.5
                     , speed = Quantity -5
                     }
                     |> Expect.equal
-                        { position = Coord.fromRawCoord ( -4, 2 )
+                        { position = Coord.fromTuple ( -4, 2 )
                         , path = RailPathBottomToRight
                         , t = 0.5570423008216338
                         , speed = Quantity 5
@@ -154,27 +154,27 @@ tests =
                     grid =
                         Grid.empty
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( 0, 0 )
+                                { position = Coord.fromTuple ( 0, 0 )
                                 , change = TrainHouseLeft
                                 , userId = user0
                                 }
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( -1, 2 )
+                                { position = Coord.fromTuple ( -1, 2 )
                                 , change = RailHorizontal
                                 , userId = user0
                                 }
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( -2, 2 )
+                                { position = Coord.fromTuple ( -2, 2 )
                                 , change = RailHorizontal
                                 , userId = user0
                                 }
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( -6, 2 )
+                                { position = Coord.fromTuple ( -6, 2 )
                                 , change = RailBottomToRight
                                 , userId = user0
                                 }
                             |> Grid.addChange
-                                { position = Coord.fromRawCoord ( -6, 6 )
+                                { position = Coord.fromTuple ( -6, 6 )
                                 , change = RailTopToRight
                                 , userId = user0
                                 }
@@ -184,7 +184,7 @@ tests =
                         List.range 1 240
                             |> List.foldl
                                 (\_ train -> Train.moveTrain (Duration.seconds (1 / 60)) grid train)
-                                { position = Coord.fromRawCoord ( 0, 0 )
+                                { position = Coord.fromTuple ( 0, 0 )
                                 , path = Tile.trainHouseLeftRailPath
                                 , t = 0.5
                                 , speed = Quantity -0.1
@@ -195,7 +195,7 @@ tests =
                         Train.moveTrain
                             (Duration.seconds 4)
                             grid
-                            { position = Coord.fromRawCoord ( 0, 0 )
+                            { position = Coord.fromTuple ( 0, 0 )
                             , path = Tile.trainHouseLeftRailPath
                             , t = 0.5
                             , speed = Quantity -0.1

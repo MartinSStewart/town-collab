@@ -599,7 +599,7 @@ createUser userId model =
             , undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
-            , mailEditor = Mail.initEditor
+            , mailEditor = Mail.initEditorData
             }
     in
     ( { model | users = Dict.insert (Id.toInt userId) userBackendData model.users }, userBackendData )

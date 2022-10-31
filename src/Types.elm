@@ -38,7 +38,7 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
-import Mail exposing (BackendMail, FrontendMail, MailEditor)
+import Mail exposing (BackendMail, FrontendMail, MailEditor, MailEditorData)
 import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -160,7 +160,7 @@ type alias BackendUserData =
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
-    , mailEditor : MailEditor
+    , mailEditor : MailEditorData
     }
 
 
@@ -205,7 +205,7 @@ type ToBackend
     = ConnectToBackend (Bounds CellUnit)
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
-    | UpdateMailEditorRequest MailEditor
+    | UpdateMailEditorRequest MailEditorData
 
 
 type BackendMsg
@@ -239,5 +239,5 @@ type alias LoadingData_ =
     , viewBounds : Bounds CellUnit
     , trains : AssocList.Dict (Id TrainId) Train
     , mail : AssocList.Dict (Id MailId) FrontendMail
-    , mailEditor : MailEditor
+    , mailEditor : MailEditorData
     }

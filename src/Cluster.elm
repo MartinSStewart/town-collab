@@ -10,7 +10,7 @@ import Units exposing (CellUnit)
 
 maxSize : Coord units
 maxSize =
-    Coord.fromRawCoord ( 4, 3 )
+    Coord.fromTuple ( 4, 3 )
 
 
 cluster : Set RawCellCoord -> List ( Bounds CellUnit, Nonempty (Coord CellUnit) )
@@ -31,7 +31,7 @@ clusterHelper coords allBounds =
         head :: _ ->
             let
                 coord =
-                    Coord.fromRawCoord head
+                    Coord.fromTuple head
 
                 boundsMin =
                     toCoarseGrid coord
@@ -40,15 +40,15 @@ clusterHelper coords allBounds =
                     Bounds.bounds boundsMin (Coord.addTuple maxSize boundsMin)
 
                 ( inside, outside ) =
-                    Set.partition (\a -> Bounds.contains (Coord.fromRawCoord a) bounds) coords
+                    Set.partition (\a -> Bounds.contains (Coord.fromTuple a) bounds) coords
             in
             clusterHelper
                 outside
                 (( bounds
-                 , Nonempty (Coord.fromRawCoord head)
+                 , Nonempty (Coord.fromTuple head)
                     (Set.remove head inside
                         |> Set.toList
-                        |> List.map Coord.fromRawCoord
+                        |> List.map Coord.fromTuple
                     )
                  )
                     :: allBounds

@@ -79,7 +79,7 @@ incrementUndoCurrent cellPosition localPosition undoCurrent =
         |> List.foldl
             (\neighborPos undoCurrent2 ->
                 Dict.update
-                    (Coord.toRawCoord neighborPos)
+                    (Coord.toTuple neighborPos)
                     (Maybe.withDefault 0 >> (+) 1 >> Just)
                     undoCurrent2
             )
@@ -168,8 +168,8 @@ update_ msg model =
             { model
                 | grid =
                     Grid.allCellsDict model.grid
-                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.fromRawCoord coord) bounds)
-                        |> Dict.union (List.map (Tuple.mapFirst Coord.toRawCoord) newCells |> Dict.fromList)
+                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.fromTuple coord) bounds)
+                        |> Dict.union (List.map (Tuple.mapFirst Coord.toTuple) newCells |> Dict.fromList)
                         |> Grid.from
                 , viewBounds = bounds
             }

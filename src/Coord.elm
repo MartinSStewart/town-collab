@@ -6,14 +6,14 @@ module Coord exposing
     , area
     , divideTuple
     , floorPoint
-    , fromRawCoord
+    , fromTuple
     , maxTuple
     , minTuple
     , minusTuple
     , multiplyTuple
     , roundPoint
     , toPoint2d
-    , toRawCoord
+    , toTuple
     , toVec2
     , toVector2d
     , toggleSet
@@ -34,7 +34,7 @@ area : Coord unit -> Int
 area coord =
     let
         ( x, y ) =
-            toRawCoord coord
+            toTuple coord
     in
     x * y
 
@@ -90,7 +90,7 @@ roundPoint point2d =
         { x, y } =
             Point2d.unwrap point2d
     in
-    fromRawCoord ( round x, round y )
+    fromTuple ( round x, round y )
 
 
 floorPoint : Point2d units coordinate -> Coord units
@@ -99,7 +99,7 @@ floorPoint point2d =
         { x, y } =
             Point2d.unwrap point2d
     in
-    fromRawCoord ( floor x, floor y )
+    fromTuple ( floor x, floor y )
 
 
 toVector2d : Coord units -> Vector2d units coordinate
@@ -107,13 +107,13 @@ toVector2d ( x, y ) =
     Vector2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
 
 
-toRawCoord : Coord units -> ( Int, Int )
-toRawCoord ( Quantity x, Quantity y ) =
+toTuple : Coord units -> ( Int, Int )
+toTuple ( Quantity x, Quantity y ) =
     ( x, y )
 
 
-fromRawCoord : ( Int, Int ) -> Coord units
-fromRawCoord ( x, y ) =
+fromTuple : ( Int, Int ) -> Coord units
+fromTuple ( x, y ) =
     ( Quantity x, Quantity y )
 
 
