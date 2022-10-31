@@ -123,7 +123,6 @@ type alias RemovedTileParticle =
 type ToolType
     = DragTool
     | SelectTool
-    | HighlightTool (Maybe ( Id UserId, Coord WorldUnit ))
 
 
 type MouseButtonState

@@ -494,7 +494,7 @@ updateLoaded msg model =
                 model2 =
                     { model | textAreaText = text }
             in
-            if newText /= "" && cursorEnabled model2 then
+            if newText /= "" then
                 if newText == "\n" || newText == "\u{000D}" then
                     ( resetTouchMove model2 |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
 
@@ -603,27 +603,6 @@ updateLoaded msg model =
 
                             _ ->
                                 model.cursor
-                    , tool =
-                        case model.tool of
-                            HighlightTool _ ->
-                                let
-                                    localModel =
-                                        LocalGrid.localModel model.localModel
-
-                                    position : Coord WorldUnit
-                                    position =
-                                        screenToWorld model mousePosition |> Coord.floorPoint
-
-                                    hideUserId =
-                                        selectionPoint
-                                            position
-                                            localModel.grid
-                                            |> Maybe.map .userId
-                                in
-                                hideUserId |> Maybe.map (\a -> ( a, position )) |> HighlightTool
-
-                            _ ->
-                                model.tool
                   }
                 , Cmd.none
                 )
@@ -841,16 +820,6 @@ pushUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.pushUrl model.key url )
 
 
-cursorEnabled : FrontendLoaded -> Bool
-cursorEnabled model =
-    case model.tool of
-        HighlightTool _ ->
-            False
-
-        _ ->
-            True
-
-
 keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 keyMsgCanvasUpdate key model =
     case key of
@@ -864,12 +833,8 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "x" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if cursorEnabled model then
-                    -- TODO
-                    ( model, Cmd.none )
-
-                else
-                    ( model, Cmd.none )
+                -- TODO
+                ( model, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -896,93 +861,69 @@ keyMsgCanvasUpdate key model =
                 ( model, Cmd.none )
 
         Keyboard.Delete ->
-            if cursorEnabled model then
-                let
-                    bounds =
-                        Cursor.bounds model.cursor
-                in
-                ( clearTextSelection bounds model
-                , Cmd.none
-                )
-
-            else
-                ( model, Cmd.none )
+            let
+                bounds =
+                    Cursor.bounds model.cursor
+            in
+            ( clearTextSelection bounds model
+            , Cmd.none
+            )
 
         Keyboard.ArrowLeft ->
-            if cursorEnabled model then
-                ( { model
-                    | cursor =
-                        Cursor.moveCursor
-                            (keyDown Keyboard.Shift model)
-                            ( Units.tileUnit -1, Units.tileUnit 0 )
-                            model.cursor
-                  }
-                , Cmd.none
-                )
-
-            else
-                ( model, Cmd.none )
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.tileUnit -1, Units.tileUnit 0 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
 
         Keyboard.ArrowRight ->
-            if cursorEnabled model then
-                ( { model
-                    | cursor =
-                        Cursor.moveCursor
-                            (keyDown Keyboard.Shift model)
-                            ( Units.tileUnit 1, Units.tileUnit 0 )
-                            model.cursor
-                  }
-                , Cmd.none
-                )
-
-            else
-                ( model, Cmd.none )
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.tileUnit 1, Units.tileUnit 0 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
 
         Keyboard.ArrowUp ->
-            if cursorEnabled model then
-                ( { model
-                    | cursor =
-                        Cursor.moveCursor
-                            (keyDown Keyboard.Shift model)
-                            ( Units.tileUnit 0, Units.tileUnit -1 )
-                            model.cursor
-                  }
-                , Cmd.none
-                )
-
-            else
-                ( model, Cmd.none )
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.tileUnit 0, Units.tileUnit -1 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
 
         Keyboard.ArrowDown ->
-            if cursorEnabled model then
-                ( { model
-                    | cursor =
-                        Cursor.moveCursor
-                            (keyDown Keyboard.Shift model)
-                            ( Units.tileUnit 0, Units.tileUnit 1 )
-                            model.cursor
-                  }
-                , Cmd.none
-                )
-
-            else
-                ( model, Cmd.none )
+            ( { model
+                | cursor =
+                    Cursor.moveCursor
+                        (keyDown Keyboard.Shift model)
+                        ( Units.tileUnit 0, Units.tileUnit 1 )
+                        model.cursor
+              }
+            , Cmd.none
+            )
 
         Keyboard.Backspace ->
-            if cursorEnabled model then
-                let
-                    newCursor =
-                        Cursor.moveCursor
-                            False
-                            ( Units.tileUnit -1, Units.tileUnit 0 )
-                            model.cursor
-                in
-                ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
-                , Cmd.none
-                )
-
-            else
-                ( model, Cmd.none )
+            let
+                newCursor =
+                    Cursor.moveCursor
+                        False
+                        ( Units.tileUnit -1, Units.tileUnit 0 )
+                        model.cursor
+            in
+            ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
+            , Cmd.none
+            )
 
         Keyboard.Escape ->
             ( { model | showMailEditor = False }, Cmd.none )
@@ -1011,9 +952,6 @@ mainMouseButtonUp mousePosition mouseState model =
                         ( False, MouseButtonUp _, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
-                        ( False, MouseButtonUp _, HighlightTool _ ) ->
-                            offsetViewPoint model mouseState.start mousePosition
-
                         _ ->
                             model.viewPoint
                 , highlightContextMenu =
@@ -1024,47 +962,34 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.highlightContextMenu
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
-
-        model3 =
-            if not (cursorEnabled model2) then
-                model2
-
-            else if isSmallDistance then
-                let
-                    localModel : LocalGrid_
-                    localModel =
-                        LocalGrid.localModel model2.localModel
-
-                    maybeTile : Maybe { userId : Id UserId, value : Tile }
-                    maybeTile =
-                        Grid.getTile (screenToWorld model2 mousePosition |> Coord.floorPoint) localModel.grid
-                in
-                case maybeTile of
-                    Just tile ->
-                        if tile.userId == localModel.user && tile.value == PostOffice then
-                            { model2 | showMailEditor = True }
-
-                        else
-                            { model2
-                                | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor
-                            }
-
-                    Nothing ->
-                        { model2 | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor }
-
-            else
-                model2
     in
-    case model3.tool of
-        HighlightTool (Just ( userId, hidePoint )) ->
-            if isSmallDistance then
-                ( highlightUser userId hidePoint model3, Cmd.none )
+    ( if isSmallDistance then
+        let
+            localModel : LocalGrid_
+            localModel =
+                LocalGrid.localModel model2.localModel
 
-            else
-                ( model3, Cmd.none )
+            maybeTile : Maybe { userId : Id UserId, value : Tile }
+            maybeTile =
+                Grid.getTile (screenToWorld model2 mousePosition |> Coord.floorPoint) localModel.grid
+        in
+        case maybeTile of
+            Just tile ->
+                if tile.userId == localModel.user && tile.value == PostOffice then
+                    { model2 | showMailEditor = True }
 
-        _ ->
-            ( model3, Cmd.none )
+                else
+                    { model2
+                        | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor
+                    }
+
+            Nothing ->
+                { model2 | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor }
+
+      else
+        model2
+    , Cmd.none
+    )
 
 
 highlightUser : Id UserId -> Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
@@ -1544,9 +1469,6 @@ actualViewPoint model =
                 DragTool ->
                     offsetViewPoint model start current
 
-                HighlightTool _ ->
-                    offsetViewPoint model start current
-
                 SelectTool ->
                     model.viewPoint
 
@@ -1589,53 +1511,39 @@ updateLoadedFromBackend msg model =
 
 textarea : FrontendLoaded -> Element.Attribute FrontendMsg_
 textarea model =
-    if cursorEnabled model then
-        Html.textarea
-            [ Html.Attributes.value model.textAreaText
-            , Html.Events.onInput UserTyped
-            , Html.Attributes.style "width" "100%"
-            , Html.Attributes.style "height" "100%"
-            , Html.Attributes.style "resize" "none"
-            , Html.Attributes.style "opacity" "0"
-            , Html.Attributes.id "textareaId"
-            , Html.Events.onFocus TextAreaFocused
-            , Html.Attributes.attribute "data-gramm" "false"
-            , Html.Events.Extra.Touch.onWithOptions
-                "touchmove"
-                { stopPropagation = False, preventDefault = True }
-                (\event ->
-                    case event.touches of
-                        head :: _ ->
-                            let
-                                ( x, y ) =
-                                    head.pagePos
-                            in
-                            TouchMove (Point2d.pixels x y)
+    Html.textarea
+        [ Html.Attributes.value model.textAreaText
+        , Html.Events.onInput UserTyped
+        , Html.Attributes.style "width" "100%"
+        , Html.Attributes.style "height" "100%"
+        , Html.Attributes.style "resize" "none"
+        , Html.Attributes.style "opacity" "0"
+        , Html.Attributes.id "textareaId"
+        , Html.Events.onFocus TextAreaFocused
+        , Html.Attributes.attribute "data-gramm" "false"
+        , Html.Events.Extra.Touch.onWithOptions
+            "touchmove"
+            { stopPropagation = False, preventDefault = True }
+            (\event ->
+                case event.touches of
+                    head :: _ ->
+                        let
+                            ( x, y ) =
+                                head.pagePos
+                        in
+                        TouchMove (Point2d.pixels x y)
 
-                        [] ->
-                            NoOpFrontendMsg
-                )
-            , Html.Events.Extra.Mouse.onDown
-                (\{ clientPos, button } ->
-                    MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                )
-            ]
-            []
-            |> Element.html
-            |> Element.inFront
-
-    else
-        Element.el
-            [ Element.width Element.fill
-            , Element.height Element.fill
-            , Element.htmlAttribute <|
-                Html.Events.Extra.Mouse.onDown
-                    (\{ clientPos, button } ->
-                        MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                    )
-            ]
-            Element.none
-            |> Element.inFront
+                    [] ->
+                        NoOpFrontendMsg
+            )
+        , Html.Events.Extra.Mouse.onDown
+            (\{ clientPos, button } ->
+                MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+            )
+        ]
+        []
+        |> Element.html
+        |> Element.inFront
 
 
 lostConnection : FrontendLoaded -> Bool
@@ -1791,7 +1699,7 @@ userListView model =
                         }
                     :: Element.Events.onMouseEnter (UserTagMouseEntered userId)
                     :: Element.Events.onMouseLeave (UserTagMouseExited userId)
-                    :: buttonAttributes (isActive userId)
+                    :: buttonAttributes
                 )
                 (colorSquareInner userId)
 
@@ -1886,7 +1794,7 @@ userListView model =
                     :: Element.width Element.fill
                     :: Element.padding 4
                     :: rowBorderWidth isFirst isLast
-                    ++ buttonAttributes (isActive userId)
+                    ++ buttonAttributes
                 )
                 { onPress = Just (UnhideUserPressed userId)
                 , label =
@@ -1924,7 +1832,7 @@ userListView model =
                     :: Element.width Element.fill
                     :: Element.padding 4
                     :: rowBorderWidth isFirst isLast
-                    ++ buttonAttributes (isActive userId)
+                    ++ buttonAttributes
                 )
                 { onPress = Just (HideForAllTogglePressed userId)
                 , label =
@@ -1934,32 +1842,15 @@ userListView model =
                         ]
                 }
 
-        buttonAttributes isActive_ =
+        buttonAttributes =
             [ Element.Border.color UiColors.border
-            , Element.Background.color
-                (if isActive_ then
-                    UiColors.buttonActive
-
-                 else
-                    UiColors.button
-                )
+            , Element.Background.color UiColors.button
             ]
 
         hiddenUserList : List (Id UserId)
         hiddenUserList =
             EverySet.diff localModel.hiddenUsers localModel.adminHiddenUsers
                 |> EverySet.toList
-
-        isActive : Id UserId -> Bool
-        isActive userId =
-            (model.userHoverHighlighted == Just userId)
-                || (case model.tool of
-                        HighlightTool (Just ( hideUserId, _ )) ->
-                            hideUserId == userId
-
-                        _ ->
-                            False
-                   )
 
         hiddenUsers : List (Element FrontendMsg_)
         hiddenUsers =
@@ -2098,7 +1989,7 @@ toolbarView model =
             [ toolbarButton
                 []
                 CopyPressed
-                (cursorEnabled model)
+                True
                 (Element.image
                     [ Element.width (Element.px 22) ]
                     { src = "copy.svg", description = "Copy text button" }
@@ -2106,7 +1997,7 @@ toolbarView model =
             , toolbarButton
                 []
                 CutPressed
-                (cursorEnabled model)
+                True
                 (Element.image
                     [ Element.width (Element.px 22) ]
                     { src = "cut.svg", description = "Cut text button" }
@@ -2158,16 +2049,6 @@ tools =
             , Element.height (Element.px 22)
             ]
             Element.none
-      )
-    , ( HighlightTool Nothing
-      , \tool ->
-            case tool of
-                HighlightTool _ ->
-                    True
-
-                _ ->
-                    False
-      , Icons.highlightTool
       )
     ]
 
@@ -2286,13 +2167,8 @@ canvasView model =
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         ]
-        ((if cursorEnabled model then
-            [ Cursor.draw viewMatrix (Element.rgba 1 0 1 0.5) model ]
-
-          else
-            []
-         )
-            ++ (case model.texture of
+        (Cursor.draw viewMatrix (Element.rgba 1 0 1 0.5) model
+            :: (case model.texture of
                     Just texture ->
                         let
                             textureSize =
