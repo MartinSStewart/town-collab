@@ -372,14 +372,19 @@ getTile coord grid =
         ( cellPos, localPos ) =
             worldToCellAndLocalCoord coord
     in
-    case getCell cellPos grid of
-        Just cell ->
-            GridCell.flatten cell
-                |> List.find
-                    (\{ value, position } ->
-                        Tile.hasCollisionWithCoord localPos position (Tile.getData value)
-                    )
-                |> Maybe.map (\{ value, userId } -> { userId = userId, value = value })
+    (( cellPos, localPos ) :: closeNeighborCells cellPos localPos)
+        |> List.filterMap
+            (\( cellPos2, localPos2 ) ->
+                case getCell cellPos2 grid of
+                    Just cell ->
+                        GridCell.flatten cell
+                            |> List.find
+                                (\{ value, position } ->
+                                    Tile.hasCollisionWithCoord localPos2 position (Tile.getData value)
+                                )
 
-        Nothing ->
-            Nothing
+                    Nothing ->
+                        Nothing
+            )
+        |> List.head
+        |> Maybe.map (\{ value, userId } -> { userId = userId, value = value })

@@ -319,12 +319,12 @@ init url key =
                     , cmd = Cmd.none
                     }
 
-                Just (UrlHelper.EmailConfirmationRoute a) ->
+                Just (UrlHelper.EmailConfirmationRoute _) ->
                     { viewPoint = UrlHelper.startPointAt
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
-                Just (UrlHelper.EmailUnsubscribeRoute a) ->
+                Just (UrlHelper.EmailUnsubscribeRoute _) ->
                     { viewPoint = UrlHelper.startPointAt
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
@@ -536,10 +536,7 @@ updateLoaded msg model =
                         screenToWorld model mousePosition |> Coord.floorPoint
 
                     maybeUserId =
-                        selectionPoint
-                            position
-                            localModel.grid
-                            |> Maybe.map .userId
+                        Grid.getTile position localModel.grid |> Maybe.map .userId
                 in
                 case maybeUserId of
                     Just userId ->
@@ -815,11 +812,6 @@ replaceUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.replaceUrl model.key url )
 
 
-pushUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
-pushUrl url model =
-    ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.pushUrl model.key url )
-
-
 keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 keyMsgCanvasUpdate key model =
     case key of
@@ -1074,22 +1066,6 @@ worldToScreen model =
 
 abc model =
     model.devicePixelRatio / (toFloat model.zoomFactor * Units.tileSize) |> Quantity
-
-
-selectionPoint : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, value : Tile }
-selectionPoint position grid =
-    let
-        ( cellPosition, localPosition ) =
-            Grid.worldToCellAndLocalCoord position
-    in
-    case Grid.getCell cellPosition grid of
-        Just cell ->
-            GridCell.flatten cell
-                |> List.find (.position >> (==) localPosition)
-                |> Maybe.map (\{ userId, value } -> { userId = userId, value = value })
-
-        Nothing ->
-            Nothing
 
 
 windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
@@ -2234,16 +2210,6 @@ canvasView model =
                         []
                )
         )
-
-
-getHighlight : FrontendLoaded -> Maybe (Id UserId)
-getHighlight model =
-    case model.highlightContextMenu of
-        Just { userId } ->
-            Just userId
-
-        Nothing ->
-            model.userHoverHighlighted
 
 
 drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Mat4 -> Texture -> List WebGL.Entity

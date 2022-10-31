@@ -513,7 +513,7 @@ hasCollisionWithCoord positionA positionB tileB =
             (x >= x2 && x < x2 + width2) && (y >= y2 && y < y2 + height2)
 
         CustomCollision setB ->
-            Set.member (Coord.toRawCoord positionA) setB
+            Set.member (positionA |> Coord.minusTuple positionB |> Coord.toRawCoord) setB
 
 
 getData : Tile -> TileData
