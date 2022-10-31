@@ -24,6 +24,7 @@ import Id exposing (Id, UserId)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
+import Mail
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
@@ -339,6 +340,16 @@ updateFromFrontend currentTime sessionId clientId msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
+        UpdateMailEditorRequest mailEditor ->
+            case getUserFromSessionId sessionId model of
+                Just ( userId, _ ) ->
+                    ( updateUser userId (\user -> { user | mailEditor = mailEditor }) model
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
 
 sendConfirmationEmailRateLimit : Duration
 sendConfirmationEmailRateLimit =
@@ -535,6 +546,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             , viewBounds = viewBounds
             , trains = model.trains
             , mail = AssocList.map (\_ mail -> { status = mail.status, sender = mail.sender }) model.mail
+            , mailEditor = user.mailEditor
             }
     in
     case getUserFromSessionId sessionId model of
@@ -587,6 +599,7 @@ createUser userId model =
             , undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
+            , mailEditor = Mail.initEditor
             }
     in
     ( { model | users = Dict.insert (Id.toInt userId) userBackendData model.users }, userBackendData )

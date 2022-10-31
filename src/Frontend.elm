@@ -285,6 +285,7 @@ loadedInit time loading loadingData =
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
             , showMailEditor = False
+            , mailEditor = loadingData.mailEditor
             }
     in
     ( updateMeshes model model
