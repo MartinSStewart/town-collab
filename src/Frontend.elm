@@ -284,7 +284,7 @@ loadedInit time loading loadingData =
             , debrisMesh = WebGL.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
-            , showMailEditor = True
+            , showMailEditor = False
             }
     in
     ( updateMeshes model model
@@ -561,7 +561,12 @@ updateLoaded msg model =
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
                     ( { model
                         | mouseMiddle = MouseButtonUp { current = mousePosition }
-                        , viewPoint = offsetViewPoint model mouseState.start mousePosition
+                        , viewPoint =
+                            if model.showMailEditor then
+                                model.viewPoint
+
+                            else
+                                offsetViewPoint model mouseState.start mousePosition
                       }
                     , Cmd.none
                     )
@@ -979,6 +984,9 @@ keyMsgCanvasUpdate key model =
             else
                 ( model, Cmd.none )
 
+        Keyboard.Escape ->
+            ( { model | showMailEditor = False }, Cmd.none )
+
         _ ->
             ( model, Cmd.none )
 
@@ -995,35 +1003,19 @@ mainMouseButtonUp mousePosition mouseState model =
                 |> Vector2d.length
                 |> Quantity.lessThan (Pixels.pixels 5)
 
-        model_ =
+        model2 =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
                 , viewPoint =
-                    case ( model.mouseMiddle, model.tool ) of
-                        ( MouseButtonUp _, DragTool ) ->
+                    case ( model.showMailEditor, model.mouseMiddle, model.tool ) of
+                        ( False, MouseButtonUp _, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
-                        ( MouseButtonUp _, HighlightTool _ ) ->
+                        ( False, MouseButtonUp _, HighlightTool _ ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
                         _ ->
                             model.viewPoint
-                , cursor =
-                    if not (cursorEnabled model) then
-                        model.cursor
-
-                    else if isSmallDistance then
-                        let
-                            grid =
-                                LocalGrid.localModel model.localModel
-
-                            tile =
-                                Grid.getTile (screenToWorld model mousePosition |> Coord.floorPoint) grid
-                        in
-                        screenToWorld model mousePosition |> Coord.floorPoint |> Cursor.setCursor
-
-                    else
-                        model.cursor
                 , highlightContextMenu =
                     if isSmallDistance then
                         Nothing
@@ -1032,17 +1024,47 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.highlightContextMenu
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
-    in
-    case model_.tool of
-        HighlightTool (Just ( userId, hidePoint )) ->
-            if isSmallDistance then
-                ( highlightUser userId hidePoint model_, Cmd.none )
+
+        model3 =
+            if not (cursorEnabled model2) then
+                model2
+
+            else if isSmallDistance then
+                let
+                    localModel : LocalGrid_
+                    localModel =
+                        LocalGrid.localModel model2.localModel
+
+                    maybeTile : Maybe { userId : Id UserId, value : Tile }
+                    maybeTile =
+                        Grid.getTile (screenToWorld model2 mousePosition |> Coord.floorPoint) localModel.grid
+                in
+                case maybeTile of
+                    Just tile ->
+                        if tile.userId == localModel.user && tile.value == PostOffice then
+                            { model2 | showMailEditor = True }
+
+                        else
+                            { model2
+                                | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor
+                            }
+
+                    Nothing ->
+                        { model2 | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor }
 
             else
-                ( model_, Cmd.none )
+                model2
+    in
+    case model3.tool of
+        HighlightTool (Just ( userId, hidePoint )) ->
+            if isSmallDistance then
+                ( highlightUser userId hidePoint model3, Cmd.none )
+
+            else
+                ( model3, Cmd.none )
 
         _ ->
-            ( model_, Cmd.none )
+            ( model3, Cmd.none )
 
 
 highlightUser : Id UserId -> Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
@@ -1513,11 +1535,11 @@ offsetViewPoint ({ windowSize, viewPoint, devicePixelRatio, zoomFactor } as mode
 
 actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
-    case ( model.mouseLeft, model.mouseMiddle ) of
-        ( _, MouseButtonDown { start, current } ) ->
+    case ( model.showMailEditor, model.mouseLeft, model.mouseMiddle ) of
+        ( False, _, MouseButtonDown { start, current } ) ->
             offsetViewPoint model start current
 
-        ( MouseButtonDown { start, current }, _ ) ->
+        ( False, MouseButtonDown { start, current }, _ ) ->
             case model.tool of
                 DragTool ->
                     offsetViewPoint model start current

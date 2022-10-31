@@ -8,6 +8,7 @@ module Tile exposing
     , fromChar
     , getData
     , hasCollision
+    , hasCollisionWithCoord
     , pathDirection
     , railPathData
     , reverseDirection
@@ -493,6 +494,26 @@ hasCollision positionA tileA positionB tileB =
                         |> Set.intersect setA
             in
             Set.size intersection > 0
+
+
+hasCollisionWithCoord : Coord CellLocalUnit -> Coord CellLocalUnit -> TileData -> Bool
+hasCollisionWithCoord positionA positionB tileB =
+    let
+        ( Quantity x, Quantity y ) =
+            positionA
+
+        ( Quantity x2, Quantity y2 ) =
+            positionB
+
+        ( width2, height2 ) =
+            tileB.size
+    in
+    case tileB.collisionMask of
+        DefaultCollision ->
+            (x >= x2 && x < x2 + width2) && (y >= y2 && y < y2 + height2)
+
+        CustomCollision setB ->
+            Set.member (Coord.toRawCoord positionA) setB
 
 
 getData : Tile -> TileData

@@ -33,6 +33,7 @@ import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import GridCell exposing (Cell)
 import Id exposing (Id, UserId)
+import List.Extra as List
 import Math.Vector2 exposing (Vec2)
 import Pixels
 import Point2d exposing (Point2d)
@@ -365,6 +366,20 @@ removeUser userId grid =
         |> from
 
 
-getTile : Coord WorldUnit -> Grid -> { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, value : Tile }
 getTile coord grid =
-    0
+    let
+        ( cellPos, localPos ) =
+            worldToCellAndLocalCoord coord
+    in
+    case getCell cellPos grid of
+        Just cell ->
+            GridCell.flatten cell
+                |> List.find
+                    (\{ value, position } ->
+                        Tile.hasCollisionWithCoord localPos position (Tile.getData value)
+                    )
+                |> Maybe.map (\{ value, userId } -> { userId = userId, value = value })
+
+        Nothing ->
+            Nothing
