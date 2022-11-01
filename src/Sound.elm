@@ -1,8 +1,9 @@
-module Sound exposing (Sound(..), load, play, playWithConfig)
+module Sound exposing (Sound(..), length, load, play, playWithConfig)
 
 import AssocList as Dict exposing (Dict)
 import Audio exposing (Audio, AudioCmd, AudioData, PlayAudioConfig)
 import Duration exposing (Duration)
+import Quantity
 import Time
 
 
@@ -13,6 +14,7 @@ type Sound
     | ChugaChuga
     | EraseSound
     | PageTurnSound
+    | WhooshSound
 
 
 allSounds =
@@ -22,6 +24,7 @@ allSounds =
     , ChugaChuga
     , EraseSound
     , PageTurnSound
+    , WhooshSound
     ]
 
 
@@ -73,8 +76,21 @@ load onLoad =
 
                 PageTurnSound ->
                     "/page-turn.mp3"
+
+                WhooshSound ->
+                    "/whoosh.mp3"
             )
                 |> Audio.loadAudio (onLoad sound)
         )
         allSounds
         |> Audio.cmdBatch
+
+
+length : AudioData -> Dict Sound (Result Audio.LoadError Audio.Source) -> Sound -> Duration
+length audioData dict sound =
+    case Dict.get sound dict of
+        Just (Ok audio) ->
+            Audio.length audioData audio
+
+        _ ->
+            Quantity.zero

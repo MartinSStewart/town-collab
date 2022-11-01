@@ -14,7 +14,7 @@ import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
-import Browser.Events
+import Browser.Events exposing (Visibility(..))
 import Browser.Navigation
 import Change exposing (Change(..))
 import Coord exposing (Coord)
@@ -33,6 +33,7 @@ import GridCell
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
+import Html.Events.Extra.Wheel
 import Icons
 import Id exposing (Id, TrainId, UserId)
 import Json.Decode
@@ -77,12 +78,6 @@ port martinsstewart_elm_device_pixel_ratio_from_js : (Float -> msg) -> Sub msg
 port martinsstewart_elm_device_pixel_ratio_to_js : () -> Cmd msg
 
 
-port supermario_copy_to_clipboard_to_js : String -> Cmd msg
-
-
-port martinsstewart_elm_open_new_tab_to_js : String -> Cmd msg
-
-
 port audioPortToJS : Json.Encode.Value -> Cmd msg
 
 
@@ -90,18 +85,11 @@ port audioPortFromJS : (Json.Decode.Value -> msg) -> Sub msg
 
 
 app =
-    let
-        _ =
-            supermario_copy_to_clipboard_to_js
-
-        _ =
-            martinsstewart_elm_open_new_tab_to_js
-    in
     Audio.lamderaFrontendWithAudio
         { init = init
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
-        , update = \_ msg model -> update msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
+        , update = \audioData msg model -> update audioData msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
         , updateFromBackend = \_ msg model -> updateFromBackend msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
         , subscriptions = subscriptions
         , view = view
@@ -214,6 +202,7 @@ audioLoaded audioData model =
 
         MailEditorClosing { startTime } ->
             playSound PageTurnSound startTime |> Audio.scaleVolume 0.8
+    , List.map (playSound WhooshSound) model.lastTileRotation |> Audio.group |> Audio.scaleVolume 0.5
     ]
         |> Audio.group
 
@@ -312,6 +301,7 @@ loadedInit time loading loadingData =
             , mail = loadingData.mail
             , mailEditor = MailEditor.initEditor loadingData.mailEditor
             , currentTile = Nothing
+            , lastTileRotation = []
             }
     in
     ( updateMeshes model model
@@ -401,8 +391,8 @@ init url key =
     )
 
 
-update : FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_ )
-update msg model =
+update : AudioData -> FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_ )
+update audioData msg model =
     case model of
         Loading loadingModel ->
             case msg of
@@ -422,14 +412,14 @@ update msg model =
                     ( model, Cmd.none )
 
         Loaded frontendLoaded ->
-            updateLoaded msg frontendLoaded
+            updateLoaded audioData msg frontendLoaded
                 |> Tuple.mapFirst (updateMeshes frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
 
 
-updateLoaded : FrontendMsg_ -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
-updateLoaded msg model =
+updateLoaded : AudioData -> FrontendMsg_ -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
+updateLoaded audioData msg model =
     case msg of
         UrlClicked urlRequest ->
             case urlRequest of
@@ -582,6 +572,41 @@ updateLoaded msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        MouseWheel event ->
+            let
+                rotationHelper rotation currentTile =
+                    let
+                        nextTile =
+                            rotation currentTile.tile |> Debug.log "tile"
+                    in
+                    if currentTile.tile == nextTile then
+                        model
+
+                    else
+                        { model
+                            | currentTile = Just { tile = nextTile, mesh = Grid.tileMesh Coord.origin nextTile }
+                            , lastTileRotation =
+                                model.time
+                                    :: List.filter
+                                        (\time ->
+                                            Duration.from time model.time
+                                                |> Quantity.lessThan (Sound.length audioData model.sounds WhooshSound)
+                                        )
+                                        model.lastTileRotation
+                        }
+            in
+            ( case ( event.deltaY > 0, model.currentTile ) of
+                ( True, Just currentTile ) ->
+                    rotationHelper Tile.rotateClockwise currentTile
+
+                ( False, Just currentTile ) ->
+                    rotationHelper Tile.rotateAntiClockwise currentTile
+
+                ( _, Nothing ) ->
+                    model
+            , Cmd.none
+            )
 
         MouseMove mousePosition ->
             ( { model
@@ -747,6 +772,9 @@ updateLoaded msg model =
         SoundLoaded sound result ->
             ( { model | sounds = AssocList.insert sound result model.sounds }, Cmd.none )
 
+        VisibilityChanged ->
+            ( { model | currentTile = Nothing }, Cmd.none )
+
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 replaceUrl url model =
@@ -798,7 +826,23 @@ keyMsgCanvasUpdate key model =
             handleRedo ()
 
         ( Keyboard.Escape, _, _ ) ->
-            ( { model | mailEditor = MailEditor.close model model.mailEditor }, Cmd.none )
+            ( if MailEditor.isOpen model.mailEditor then
+                { model | mailEditor = MailEditor.close model model.mailEditor }
+
+              else
+                { model | currentTile = Nothing }
+            , Cmd.none
+            )
+
+        ( Keyboard.Spacebar, False, False ) ->
+            ( case Tile.fromChar ' ' of
+                Just tile ->
+                    { model | currentTile = Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile } }
+
+                Nothing ->
+                    model
+            , Cmd.none
+            )
 
         ( Keyboard.Character char, False, False ) ->
             ( case String.toList char of
@@ -995,8 +1039,14 @@ placeTile tile model =
             else
                 model
 
+        tileSize : ( Int, Int )
+        tileSize =
+            Tile.getData tile |> .size
+
         cursorPosition =
-            mouseWorldPosition model |> Coord.floorPoint
+            mouseWorldPosition model
+                |> Coord.floorPoint
+                |> Coord.minusTuple (Coord.fromTuple tileSize |> Coord.divideTuple (Coord.fromTuple ( 2, 2 )))
 
         ( cellPos, localPos ) =
             Grid.worldToCellAndLocalCoord cursorPosition
@@ -1443,6 +1493,7 @@ mouseAttributes =
         (\{ clientPos, button } ->
             MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
         )
+    , Html.Events.Extra.Wheel.onWheel MouseWheel
     ]
         |> List.map Element.htmlAttribute
 
@@ -1763,6 +1814,9 @@ canvasView model =
                                 let
                                     ( mouseX, mouseY ) =
                                         mouseWorldPosition model |> Coord.floorPoint |> Coord.toTuple
+
+                                    ( w, h ) =
+                                        Tile.getData currentTile.tile |> .size
                                 in
                                 [ WebGL.entityWith
                                     [ Shaders.blend ]
@@ -1772,8 +1826,8 @@ canvasView model =
                                     { view =
                                         viewMatrix
                                             |> Mat4.translate3
-                                                (toFloat mouseX * Units.tileSize)
-                                                (toFloat mouseY * Units.tileSize)
+                                                (toFloat (mouseX - (w // 2)) * Units.tileSize)
+                                                (toFloat (mouseY - (h // 2)) * Units.tileSize)
                                                 0
                                     , texture = texture
                                     , textureSize = textureSize
@@ -1982,5 +2036,6 @@ subscriptions _ model =
                     , Keyboard.downs KeyDown
                     , Time.every 1000 ShortIntervalElapsed
                     , Browser.Events.onAnimationFrame AnimationFrame
+                    , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         ]

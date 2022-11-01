@@ -22,6 +22,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
+import Browser.Events exposing (Visibility)
 import Browser.Navigation
 import Change exposing (Change, ServerChange)
 import Coord exposing (Coord, RawCellCoord)
@@ -31,6 +32,7 @@ import EmailAddress exposing (EmailAddress)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid, Vertex)
 import Html.Events.Extra.Mouse exposing (Button)
+import Html.Events.Extra.Wheel
 import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
@@ -108,6 +110,7 @@ type alias FrontendLoaded =
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : MailEditor
     , currentTile : Maybe { tile : Tile, mesh : WebGL.Mesh Vertex }
+    , lastTileRotation : List Time.Posix
     }
 
 
@@ -173,6 +176,7 @@ type FrontendMsg_
     | MouseDown Button (Point2d Pixels Pixels)
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
+    | MouseWheel Html.Events.Extra.Wheel.Event
     | ShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType
@@ -188,6 +192,7 @@ type FrontendMsg_
     | HideUserPressed { userId : Id UserId, hidePoint : Coord WorldUnit }
     | AnimationFrame Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
+    | VisibilityChanged
 
 
 type ToBackend
