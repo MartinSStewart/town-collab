@@ -575,12 +575,13 @@ updateLoaded audioData msg model =
 
         MouseWheel event ->
             let
-                rotationHelper rotation currentTile =
+                rotationHelper : (Tile -> Tile) -> Tile -> FrontendLoaded
+                rotationHelper rotation tile =
                     let
                         nextTile =
-                            rotation currentTile.tile |> Debug.log "tile"
+                            rotation tile |> Debug.log "tile"
                     in
-                    if currentTile.tile == nextTile then
+                    if tile == nextTile then
                         model
 
                     else
@@ -598,10 +599,10 @@ updateLoaded audioData msg model =
             in
             ( case ( event.deltaY > 0, model.currentTile ) of
                 ( True, Just currentTile ) ->
-                    rotationHelper Tile.rotateClockwise currentTile
+                    rotationHelper Tile.rotateClockwise currentTile.tile
 
                 ( False, Just currentTile ) ->
-                    rotationHelper Tile.rotateAntiClockwise currentTile
+                    rotationHelper Tile.rotateAntiClockwise currentTile.tile
 
                 ( _, Nothing ) ->
                     model

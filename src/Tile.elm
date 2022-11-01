@@ -977,7 +977,7 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToRight
                     (RailPathVertical { offsetX = 0, offsetY = 0, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitRight
+            , nextClockwise = RailBottomToRight_SplitLeft
             }
 
         RailTopToLeft_SplitRight ->
@@ -1004,7 +1004,7 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToLeft
                     (RailPathHorizontal { offsetX = 0, offsetY = 3, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitRight
+            , nextClockwise = RailTopToRight_SplitDown
             }
 
         RailBottomToRight_SplitUp ->
@@ -1031,7 +1031,7 @@ getData tile =
                 DoubleRailPath
                     RailPathBottomToRight
                     (RailPathVertical { offsetX = 0, offsetY = 1, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitRight
+            , nextClockwise = RailBottomToLeft_SplitRight
             }
 
         RailBottomToLeft_SplitRight ->
@@ -1058,7 +1058,7 @@ getData tile =
                 DoubleRailPath
                     RailPathBottomToLeft
                     (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitRight
+            , nextClockwise = RailTopToLeft_SplitDown
             }
 
         RailTopToRight_SplitLeft ->
@@ -1085,7 +1085,7 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToRight
                     (RailPathHorizontal { offsetX = 1, offsetY = 3, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitRight
+            , nextClockwise = RailBottomToLeft_SplitRight
             }
 
         RailTopToLeft_SplitDown ->
@@ -1112,7 +1112,7 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToLeft
                     (RailPathVertical { offsetX = 3, offsetY = 0, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitRight
+            , nextClockwise = RailTopToRight_SplitLeft
             }
 
         PostOffice ->
