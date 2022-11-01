@@ -1031,7 +1031,13 @@ mainMouseButtonUp mousePosition mouseState model =
                 if tile.userId == localModel.user && tile.value == PostOffice then
                     { model2
                         | showMailEditor =
-                            MailEditorOpening { startTime = model.time, startPosition = tile.position }
+                            MailEditorOpening
+                                { startTime = model.time
+                                , startPosition =
+                                    Coord.toPoint2d tile.position
+                                        |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
+                                        |> worldToScreen model2
+                                }
                     }
 
                 else

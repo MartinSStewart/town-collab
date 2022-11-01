@@ -3,6 +3,7 @@ module Units exposing
     , CellUnit
     , MailPixelUnit
     , TileLocalUnit
+    , UiPixelUnit
     , WorldUnit
     , cellSize
     , cellToTile
@@ -38,6 +39,10 @@ type TileLocalUnit
 
 type MailPixelUnit
     = MailUnit Never
+
+
+type UiPixelUnit
+    = UiPixelUnit Never
 
 
 tileUnit : number -> Quantity number WorldUnit

@@ -30,7 +30,7 @@ import Quantity exposing (Quantity(..))
 import Shaders exposing (SimpleVertex)
 import Tile
 import Time
-import Units exposing (MailPixelUnit, WorldUnit)
+import Units exposing (MailPixelUnit, UiPixelUnit, WorldUnit)
 import Vector2d
 import WebGL
 import WebGL.Settings.Blend as Blend
@@ -84,7 +84,7 @@ type Image
 
 openAnimationLength : Duration
 openAnimationLength =
-    Duration.milliseconds 500
+    Duration.milliseconds 200
 
 
 mailEditorIsOpen : ShowMailEditor -> Bool
@@ -102,8 +102,8 @@ mailEditorIsOpen showMailEditor =
 
 type ShowMailEditor
     = MailEditorClosed
-    | MailEditorOpening { startTime : Time.Posix, startPosition : Coord WorldUnit }
-    | MailEditorClosing { startTime : Time.Posix, startPosition : Coord WorldUnit }
+    | MailEditorOpening { startTime : Time.Posix, startPosition : Point2d Pixels Pixels }
+    | MailEditorClosing { startTime : Time.Posix, startPosition : Point2d Pixels Pixels }
 
 
 initEditor : MailEditorData -> MailEditor
@@ -163,6 +163,7 @@ mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
                     (Coord.fromTuple imageData.textureSize
                         |> Coord.divideTuple (Coord.fromTuple ( 2, 2 ))
                     )
+                |> uiPixelToMailPixel
 
         imageData =
             getImageData mailEditor.currentImage
@@ -190,6 +191,11 @@ mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
         { newMailEditor = mailEditor, shouldClose = True }
 
 
+uiPixelToMailPixel : Coord UiPixelUnit -> Coord MailPixelUnit
+uiPixelToMailPixel coord =
+    coord |> Coord.addTuple (Coord.fromTuple ( mailWidth // 2, mailHeight // 2 )) |> Coord.toTuple |> Coord.fromTuple
+
+
 validImagePosition : ImageData -> Coord MailPixelUnit -> Bool
 validImagePosition imageData position =
     let
@@ -200,9 +206,9 @@ validImagePosition imageData position =
             Coord.toTuple position
     in
     (x > round (toFloat w / -2))
-        && (x < mailWidth - round (toFloat w / 2))
+        && (x < mailWidth + round (toFloat w / -2))
         && (y > round (toFloat h / -2))
-        && (y < mailHeight - round (toFloat h / 2))
+        && (y < mailHeight + round (toFloat h / -2))
 
 
 undoMailEditor : MailEditor -> MailEditor
@@ -269,7 +275,7 @@ screenToWorld :
     -> Int
     -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
     -> Point2d Pixels Pixels
-    -> Point2d MailPixelUnit MailPixelUnit
+    -> Point2d UiPixelUnit UiPixelUnit
 screenToWorld windowWidth windowHeight model =
     let
         ( w, h ) =
@@ -278,14 +284,14 @@ screenToWorld windowWidth windowHeight model =
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
         >> Point2d.at (scaleForScreenToWorld windowWidth windowHeight model)
-        >> Point2d.placeIn (Point2d.unsafe { x = mailWidth / 2, y = mailHeight / 2 } |> Frame2d.atPoint)
+        >> Point2d.placeIn (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
 worldToScreen :
     Int
     -> Int
     -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
-    -> Point2d MailPixelUnit MailPixelUnit
+    -> Point2d UiPixelUnit UiPixelUnit
     -> Point2d Pixels Pixels
 worldToScreen windowWidth windowHeight model =
     let
@@ -295,7 +301,7 @@ worldToScreen windowWidth windowHeight model =
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
         << Point2d.at_ (scaleForScreenToWorld windowWidth windowHeight model)
-        << Point2d.relativeTo (Point2d.unsafe { x = mailWidth / 2, y = mailHeight / 2 } |> Frame2d.atPoint)
+        << Point2d.relativeTo (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
 scaleForScreenToWorld windowWidth windowHeight model =
@@ -307,104 +313,154 @@ drawMail :
     -> Point2d Pixels Pixels
     -> Int
     -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Time.Posix }
+    ->
+        { a
+            | windowSize : Coord Pixels
+            , devicePixelRatio : Float
+            , time : Time.Posix
+            , zoomFactor : Int
+            , viewPoint : Point2d WorldUnit WorldUnit
+        }
     -> MailEditor
     -> ShowMailEditor
     -> List WebGL.Entity
 drawMail texture mousePosition windowWidth windowHeight config mailEditor showMailEditor =
     let
-        isClosed =
+        isOpen =
             case showMailEditor of
-                MailEditorOpening _ ->
-                    False
+                MailEditorOpening a ->
+                    Just a
 
                 MailEditorClosed ->
-                    True
+                    Nothing
 
-                MailEditorClosing { startTime } ->
-                    Duration.from startTime config.time |> Quantity.greaterThan openAnimationLength
+                MailEditorClosing a ->
+                    if Duration.from a.startTime config.time |> Quantity.lessThan openAnimationLength then
+                        Just a
+
+                    else
+                        Nothing
     in
-    if isClosed then
-        []
+    case isOpen of
+        Just { startTime, startPosition } ->
+            let
+                startPosition_ : { x : Float, y : Float }
+                startPosition_ =
+                    screenToWorld windowWidth windowHeight config startPosition |> Point2d.unwrap
 
-    else
-        let
-            zoomFactor : Float
-            zoomFactor =
-                mailZoomFactor windowWidth windowHeight |> toFloat
+                zoomFactor : Float
+                zoomFactor =
+                    mailZoomFactor windowWidth windowHeight |> toFloat
 
-            ( mouseX, mouseY ) =
-                screenToWorld windowWidth windowHeight config mousePosition |> Coord.roundPoint |> Coord.toTuple
+                mousePosition_ : Coord UiPixelUnit
+                mousePosition_ =
+                    screenToWorld windowWidth windowHeight config mousePosition
+                        |> Coord.roundPoint
 
-            imageData =
-                getImageData mailEditor.currentImage
+                imageData =
+                    getImageData mailEditor.currentImage
 
-            ( width, height ) =
-                imageData.textureSize
+                ( imageWidth, imageHeight ) =
+                    imageData.textureSize
 
-            { topLeft, bottomRight, bottomLeft, topRight } =
-                Tile.texturePositionPixels imageData.texturePosition ( width, height )
+                { topLeft, bottomRight, bottomLeft, topRight } =
+                    Tile.texturePositionPixels imageData.texturePosition ( imageWidth, imageHeight )
 
-            tileX =
-                mouseX + (width // -2)
+                tilePosition : Coord UiPixelUnit
+                tilePosition =
+                    mousePosition_
+                        |> Coord.addTuple (Coord.fromTuple ( imageWidth // -2, imageHeight // -2 ))
 
-            tileY =
-                mouseY + (height // -2)
+                ( tileX, tileY ) =
+                    Coord.toTuple tilePosition
 
-            showHoverImage =
-                case showMailEditor of
-                    MailEditorOpening { startTime } ->
-                        (Duration.from startTime config.time |> Quantity.greaterThan openAnimationLength)
-                            && validImagePosition imageData (Coord.fromTuple ( tileX, tileY ))
+                showHoverImage : Bool
+                showHoverImage =
+                    case showMailEditor of
+                        MailEditorOpening mailEditorOpening ->
+                            (Duration.from mailEditorOpening.startTime config.time
+                                |> Quantity.greaterThan openAnimationLength
+                            )
+                                && validImagePosition imageData (uiPixelToMailPixel tilePosition)
 
-                    MailEditorClosed ->
-                        False
+                        MailEditorClosed ->
+                            False
 
-                    MailEditorClosing _ ->
-                        False
-        in
-        WebGL.entityWith
-            [ Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha ]
-            Shaders.vertexShader
-            Shaders.fragmentShader
-            mailEditor.mesh
-            { texture = texture
-            , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
-            , view =
-                Mat4.makeScale3
-                    (zoomFactor * 2 / toFloat windowWidth)
-                    (zoomFactor * -2 / toFloat windowHeight)
-                    1
-                    |> Mat4.translate3
-                        (mailWidth / -2 |> round |> toFloat)
-                        (mailHeight / -2 |> round |> toFloat)
-                        0
-            }
-            :: (if showHoverImage then
-                    [ WebGL.entityWith
-                        [ Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha ]
-                        Shaders.simpleVertexShader
-                        Shaders.simpleFragmentShader
-                        square
-                        { texture = texture
-                        , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
-                        , texturePosition = Coord.fromTuple imageData.texturePosition |> Coord.toVec2
-                        , textureScale = Coord.fromTuple imageData.textureSize |> Coord.toVec2
-                        , view =
-                            Mat4.makeScale3
-                                (zoomFactor * 2 / toFloat windowWidth)
-                                (zoomFactor * -2 / toFloat windowHeight)
-                                1
-                                |> Mat4.translate3
-                                    (toFloat tileX + mailWidth / -2 |> round |> toFloat)
-                                    (toFloat tileY + mailHeight / -2 |> round |> toFloat)
-                                    0
-                        }
-                    ]
+                        MailEditorClosing _ ->
+                            False
 
-                else
-                    []
-               )
+                t =
+                    case showMailEditor of
+                        MailEditorOpening _ ->
+                            Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> min 1
+
+                        _ ->
+                            1 - Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> max 0
+
+                endX =
+                    mailWidth / -2
+
+                endY =
+                    mailHeight / -2
+
+                mailX =
+                    (endX - startPosition_.x) * t + startPosition_.x
+
+                mailY =
+                    (endY - startPosition_.y) * t + startPosition_.y
+
+                scaleStart =
+                    0.13 * toFloat config.zoomFactor / zoomFactor
+
+                mailScale =
+                    (1 - scaleStart) * t + scaleStart
+            in
+            WebGL.entityWith
+                [ Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha ]
+                Shaders.vertexShader
+                Shaders.fragmentShader
+                mailEditor.mesh
+                { texture = texture
+                , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                , view =
+                    Mat4.makeScale3
+                        (zoomFactor * 2 / toFloat windowWidth)
+                        (zoomFactor * -2 / toFloat windowHeight)
+                        1
+                        |> Mat4.translate3
+                            (mailX |> round |> toFloat)
+                            (mailY |> round |> toFloat)
+                            0
+                        |> Mat4.scale3 mailScale mailScale 0
+                }
+                :: (if showHoverImage then
+                        [ WebGL.entityWith
+                            [ Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha ]
+                            Shaders.simpleVertexShader
+                            Shaders.simpleFragmentShader
+                            square
+                            { texture = texture
+                            , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                            , texturePosition = Coord.fromTuple imageData.texturePosition |> Coord.toVec2
+                            , textureScale = Coord.fromTuple imageData.textureSize |> Coord.toVec2
+                            , view =
+                                Mat4.makeScale3
+                                    (zoomFactor * 2 / toFloat windowWidth)
+                                    (zoomFactor * -2 / toFloat windowHeight)
+                                    1
+                                    |> Mat4.translate3
+                                        (toFloat tileX |> round |> toFloat)
+                                        (toFloat tileY |> round |> toFloat)
+                                        0
+                            }
+                        ]
+
+                    else
+                        []
+                   )
+
+        Nothing ->
+            []
 
 
 imageMesh : { position : Coord MailPixelUnit, image : Image } -> List Vertex
