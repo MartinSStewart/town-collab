@@ -45,14 +45,14 @@ colorToVec3 color =
 vertexShader : Shader Grid.Vertex { u | view : Mat4, textureSize : Vec2 } { vcoord : Vec2 }
 vertexShader =
     [glsl|
-attribute vec2 position;
+attribute vec3 position;
 attribute vec2 texturePosition;
 uniform mat4 view;
 uniform vec2 textureSize;
 varying vec2 vcoord;
 
 void main () {
-    gl_Position = view * vec4(position, 0.0, 1.0);
+    gl_Position = view * vec4(position, 1.0);
     vcoord = texturePosition / textureSize;
 }
 
@@ -111,7 +111,11 @@ uniform sampler2D texture;
 varying vec2 vcoord;
 
 void main () {
-    gl_FragColor = texture2D(texture, vcoord);
+    vec4 color = texture2D(texture, vcoord);
+    if (color.a == 0.0) {
+        discard;
+    }
+    gl_FragColor = color;
 }
     |]
 

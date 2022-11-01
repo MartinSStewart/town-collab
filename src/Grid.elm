@@ -23,6 +23,7 @@ module Grid exposing
     , moveUndoPoint
     , region
     , removeUser
+    , tileZ
     , worldToCellAndLocalCoord
     , worldToCellAndLocalPoint
     )
@@ -34,7 +35,8 @@ import Dict exposing (Dict)
 import GridCell exposing (Cell)
 import Id exposing (Id, UserId)
 import List.Extra as List
-import Math.Vector2 exposing (Vec2)
+import Math.Vector2 as Vec2 exposing (Vec2)
+import Math.Vector3 as Vec3 exposing (Vec3)
 import Pixels
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -287,7 +289,7 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
 
 
 type alias Vertex =
-    { position : Vec2, texturePosition : Vec2 }
+    { position : Vec3, texturePosition : Vec2 }
 
 
 mesh : Coord CellUnit -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile } -> WebGL.Mesh Vertex
@@ -303,21 +305,24 @@ mesh cellPosition tiles =
                     }
                 )
                 tiles
-                |> List.sortBy
-                    (\{ position, value } ->
-                        let
-                            ( _, Quantity y ) =
-                                position
-
-                            ( _, height ) =
-                                Tile.getData value |> .size
-                        in
-                        y + height
-                    )
 
         indices : List ( Int, Int, Int )
         indices =
-            List.range 0 (List.length list - 1)
+            List.range 0
+                ((List.map
+                    (\item ->
+                        case Tile.getData item.value |> .texturePositionTopLayer of
+                            Just _ ->
+                                2
+
+                            Nothing ->
+                                1
+                    )
+                    list
+                    |> List.sum
+                 )
+                    - 1
+                )
                 |> List.concatMap getIndices
     in
     List.map
@@ -326,18 +331,32 @@ mesh cellPosition tiles =
                 { topLeft, topRight, bottomLeft, bottomRight } =
                     Tile.texturePosition value
 
+                topLeftRecord =
+                    Vec2.toRecord topLeft
+
                 ( Quantity x, Quantity y ) =
                     position
+
+                data =
+                    Tile.getData value
+
+                height =
+                    data.size |> Tuple.second
+
+                texturePositionTopLayer =
+                    data.texturePositionTopLayer
             in
             List.map
                 (\uv ->
                     let
-                        offset =
-                            Math.Vector2.vec2
-                                (x * Units.tileSize |> toFloat)
-                                (y * Units.tileSize |> toFloat)
+                        uvRecord =
+                            Vec2.toRecord uv
                     in
-                    { position = Math.Vector2.sub (Math.Vector2.add offset uv) topLeft
+                    { position =
+                        Vec3.vec3
+                            (uvRecord.x - topLeftRecord.x + toFloat x * Units.tileSize)
+                            (uvRecord.y - topLeftRecord.y + toFloat y * Units.tileSize)
+                            (tileZ False (toFloat y) height)
                     , texturePosition = uv
                     }
                 )
@@ -346,10 +365,54 @@ mesh cellPosition tiles =
                 , bottomRight
                 , bottomLeft
                 ]
+                ++ (case texturePositionTopLayer of
+                        Just topLayer ->
+                            let
+                                texturePosition =
+                                    Tile.texturePosition_ topLayer.texturePosition data.size
+
+                                topLeftRecord2 =
+                                    Vec2.toRecord texturePosition.topLeft
+                            in
+                            List.map
+                                (\uv ->
+                                    let
+                                        uvRecord =
+                                            Vec2.toRecord uv
+                                    in
+                                    { position =
+                                        Vec3.vec3
+                                            (uvRecord.x - topLeftRecord2.x + toFloat x * Units.tileSize)
+                                            (uvRecord.y - topLeftRecord2.y + toFloat y * Units.tileSize)
+                                            (tileZ True (toFloat y) (height + topLayer.yOffset))
+                                    , texturePosition = uv
+                                    }
+                                )
+                                [ texturePosition.topLeft
+                                , texturePosition.topRight
+                                , texturePosition.bottomRight
+                                , texturePosition.bottomLeft
+                                ]
+
+                        Nothing ->
+                            []
+                   )
         )
         list
         |> List.concat
         |> (\vertices -> WebGL.indexedTriangles vertices indices)
+
+
+tileZ : Bool -> Float -> Int -> Float
+tileZ isTopLayer y height =
+    (if isTopLayer then
+        -0.5
+
+     else
+        0
+    )
+        + (y + toFloat height)
+        / -1000
 
 
 getIndices : number -> List ( number, number, number )

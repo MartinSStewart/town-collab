@@ -44,6 +44,7 @@ import LocalModel
 import MailEditor exposing (ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
+import Math.Vector3 as Vec3
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -63,6 +64,7 @@ import UrlHelper
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
 import WebGL.Settings
+import WebGL.Settings.DepthTest
 import WebGL.Texture exposing (Texture)
 
 
@@ -2224,7 +2226,7 @@ canvasView model =
                     0
     in
     WebGL.toHtmlWith
-        [ WebGL.alpha False, WebGL.antialias, WebGL.clearColor 0.8 1 0.7 1 ]
+        [ WebGL.alpha False, WebGL.antialias, WebGL.clearColor 0.8 1 0.7 1, WebGL.depth 1 ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
@@ -2364,6 +2366,7 @@ drawText meshes viewMatrix texture =
             (\( _, mesh ) ->
                 WebGL.entityWith
                     [ WebGL.Settings.cullFace WebGL.Settings.back
+                    , WebGL.Settings.DepthTest.default
                     , Shaders.blend
                     ]
                     Shaders.vertexShader
@@ -2406,11 +2409,11 @@ drawTrains trains viewMatrix texture =
             case Array.get trainFrame trainMeshes of
                 Just trainMesh_ ->
                     [ WebGL.entityWith
-                        [ Shaders.blend ]
+                        [ WebGL.Settings.DepthTest.default, Shaders.blend ]
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         trainMesh_
-                        { view = Mat4.makeTranslate3 (x * Units.tileSize) (y * Units.tileSize) 0 |> Mat4.mul viewMatrix
+                        { view = Mat4.makeTranslate3 (x * Units.tileSize) (y * Units.tileSize) (Grid.tileZ True y 0) |> Mat4.mul viewMatrix
                         , texture = texture
                         , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                         }
@@ -2443,10 +2446,10 @@ trainMesh frame =
             Tile.texturePosition_ ( 11, frame * 2 ) ( 2, 2 )
     in
     WebGL.triangleFan
-        [ { position = Vec2.vec2 -Units.tileSize (-Units.tileSize + offsetY), texturePosition = topLeft }
-        , { position = Vec2.vec2 Units.tileSize (-Units.tileSize + offsetY), texturePosition = topRight }
-        , { position = Vec2.vec2 Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomRight }
-        , { position = Vec2.vec2 -Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomLeft }
+        [ { position = Vec3.vec3 -Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topLeft }
+        , { position = Vec3.vec3 Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topRight }
+        , { position = Vec3.vec3 Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomRight }
+        , { position = Vec3.vec3 -Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomLeft }
         ]
 
 
@@ -2470,10 +2473,10 @@ flagMesh frame =
             Tile.texturePositionPixels ( 72, 594 + frame * 6 ) ( width, 6 )
     in
     WebGL.triangleFan
-        [ { position = Vec2.vec2 0 0, texturePosition = topLeft }
-        , { position = Vec2.vec2 width 0, texturePosition = topRight }
-        , { position = Vec2.vec2 width height, texturePosition = bottomRight }
-        , { position = Vec2.vec2 0 height, texturePosition = bottomLeft }
+        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft }
+        , { position = Vec3.vec3 width 0 0, texturePosition = topRight }
+        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight }
+        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft }
         ]
 
 

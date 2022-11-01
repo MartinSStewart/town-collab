@@ -389,6 +389,7 @@ texturePositionPixels position textureSize =
 
 type alias TileData =
     { texturePosition : ( Int, Int )
+    , texturePositionTopLayer : Maybe { yOffset : Int, texturePosition : ( Int, Int ) }
     , size : ( Int, Int )
     , collisionMask : CollisionMask
     , char : Char
@@ -521,6 +522,7 @@ getData tile =
     case tile of
         EmptyTile ->
             { texturePosition = ( 0, 5 )
+            , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = ' '
@@ -529,6 +531,7 @@ getData tile =
 
         House ->
             { texturePosition = ( 0, 1 )
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 0, 5 ) }
             , size = ( 3, 3 )
             , collisionMask =
                 [ ( 0, 1 )
@@ -546,6 +549,7 @@ getData tile =
 
         RailHorizontal ->
             { texturePosition = ( 0, 0 )
+            , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'r'
@@ -554,6 +558,7 @@ getData tile =
 
         RailVertical ->
             { texturePosition = ( 1, 0 )
+            , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'R'
@@ -562,6 +567,7 @@ getData tile =
 
         RailBottomToRight ->
             { texturePosition = ( 3, 0 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 1, 0 )
@@ -584,6 +590,7 @@ getData tile =
 
         RailBottomToLeft ->
             { texturePosition = ( 7, 0 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -606,6 +613,7 @@ getData tile =
 
         RailTopToRight ->
             { texturePosition = ( 3, 4 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -628,6 +636,7 @@ getData tile =
 
         RailTopToLeft ->
             { texturePosition = ( 7, 4 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 2, 0 )
@@ -650,6 +659,7 @@ getData tile =
 
         RailCrossing ->
             { texturePosition = ( 2, 0 )
+            , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'e'
@@ -661,6 +671,7 @@ getData tile =
 
         RailStrafeDown ->
             { texturePosition = ( 0, 8 )
+            , texturePositionTopLayer = Nothing
             , size = ( 5, 3 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -683,6 +694,7 @@ getData tile =
 
         RailStrafeUp ->
             { texturePosition = ( 5, 8 )
+            , texturePositionTopLayer = Nothing
             , size = ( 5, 3 )
             , collisionMask =
                 [ ( 2, 0 )
@@ -705,6 +717,7 @@ getData tile =
 
         RailStrafeLeft ->
             { texturePosition = ( 0, 11 )
+            , texturePositionTopLayer = Nothing
             , size = ( 3, 5 )
             , collisionMask =
                 [ ( 0, 2 )
@@ -727,6 +740,7 @@ getData tile =
 
         RailStrafeRight ->
             { texturePosition = ( 0, 16 )
+            , texturePositionTopLayer = Nothing
             , size = ( 3, 5 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -749,6 +763,7 @@ getData tile =
 
         TrainHouseRight ->
             { texturePosition = ( 3, 11 )
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 13, 8 ) }
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 1 )
@@ -772,6 +787,7 @@ getData tile =
 
         TrainHouseLeft ->
             { texturePosition = ( 7, 11 )
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 17, 8 ) }
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 1 )
@@ -795,6 +811,7 @@ getData tile =
 
         RailStrafeDownSmall ->
             { texturePosition = ( 3, 15 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
             , char = 'u'
@@ -803,6 +820,7 @@ getData tile =
 
         RailStrafeUpSmall ->
             { texturePosition = ( 7, 15 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
             , char = 'j'
@@ -811,6 +829,7 @@ getData tile =
 
         RailStrafeLeftSmall ->
             { texturePosition = ( 0, 21 )
+            , texturePositionTopLayer = Nothing
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
             , char = 'U'
@@ -819,6 +838,7 @@ getData tile =
 
         RailStrafeRightSmall ->
             { texturePosition = ( 0, 25 )
+            , texturePositionTopLayer = Nothing
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
             , char = 'J'
@@ -827,6 +847,7 @@ getData tile =
 
         Sidewalk ->
             { texturePosition = ( 2, 4 )
+            , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'z'
@@ -835,6 +856,7 @@ getData tile =
 
         SidewalkHorizontalRailCrossing ->
             { texturePosition = ( 0, 4 )
+            , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'x'
@@ -843,6 +865,7 @@ getData tile =
 
         SidewalkVerticalRailCrossing ->
             { texturePosition = ( 1, 4 )
+            , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
             , char = 'X'
@@ -851,6 +874,7 @@ getData tile =
 
         RailBottomToRight_SplitLeft ->
             { texturePosition = ( 3, 17 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 1, 0 )
@@ -876,6 +900,7 @@ getData tile =
 
         RailBottomToLeft_SplitUp ->
             { texturePosition = ( 7, 17 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -901,6 +926,7 @@ getData tile =
 
         RailTopToRight_SplitDown ->
             { texturePosition = ( 3, 21 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -926,6 +952,7 @@ getData tile =
 
         RailTopToLeft_SplitRight ->
             { texturePosition = ( 7, 21 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 2, 0 )
@@ -951,6 +978,7 @@ getData tile =
 
         RailBottomToRight_SplitUp ->
             { texturePosition = ( 3, 25 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 1, 0 )
@@ -976,6 +1004,7 @@ getData tile =
 
         RailBottomToLeft_SplitRight ->
             { texturePosition = ( 7, 25 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -1001,6 +1030,7 @@ getData tile =
 
         RailTopToRight_SplitLeft ->
             { texturePosition = ( 3, 29 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 0, 0 )
@@ -1026,6 +1056,7 @@ getData tile =
 
         RailTopToLeft_SplitDown ->
             { texturePosition = ( 7, 29 )
+            , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask =
                 [ ( 2, 0 )
@@ -1050,7 +1081,8 @@ getData tile =
             }
 
         PostOffice ->
-            { texturePosition = ( 0, 33 )
+            { texturePosition = ( 0, 38 )
+            , texturePositionTopLayer = Just { yOffset = -1, texturePosition = ( 0, 33 ) }
             , size = ( 4, 5 )
             , collisionMask = postOfficeCollision
             , char = 'p'

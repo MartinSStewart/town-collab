@@ -27,6 +27,7 @@ import Grid exposing (Vertex)
 import Id exposing (Id, TrainId, UserId)
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
+import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -284,10 +285,10 @@ mailMesh =
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels ( 234, 0 ) ( mailWidth, mailHeight )
     in
-    [ { position = Vec2.vec2 0 0, texturePosition = topLeft }
-    , { position = Vec2.vec2 mailWidth 0, texturePosition = topRight }
-    , { position = Vec2.vec2 mailWidth mailHeight, texturePosition = bottomRight }
-    , { position = Vec2.vec2 0 mailHeight, texturePosition = bottomLeft }
+    [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft }
+    , { position = Vec3.vec3 mailWidth 0 0, texturePosition = topRight }
+    , { position = Vec3.vec3 mailWidth mailHeight 0, texturePosition = bottomRight }
+    , { position = Vec3.vec3 0 mailHeight 0, texturePosition = bottomLeft }
     ]
 
 
@@ -514,10 +515,10 @@ imageMesh { position, image } =
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels imageData.texturePosition ( width, height )
     in
-    [ { position = Vec2.vec2 (toFloat x) (toFloat y), texturePosition = topLeft }
-    , { position = Vec2.vec2 (toFloat (x + width)) (toFloat y), texturePosition = topRight }
-    , { position = Vec2.vec2 (toFloat (x + width)) (toFloat (y + height)), texturePosition = bottomRight }
-    , { position = Vec2.vec2 (toFloat x) (toFloat (y + height)), texturePosition = bottomLeft }
+    [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0, texturePosition = topLeft }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0, texturePosition = topRight }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) 0, texturePosition = bottomRight }
+    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) 0, texturePosition = bottomLeft }
     ]
 
 
