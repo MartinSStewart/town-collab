@@ -25,11 +25,13 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor
+import Quantity exposing (Quantity(..))
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
+import Tile exposing (Tile(..))
 import Time
-import Train
+import Train exposing (Train)
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
@@ -404,7 +406,11 @@ updateLocalChange ( userId, _ ) change model =
                             Grid.worldToCellAndLocalCoord localChange.position
 
                         maybeTrain =
-                            Frontend.handleAddingTrain localChange.change localChange.position
+                            if AssocList.size model.trains < 50 then
+                                handleAddingTrain localChange.change localChange.position
+
+                            else
+                                Nothing
                     in
                     ( { model
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
@@ -504,6 +510,33 @@ updateLocalChange ( userId, _ ) change model =
 
             else
                 ( model, Nothing )
+
+
+handleAddingTrain : Tile -> Coord WorldUnit -> Maybe Train
+handleAddingTrain tile position =
+    if tile == TrainHouseLeft || tile == TrainHouseRight then
+        let
+            ( path, speed ) =
+                if tile == TrainHouseLeft then
+                    ( Tile.trainHouseLeftRailPath
+                    , Quantity -0.1
+                    )
+
+                else
+                    ( Tile.trainHouseRightRailPath
+                    , Quantity 0.1
+                    )
+        in
+        { position = position
+        , path = path
+        , t = 0.5
+        , speed = speed
+        , stoppedAtPostOffice = Nothing
+        }
+            |> Just
+
+    else
+        Nothing
 
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel

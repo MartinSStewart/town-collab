@@ -49,7 +49,7 @@ moveTrain :
 moveTrain startTime endTime state train =
     let
         timeElapsed_ =
-            Duration.inSeconds (Duration.from startTime endTime)
+            Duration.inSeconds (Duration.from startTime endTime) |> min 10
 
         trainSpeed =
             Quantity.unwrap train.speed

@@ -1,4 +1,10 @@
-port module Frontend exposing (app, handleAddingTrain, init, update, updateFromBackend, view)
+port module Frontend exposing
+    ( app
+    , init
+    , update
+    , updateFromBackend
+    , view
+    )
 
 import Angle
 import Array exposing (Array)
@@ -1255,33 +1261,6 @@ changeText text model =
             model
 
 
-handleAddingTrain : Tile -> Coord WorldUnit -> Maybe Train
-handleAddingTrain tile position =
-    if tile == TrainHouseLeft || tile == TrainHouseRight then
-        let
-            ( path, speed ) =
-                if tile == TrainHouseLeft then
-                    ( Tile.trainHouseLeftRailPath
-                    , Quantity -0.1
-                    )
-
-                else
-                    ( Tile.trainHouseRightRailPath
-                    , Quantity 0.1
-                    )
-        in
-        { position = position
-        , path = path
-        , t = 0.5
-        , speed = speed
-        , stoppedAtPostOffice = Nothing
-        }
-            |> Just
-
-    else
-        Nothing
-
-
 createDebrisMesh : Time.Posix -> List RemovedTileParticle -> WebGL.Mesh DebrisVertex
 createDebrisMesh appStartTime removedTiles =
     let
@@ -1305,10 +1284,21 @@ createDebrisMesh appStartTime removedTiles =
             List.map
                 (\{ tile } ->
                     let
+                        data =
+                            Tile.getData tile
+
                         ( textureW, textureH ) =
-                            Tile.getData tile |> .size
+                            data.size
                     in
-                    textureW * textureH
+                    textureW
+                        * textureH
+                        * (case data.texturePositionTopLayer of
+                            Just _ ->
+                                2
+
+                            Nothing ->
+                                1
+                          )
                 )
                 list
                 |> List.sum
@@ -1321,59 +1311,68 @@ createDebrisMesh appStartTime removedTiles =
             let
                 data =
                     Tile.getData tile
-
-                ( Quantity x, Quantity y ) =
-                    position
-
-                ( textureX, textureY ) =
-                    data.texturePosition
-
-                ( textureW, textureH ) =
-                    data.size
             in
-            List.concatMap
-                (\x2 ->
-                    List.concatMap
-                        (\y2 ->
-                            let
-                                { topLeft, topRight, bottomLeft, bottomRight } =
-                                    Tile.texturePosition_ ( textureX + x2, textureY + y2 ) ( 1, 1 )
+            createDebrisMeshHelper position data.texturePosition data.size appStartTime time
+                ++ (case data.texturePositionTopLayer of
+                        Just topLayer ->
+                            createDebrisMeshHelper position topLayer.texturePosition data.size appStartTime time
 
-                                ( ( randomX, randomY ), _ ) =
-                                    Random.step
-                                        (Random.map2 Tuple.pair (Random.float -40 40) (Random.float -40 40))
-                                        (Random.initialSeed (Time.posixToMillis time + x2 * 3 + y2 * 5))
-                            in
-                            List.map
-                                (\uv ->
-                                    let
-                                        offset =
-                                            Vec2.vec2
-                                                ((x + x2) * Units.tileSize |> toFloat)
-                                                ((y + y2) * Units.tileSize |> toFloat)
-                                    in
-                                    { position = Vec2.sub (Vec2.add offset uv) topLeft
-                                    , initialSpeed =
-                                        Vec2.vec2
-                                            ((toFloat x2 + 0.5 - toFloat textureW / 2) * 100 + randomX)
-                                            (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
-                                    , texturePosition = uv
-                                    , startTime = Duration.from appStartTime time |> Duration.inSeconds
-                                    }
-                                )
-                                [ topLeft
-                                , topRight
-                                , bottomRight
-                                , bottomLeft
-                                ]
-                        )
-                        (List.range 0 (textureH - 1))
-                )
-                (List.range 0 (textureW - 1))
+                        Nothing ->
+                            []
+                   )
         )
         list
         |> List.concat
         |> (\vertices -> WebGL.indexedTriangles vertices indices)
+
+
+createDebrisMeshHelper :
+    ( Quantity Int WorldUnit, Quantity Int WorldUnit )
+    -> ( Int, Int )
+    -> ( Int, Int )
+    -> Time.Posix
+    -> Time.Posix
+    -> List DebrisVertex
+createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textureW, textureH ) appStartTime time =
+    List.concatMap
+        (\x2 ->
+            List.concatMap
+                (\y2 ->
+                    let
+                        { topLeft, topRight, bottomLeft, bottomRight } =
+                            Tile.texturePosition_ ( textureX + x2, textureY + y2 ) ( 1, 1 )
+
+                        ( ( randomX, randomY ), _ ) =
+                            Random.step
+                                (Random.map2 Tuple.pair (Random.float -40 40) (Random.float -40 40))
+                                (Random.initialSeed (Time.posixToMillis time + x2 * 3 + y2 * 5))
+                    in
+                    List.map
+                        (\uv ->
+                            let
+                                offset =
+                                    Vec2.vec2
+                                        ((x + x2) * Units.tileSize |> toFloat)
+                                        ((y + y2) * Units.tileSize |> toFloat)
+                            in
+                            { position = Vec2.sub (Vec2.add offset uv) topLeft
+                            , initialSpeed =
+                                Vec2.vec2
+                                    ((toFloat x2 + 0.5 - toFloat textureW / 2) * 100 + randomX)
+                                    (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
+                            , texturePosition = uv
+                            , startTime = Duration.from appStartTime time |> Duration.inSeconds
+                            }
+                        )
+                        [ topLeft
+                        , topRight
+                        , bottomRight
+                        , bottomLeft
+                        ]
+                )
+                (List.range 0 (textureH - 1))
+        )
+        (List.range 0 (textureW - 1))
 
 
 keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
@@ -1650,16 +1649,8 @@ view _ model =
                         :: Element.clip
                         :: textarea loadedModel
                         :: Element.inFront (toolbarView loadedModel)
-                        :: Element.inFront (userListView loadedModel)
                         :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
                         :: mouseAttributes
-                        ++ (case loadedModel.highlightContextMenu of
-                                Just hideUser ->
-                                    [ contextMenuView hideUser loadedModel |> Element.inFront ]
-
-                                Nothing ->
-                                    []
-                           )
                     )
                     (Element.html (canvasView loadedModel))
         , Html.node "style"
