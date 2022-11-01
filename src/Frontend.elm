@@ -142,9 +142,26 @@ audioLoaded audioData model =
                 )
                 (AssocList.toList model.trains)
 
+        mailEditorVolumeScale =
+            clamp
+                0
+                1
+                (case model.mailEditor.showMailEditor of
+                    MailEditorClosed ->
+                        1
+
+                    MailEditorClosing { startTime } ->
+                        Quantity.ratio (Duration.from startTime model.time) Mail.openAnimationLength
+
+                    MailEditorOpening { startTime } ->
+                        1 - Quantity.ratio (Duration.from startTime model.time) Mail.openAnimationLength
+                )
+                * 0.75
+                + 0.25
+
         volumeOffset : Float
         volumeOffset =
-            0.5 / ((List.map .volume movingTrains |> List.sum) + 1)
+            mailEditorVolumeScale * 0.5 / ((List.map .volume movingTrains |> List.sum) + 1)
 
         trainSounds =
             List.map
@@ -166,20 +183,20 @@ audioLoaded audioData model =
     [ case model.lastTilePlaced of
         Just { time, overwroteTiles, tile } ->
             if tile == EmptyTile then
-                playSound EraseSound time |> Audio.scaleVolume 0.2
+                playSound EraseSound time |> Audio.scaleVolume 0.4
 
             else if overwroteTiles then
-                playSound CrackleSound time |> Audio.scaleVolume 0.2
+                playSound CrackleSound time |> Audio.scaleVolume 0.4
 
             else
-                playSound PopSound time |> Audio.scaleVolume 0.2
+                playSound PopSound time |> Audio.scaleVolume 0.4
 
         _ ->
             Audio.silence
     , trainSounds
     , case model.lastTrainWhistle of
         Just time ->
-            playSound TrainWhistleSound time |> Audio.scaleVolume 0.2
+            playSound TrainWhistleSound time |> Audio.scaleVolume (0.2 * mailEditorVolumeScale)
 
         Nothing ->
             Audio.silence

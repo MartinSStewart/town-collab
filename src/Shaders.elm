@@ -2,7 +2,9 @@ module Shaders exposing
     ( DebrisVertex
     , SimpleVertex
     , blend
+    , colorFragmentShader
     , colorToVec3
+    , colorVertexShader
     , debrisVertexShader
     , fragmentShader
     , simpleFragmentShader
@@ -11,7 +13,7 @@ module Shaders exposing
     )
 
 import Element
-import Grid
+import Grid exposing (Vertex)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3
@@ -52,6 +54,32 @@ varying vec2 vcoord;
 void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
     vcoord = texturePosition / textureSize;
+}
+
+|]
+
+
+colorVertexShader : Shader { a | position : Vec2 } { u | view : Mat4 } {}
+colorVertexShader =
+    [glsl|
+attribute vec2 position;
+uniform mat4 view;
+
+void main () {
+    gl_Position = view * vec4(position, 0.0, 1.0);
+}
+
+|]
+
+
+colorFragmentShader : Shader {} { u | color : Vec4 } {}
+colorFragmentShader =
+    [glsl|
+precision mediump float;
+uniform vec4 color;
+
+void main () {
+    gl_FragColor = color;
 }
 
 |]

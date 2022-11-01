@@ -27,6 +27,7 @@ import Grid exposing (Vertex)
 import Id exposing (Id, TrainId, UserId)
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
+import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -439,22 +440,30 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor =
             in
             WebGL.entityWith
                 [ Shaders.blend ]
-                Shaders.vertexShader
-                Shaders.fragmentShader
-                mailEditor.mesh
-                { texture = texture
-                , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
-                , view =
-                    Mat4.makeScale3
-                        (zoomFactor * 2 / toFloat windowWidth)
-                        (zoomFactor * -2 / toFloat windowHeight)
-                        1
-                        |> Mat4.translate3
-                            (mailX |> round |> toFloat)
-                            (mailY |> round |> toFloat)
-                            0
-                        |> Mat4.scale3 mailScale mailScale 0
+                Shaders.colorVertexShader
+                Shaders.colorFragmentShader
+                square
+                { color = Vec4.vec4 0.2 0.2 0.2 (t * t * 0.75)
+                , view = Mat4.makeTranslate3 -1 -1 0 |> Mat4.scale3 2 2 1
                 }
+                :: WebGL.entityWith
+                    [ Shaders.blend ]
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
+                    mailEditor.mesh
+                    { texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                    , view =
+                        Mat4.makeScale3
+                            (zoomFactor * 2 / toFloat windowWidth)
+                            (zoomFactor * -2 / toFloat windowHeight)
+                            1
+                            |> Mat4.translate3
+                                (mailX |> round |> toFloat)
+                                (mailY |> round |> toFloat)
+                                0
+                            |> Mat4.scale3 mailScale mailScale 0
+                    }
                 :: (if showHoverImage then
                         [ WebGL.entityWith
                             [ Shaders.blend ]
