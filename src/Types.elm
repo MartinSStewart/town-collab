@@ -112,7 +112,6 @@ type alias FrontendLoaded =
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
-    , showMailEditor : ShowMailEditor
     , mailEditor : MailEditor
     }
 

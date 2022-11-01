@@ -12,6 +12,7 @@ type Sound
     | TrainWhistleSound
     | ChugaChuga
     | EraseSound
+    | PageTurnSound
 
 
 allSounds =
@@ -20,6 +21,7 @@ allSounds =
     , TrainWhistleSound
     , ChugaChuga
     , EraseSound
+    , PageTurnSound
     ]
 
 
@@ -68,6 +70,9 @@ load onLoad =
 
                 EraseSound ->
                     "/erase.mp3"
+
+                PageTurnSound ->
+                    "/page-turn.mp3"
             )
                 |> Audio.loadAudio (onLoad sound)
         )

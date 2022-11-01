@@ -6,6 +6,7 @@ module Mail exposing
     , MailEditorData
     , MailStatus(..)
     , ShowMailEditor(..)
+    , closeMailEditor
     , drawMail
     , getImageData
     , initEditor
@@ -13,10 +14,12 @@ module Mail exposing
     , mailEditorIsOpen
     , mouseDownMailEditor
     , openAnimationLength
+    , openMailEditor
     , redoMailEditor
     , undoMailEditor
     )
 
+import Audio exposing (Audio)
 import Coord exposing (Coord)
 import Duration exposing (Duration)
 import Frame2d
@@ -63,6 +66,7 @@ type alias MailEditor =
     , undo : List EditorState
     , current : EditorState
     , redo : List EditorState
+    , showMailEditor : ShowMailEditor
     }
 
 
@@ -87,8 +91,8 @@ openAnimationLength =
     Duration.milliseconds 300
 
 
-mailEditorIsOpen : ShowMailEditor -> Bool
-mailEditorIsOpen showMailEditor =
+mailEditorIsOpen : MailEditor -> Bool
+mailEditorIsOpen { showMailEditor } =
     case showMailEditor of
         MailEditorClosed ->
             False
@@ -113,6 +117,7 @@ initEditor data =
     , redo = []
     , mesh = mesh data.content
     , currentImage = BlueStamp
+    , showMailEditor = MailEditorClosed
     }
 
 
@@ -150,10 +155,10 @@ getImageData image =
 mouseDownMailEditor :
     Int
     -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
+    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Time.Posix }
     -> Point2d Pixels Pixels
     -> MailEditor
-    -> { newMailEditor : MailEditor, shouldClose : Bool }
+    -> MailEditor
 mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
     let
         mailCoord =
@@ -177,18 +182,36 @@ mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
             }
     in
     if validImagePosition imageData mailCoord then
-        { newMailEditor =
-            { mailEditor
-                | current = newEditorState
-                , undo = oldEditorState :: List.take 50 mailEditor.undo
-                , redo = []
-                , mesh = mesh newEditorState.content
-            }
-        , shouldClose = False
+        { mailEditor
+            | current = newEditorState
+            , undo = oldEditorState :: List.take 50 mailEditor.undo
+            , redo = []
+            , mesh = mesh newEditorState.content
         }
 
     else
-        { newMailEditor = mailEditor, shouldClose = True }
+        closeMailEditor config mailEditor
+
+
+closeMailEditor : { a | time : Time.Posix } -> MailEditor -> MailEditor
+closeMailEditor config mailEditor =
+    { mailEditor
+        | showMailEditor =
+            case mailEditor.showMailEditor of
+                MailEditorOpening { startPosition } ->
+                    MailEditorClosing { startTime = config.time, startPosition = startPosition }
+
+                MailEditorClosing _ ->
+                    MailEditorClosed
+
+                MailEditorClosed ->
+                    MailEditorClosed
+    }
+
+
+openMailEditor : { a | time : Time.Posix } -> Point2d Pixels Pixels -> MailEditor -> MailEditor
+openMailEditor config startPosition mailEditor =
+    { mailEditor | showMailEditor = MailEditorOpening { startTime = config.time, startPosition = startPosition } }
 
 
 uiPixelToMailPixel : Coord UiPixelUnit -> Coord MailPixelUnit
@@ -322,12 +345,11 @@ drawMail :
             , viewPoint : Point2d WorldUnit WorldUnit
         }
     -> MailEditor
-    -> ShowMailEditor
     -> List WebGL.Entity
-drawMail texture mousePosition windowWidth windowHeight config mailEditor showMailEditor =
+drawMail texture mousePosition windowWidth windowHeight config mailEditor =
     let
         isOpen =
-            case showMailEditor of
+            case mailEditor.showMailEditor of
                 MailEditorOpening a ->
                     Just a
 
@@ -376,7 +398,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor showMa
 
                 showHoverImage : Bool
                 showHoverImage =
-                    case showMailEditor of
+                    case mailEditor.showMailEditor of
                         MailEditorOpening mailEditorOpening ->
                             (Duration.from mailEditorOpening.startTime config.time
                                 |> Quantity.greaterThan openAnimationLength
@@ -390,7 +412,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor showMa
                             False
 
                 t =
-                    case showMailEditor of
+                    case mailEditor.showMailEditor of
                         MailEditorOpening _ ->
                             Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> min 1
 

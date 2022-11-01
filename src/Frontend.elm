@@ -183,6 +183,15 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , case model.mailEditor.showMailEditor of
+        MailEditorClosed ->
+            Audio.silence
+
+        MailEditorOpening { startTime } ->
+            playSound PageTurnSound startTime |> Audio.scaleVolume 0.8
+
+        MailEditorClosing { startTime } ->
+            playSound PageTurnSound startTime |> Audio.scaleVolume 0.8
     ]
         |> Audio.group
 
@@ -287,7 +296,6 @@ loadedInit time loading loadingData =
             , debrisMesh = WebGL.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
-            , showMailEditor = MailEditorClosed
             , mailEditor = Mail.initEditor loadingData.mailEditor
             }
     in
@@ -516,7 +524,7 @@ updateLoaded msg model =
                 model_ =
                     resetTouchMove model
             in
-            case model.showMailEditor of
+            case model.mailEditor.showMailEditor of
                 MailEditorOpening { startTime, startPosition } ->
                     if
                         (button == MainButton)
@@ -528,21 +536,12 @@ updateLoaded msg model =
 
                             { canvasSize, actualCanvasSize } =
                                 findPixelPerfectSize model
-
-                            { newMailEditor, shouldClose } =
-                                Mail.mouseDownMailEditor windowWidth windowHeight model_ mousePosition model.mailEditor
                         in
                         ( { model_
                             | mouseLeft =
                                 MouseButtonDown
                                     { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
-                            , mailEditor = newMailEditor
-                            , showMailEditor =
-                                if shouldClose then
-                                    MailEditorClosing { startTime = model.time, startPosition = startPosition }
-
-                                else
-                                    model.showMailEditor
+                            , mailEditor = Mail.mouseDownMailEditor windowWidth windowHeight model_ mousePosition model.mailEditor
                           }
                         , Cmd.none
                         )
@@ -598,7 +597,7 @@ updateLoaded msg model =
                     ( { model
                         | mouseMiddle = MouseButtonUp { current = mousePosition }
                         , viewPoint =
-                            if Mail.mailEditorIsOpen model.showMailEditor then
+                            if Mail.mailEditorIsOpen model.mailEditor then
                                 model.viewPoint
 
                             else
@@ -872,7 +871,7 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if Mail.mailEditorIsOpen model.showMailEditor then
+                if Mail.mailEditorIsOpen model.mailEditor then
                     ( { model | mailEditor = Mail.undoMailEditor model.mailEditor }, Cmd.none )
 
                 else
@@ -883,7 +882,7 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "Z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if Mail.mailEditorIsOpen model.showMailEditor then
+                if Mail.mailEditorIsOpen model.mailEditor then
                     ( { model | mailEditor = Mail.redoMailEditor model.mailEditor }, Cmd.none )
 
                 else
@@ -965,20 +964,7 @@ keyMsgCanvasUpdate key model =
             )
 
         Keyboard.Escape ->
-            ( { model
-                | showMailEditor =
-                    case model.showMailEditor of
-                        MailEditorOpening { startPosition } ->
-                            MailEditorClosing { startTime = model.time, startPosition = startPosition }
-
-                        MailEditorClosing _ ->
-                            MailEditorClosed
-
-                        MailEditorClosed ->
-                            MailEditorClosed
-              }
-            , Cmd.none
-            )
+            ( { model | mailEditor = Mail.closeMailEditor model model.mailEditor }, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -1000,7 +986,7 @@ mainMouseButtonUp mousePosition mouseState model =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
                 , viewPoint =
-                    case ( Mail.mailEditorIsOpen model.showMailEditor, model.mouseMiddle, model.tool ) of
+                    case ( Mail.mailEditorIsOpen model.mailEditor, model.mouseMiddle, model.tool ) of
                         ( False, MouseButtonUp _, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
@@ -1016,7 +1002,7 @@ mainMouseButtonUp mousePosition mouseState model =
             }
 
         canOpenMailEditor =
-            case model.showMailEditor of
+            case model.mailEditor.showMailEditor of
                 MailEditorClosed ->
                     True
 
@@ -1040,14 +1026,14 @@ mainMouseButtonUp mousePosition mouseState model =
             Just tile ->
                 if tile.userId == localModel.user && tile.value == PostOffice then
                     { model2
-                        | showMailEditor =
-                            MailEditorOpening
-                                { startTime = model.time
-                                , startPosition =
-                                    Coord.toPoint2d tile.position
-                                        |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                        |> worldToScreen model2
-                                }
+                        | mailEditor =
+                            Mail.openMailEditor
+                                model
+                                (Coord.toPoint2d tile.position
+                                    |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
+                                    |> worldToScreen model2
+                                )
+                                model.mailEditor
                     }
 
                 else
@@ -1520,7 +1506,7 @@ offsetViewPoint ({ windowSize, viewPoint, devicePixelRatio, zoomFactor } as mode
 
 actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
-    case ( Mail.mailEditorIsOpen model.showMailEditor, model.mouseLeft, model.mouseMiddle ) of
+    case ( Mail.mailEditorIsOpen model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
         ( False, _, MouseButtonDown { start, current } ) ->
             offsetViewPoint model start current
 
@@ -2305,7 +2291,6 @@ canvasView model =
                                 windowHeight
                                 model
                                 model.mailEditor
-                                model.showMailEditor
 
                     Nothing ->
                         []
