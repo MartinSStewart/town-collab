@@ -23,6 +23,7 @@ module Grid exposing
     , moveUndoPoint
     , region
     , removeUser
+    , tileMesh
     , tileZ
     , worldToCellAndLocalCoord
     , worldToCellAndLocalPoint
@@ -328,71 +329,13 @@ mesh cellPosition tiles =
     List.map
         (\{ position, value } ->
             let
-                { topLeft, topRight, bottomLeft, bottomRight } =
-                    Tile.texturePosition value
-
-                topLeftRecord =
-                    Vec2.toRecord topLeft
-
-                ( Quantity x, Quantity y ) =
-                    position
-
                 data =
                     Tile.getData value
-
-                height =
-                    data.size |> Tuple.second
-
-                texturePositionTopLayer =
-                    data.texturePositionTopLayer
             in
-            List.map
-                (\uv ->
-                    let
-                        uvRecord =
-                            Vec2.toRecord uv
-                    in
-                    { position =
-                        Vec3.vec3
-                            (uvRecord.x - topLeftRecord.x + toFloat x * Units.tileSize)
-                            (uvRecord.y - topLeftRecord.y + toFloat y * Units.tileSize)
-                            (tileZ False (toFloat y) height)
-                    , texturePosition = uv
-                    }
-                )
-                [ topLeft
-                , topRight
-                , bottomRight
-                , bottomLeft
-                ]
-                ++ (case texturePositionTopLayer of
+            tileMeshHelper False position data.texturePosition data.size
+                ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
-                            let
-                                texturePosition =
-                                    Tile.texturePosition_ topLayer.texturePosition data.size
-
-                                topLeftRecord2 =
-                                    Vec2.toRecord texturePosition.topLeft
-                            in
-                            List.map
-                                (\uv ->
-                                    let
-                                        uvRecord =
-                                            Vec2.toRecord uv
-                                    in
-                                    { position =
-                                        Vec3.vec3
-                                            (uvRecord.x - topLeftRecord2.x + toFloat x * Units.tileSize)
-                                            (uvRecord.y - topLeftRecord2.y + toFloat y * Units.tileSize)
-                                            (tileZ True (toFloat y) (height + topLayer.yOffset))
-                                    , texturePosition = uv
-                                    }
-                                )
-                                [ texturePosition.topLeft
-                                , texturePosition.topRight
-                                , texturePosition.bottomRight
-                                , texturePosition.bottomLeft
-                                ]
+                            tileMeshHelper True position topLayer.texturePosition data.size
 
                         Nothing ->
                             []
@@ -401,6 +344,75 @@ mesh cellPosition tiles =
         list
         |> List.concat
         |> (\vertices -> WebGL.indexedTriangles vertices indices)
+
+
+tileMesh : ( Quantity Int WorldUnit, Quantity Int WorldUnit ) -> Tile -> WebGL.Mesh Vertex
+tileMesh position tile =
+    let
+        indices =
+            List.range 0
+                (case Tile.getData tile |> .texturePositionTopLayer of
+                    Just _ ->
+                        1
+
+                    Nothing ->
+                        0
+                )
+                |> List.concatMap getIndices
+
+        data =
+            Tile.getData tile
+    in
+    tileMeshHelper False position data.texturePosition data.size
+        ++ (case data.texturePositionTopLayer of
+                Just topLayer ->
+                    tileMeshHelper True position topLayer.texturePosition data.size
+
+                Nothing ->
+                    []
+           )
+        |> (\vertices -> WebGL.indexedTriangles vertices indices)
+
+
+tileMeshHelper :
+    Bool
+    -> ( Quantity Int WorldUnit, Quantity Int WorldUnit )
+    -> ( Int, Int )
+    -> ( Int, Int )
+    -> List Vertex
+tileMeshHelper isTopLayer position texturePosition size =
+    let
+        { topLeft, topRight, bottomLeft, bottomRight } =
+            Tile.texturePosition_ texturePosition size
+
+        topLeftRecord =
+            Vec2.toRecord topLeft
+
+        ( Quantity x, Quantity y ) =
+            position
+
+        height =
+            Tuple.second size
+    in
+    List.map
+        (\uv ->
+            let
+                uvRecord =
+                    Vec2.toRecord uv
+            in
+            { position =
+                Vec3.vec3
+                    (uvRecord.x - topLeftRecord.x + toFloat x * Units.tileSize)
+                    (uvRecord.y - topLeftRecord.y + toFloat y * Units.tileSize)
+                    (tileZ isTopLayer (toFloat y) height)
+            , texturePosition = uv
+            }
+        )
+        [ topLeft
+        , topRight
+        , bottomRight
+        , bottomLeft
+        ]
 
 
 tileZ : Bool -> Float -> Int -> Float

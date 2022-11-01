@@ -2,6 +2,8 @@ module Shaders exposing
     ( DebrisVertex
     , SimpleVertex
     , blend
+    , colorAndTextureFragmentShader
+    , colorAndTextureVertexShader
     , colorFragmentShader
     , colorToVec3
     , colorVertexShader
@@ -16,7 +18,7 @@ import Element
 import Grid exposing (Vertex)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
-import Math.Vector3
+import Math.Vector3 exposing (Vec3)
 import Math.Vector4 exposing (Vec4)
 import WebGL exposing (Shader)
 import WebGL.Settings exposing (Setting)
@@ -54,9 +56,7 @@ varying vec2 vcoord;
 void main () {
     gl_Position = view * vec4(position, 1.0);
     vcoord = texturePosition / textureSize;
-}
-
-|]
+}|]
 
 
 colorVertexShader : Shader { a | position : Vec2 } { u | view : Mat4 } {}
@@ -67,9 +67,7 @@ uniform mat4 view;
 
 void main () {
     gl_Position = view * vec4(position, 0.0, 1.0);
-}
-
-|]
+}|]
 
 
 colorFragmentShader : Shader {} { u | color : Vec4 } {}
@@ -80,9 +78,35 @@ uniform vec4 color;
 
 void main () {
     gl_FragColor = color;
-}
+}|]
 
-|]
+
+colorAndTextureVertexShader : Shader Vertex { a | view : Mat4, textureSize : Vec2 } { vcoord : Vec2 }
+colorAndTextureVertexShader =
+    [glsl|
+attribute vec3 position;
+attribute vec2 texturePosition;
+uniform vec2 textureSize;
+uniform mat4 view;
+varying vec2 vcoord;
+
+void main () {
+    gl_Position = view * vec4(position, 1.0);
+    vcoord = texturePosition / textureSize;
+}|]
+
+
+colorAndTextureFragmentShader : Shader {} { u | color : Vec4, texture : Texture } { vcoord : Vec2 }
+colorAndTextureFragmentShader =
+    [glsl|
+precision mediump float;
+uniform vec4 color;
+uniform sampler2D texture;
+varying vec2 vcoord;
+
+void main () {
+    gl_FragColor = texture2D(texture, vcoord) * color;
+}|]
 
 
 simpleVertexShader : Shader SimpleVertex { u | view : Mat4, texturePosition : Vec2, textureScale : Vec2, textureSize : Vec2 } { vcoord : Vec2 }
@@ -98,9 +122,7 @@ varying vec2 vcoord;
 void main () {
     gl_Position = view * vec4(position * textureScale, 0.0, 1.0);
     vcoord = (texturePosition + position * textureScale) / textureSize;
-}
-
-|]
+}|]
 
 
 fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2 }
@@ -116,8 +138,7 @@ void main () {
         discard;
     }
     gl_FragColor = color;
-}
-    |]
+}|]
 
 
 simpleFragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2 }
@@ -129,8 +150,7 @@ varying vec2 vcoord;
 
 void main () {
     gl_FragColor = texture2D(texture, vcoord) * vec4(1.0, 1.0, 1.0, 0.5);
-}
-    |]
+}|]
 
 
 type alias DebrisVertex =
@@ -153,6 +173,4 @@ void main () {
     float seconds = time - startTime;
     gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
     vcoord = texturePosition / textureSize;
-}
-
-|]
+}|]

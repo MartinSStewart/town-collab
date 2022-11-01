@@ -11,6 +11,7 @@ module Coord exposing
     , minTuple
     , minusTuple
     , multiplyTuple
+    , origin
     , roundPoint
     , toPoint2d
     , toTuple
@@ -37,6 +38,11 @@ area coord =
             toTuple coord
     in
     x * y
+
+
+origin : Coord units
+origin =
+    fromTuple ( 0, 0 )
 
 
 addTuple : Coord unit -> Coord unit -> Coord unit

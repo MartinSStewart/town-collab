@@ -25,12 +25,11 @@ import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Change exposing (Change, ServerChange)
 import Coord exposing (Coord, RawCellCoord)
-import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
 import EverySet exposing (EverySet)
-import Grid exposing (Grid)
+import Grid exposing (Grid, Vertex)
 import Html.Events.Extra.Mouse exposing (Button)
 import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard
@@ -39,7 +38,6 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, MailEditor, MailEditorData, ShowMailEditor)
-import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import SendGrid
@@ -81,11 +79,9 @@ type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : AssocList.Dict (Id TrainId) Train
-    , meshes : Dict RawCellCoord (WebGL.Mesh Grid.Vertex)
-    , cursorMesh : WebGL.Mesh { position : Vec2 }
+    , meshes : Dict RawCellCoord (WebGL.Mesh Vertex)
     , viewPoint : Point2d WorldUnit WorldUnit
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
-    , cursor : Cursor
     , texture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
@@ -99,13 +95,11 @@ type alias FrontendLoaded =
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , startTime : Time.Posix
-    , lastTouchMove : Maybe Time.Posix
     , userHoverHighlighted : Maybe (Id UserId)
     , highlightContextMenu : Maybe { userId : Id UserId, hidePoint : Coord WorldUnit }
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
-    , textAreaText : String
     , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool, tile : Tile }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , removedTileParticles : List RemovedTileParticle
@@ -113,6 +107,7 @@ type alias FrontendLoaded =
     , lastTrainWhistle : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : MailEditor
+    , currentTile : Maybe { tile : Tile, mesh : WebGL.Mesh Vertex }
     }
 
 
@@ -122,7 +117,6 @@ type alias RemovedTileParticle =
 
 type ToolType
     = DragTool
-    | SelectTool
 
 
 type MouseButtonState
@@ -176,14 +170,10 @@ type FrontendMsg_
     | KeyDown Keyboard.RawKey
     | WindowResized (Coord Pixels)
     | GotDevicePixelRatio Float
-    | UserTyped String
-    | TextAreaFocused
     | MouseDown Button (Point2d Pixels Pixels)
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
-    | TouchMove (Point2d Pixels Pixels)
     | ShortIntervalElapsed Time.Posix
-    | VeryShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType
     | UndoPressed

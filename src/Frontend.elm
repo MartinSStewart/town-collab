@@ -18,14 +18,12 @@ import Browser.Events
 import Browser.Navigation
 import Change exposing (Change(..))
 import Coord exposing (Coord)
-import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Direction2d
 import Duration exposing (Duration)
 import Element exposing (Element)
 import Element.Background
 import Element.Border
-import Element.Events
 import Element.Font
 import Element.Input
 import Env
@@ -34,9 +32,7 @@ import Grid exposing (Grid, Vertex)
 import GridCell
 import Html exposing (Html)
 import Html.Attributes
-import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
-import Html.Events.Extra.Touch
 import Icons
 import Id exposing (Id, TrainId, UserId)
 import Json.Decode
@@ -51,6 +47,7 @@ import MailEditor exposing (ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
+import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -281,20 +278,14 @@ tryLoading frontendLoading =
 loadedInit : Time.Posix -> FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
 loadedInit time loading loadingData =
     let
-        cursor : Cursor
-        cursor =
-            Cursor.setCursor loading.viewPoint
-
         model : FrontendLoaded
         model =
             { key = loading.key
             , localModel = LocalGrid.init loadingData
             , trains = loadingData.trains
             , meshes = Dict.empty
-            , cursorMesh = Cursor.toMesh cursor
             , viewPoint = Coord.toPoint2d loading.viewPoint
             , viewPointLastInterval = Point2d.origin
-            , cursor = cursor
             , texture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
@@ -308,13 +299,11 @@ loadedInit time loading loadingData =
             , undoAddLast = Time.millisToPosix 0
             , time = time
             , startTime = time
-            , lastTouchMove = Nothing
             , userHoverHighlighted = Nothing
             , highlightContextMenu = Nothing
             , adminEnabled = False
             , animationElapsedTime = Duration.seconds 0
             , ignoreNextUrlChanged = False
-            , textAreaText = ""
             , lastTilePlaced = Nothing
             , sounds = loading.sounds
             , removedTileParticles = []
@@ -322,6 +311,7 @@ loadedInit time loading loadingData =
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
             , mailEditor = MailEditor.initEditor loadingData.mailEditor
+            , currentTile = Nothing
             }
     in
     ( updateMeshes model model
@@ -411,11 +401,6 @@ init url key =
     )
 
 
-isTouchDevice : FrontendLoaded -> Bool
-isTouchDevice model =
-    model.lastTouchMove /= Nothing
-
-
 update : FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_ )
 update msg model =
     case model of
@@ -438,7 +423,7 @@ update msg model =
 
         Loaded frontendLoaded ->
             updateLoaded msg frontendLoaded
-                |> Tuple.mapFirst (updateMeshes frontendLoaded >> Cursor.updateMesh frontendLoaded)
+                |> Tuple.mapFirst (updateMeshes frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
 
@@ -466,8 +451,7 @@ updateLoaded msg model =
                 case Url.Parser.parse UrlHelper.urlParser url of
                     Just (UrlHelper.InternalRoute { viewPoint }) ->
                         { model
-                            | cursor = Cursor.setCursor viewPoint
-                            , viewPoint = viewPoint |> Coord.toPoint2d
+                            | viewPoint = viewPoint |> Coord.toPoint2d
                         }
 
                     _ ->
@@ -494,25 +478,7 @@ updateLoaded msg model =
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
-                    let
-                        model2 =
-                            if
-                                (key == Keyboard.Delete)
-                                    || (key == Keyboard.Alt)
-                                    || (key == Keyboard.Control)
-                                    || (key == Keyboard.Meta)
-                                    || (key == Keyboard.ArrowDown)
-                                    || (key == Keyboard.ArrowUp)
-                                    || (key == Keyboard.ArrowRight)
-                                    || (key == Keyboard.ArrowLeft)
-                                    || (key == Keyboard.Escape)
-                            then
-                                { model | textAreaText = "" }
-
-                            else
-                                model
-                    in
-                    keyMsgCanvasUpdate key model2
+                    keyMsgCanvasUpdate key model
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -523,32 +489,7 @@ updateLoaded msg model =
         GotDevicePixelRatio devicePixelRatio ->
             devicePixelRatioUpdate devicePixelRatio model
 
-        UserTyped text ->
-            let
-                newText =
-                    String.right (String.length text - String.length model.textAreaText) text
-
-                model2 =
-                    { model | textAreaText = text }
-            in
-            if newText /= "" then
-                if newText == "\n" || newText == "\u{000D}" then
-                    ( resetTouchMove model2 |> (\m -> { m | cursor = Cursor.newLine m.cursor }), Cmd.none )
-
-                else
-                    ( resetTouchMove model2 |> changeText newText, Cmd.none )
-
-            else
-                ( model2, Cmd.none )
-
-        TextAreaFocused ->
-            ( { model | textAreaText = "" }, Cmd.none )
-
         MouseDown button mousePosition ->
-            let
-                model_ =
-                    resetTouchMove model
-            in
             case model.mailEditor.showMailEditor of
                 MailEditorOpening { startTime, startPosition } ->
                     if
@@ -562,31 +503,39 @@ updateLoaded msg model =
                             { canvasSize, actualCanvasSize } =
                                 findPixelPerfectSize model
                         in
-                        ( { model_
+                        ( { model
                             | mouseLeft =
                                 MouseButtonDown
-                                    { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
-                            , mailEditor = MailEditor.handleMouseDown windowWidth windowHeight model_ mousePosition model.mailEditor
+                                    { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                            , mailEditor = MailEditor.handleMouseDown windowWidth windowHeight model mousePosition model.mailEditor
                           }
                         , Cmd.none
                         )
 
                     else
-                        ( model_, Cmd.none )
+                        ( model, Cmd.none )
 
                 _ ->
                     ( if button == MainButton then
-                        { model_
+                        { model
                             | mouseLeft =
                                 MouseButtonDown
-                                    { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                                    { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                         }
+                            |> (\model2 ->
+                                    case model2.currentTile of
+                                        Just { tile } ->
+                                            placeTile tile model2
+
+                                        Nothing ->
+                                            model2
+                               )
 
                       else if button == MiddleButton then
-                        { model_
+                        { model
                             | mouseMiddle =
                                 MouseButtonDown
-                                    { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
+                                    { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                         }
 
                       else if button == SecondButton then
@@ -603,13 +552,13 @@ updateLoaded msg model =
                         in
                         case maybeUserId of
                             Just userId ->
-                                highlightUser userId position model_
+                                highlightUser userId position model
 
                             Nothing ->
-                                { model_ | highlightContextMenu = Nothing }
+                                { model | highlightContextMenu = Nothing }
 
                       else
-                        model_
+                        model
                     , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
                     )
 
@@ -635,37 +584,24 @@ updateLoaded msg model =
                     ( model, Cmd.none )
 
         MouseMove mousePosition ->
-            if isTouchDevice model then
-                ( model, Cmd.none )
+            ( { model
+                | mouseLeft =
+                    case model.mouseLeft of
+                        MouseButtonDown mouseState ->
+                            MouseButtonDown { mouseState | current = mousePosition }
 
-            else
-                ( { model
-                    | mouseLeft =
-                        case model.mouseLeft of
-                            MouseButtonDown mouseState ->
-                                MouseButtonDown { mouseState | current = mousePosition }
+                        MouseButtonUp _ ->
+                            MouseButtonUp { current = mousePosition }
+                , mouseMiddle =
+                    case model.mouseMiddle of
+                        MouseButtonDown mouseState ->
+                            MouseButtonDown { mouseState | current = mousePosition }
 
-                            MouseButtonUp _ ->
-                                MouseButtonUp { current = mousePosition }
-                    , mouseMiddle =
-                        case model.mouseMiddle of
-                            MouseButtonDown mouseState ->
-                                MouseButtonDown { mouseState | current = mousePosition }
-
-                            MouseButtonUp _ ->
-                                MouseButtonUp { current = mousePosition }
-                    , cursor =
-                        case ( model.mouseLeft, model.tool ) of
-                            ( MouseButtonDown mouseState, SelectTool ) ->
-                                Cursor.selection
-                                    (mouseState.start_ |> Coord.floorPoint)
-                                    (screenToWorld model mousePosition |> Coord.floorPoint)
-
-                            _ ->
-                                model.cursor
-                  }
-                , Cmd.none
-                )
+                        MouseButtonUp _ ->
+                            MouseButtonUp { current = mousePosition }
+              }
+            , Cmd.none
+            )
 
         ShortIntervalElapsed time ->
             let
@@ -724,16 +660,16 @@ updateLoaded msg model =
                     ( model4, urlChange )
 
         ZoomFactorPressed zoomFactor ->
-            ( resetTouchMove model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
+            ( model |> (\m -> { m | zoomFactor = zoomFactor }), Cmd.none )
 
         SelectToolPressed toolType ->
-            ( resetTouchMove model |> (\m -> { m | tool = toolType }), Cmd.none )
+            ( model |> (\m -> { m | tool = toolType }), Cmd.none )
 
         UndoPressed ->
-            ( resetTouchMove model |> updateLocalModel Change.LocalUndo, Cmd.none )
+            ( model |> updateLocalModel Change.LocalUndo, Cmd.none )
 
         RedoPressed ->
-            ( resetTouchMove model |> updateLocalModel Change.LocalRedo, Cmd.none )
+            ( model |> updateLocalModel Change.LocalRedo, Cmd.none )
 
         CopyPressed ->
             -- TODO
@@ -742,64 +678,6 @@ updateLoaded msg model =
         CutPressed ->
             -- TODO
             ( model, Cmd.none )
-
-        TouchMove touchPosition ->
-            let
-                mouseDown m =
-                    { m
-                        | mouseLeft =
-                            MouseButtonDown
-                                { start = touchPosition
-                                , start_ = screenToWorld model touchPosition
-                                , current = touchPosition
-                                }
-                        , lastTouchMove = Just model.time
-                    }
-            in
-            case model.mouseLeft of
-                MouseButtonDown mouseState ->
-                    let
-                        duration =
-                            case model.lastTouchMove of
-                                Just lastTouchMove ->
-                                    Duration.from lastTouchMove model.time
-
-                                Nothing ->
-                                    Quantity.zero
-
-                        rate : Quantity Float (Rate Pixels Duration.Seconds)
-                        rate =
-                            Quantity.per Duration.second (Pixels.pixels 30)
-
-                        snapDistance =
-                            Pixels.pixels 50 |> Quantity.minus (Quantity.for duration rate) |> Quantity.max (Pixels.pixels 10)
-                    in
-                    if Point2d.distanceFrom mouseState.current touchPosition |> Quantity.greaterThan snapDistance then
-                        mainMouseButtonUp mouseState.current mouseState model
-                            |> Tuple.mapFirst mouseDown
-
-                    else
-                        ( { model
-                            | mouseLeft = MouseButtonDown { mouseState | current = touchPosition }
-                            , cursor =
-                                case model.tool of
-                                    SelectTool ->
-                                        Cursor.selection
-                                            (Coord.floorPoint mouseState.start_)
-                                            (screenToWorld model touchPosition |> Coord.floorPoint)
-
-                                    _ ->
-                                        model.cursor
-                            , lastTouchMove = Just model.time
-                          }
-                        , Cmd.none
-                        )
-
-                MouseButtonUp _ ->
-                    ( mouseDown model, Cmd.none )
-
-        VeryShortIntervalElapsed time ->
-            ( { model | time = time }, Cmd.none )
 
         UnhideUserPressed userToUnhide ->
             ( updateLocalModel
@@ -877,24 +755,8 @@ replaceUrl url model =
 
 keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 keyMsgCanvasUpdate key model =
-    case key of
-        Keyboard.Character "c" ->
-            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                -- TODO
-                ( model, Cmd.none )
-
-            else
-                ( model, Cmd.none )
-
-        Keyboard.Character "x" ->
-            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                -- TODO
-                ( model, Cmd.none )
-
-            else
-                ( model, Cmd.none )
-
-        Keyboard.Character "z" ->
+    let
+        handleUndo () =
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 if MailEditor.isOpen model.mailEditor then
                     ( { model | mailEditor = MailEditor.undo model.mailEditor }, Cmd.none )
@@ -905,7 +767,7 @@ keyMsgCanvasUpdate key model =
             else
                 ( model, Cmd.none )
 
-        Keyboard.Character "Z" ->
+        handleRedo () =
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
                 if MailEditor.isOpen model.mailEditor then
                     ( { model | mailEditor = MailEditor.redo model.mailEditor }, Cmd.none )
@@ -915,81 +777,43 @@ keyMsgCanvasUpdate key model =
 
             else
                 ( model, Cmd.none )
+    in
+    case ( key, keyDown Keyboard.Control model, keyDown Keyboard.Meta model ) of
+        ( Keyboard.Character "z", True, _ ) ->
+            handleUndo ()
 
-        Keyboard.Character "y" ->
-            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel Change.LocalRedo model, Cmd.none )
+        ( Keyboard.Character "z", _, True ) ->
+            handleUndo ()
 
-            else
-                ( model, Cmd.none )
+        ( Keyboard.Character "Z", True, _ ) ->
+            handleRedo ()
 
-        Keyboard.Delete ->
-            let
-                bounds =
-                    Cursor.bounds model.cursor
-            in
-            ( clearTextSelection bounds model
-            , Cmd.none
-            )
+        ( Keyboard.Character "Z", _, True ) ->
+            handleRedo ()
 
-        Keyboard.ArrowLeft ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.tileUnit -1, Units.tileUnit 0 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
+        ( Keyboard.Character "y", True, _ ) ->
+            handleRedo ()
 
-        Keyboard.ArrowRight ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.tileUnit 1, Units.tileUnit 0 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
+        ( Keyboard.Character "y", _, True ) ->
+            handleRedo ()
 
-        Keyboard.ArrowUp ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.tileUnit 0, Units.tileUnit -1 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
-
-        Keyboard.ArrowDown ->
-            ( { model
-                | cursor =
-                    Cursor.moveCursor
-                        (keyDown Keyboard.Shift model)
-                        ( Units.tileUnit 0, Units.tileUnit 1 )
-                        model.cursor
-              }
-            , Cmd.none
-            )
-
-        Keyboard.Backspace ->
-            let
-                newCursor =
-                    Cursor.moveCursor
-                        False
-                        ( Units.tileUnit -1, Units.tileUnit 0 )
-                        model.cursor
-            in
-            ( { model | cursor = newCursor } |> changeText " " |> (\m -> { m | cursor = newCursor })
-            , Cmd.none
-            )
-
-        Keyboard.Escape ->
+        ( Keyboard.Escape, _, _ ) ->
             ( { model | mailEditor = MailEditor.close model model.mailEditor }, Cmd.none )
+
+        ( Keyboard.Character char, False, False ) ->
+            ( case String.toList char of
+                head :: _ ->
+                    case Tile.fromChar head of
+                        Just tile ->
+                            { model | currentTile = Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile } }
+
+                        Nothing ->
+                            model
+
+                [] ->
+                    model
+            , Cmd.none
+            )
 
         _ ->
             ( model, Cmd.none )
@@ -1062,12 +886,10 @@ mainMouseButtonUp mousePosition mouseState model =
                     }
 
                 else
-                    { model2
-                        | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor
-                    }
+                    model2
 
             Nothing ->
-                { model2 | cursor = screenToWorld model2 mousePosition |> Coord.floorPoint |> Cursor.setCursor }
+                model2
 
       else
         model2
@@ -1095,40 +917,12 @@ highlightUser highlightUserId highlightPoint model =
     }
 
 
-resetTouchMove : FrontendLoaded -> FrontendLoaded
-resetTouchMove model =
-    case model.mouseLeft of
-        MouseButtonUp _ ->
-            model
-
-        MouseButtonDown mouseState ->
-            if isTouchDevice model then
-                mainMouseButtonUp mouseState.current mouseState model |> Tuple.first
-
-            else
-                model
-
-
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> FrontendLoaded
 updateLocalModel msg model =
     { model
         | pendingChanges = model.pendingChanges ++ [ msg ]
         , localModel = LocalGrid.update model.time (LocalChange msg) model.localModel
     }
-
-
-clearTextSelection : Bounds WorldUnit -> FrontendLoaded -> FrontendLoaded
-clearTextSelection bounds model =
-    let
-        ( w, h ) =
-            Bounds.maximum bounds
-                |> Coord.minusTuple (Bounds.minimum bounds)
-                |> Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 )
-                |> Coord.toTuple
-    in
-    { model | cursor = Cursor.setCursor (Bounds.minimum bounds) }
-        |> changeText (String.repeat w " " |> List.repeat h |> String.join "\n")
-        |> (\m -> { m | cursor = model.cursor })
 
 
 screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
@@ -1176,89 +970,97 @@ devicePixelRatioUpdate devicePixelRatio model =
     )
 
 
-changeText : String -> FrontendLoaded -> FrontendLoaded
-changeText text model =
-    case String.toList text of
-        head :: _ ->
-            case Tile.fromChar head of
-                Just tile ->
+mouseWorldPosition : FrontendLoaded -> Point2d WorldUnit WorldUnit
+mouseWorldPosition model =
+    (case model.mouseLeft of
+        MouseButtonDown { current } ->
+            current
+
+        MouseButtonUp { current } ->
+            current
+    )
+        |> screenToWorld model
+
+
+placeTile : Tile -> FrontendLoaded -> FrontendLoaded
+placeTile tile model =
+    let
+        _ =
+            Debug.log "abc" model.currentTile
+
+        model2 =
+            if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
+                updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
+
+            else
+                model
+
+        cursorPosition =
+            mouseWorldPosition model |> Coord.floorPoint
+
+        ( cellPos, localPos ) =
+            Grid.worldToCellAndLocalCoord cursorPosition
+
+        neighborCells : List ( Coord CellUnit, Coord Units.CellLocalUnit )
+        neighborCells =
+            ( cellPos, localPos ) :: Grid.closeNeighborCells cellPos localPos
+
+        oldGrid : Grid
+        oldGrid =
+            LocalGrid.localModel model2.localModel |> .grid
+
+        model3 =
+            updateLocalModel
+                (Change.LocalGridChange
+                    { position = cursorPosition
+                    , change = tile
+                    }
+                )
+                model2
+
+        newGrid : Grid
+        newGrid =
+            LocalGrid.localModel model3.localModel |> .grid
+
+        removedTiles =
+            List.concatMap
+                (\( neighborCellPos, _ ) ->
                     let
-                        model2 =
-                            if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
-                                updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
+                        oldCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                        oldCell =
+                            Grid.getCell neighborCellPos oldGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
+
+                        newCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                        newCell =
+                            Grid.getCell neighborCellPos newGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
+                    in
+                    List.foldl
+                        (\item state ->
+                            if List.any ((==) item) newCell then
+                                state
 
                             else
-                                model
-
-                        ( cellPos, localPos ) =
-                            Grid.worldToCellAndLocalCoord (Cursor.position model.cursor)
-
-                        neighborCells : List ( Coord CellUnit, Coord Units.CellLocalUnit )
-                        neighborCells =
-                            ( cellPos, localPos ) :: Grid.closeNeighborCells cellPos localPos
-
-                        oldGrid : Grid
-                        oldGrid =
-                            LocalGrid.localModel model2.localModel |> .grid
-
-                        model3 =
-                            updateLocalModel
-                                (Change.LocalGridChange
-                                    { position = Cursor.position model.cursor
-                                    , change = tile
-                                    }
-                                )
-                                model2
-
-                        newGrid : Grid
-                        newGrid =
-                            LocalGrid.localModel model3.localModel |> .grid
-
-                        removedTiles =
-                            List.concatMap
-                                (\( neighborCellPos, _ ) ->
-                                    let
-                                        oldCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
-                                        oldCell =
-                                            Grid.getCell neighborCellPos oldGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
-
-                                        newCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
-                                        newCell =
-                                            Grid.getCell neighborCellPos newGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
-                                    in
-                                    List.foldl
-                                        (\item state ->
-                                            if List.any ((==) item) newCell then
-                                                state
-
-                                            else
-                                                { time = model.time
-                                                , tile = item.value
-                                                , position = Grid.cellAndLocalCoordToAscii ( neighborCellPos, item.position )
-                                                }
-                                                    :: state
-                                        )
-                                        []
-                                        oldCell
-                                )
-                                neighborCells
-                    in
-                    { model3
-                        | lastTilePlaced =
-                            Just
                                 { time = model.time
-                                , overwroteTiles = List.isEmpty removedTiles |> not
-                                , tile = tile
+                                , tile = item.value
+                                , position = Grid.cellAndLocalCoordToAscii ( neighborCellPos, item.position )
                                 }
-                        , removedTileParticles = removedTiles ++ model3.removedTileParticles
-                        , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
-                    }
-
-                Nothing ->
-                    model
-
-        [] ->
-            model
+                                    :: state
+                        )
+                        []
+                        oldCell
+                )
+                neighborCells
+    in
+    { model3
+        | lastTilePlaced =
+            Just
+                { time = model.time
+                , overwroteTiles = List.isEmpty removedTiles |> not
+                , tile = tile
+                }
+        , removedTileParticles = removedTiles ++ model3.removedTileParticles
+        , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
+    }
 
 
 createDebrisMesh : Time.Posix -> List RemovedTileParticle -> WebGL.Mesh DebrisVertex
@@ -1533,9 +1335,6 @@ actualViewPoint model =
                 DragTool ->
                     offsetViewPoint model start current
 
-                SelectTool ->
-                    model.viewPoint
-
         _ ->
             model.viewPoint
 
@@ -1571,43 +1370,6 @@ updateLoadedFromBackend msg model =
 
         TrainUpdate trains ->
             ( { model | trains = trains }, Cmd.none )
-
-
-textarea : FrontendLoaded -> Element.Attribute FrontendMsg_
-textarea model =
-    Html.textarea
-        [ Html.Attributes.value model.textAreaText
-        , Html.Events.onInput UserTyped
-        , Html.Attributes.style "width" "100%"
-        , Html.Attributes.style "height" "100%"
-        , Html.Attributes.style "resize" "none"
-        , Html.Attributes.style "opacity" "0"
-        , Html.Attributes.id "textareaId"
-        , Html.Events.onFocus TextAreaFocused
-        , Html.Attributes.attribute "data-gramm" "false"
-        , Html.Events.Extra.Touch.onWithOptions
-            "touchmove"
-            { stopPropagation = False, preventDefault = True }
-            (\event ->
-                case event.touches of
-                    head :: _ ->
-                        let
-                            ( x, y ) =
-                                head.pagePos
-                        in
-                        TouchMove (Point2d.pixels x y)
-
-                    [] ->
-                        NoOpFrontendMsg
-            )
-        , Html.Events.Extra.Mouse.onDown
-            (\{ clientPos, button } ->
-                MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-            )
-        ]
-        []
-        |> Element.html
-        |> Element.inFront
 
 
 lostConnection : FrontendLoaded -> Bool
@@ -1647,7 +1409,6 @@ view _ model =
                     (Element.width Element.fill
                         :: Element.height Element.fill
                         :: Element.clip
-                        :: textarea loadedModel
                         :: Element.inFront (toolbarView loadedModel)
                         :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
                         :: mouseAttributes
@@ -1658,38 +1419,6 @@ view _ model =
             [ Html.text "@font-face { font-family: ascii; src: url('ascii.ttf'); }" ]
         ]
     }
-
-
-contextMenuView : { userId : Id UserId, hidePoint : Coord WorldUnit } -> FrontendLoaded -> Element FrontendMsg_
-contextMenuView { userId, hidePoint } loadedModel =
-    let
-        { x, y } =
-            Coord.addTuple ( Units.tileUnit 1, Units.tileUnit 1 ) hidePoint
-                |> Coord.toPoint2d
-                |> worldToScreen loadedModel
-                |> Point2d.unwrap
-
-        attributes =
-            [ Element.padding 8
-            , Element.moveRight x
-            , Element.moveDown y
-            , Element.Border.roundEach { topLeft = 0, topRight = 4, bottomLeft = 4, bottomRight = 4 }
-            , Element.Border.width 1
-            , Element.Border.color UiColors.border
-            ]
-    in
-    if userId == currentUserId loadedModel then
-        Element.el (Element.Background.color UiColors.background :: attributes) (Element.text "You")
-
-    else
-        Element.Input.button
-            (Element.Background.color UiColors.button
-                :: Element.mouseOver [ Element.Background.color UiColors.buttonActive ]
-                :: attributes
-            )
-            { onPress = Just (HideUserPressed { userId = userId, hidePoint = hidePoint })
-            , label = Element.text "Hide user"
-            }
 
 
 offlineWarningView : Element msg
@@ -1718,263 +1447,9 @@ mouseAttributes =
         |> List.map Element.htmlAttribute
 
 
-isAdmin : FrontendLoaded -> Bool
-isAdmin model =
-    currentUserId model |> Just |> (==) Env.adminUserId |> (&&) model.adminEnabled
-
-
 currentUserId : FrontendLoaded -> Id UserId
 currentUserId =
     .localModel >> LocalGrid.localModel >> .user
-
-
-userListView : FrontendLoaded -> Element FrontendMsg_
-userListView model =
-    let
-        localModel =
-            LocalGrid.localModel model.localModel
-
-        colorSquare isFirst isLast userId =
-            Element.el
-                (Element.padding 4
-                    :: Element.Border.widthEach
-                        { left = 0
-                        , right = 1
-                        , top =
-                            if isFirst then
-                                0
-
-                            else
-                                1
-                        , bottom =
-                            if isLast then
-                                0
-
-                            else
-                                1
-                        }
-                    :: Element.Events.onMouseEnter (UserTagMouseEntered userId)
-                    :: Element.Events.onMouseLeave (UserTagMouseExited userId)
-                    :: buttonAttributes
-                )
-                (colorSquareInner userId)
-
-        colorSquareInner : Id UserId -> Element FrontendMsg_
-        colorSquareInner userId =
-            Element.el
-                [ Element.width (Element.px 20)
-                , Element.height (Element.px 20)
-                , Element.Border.rounded 2
-                , Element.Border.width 1
-                , Element.Border.color UiColors.colorSquareBorder
-                ]
-                (if isAdmin model then
-                    Element.paragraph
-                        [ Element.Font.size 9, Element.spacing 0, Element.moveDown 1, Element.moveRight 1 ]
-                        [ Id.toInt userId |> String.fromInt |> Element.text ]
-
-                 else
-                    Element.none
-                )
-
-        youText =
-            if isAdmin model then
-                Element.el
-                    [ Element.Font.bold, Element.centerX, Element.Font.color UiColors.adminText ]
-                    (Element.text "⇽ Admin")
-
-            else
-                Element.el [ Element.Font.bold, Element.centerX ] (Element.text "⇽ You")
-
-        userTag : Element FrontendMsg_
-        userTag =
-            baseTag
-                True
-                (List.isEmpty hiddenUsers && not showHiddenUsersForAll)
-                (if Just (currentUserId model) == Env.adminUserId then
-                    Element.Input.button
-                        [ Element.width Element.fill, Element.height Element.fill ]
-                        { onPress = Just ToggleAdminEnabledPressed
-                        , label = youText
-                        }
-
-                 else
-                    youText
-                )
-                localModel.user
-
-        baseTag : Bool -> Bool -> Element FrontendMsg_ -> Id UserId -> Element FrontendMsg_
-        baseTag isFirst isLast content userId =
-            Element.row
-                [ Element.width Element.fill
-                , "User Id: "
-                    ++ String.fromInt (Id.toInt userId)
-                    |> Element.text
-                    |> Element.el [ Element.htmlAttribute <| Html.Attributes.style "visibility" "collapse" ]
-                    |> Element.behindContent
-                ]
-                [ colorSquare isFirst isLast userId
-                , content
-                ]
-
-        rowBorderWidth : Bool -> Bool -> List (Element.Attribute msg)
-        rowBorderWidth isFirst isLast =
-            Element.Border.widthEach
-                { left = 0
-                , right = 0
-                , top =
-                    if isFirst then
-                        0
-
-                    else
-                        1
-                , bottom =
-                    if isLast then
-                        0
-
-                    else
-                        1
-                }
-                :: (if isLast then
-                        [ Element.Border.roundEach { bottomLeft = 1, topLeft = 0, topRight = 0, bottomRight = 0 } ]
-
-                    else
-                        []
-                   )
-
-        hiddenUserTag : Bool -> Bool -> Id UserId -> Element FrontendMsg_
-        hiddenUserTag isFirst isLast userId =
-            Element.Input.button
-                (Element.Events.onMouseEnter (UserTagMouseEntered userId)
-                    :: Element.Events.onMouseLeave (UserTagMouseExited userId)
-                    :: Element.width Element.fill
-                    :: Element.padding 4
-                    :: rowBorderWidth isFirst isLast
-                    ++ buttonAttributes
-                )
-                { onPress = Just (UnhideUserPressed userId)
-                , label =
-                    Element.row [ Element.width Element.fill ]
-                        [ colorSquareInner userId
-                        , Element.el [ Element.centerX ] (Element.text "Unhide")
-                        ]
-                }
-                |> (\a ->
-                        if isAdmin model then
-                            Element.row [ Element.width Element.fill ]
-                                [ a
-                                , Element.Input.button
-                                    (Element.Border.color UiColors.border
-                                        :: Element.Background.color UiColors.button
-                                        :: Element.mouseOver [ Element.Background.color UiColors.buttonActive ]
-                                        :: Element.height Element.fill
-                                        :: Element.width Element.fill
-                                        :: rowBorderWidth isFirst isLast
-                                    )
-                                    { onPress = Just (HideForAllTogglePressed userId)
-                                    , label = Element.el [ Element.centerX ] (Element.text "Hide for all")
-                                    }
-                                ]
-
-                        else
-                            a
-                   )
-
-        hiddenUserForAllTag : Bool -> Bool -> Id UserId -> Element FrontendMsg_
-        hiddenUserForAllTag isFirst isLast userId =
-            Element.Input.button
-                (Element.Events.onMouseEnter (UserTagMouseEntered userId)
-                    :: Element.Events.onMouseLeave (UserTagMouseExited userId)
-                    :: Element.width Element.fill
-                    :: Element.padding 4
-                    :: rowBorderWidth isFirst isLast
-                    ++ buttonAttributes
-                )
-                { onPress = Just (HideForAllTogglePressed userId)
-                , label =
-                    Element.row [ Element.width Element.fill ]
-                        [ colorSquareInner userId
-                        , Element.el [ Element.centerX ] (Element.text "Unhide for all")
-                        ]
-                }
-
-        buttonAttributes =
-            [ Element.Border.color UiColors.border
-            , Element.Background.color UiColors.button
-            ]
-
-        hiddenUserList : List (Id UserId)
-        hiddenUserList =
-            EverySet.diff localModel.hiddenUsers localModel.adminHiddenUsers
-                |> EverySet.toList
-
-        hiddenUsers : List (Element FrontendMsg_)
-        hiddenUsers =
-            hiddenUserList
-                |> List.indexedMap
-                    (\index otherUser ->
-                        hiddenUserTag
-                            False
-                            (List.length hiddenUserList - 1 == index && not showHiddenUsersForAll)
-                            otherUser
-                    )
-
-        hiddenusersForAllList : List (Id UserId)
-        hiddenusersForAllList =
-            EverySet.toList localModel.adminHiddenUsers
-
-        hiddenUsersForAll : List (Element FrontendMsg_)
-        hiddenUsersForAll =
-            hiddenusersForAllList
-                |> List.indexedMap
-                    (\index otherUser ->
-                        hiddenUserForAllTag
-                            False
-                            (List.length hiddenusersForAllList - 1 == index)
-                            otherUser
-                    )
-
-        showHiddenUsersForAll =
-            not (List.isEmpty hiddenUsersForAll) && isAdmin model
-    in
-    Element.column
-        [ Element.Background.color UiColors.background
-        , Element.alignRight
-        , Element.spacing 8
-        , Element.Border.widthEach { bottom = 1, left = 1, right = 1, top = 0 }
-        , Element.Border.roundEach { bottomLeft = 3, topLeft = 0, topRight = 0, bottomRight = 0 }
-        , Element.Border.color UiColors.border
-        , Element.Font.color UiColors.text
-        , if isAdmin model then
-            Element.width (Element.px 230)
-
-          else
-            Element.width (Element.px 130)
-        ]
-        [ userTag
-        , if List.isEmpty hiddenUsers && not showHiddenUsersForAll then
-            Element.none
-
-          else
-            Element.column
-                [ Element.width Element.fill, Element.spacing 4 ]
-                [ Element.el [ Element.paddingXY 8 0 ] (Element.text "Hidden")
-                , Element.column
-                    [ Element.width Element.fill, Element.spacing 2 ]
-                    hiddenUsers
-                ]
-        , if showHiddenUsersForAll then
-            Element.column
-                [ Element.width Element.fill, Element.spacing 4 ]
-                [ Element.el [ Element.paddingXY 8 0 ] (Element.text "Hidden for all")
-                , Element.column
-                    [ Element.width Element.fill, Element.spacing 2 ]
-                    hiddenUsersForAll
-                ]
-
-          else
-            Element.none
-        ]
 
 
 canUndo : FrontendLoaded -> Bool
@@ -2096,16 +1571,6 @@ toolbarView model =
 tools : List ( ToolType, ToolType -> Bool, Element msg )
 tools =
     [ ( DragTool, (==) DragTool, Icons.dragTool )
-    , ( SelectTool
-      , (==) SelectTool
-      , Element.el
-            [ Element.Border.width 2
-            , Element.Border.dashed
-            , Element.width (Element.px 22)
-            , Element.height (Element.px 22)
-            ]
-            Element.none
-      )
     ]
 
 
@@ -2217,94 +1682,125 @@ canvasView model =
                     0
     in
     WebGL.toHtmlWith
-        [ WebGL.alpha False, WebGL.antialias, WebGL.clearColor 0.8 1 0.7 1, WebGL.depth 1 ]
+        [ WebGL.alpha False
+        , WebGL.antialias
+        , WebGL.clearColor 0.8 1 0.7 1
+        , WebGL.depth 1
+        ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
+        , Html.Events.Extra.Mouse.onDown
+            (\{ clientPos, button } ->
+                MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+            )
         ]
-        (Cursor.draw viewMatrix (Element.rgba 1 0 1 0.5) model
-            :: (case model.texture of
-                    Just texture ->
-                        let
-                            textureSize =
-                                WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
-                        in
-                        drawText
-                            (Dict.filter
-                                (\key _ ->
-                                    Coord.fromTuple key
-                                        |> Units.cellToTile
-                                        |> Coord.toPoint2d
-                                        |> (\p -> BoundingBox2d.contains p viewBounds_)
-                                )
-                                model.meshes
-                            )
-                            viewMatrix
-                            texture
-                            ++ drawTrains model.trains viewMatrix texture
-                            ++ List.filterMap
-                                (\flag ->
-                                    case
-                                        Array.get
-                                            (Time.posixToMillis model.time |> toFloat |> (*) 0.005 |> round |> modBy 3)
-                                            flagMeshes
-                                    of
-                                        Just flagMesh_ ->
-                                            let
-                                                flagPosition =
-                                                    Point2d.unwrap flag.position
-                                            in
-                                            WebGL.entityWith
-                                                [ Shaders.blend ]
-                                                Shaders.vertexShader
-                                                Shaders.fragmentShader
-                                                flagMesh_
-                                                { view =
-                                                    Mat4.makeTranslate3
-                                                        (flagPosition.x * Units.tileSize)
-                                                        (flagPosition.y * Units.tileSize)
-                                                        0
-                                                        |> Mat4.mul viewMatrix
+        (case model.texture of
+            Just texture ->
+                let
+                    textureSize =
+                        WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                in
+                drawText
+                    (Dict.filter
+                        (\key _ ->
+                            Coord.fromTuple key
+                                |> Units.cellToTile
+                                |> Coord.toPoint2d
+                                |> (\p -> BoundingBox2d.contains p viewBounds_)
+                        )
+                        model.meshes
+                    )
+                    viewMatrix
+                    texture
+                    ++ drawTrains model.trains viewMatrix texture
+                    ++ List.filterMap
+                        (\flag ->
+                            case
+                                Array.get
+                                    (Time.posixToMillis model.time |> toFloat |> (*) 0.005 |> round |> modBy 3)
+                                    flagMeshes
+                            of
+                                Just flagMesh_ ->
+                                    let
+                                        flagPosition =
+                                            Point2d.unwrap flag.position
+                                    in
+                                    WebGL.entityWith
+                                        [ Shaders.blend ]
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        flagMesh_
+                                        { view =
+                                            Mat4.makeTranslate3
+                                                (flagPosition.x * Units.tileSize)
+                                                (flagPosition.y * Units.tileSize)
+                                                0
+                                                |> Mat4.mul viewMatrix
+                                        , texture = texture
+                                        , textureSize = textureSize
+                                        }
+                                        |> Just
 
-                                                --|> Mat4.translate3 flagPosition.x flagPosition.y 0
-                                                , texture = texture
-                                                , textureSize = textureSize
-                                                }
-                                                |> Just
-
-                                        Nothing ->
-                                            Nothing
-                                )
-                                (getFlags model)
-                            ++ [ WebGL.entityWith
+                                Nothing ->
+                                    Nothing
+                        )
+                        (getFlags model)
+                    ++ [ WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.debrisVertexShader
+                            Shaders.fragmentShader
+                            model.debrisMesh
+                            { view = viewMatrix
+                            , texture = texture
+                            , textureSize = textureSize
+                            , time = Duration.from model.startTime model.time |> Duration.inSeconds
+                            }
+                       ]
+                    ++ (case model.currentTile of
+                            Just currentTile ->
+                                let
+                                    ( mouseX, mouseY ) =
+                                        mouseWorldPosition model |> Coord.floorPoint |> Coord.toTuple
+                                in
+                                [ WebGL.entityWith
                                     [ Shaders.blend ]
-                                    Shaders.debrisVertexShader
-                                    Shaders.fragmentShader
-                                    model.debrisMesh
-                                    { view = viewMatrix
+                                    Shaders.colorAndTextureVertexShader
+                                    Shaders.colorAndTextureFragmentShader
+                                    currentTile.mesh
+                                    { view =
+                                        viewMatrix
+                                            |> Mat4.translate3
+                                                (toFloat mouseX * Units.tileSize)
+                                                (toFloat mouseY * Units.tileSize)
+                                                0
                                     , texture = texture
                                     , textureSize = textureSize
+                                    , color = Vec4.vec4 1 1 1 0.5
                                     , time = Duration.from model.startTime model.time |> Duration.inSeconds
                                     }
-                               ]
-                            ++ MailEditor.drawMail
-                                texture
-                                (case model.mouseLeft of
-                                    MouseButtonDown { current } ->
-                                        current
+                                ]
 
-                                    MouseButtonUp { current } ->
-                                        current
-                                )
-                                windowWidth
-                                windowHeight
-                                model
-                                model.mailEditor
+                            Nothing ->
+                                []
+                       )
+                    ++ MailEditor.drawMail
+                        texture
+                        (case model.mouseLeft of
+                            MouseButtonDown { current } ->
+                                current
 
-                    Nothing ->
-                        []
-               )
+                            MouseButtonUp { current } ->
+                                current
+                        )
+                        windowWidth
+                        windowHeight
+                        model
+                        model.mailEditor
+
+            Nothing ->
+                []
         )
 
 
@@ -2480,17 +1976,11 @@ subscriptions _ model =
             Loading _ ->
                 Sub.none
 
-            Loaded loadedModel ->
+            Loaded _ ->
                 Sub.batch
                     [ Sub.map KeyMsg Keyboard.subscriptions
                     , Keyboard.downs KeyDown
                     , Time.every 1000 ShortIntervalElapsed
-                    , case ( loadedModel.mouseLeft, isTouchDevice loadedModel ) of
-                        ( MouseButtonDown _, True ) ->
-                            Time.every 100 VeryShortIntervalElapsed
-
-                        _ ->
-                            Sub.none
                     , Browser.Events.onAnimationFrame AnimationFrame
                     ]
         ]
