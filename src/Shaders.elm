@@ -1,6 +1,7 @@
 module Shaders exposing
     ( DebrisVertex
     , SimpleVertex
+    , blend
     , colorToVec3
     , debrisVertexShader
     , fragmentShader
@@ -16,11 +17,18 @@ import Math.Vector2 exposing (Vec2)
 import Math.Vector3
 import Math.Vector4 exposing (Vec4)
 import WebGL exposing (Shader)
+import WebGL.Settings exposing (Setting)
+import WebGL.Settings.Blend as Blend
 import WebGL.Texture exposing (Texture)
 
 
 type alias SimpleVertex =
     { position : Vec2 }
+
+
+blend : Setting
+blend =
+    Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha
 
 
 colorToVec3 : Element.Color -> Math.Vector3.Vec3

@@ -84,7 +84,7 @@ type Image
 
 openAnimationLength : Duration
 openAnimationLength =
-    Duration.milliseconds 200
+    Duration.milliseconds 300
 
 
 mailEditorIsOpen : ShowMailEditor -> Bool
@@ -413,10 +413,10 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor showMa
                     0.13 * toFloat config.zoomFactor / zoomFactor
 
                 mailScale =
-                    (1 - scaleStart) * t + scaleStart
+                    (1 - scaleStart) * t * t + scaleStart
             in
             WebGL.entityWith
-                [ Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha ]
+                [ Shaders.blend ]
                 Shaders.vertexShader
                 Shaders.fragmentShader
                 mailEditor.mesh
@@ -435,7 +435,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor showMa
                 }
                 :: (if showHoverImage then
                         [ WebGL.entityWith
-                            [ Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha ]
+                            [ Shaders.blend ]
                             Shaders.simpleVertexShader
                             Shaders.simpleFragmentShader
                             square

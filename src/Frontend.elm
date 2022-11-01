@@ -63,7 +63,6 @@ import UrlHelper
 import Vector2d exposing (Vector2d)
 import WebGL exposing (Shader)
 import WebGL.Settings
-import WebGL.Settings.Blend as Blend
 import WebGL.Texture exposing (Texture)
 
 
@@ -1015,8 +1014,19 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.highlightContextMenu
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
+
+        canOpenMailEditor =
+            case model.showMailEditor of
+                MailEditorClosed ->
+                    True
+
+                MailEditorClosing { startTime } ->
+                    Duration.from startTime model.time |> Quantity.greaterThan Mail.openAnimationLength
+
+                MailEditorOpening _ ->
+                    False
     in
-    ( if isSmallDistance && not (Mail.mailEditorIsOpen model.showMailEditor) then
+    ( if isSmallDistance && canOpenMailEditor then
         let
             localModel : LocalGrid_
             localModel =
@@ -2220,6 +2230,10 @@ canvasView model =
         (Cursor.draw viewMatrix (Element.rgba 1 0 1 0.5) model
             :: (case model.texture of
                     Just texture ->
+                        let
+                            textureSize =
+                                WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                        in
                         drawText
                             (Dict.filter
                                 (\key _ ->
@@ -2233,14 +2247,48 @@ canvasView model =
                             viewMatrix
                             texture
                             ++ drawTrains model.trains viewMatrix texture
+                            ++ List.filterMap
+                                (\flag ->
+                                    case
+                                        Array.get
+                                            (Time.posixToMillis model.time |> toFloat |> (*) 0.005 |> round |> modBy 3)
+                                            flagMeshes
+                                    of
+                                        Just flagMesh_ ->
+                                            let
+                                                flagPosition =
+                                                    Point2d.unwrap flag.position
+                                            in
+                                            WebGL.entityWith
+                                                [ Shaders.blend ]
+                                                Shaders.vertexShader
+                                                Shaders.fragmentShader
+                                                flagMesh_
+                                                { view =
+                                                    Mat4.makeTranslate3
+                                                        (flagPosition.x * Units.tileSize)
+                                                        (flagPosition.y * Units.tileSize)
+                                                        0
+                                                        |> Mat4.mul viewMatrix
+
+                                                --|> Mat4.translate3 flagPosition.x flagPosition.y 0
+                                                , texture = texture
+                                                , textureSize = textureSize
+                                                }
+                                                |> Just
+
+                                        Nothing ->
+                                            Nothing
+                                )
+                                (getFlags model)
                             ++ [ WebGL.entityWith
-                                    [ Blend.add Blend.one Blend.oneMinusSrcAlpha ]
+                                    [ Shaders.blend ]
                                     Shaders.debrisVertexShader
                                     Shaders.fragmentShader
                                     model.debrisMesh
                                     { view = viewMatrix
                                     , texture = texture
-                                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                                    , textureSize = textureSize
                                     , time = Duration.from model.startTime model.time |> Duration.inSeconds
                                     }
                                ]
@@ -2265,6 +2313,48 @@ canvasView model =
         )
 
 
+getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit }
+getFlags model =
+    let
+        localModel =
+            LocalGrid.localModel model.localModel
+    in
+    Bounds.coordRangeFold
+        (\coord postOffices ->
+            case Grid.getCell coord localModel.grid of
+                Just cell ->
+                    List.filterMap
+                        (\tile ->
+                            if
+                                (tile.value == PostOffice)
+                                    && List.any (\mail -> mail.sender == tile.userId) (AssocList.values model.mail)
+                            then
+                                Just
+                                    { position =
+                                        Grid.cellAndLocalCoordToAscii ( coord, tile.position )
+                                            |> Coord.toPoint2d
+                                            |> Point2d.translateBy postOfficeFlagOffset
+                                    }
+
+                            else
+                                Nothing
+                        )
+                        (GridCell.flatten cell)
+                        ++ postOffices
+
+                Nothing ->
+                    postOffices
+        )
+        identity
+        localModel.viewBounds
+        []
+
+
+postOfficeFlagOffset : Vector2d WorldUnit WorldUnit
+postOfficeFlagOffset =
+    Vector2d.unsafe { x = 3.5, y = 1 + 13 / 18 }
+
+
 drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Mat4 -> Texture -> List WebGL.Entity
 drawText meshes viewMatrix texture =
     Dict.toList meshes
@@ -2272,7 +2362,7 @@ drawText meshes viewMatrix texture =
             (\( _, mesh ) ->
                 WebGL.entityWith
                     [ WebGL.Settings.cullFace WebGL.Settings.back
-                    , Blend.add Blend.one Blend.oneMinusSrcAlpha
+                    , Shaders.blend
                     ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
@@ -2314,8 +2404,7 @@ drawTrains trains viewMatrix texture =
             case Array.get trainFrame trainMeshes of
                 Just trainMesh_ ->
                     [ WebGL.entityWith
-                        [ Blend.add Blend.one Blend.oneMinusSrcAlpha
-                        ]
+                        [ Shaders.blend ]
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         trainMesh_
@@ -2356,6 +2445,33 @@ trainMesh frame =
         , { position = Vec2.vec2 Units.tileSize (-Units.tileSize + offsetY), texturePosition = topRight }
         , { position = Vec2.vec2 Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomRight }
         , { position = Vec2.vec2 -Units.tileSize (Units.tileSize + offsetY), texturePosition = bottomLeft }
+        ]
+
+
+flagMeshes : Array (WebGL.Mesh Vertex)
+flagMeshes =
+    List.range 0 2
+        |> List.map flagMesh
+        |> Array.fromList
+
+
+flagMesh : Int -> WebGL.Mesh Vertex
+flagMesh frame =
+    let
+        width =
+            11
+
+        height =
+            6
+
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePositionPixels ( 72, 594 + frame * 6 ) ( width, 6 )
+    in
+    WebGL.triangleFan
+        [ { position = Vec2.vec2 0 0, texturePosition = topLeft }
+        , { position = Vec2.vec2 width 0, texturePosition = topRight }
+        , { position = Vec2.vec2 width height, texturePosition = bottomRight }
+        , { position = Vec2.vec2 0 height, texturePosition = bottomLeft }
         ]
 
 
