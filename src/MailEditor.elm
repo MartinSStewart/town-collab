@@ -1,4 +1,4 @@
-module Mail exposing
+module MailEditor exposing
     ( BackendMail
     , FrontendMail
     , Image(..)
@@ -6,17 +6,17 @@ module Mail exposing
     , MailEditorData
     , MailStatus(..)
     , ShowMailEditor(..)
-    , closeMailEditor
+    , close
     , drawMail
     , getImageData
+    , handleMouseDown
+    , init
     , initEditor
-    , initEditorData
-    , mailEditorIsOpen
-    , mouseDownMailEditor
+    , isOpen
+    , open
     , openAnimationLength
-    , openMailEditor
-    , redoMailEditor
-    , undoMailEditor
+    , redo
+    , undo
     )
 
 import Audio exposing (Audio)
@@ -92,8 +92,8 @@ openAnimationLength =
     Duration.milliseconds 300
 
 
-mailEditorIsOpen : MailEditor -> Bool
-mailEditorIsOpen { showMailEditor } =
+isOpen : MailEditor -> Bool
+isOpen { showMailEditor } =
     case showMailEditor of
         MailEditorClosed ->
             False
@@ -129,8 +129,8 @@ mesh content =
         (List.range 0 (List.length content) |> List.concatMap Grid.getIndices)
 
 
-initEditorData : MailEditorData
-initEditorData =
+init : MailEditorData
+init =
     { recipient = Nothing
     , content = []
     }
@@ -153,14 +153,14 @@ getImageData image =
             { textureSize = ( 24, 24 ), texturePosition = ( 556, 0 ) }
 
 
-mouseDownMailEditor :
+handleMouseDown :
     Int
     -> Int
     -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Time.Posix }
     -> Point2d Pixels Pixels
     -> MailEditor
     -> MailEditor
-mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
+handleMouseDown windowWidth windowHeight config mousePosition model =
     let
         mailCoord =
             screenToWorld windowWidth windowHeight config mousePosition
@@ -172,10 +172,10 @@ mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
                 |> uiPixelToMailPixel
 
         imageData =
-            getImageData mailEditor.currentImage
+            getImageData model.currentImage
 
         oldEditorState =
-            mailEditor.current
+            model.current
 
         newEditorState =
             { oldEditorState
@@ -183,22 +183,27 @@ mouseDownMailEditor windowWidth windowHeight config mousePosition mailEditor =
             }
     in
     if validImagePosition imageData mailCoord then
-        { mailEditor
+        { model
             | current = newEditorState
-            , undo = oldEditorState :: List.take 50 mailEditor.undo
+            , undo = oldEditorState :: List.take 50 model.undo
             , redo = []
             , mesh = mesh newEditorState.content
         }
 
     else
-        closeMailEditor config mailEditor
+        close config model
 
 
-closeMailEditor : { a | time : Time.Posix } -> MailEditor -> MailEditor
-closeMailEditor config mailEditor =
-    { mailEditor
+handleKeyDown : MailEditor -> MailEditor
+handleKeyDown model =
+    model
+
+
+close : { a | time : Time.Posix } -> MailEditor -> MailEditor
+close config model =
+    { model
         | showMailEditor =
-            case mailEditor.showMailEditor of
+            case model.showMailEditor of
                 MailEditorOpening { startPosition } ->
                     MailEditorClosing { startTime = config.time, startPosition = startPosition }
 
@@ -210,9 +215,9 @@ closeMailEditor config mailEditor =
     }
 
 
-openMailEditor : { a | time : Time.Posix } -> Point2d Pixels Pixels -> MailEditor -> MailEditor
-openMailEditor config startPosition mailEditor =
-    { mailEditor | showMailEditor = MailEditorOpening { startTime = config.time, startPosition = startPosition } }
+open : { a | time : Time.Posix } -> Point2d Pixels Pixels -> MailEditor -> MailEditor
+open config startPosition model =
+    { model | showMailEditor = MailEditorOpening { startTime = config.time, startPosition = startPosition } }
 
 
 uiPixelToMailPixel : Coord UiPixelUnit -> Coord MailPixelUnit
@@ -235,34 +240,34 @@ validImagePosition imageData position =
         && (y < mailHeight + round (toFloat h / -2))
 
 
-undoMailEditor : MailEditor -> MailEditor
-undoMailEditor mailEditor =
-    case mailEditor.undo of
+undo : MailEditor -> MailEditor
+undo model =
+    case model.undo of
         head :: rest ->
-            { mailEditor
+            { model
                 | undo = rest
                 , current = head
                 , mesh = mesh head.content
-                , redo = mailEditor.current :: mailEditor.redo
+                , redo = model.current :: model.redo
             }
 
         [] ->
-            mailEditor
+            model
 
 
-redoMailEditor : MailEditor -> MailEditor
-redoMailEditor mailEditor =
-    case mailEditor.redo of
+redo : MailEditor -> MailEditor
+redo model =
+    case model.redo of
         head :: rest ->
-            { mailEditor
+            { model
                 | redo = rest
                 , current = head
                 , mesh = mesh head.content
-                , undo = mailEditor.current :: mailEditor.undo
+                , undo = model.current :: model.undo
             }
 
         [] ->
-            mailEditor
+            model
 
 
 mailWidth =
@@ -347,10 +352,10 @@ drawMail :
         }
     -> MailEditor
     -> List WebGL.Entity
-drawMail texture mousePosition windowWidth windowHeight config mailEditor =
+drawMail texture mousePosition windowWidth windowHeight config model =
     let
-        isOpen =
-            case mailEditor.showMailEditor of
+        isOpen_ =
+            case model.showMailEditor of
                 MailEditorOpening a ->
                     Just a
 
@@ -364,7 +369,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor =
                     else
                         Nothing
     in
-    case isOpen of
+    case isOpen_ of
         Just { startTime, startPosition } ->
             let
                 startPosition_ : { x : Float, y : Float }
@@ -381,7 +386,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor =
                         |> Coord.roundPoint
 
                 imageData =
-                    getImageData mailEditor.currentImage
+                    getImageData model.currentImage
 
                 ( imageWidth, imageHeight ) =
                     imageData.textureSize
@@ -399,7 +404,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor =
 
                 showHoverImage : Bool
                 showHoverImage =
-                    case mailEditor.showMailEditor of
+                    case model.showMailEditor of
                         MailEditorOpening mailEditorOpening ->
                             (Duration.from mailEditorOpening.startTime config.time
                                 |> Quantity.greaterThan openAnimationLength
@@ -413,7 +418,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor =
                             False
 
                 t =
-                    case mailEditor.showMailEditor of
+                    case model.showMailEditor of
                         MailEditorOpening _ ->
                             Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> min 1
 
@@ -450,7 +455,7 @@ drawMail texture mousePosition windowWidth windowHeight config mailEditor =
                     [ Shaders.blend ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
-                    mailEditor.mesh
+                    model.mesh
                     { texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                     , view =

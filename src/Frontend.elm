@@ -41,7 +41,7 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
-import Mail exposing (ShowMailEditor(..))
+import MailEditor exposing (ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Pixels exposing (Pixels)
@@ -151,10 +151,10 @@ audioLoaded audioData model =
                         1
 
                     MailEditorClosing { startTime } ->
-                        Quantity.ratio (Duration.from startTime model.time) Mail.openAnimationLength
+                        Quantity.ratio (Duration.from startTime model.time) MailEditor.openAnimationLength
 
                     MailEditorOpening { startTime } ->
-                        1 - Quantity.ratio (Duration.from startTime model.time) Mail.openAnimationLength
+                        1 - Quantity.ratio (Duration.from startTime model.time) MailEditor.openAnimationLength
                 )
                 * 0.75
                 + 0.25
@@ -313,7 +313,7 @@ loadedInit time loading loadingData =
             , debrisMesh = WebGL.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
-            , mailEditor = Mail.initEditor loadingData.mailEditor
+            , mailEditor = MailEditor.initEditor loadingData.mailEditor
             }
     in
     ( updateMeshes model model
@@ -545,7 +545,7 @@ updateLoaded msg model =
                 MailEditorOpening { startTime, startPosition } ->
                     if
                         (button == MainButton)
-                            && (Duration.from startTime model.time |> Quantity.greaterThan Mail.openAnimationLength)
+                            && (Duration.from startTime model.time |> Quantity.greaterThan MailEditor.openAnimationLength)
                     then
                         let
                             ( windowWidth, windowHeight ) =
@@ -558,7 +558,7 @@ updateLoaded msg model =
                             | mouseLeft =
                                 MouseButtonDown
                                     { start = mousePosition, start_ = screenToWorld model_ mousePosition, current = mousePosition }
-                            , mailEditor = Mail.mouseDownMailEditor windowWidth windowHeight model_ mousePosition model.mailEditor
+                            , mailEditor = MailEditor.handleMouseDown windowWidth windowHeight model_ mousePosition model.mailEditor
                           }
                         , Cmd.none
                         )
@@ -614,7 +614,7 @@ updateLoaded msg model =
                     ( { model
                         | mouseMiddle = MouseButtonUp { current = mousePosition }
                         , viewPoint =
-                            if Mail.mailEditorIsOpen model.mailEditor then
+                            if MailEditor.isOpen model.mailEditor then
                                 model.viewPoint
 
                             else
@@ -888,8 +888,8 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if Mail.mailEditorIsOpen model.mailEditor then
-                    ( { model | mailEditor = Mail.undoMailEditor model.mailEditor }, Cmd.none )
+                if MailEditor.isOpen model.mailEditor then
+                    ( { model | mailEditor = MailEditor.undo model.mailEditor }, Cmd.none )
 
                 else
                     ( updateLocalModel Change.LocalUndo model, Cmd.none )
@@ -899,8 +899,8 @@ keyMsgCanvasUpdate key model =
 
         Keyboard.Character "Z" ->
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if Mail.mailEditorIsOpen model.mailEditor then
-                    ( { model | mailEditor = Mail.redoMailEditor model.mailEditor }, Cmd.none )
+                if MailEditor.isOpen model.mailEditor then
+                    ( { model | mailEditor = MailEditor.redo model.mailEditor }, Cmd.none )
 
                 else
                     ( updateLocalModel Change.LocalRedo model, Cmd.none )
@@ -981,7 +981,7 @@ keyMsgCanvasUpdate key model =
             )
 
         Keyboard.Escape ->
-            ( { model | mailEditor = Mail.closeMailEditor model model.mailEditor }, Cmd.none )
+            ( { model | mailEditor = MailEditor.close model model.mailEditor }, Cmd.none )
 
         _ ->
             ( model, Cmd.none )
@@ -1003,7 +1003,7 @@ mainMouseButtonUp mousePosition mouseState model =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
                 , viewPoint =
-                    case ( Mail.mailEditorIsOpen model.mailEditor, model.mouseMiddle, model.tool ) of
+                    case ( MailEditor.isOpen model.mailEditor, model.mouseMiddle, model.tool ) of
                         ( False, MouseButtonUp _, DragTool ) ->
                             offsetViewPoint model mouseState.start mousePosition
 
@@ -1024,7 +1024,7 @@ mainMouseButtonUp mousePosition mouseState model =
                     True
 
                 MailEditorClosing { startTime } ->
-                    Duration.from startTime model.time |> Quantity.greaterThan Mail.openAnimationLength
+                    Duration.from startTime model.time |> Quantity.greaterThan MailEditor.openAnimationLength
 
                 MailEditorOpening _ ->
                     False
@@ -1044,7 +1044,7 @@ mainMouseButtonUp mousePosition mouseState model =
                 if tile.userId == localModel.user && tile.value == PostOffice then
                     { model2
                         | mailEditor =
-                            Mail.openMailEditor
+                            MailEditor.open
                                 model
                                 (Coord.toPoint2d tile.position
                                     |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
@@ -1523,7 +1523,7 @@ offsetViewPoint ({ windowSize, viewPoint, devicePixelRatio, zoomFactor } as mode
 
 actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
-    case ( Mail.mailEditorIsOpen model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
+    case ( MailEditor.isOpen model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
         ( False, _, MouseButtonDown { start, current } ) ->
             offsetViewPoint model start current
 
@@ -2295,7 +2295,7 @@ canvasView model =
                                     , time = Duration.from model.startTime model.time |> Duration.inSeconds
                                     }
                                ]
-                            ++ Mail.drawMail
+                            ++ MailEditor.drawMail
                                 texture
                                 (case model.mouseLeft of
                                     MouseButtonDown { current } ->

@@ -24,7 +24,7 @@ import Id exposing (Id, UserId)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import Mail
+import MailEditor
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
@@ -599,7 +599,7 @@ createUser userId model =
             , undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
-            , mailEditor = Mail.initEditorData
+            , mailEditor = MailEditor.init
             }
     in
     ( { model | users = Dict.insert (Id.toInt userId) userBackendData model.users }, userBackendData )

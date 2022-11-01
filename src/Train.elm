@@ -6,7 +6,7 @@ import Duration exposing (Duration, Seconds)
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, MailId, UserId)
-import Mail exposing (MailStatus(..))
+import MailEditor exposing (MailStatus(..))
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
