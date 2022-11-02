@@ -57,7 +57,6 @@ tests =
                                 , change = RailHorizontal
                                 , userId = user0
                                 }
-                            |> Debug.log "a"
                             |> Grid.getCell (Coord.fromTuple ( 0, 0 ))
                 in
                 case maybeCell of

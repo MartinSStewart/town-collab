@@ -203,6 +203,12 @@ audioLoaded audioData model =
         MailEditorClosing { startTime } ->
             playSound PageTurnSound startTime |> Audio.scaleVolume 0.8
     , List.map (playSound WhooshSound) model.lastTileRotation |> Audio.group |> Audio.scaleVolume 0.5
+    , case model.mailEditor.lastPlacedImage of
+        Just time ->
+            playSound PopSound time |> Audio.scaleVolume 0.4
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
 
@@ -560,7 +566,7 @@ updateLoaded audioData msg model =
                 rotationHelper rotation tile =
                     let
                         nextTile =
-                            rotation tile |> Debug.log "tile"
+                            rotation tile
                     in
                     if tile == nextTile then
                         model
@@ -1414,7 +1420,13 @@ view _ model =
                     (Element.width Element.fill
                         :: Element.height Element.fill
                         :: Element.clip
-                        :: Element.inFront (toolbarView loadedModel)
+                        :: Element.inFront
+                            (if MailEditor.isOpen loadedModel.mailEditor then
+                                Element.none
+
+                             else
+                                toolbarView loadedModel
+                            )
                         :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
                         :: mouseAttributes
                     )

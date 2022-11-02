@@ -69,6 +69,7 @@ type alias MailEditor =
     , current : EditorState
     , redo : List EditorState
     , showMailEditor : ShowMailEditor
+    , lastPlacedImage : Maybe Time.Posix
     }
 
 
@@ -120,6 +121,7 @@ initEditor data =
     , mesh = mesh data.content
     , currentImage = BlueStamp
     , showMailEditor = MailEditorClosed
+    , lastPlacedImage = Nothing
     }
 
 
@@ -189,6 +191,7 @@ handleMouseDown windowWidth windowHeight config mousePosition model =
             , undo = oldEditorState :: List.take 50 model.undo
             , redo = []
             , mesh = mesh newEditorState.content
+            , lastPlacedImage = Just config.time
         }
 
     else
@@ -470,6 +473,20 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                                 0
                             |> Mat4.scale3 mailScale mailScale 0
                     }
+                :: WebGL.entityWith
+                    [ Shaders.blend ]
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
+                    submitButtonMesh
+                    { texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                    , view =
+                        Mat4.makeScale3
+                            (zoomFactor * 2 / toFloat windowWidth)
+                            (zoomFactor * -2 / toFloat windowHeight)
+                            1
+                            |> Coord.translateMat4 submitButtonPosition
+                    }
                 :: (if showHoverImage then
                         [ WebGL.entityWith
                             [ Shaders.blend ]
@@ -500,6 +517,92 @@ drawMail texture mousePosition windowWidth windowHeight config model =
             []
 
 
+submitButtonPosition : Coord UiPixelUnit
+submitButtonPosition =
+    Coord.fromTuple ( 75, 80 )
+
+
+submitButtonWidth =
+    50
+
+
+submitButtonHeight =
+    19
+
+
+submitButtonMesh : WebGL.Mesh Vertex
+submitButtonMesh =
+    let
+        vertices =
+            spriteMesh ( 0, 0 ) ( submitButtonWidth, submitButtonHeight ) ( 380, 153 ) ( 1, 1 )
+                ++ spriteMesh ( 1, 1 ) ( submitButtonWidth - 2, submitButtonHeight - 2 ) ( 379, 153 ) ( 1, 1 )
+                ++ textMesh "SUBMIT" ( 12, 7 )
+    in
+    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+
+
+textMesh : String -> ( Int, Int ) -> List Vertex
+textMesh string position =
+    let
+        position_ =
+            Coord.fromTuple position
+    in
+    String.toList string
+        |> List.foldl
+            (\char state ->
+                let
+                    index : Int
+                    index =
+                        Char.toCode char - Char.toCode 'A' |> Debug.log "a"
+                in
+                if index >= 0 && index < 26 then
+                    { offset = state.offset + charWidth char
+                    , vertices =
+                        state.vertices
+                            ++ spriteMesh
+                                (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple |> Debug.log "b")
+                                ( 5, 5 )
+                                ( 378 + index * 5, 144 )
+                                ( 5, 5 )
+                    }
+
+                else
+                    state
+            )
+            { offset = 0, vertices = [] }
+        |> .vertices
+
+
+charWidth : Char -> number
+charWidth char =
+    case char of
+        'T' ->
+            4
+
+        'J' ->
+            4
+
+        'I' ->
+            4
+
+        'M' ->
+            6
+
+        'W' ->
+            6
+
+        'Y' ->
+            4
+
+        _ ->
+            5
+
+
+getQuadIndices : List a -> List ( Int, Int, Int )
+getQuadIndices list =
+    List.range 0 (List.length list // 4 - 1) |> List.concatMap Grid.getIndices
+
+
 imageMesh : { position : Coord MailPixelUnit, image : Image } -> List Vertex
 imageMesh { position, image } =
     let
@@ -514,6 +617,19 @@ imageMesh { position, image } =
 
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels imageData.texturePosition ( width, height )
+    in
+    [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0, texturePosition = topLeft }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0, texturePosition = topRight }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) 0, texturePosition = bottomRight }
+    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) 0, texturePosition = bottomLeft }
+    ]
+
+
+spriteMesh : ( Int, Int ) -> ( Int, Int ) -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
+spriteMesh ( x, y ) ( width, height ) texturePosition textureSize =
+    let
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePositionPixels texturePosition textureSize
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0, texturePosition = topLeft }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0, texturePosition = topRight }

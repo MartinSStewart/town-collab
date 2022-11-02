@@ -3,6 +3,7 @@ module Coord exposing
     , RawCellCoord
     , absTuple
     , addTuple
+    , addTuple_
     , area
     , divideTuple
     , floorPoint
@@ -18,9 +19,11 @@ module Coord exposing
     , toVec2
     , toVector2d
     , toggleSet
+    , translateMat4
     )
 
 import EverySet exposing (EverySet)
+import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -40,6 +43,11 @@ area coord =
     x * y
 
 
+translateMat4 : Coord unit -> Mat4 -> Mat4
+translateMat4 ( Quantity x, Quantity y ) =
+    Mat4.translate3 (toFloat x) (toFloat y) 0
+
+
 origin : Coord units
 origin =
     fromTuple ( 0, 0 )
@@ -48,6 +56,11 @@ origin =
 addTuple : Coord unit -> Coord unit -> Coord unit
 addTuple ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.plus x0 x1, Quantity.plus y0 y1 )
+
+
+addTuple_ : ( Int, Int ) -> Coord unit -> Coord unit
+addTuple_ ( x0, y0 ) ( x1, y1 ) =
+    ( Quantity.plus (Quantity x0) x1, Quantity.plus (Quantity y0) y1 )
 
 
 minusTuple : Coord unit -> Coord unit -> Coord unit
