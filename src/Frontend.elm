@@ -498,14 +498,17 @@ updateLoaded audioData msg model =
 
                             { canvasSize, actualCanvasSize } =
                                 findPixelPerfectSize model
+
+                            ( newMailEditor, cmd ) =
+                                MailEditor.handleMouseDown windowWidth windowHeight model mousePosition model.mailEditor
                         in
                         ( { model
                             | mouseLeft =
                                 MouseButtonDown
                                     { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
-                            , mailEditor = MailEditor.handleMouseDown windowWidth windowHeight model mousePosition model.mailEditor
+                            , mailEditor = newMailEditor
                           }
-                        , Cmd.none
+                        , Cmd.map MailEditorToBackend cmd
                         )
 
                     else

@@ -10,6 +10,7 @@ module Bounds exposing
     , coordRangeFold
     , coordRangeFoldReverse
     , expand
+    , fromCoordAndSize
     , fromCoords
     , height
     , maximum
@@ -22,7 +23,7 @@ module Bounds exposing
 import BoundingBox2d exposing (BoundingBox2d)
 import Coord exposing (Coord)
 import List.Extra as List
-import List.Nonempty exposing (Nonempty)
+import List.Nonempty exposing (Nonempty(..))
 import NonemptyExtra as Nonempty
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -81,6 +82,11 @@ fromCoords coords =
         { min = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.minimumBy Quantity.unwrap yValues )
         , max = ( Nonempty.maximumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap yValues )
         }
+
+
+fromCoordAndSize : Coord unit -> Coord unit -> Bounds unit
+fromCoordAndSize coord size =
+    fromCoords (Nonempty coord [ Coord.addTuple coord size ])
 
 
 centerAndHalfSize : Coord unit -> Coord unit -> Bounds unit

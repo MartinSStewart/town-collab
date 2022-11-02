@@ -200,6 +200,7 @@ type ToBackend
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
     | UpdateMailEditorRequest MailEditorData
+    | MailEditorToBackend MailEditor.ToBackend
 
 
 type BackendMsg

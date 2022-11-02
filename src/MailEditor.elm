@@ -6,6 +6,7 @@ module MailEditor exposing
     , MailEditorData
     , MailStatus(..)
     , ShowMailEditor(..)
+    , ToBackend(..)
     , close
     , drawMail
     , getImageData
@@ -20,11 +21,13 @@ module MailEditor exposing
     )
 
 import Audio exposing (Audio)
+import Bounds
 import Coord exposing (Coord)
 import Duration exposing (Duration)
 import Frame2d
 import Grid exposing (Vertex)
 import Id exposing (Id, TrainId, UserId)
+import Lamdera
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
@@ -70,7 +73,14 @@ type alias MailEditor =
     , redo : List EditorState
     , showMailEditor : ShowMailEditor
     , lastPlacedImage : Maybe Time.Posix
+    , submitStatus : SubmitStatus
     }
+
+
+type SubmitStatus
+    = NotSubmitted
+    | Submitting
+    | SubmitSuccessful
 
 
 type alias EditorState =
@@ -122,6 +132,7 @@ initEditor data =
     , currentImage = BlueStamp
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
+    , submitStatus = NotSubmitted
     }
 
 
@@ -143,6 +154,10 @@ type alias ImageData =
     { textureSize : ( Int, Int ), texturePosition : ( Int, Int ) }
 
 
+type ToBackend
+    = SubmitMailRequest EditorState
+
+
 getImageData : Image -> ImageData
 getImageData image =
     case image of
@@ -162,40 +177,52 @@ handleMouseDown :
     -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Time.Posix }
     -> Point2d Pixels Pixels
     -> MailEditor
-    -> MailEditor
+    -> ( MailEditor, Cmd ToBackend )
 handleMouseDown windowWidth windowHeight config mousePosition model =
     let
+        uiCoord : Coord UiPixelUnit
+        uiCoord =
+            screenToWorld windowWidth windowHeight config mousePosition |> Coord.roundPoint
+
+        mailCoord : Coord MailPixelUnit
         mailCoord =
-            screenToWorld windowWidth windowHeight config mousePosition
-                |> Coord.roundPoint
+            uiCoord
                 |> Coord.minusTuple
                     (Coord.fromTuple imageData.textureSize
                         |> Coord.divideTuple (Coord.fromTuple ( 2, 2 ))
                     )
                 |> uiPixelToMailPixel
 
+        imageData : ImageData
         imageData =
             getImageData model.currentImage
 
+        oldEditorState : EditorState
         oldEditorState =
             model.current
 
+        newEditorState : EditorState
         newEditorState =
             { oldEditorState
                 | content = oldEditorState.content ++ [ { position = mailCoord, image = BlueStamp } ]
             }
     in
     if validImagePosition imageData mailCoord then
-        { model
+        ( { model
             | current = newEditorState
             , undo = oldEditorState :: List.take 50 model.undo
             , redo = []
             , mesh = mesh newEditorState.content
             , lastPlacedImage = Just config.time
-        }
+          }
+        , Cmd.none
+        )
+
+    else if Bounds.fromCoordAndSize submitButtonPosition submitButtonSize |> Bounds.contains uiCoord then
+        ( model, Lamdera.sendToBackend (SubmitMailRequest model.current) )
 
     else
-        close config model
+        ( close config model, Cmd.none )
 
 
 handleKeyDown : MailEditor -> MailEditor
@@ -522,23 +549,25 @@ submitButtonPosition =
     Coord.fromTuple ( 75, 80 )
 
 
-submitButtonWidth =
-    50
-
-
-submitButtonHeight =
-    19
+submitButtonSize : Coord UiPixelUnit
+submitButtonSize =
+    Coord.fromTuple ( 50, 19 )
 
 
 submitButtonMesh : WebGL.Mesh Vertex
 submitButtonMesh =
     let
         vertices =
-            spriteMesh ( 0, 0 ) ( submitButtonWidth, submitButtonHeight ) ( 380, 153 ) ( 1, 1 )
-                ++ spriteMesh ( 1, 1 ) ( submitButtonWidth - 2, submitButtonHeight - 2 ) ( 379, 153 ) ( 1, 1 )
+            spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ textMesh "SUBMIT" ( 12, 7 )
     in
     WebGL.indexedTriangles vertices (getQuadIndices vertices)
+
+
+charSize : Coord UiPixelUnit
+charSize =
+    Coord.fromTuple ( 5, 5 )
 
 
 textMesh : String -> ( Int, Int ) -> List Vertex
@@ -553,15 +582,15 @@ textMesh string position =
                 let
                     index : Int
                     index =
-                        Char.toCode char - Char.toCode 'A' |> Debug.log "a"
+                        Char.toCode char - Char.toCode 'A'
                 in
                 if index >= 0 && index < 26 then
                     { offset = state.offset + charWidth char
                     , vertices =
                         state.vertices
                             ++ spriteMesh
-                                (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple |> Debug.log "b")
-                                ( 5, 5 )
+                                (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple)
+                                charSize
                                 ( 378 + index * 5, 144 )
                                 ( 5, 5 )
                     }
@@ -625,8 +654,8 @@ imageMesh { position, image } =
     ]
 
 
-spriteMesh : ( Int, Int ) -> ( Int, Int ) -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
-spriteMesh ( x, y ) ( width, height ) texturePosition textureSize =
+spriteMesh : ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
+spriteMesh ( x, y ) ( Quantity width, Quantity height ) texturePosition textureSize =
     let
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels texturePosition textureSize

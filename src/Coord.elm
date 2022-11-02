@@ -11,6 +11,7 @@ module Coord exposing
     , maxTuple
     , minTuple
     , minusTuple
+    , minusTuple_
     , multiplyTuple
     , origin
     , roundPoint
@@ -66,6 +67,11 @@ addTuple_ ( x0, y0 ) ( x1, y1 ) =
 minusTuple : Coord unit -> Coord unit -> Coord unit
 minusTuple ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.minus x0 x1, Quantity.minus y0 y1 )
+
+
+minusTuple_ : ( Int, Int ) -> Coord unit -> Coord unit
+minusTuple_ ( x0, y0 ) ( x1, y1 ) =
+    ( Quantity.minus (Quantity x0) x1, Quantity.minus (Quantity y0) y1 )
 
 
 multiplyTuple : ( Int, Int ) -> Coord unit -> Coord unit
