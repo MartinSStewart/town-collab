@@ -528,25 +528,6 @@ updateLoaded audioData msg model =
                                     { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                         }
 
-                      else if button == SecondButton then
-                        let
-                            localModel =
-                                LocalGrid.localModel model.localModel
-
-                            position : Coord WorldUnit
-                            position =
-                                screenToWorld model mousePosition |> Coord.floorPoint
-
-                            maybeUserId =
-                                Grid.getTile position localModel.grid |> Maybe.map .userId
-                        in
-                        case maybeUserId of
-                            Just userId ->
-                                highlightUser userId position model
-
-                            Nothing ->
-                                { model | highlightContextMenu = Nothing }
-
                       else
                         model
                     , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
@@ -942,26 +923,6 @@ mainMouseButtonUp mousePosition mouseState model =
     )
 
 
-highlightUser : Id UserId -> Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
-highlightUser highlightUserId highlightPoint model =
-    { model
-        | highlightContextMenu =
-            case model.highlightContextMenu of
-                Just { userId } ->
-                    if highlightUserId == userId then
-                        Nothing
-
-                    else
-                        Just { userId = highlightUserId, hidePoint = highlightPoint }
-
-                Nothing ->
-                    Just { userId = highlightUserId, hidePoint = highlightPoint }
-
-        -- We add some delay because there's usually lag before the animation starts
-        , animationElapsedTime = Duration.milliseconds -300
-    }
-
-
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> FrontendLoaded
 updateLocalModel msg model =
     { model
@@ -1008,11 +969,7 @@ devicePixelRatioUpdate :
     -> { b | devicePixelRatio : Float, zoomFactor : Int }
     -> ( { b | devicePixelRatio : Float, zoomFactor : Int }, Cmd msg )
 devicePixelRatioUpdate devicePixelRatio model =
-    ( { model
-        | devicePixelRatio = devicePixelRatio
-      }
-    , Cmd.none
-    )
+    ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
 
 
 mouseWorldPosition : FrontendLoaded -> Point2d WorldUnit WorldUnit

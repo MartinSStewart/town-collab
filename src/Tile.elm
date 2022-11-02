@@ -1085,7 +1085,7 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToRight
                     (RailPathHorizontal { offsetX = 1, offsetY = 3, length = 3 })
-            , nextClockwise = RailBottomToLeft_SplitRight
+            , nextClockwise = RailBottomToRight_SplitUp
             }
 
         RailTopToLeft_SplitDown ->
