@@ -500,7 +500,14 @@ updateLoaded audioData msg model =
                                 findPixelPerfectSize model
 
                             ( newMailEditor, cmd ) =
-                                MailEditor.handleMouseDown windowWidth windowHeight model mousePosition model.mailEditor
+                                MailEditor.handleMouseDown
+                                    Cmd.none
+                                    (MailEditorToBackend >> Lamdera.sendToBackend)
+                                    windowWidth
+                                    windowHeight
+                                    model
+                                    mousePosition
+                                    model.mailEditor
                         in
                         ( { model
                             | mouseLeft =
@@ -508,7 +515,7 @@ updateLoaded audioData msg model =
                                     { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                             , mailEditor = newMailEditor
                           }
-                        , Cmd.map MailEditorToBackend cmd
+                        , cmd
                         )
 
                     else
@@ -1385,6 +1392,9 @@ updateLoadedFromBackend msg model =
         TrainUpdate trains ->
             ( { model | trains = trains }, Cmd.none )
 
+        MailEditorToFrontend mailEditorToFrontend ->
+            ( { model | mailEditor = MailEditor.updateFromBackend model mailEditorToFrontend model.mailEditor }, Cmd.none )
+
 
 lostConnection : FrontendLoaded -> Bool
 lostConnection model =
@@ -1842,7 +1852,7 @@ getFlags model =
                         (\tile ->
                             if
                                 (tile.value == PostOffice)
-                                    && List.any (\mail -> mail.sender == tile.userId) (AssocList.values model.mail)
+                                    && List.any (\mail -> mail.from == tile.userId) (AssocList.values model.mail)
                             then
                                 Just
                                     { position =

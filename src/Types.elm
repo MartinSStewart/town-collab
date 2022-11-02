@@ -199,7 +199,6 @@ type ToBackend
     = ConnectToBackend (Bounds CellUnit)
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
-    | UpdateMailEditorRequest MailEditorData
     | MailEditorToBackend MailEditor.ToBackend
 
 
@@ -217,6 +216,7 @@ type ToFrontend
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
     | TrainUpdate (AssocList.Dict (Id TrainId) Train)
+    | MailEditorToFrontend MailEditor.ToFrontend
 
 
 type EmailEvent

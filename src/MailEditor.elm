@@ -7,6 +7,7 @@ module MailEditor exposing
     , MailStatus(..)
     , ShowMailEditor(..)
     , ToBackend(..)
+    , ToFrontend(..)
     , close
     , drawMail
     , getImageData
@@ -18,6 +19,7 @@ module MailEditor exposing
     , openAnimationLength
     , redo
     , undo
+    , updateFromBackend
     )
 
 import Audio exposing (Audio)
@@ -46,16 +48,17 @@ import WebGL.Texture
 
 
 type alias BackendMail =
-    { message : String
+    { content : List { position : Coord MailPixelUnit, image : Image }
     , status : MailStatus
-    , sender : Id UserId
-    , recipient : Id UserId
+    , from : Id UserId
+    , to : Id UserId
     }
 
 
 type alias FrontendMail =
     { status : MailStatus
-    , sender : Id UserId
+    , from : Id UserId
+    , to : Id UserId
     }
 
 
@@ -80,16 +83,16 @@ type alias MailEditor =
 type SubmitStatus
     = NotSubmitted
     | Submitting
-    | SubmitSuccessful
 
 
 type alias EditorState =
-    { content : List { position : Coord MailPixelUnit, image : Image }, recipient : Maybe (Id UserId) }
+    { content : List { position : Coord MailPixelUnit, image : Image }, to : String }
 
 
 type alias MailEditorData =
-    { recipient : Maybe (Id UserId)
+    { to : String
     , content : List { position : Coord MailPixelUnit, image : Image }
+    , currentImage : Image
     }
 
 
@@ -125,28 +128,23 @@ type ShowMailEditor
 
 initEditor : MailEditorData -> MailEditor
 initEditor data =
-    { current = { content = data.content, recipient = data.recipient }
+    { current = { content = data.content, to = data.to }
     , undo = []
     , redo = []
-    , mesh = mesh data.content
+    , mesh = WebGL.triangleFan []
     , currentImage = BlueStamp
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
     , submitStatus = NotSubmitted
     }
-
-
-mesh : List { position : Coord MailPixelUnit, image : Image } -> WebGL.Mesh Vertex
-mesh content =
-    WebGL.indexedTriangles
-        (mailMesh ++ List.concatMap imageMesh content)
-        (List.range 0 (List.length content) |> List.concatMap Grid.getIndices)
+        |> updateMailMesh
 
 
 init : MailEditorData
 init =
-    { recipient = Nothing
+    { to = ""
     , content = []
+    , currentImage = BlueStamp
     }
 
 
@@ -155,7 +153,12 @@ type alias ImageData =
 
 
 type ToBackend
-    = SubmitMailRequest EditorState
+    = SubmitMailRequest { content : List { position : Coord MailPixelUnit, image : Image }, to : Id UserId }
+    | UpdateMailEditorRequest MailEditorData
+
+
+type ToFrontend
+    = SubmitMailResponse
 
 
 getImageData : Image -> ImageData
@@ -171,18 +174,40 @@ getImageData image =
             { textureSize = ( 24, 24 ), texturePosition = ( 556, 0 ) }
 
 
+updateFromBackend : { a | time : Time.Posix } -> ToFrontend -> MailEditor -> MailEditor
+updateFromBackend config toFrontend mailEditor =
+    case toFrontend of
+        SubmitMailResponse ->
+            case mailEditor.submitStatus of
+                NotSubmitted ->
+                    mailEditor
+
+                Submitting ->
+                    { mailEditor
+                        | submitStatus = NotSubmitted
+                        , undo = []
+                        , redo = []
+                        , current = { content = [], to = "" }
+                    }
+                        |> updateMailMesh
+                        |> close config
+
+
 handleMouseDown :
-    Int
+    cmd
+    -> (ToBackend -> cmd)
+    -> Int
     -> Int
     -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Time.Posix }
     -> Point2d Pixels Pixels
     -> MailEditor
-    -> ( MailEditor, Cmd ToBackend )
-handleMouseDown windowWidth windowHeight config mousePosition model =
+    -> ( MailEditor, cmd )
+handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosition model =
     let
         uiCoord : Coord UiPixelUnit
         uiCoord =
-            screenToWorld windowWidth windowHeight config mousePosition |> Coord.roundPoint
+            screenToWorld windowWidth windowHeight config mousePosition
+                |> Coord.roundPoint
 
         mailCoord : Coord MailPixelUnit
         mailCoord =
@@ -204,25 +229,52 @@ handleMouseDown windowWidth windowHeight config mousePosition model =
         newEditorState : EditorState
         newEditorState =
             { oldEditorState
-                | content = oldEditorState.content ++ [ { position = mailCoord, image = BlueStamp } ]
+                | content = oldEditorState.content ++ [ { position = mailCoord, image = model.currentImage } ]
             }
     in
     if validImagePosition imageData mailCoord then
-        ( { model
-            | current = newEditorState
-            , undo = oldEditorState :: List.take 50 model.undo
-            , redo = []
-            , mesh = mesh newEditorState.content
-            , lastPlacedImage = Just config.time
-          }
-        , Cmd.none
-        )
+        let
+            model2 =
+                { model
+                    | current = newEditorState
+                    , undo = oldEditorState :: List.take 50 model.undo
+                    , redo = []
+                    , lastPlacedImage = Just config.time
+                }
+                    |> updateMailMesh
+        in
+        ( model2, UpdateMailEditorRequest (toData model2) |> sendToBackend )
 
     else if Bounds.fromCoordAndSize submitButtonPosition submitButtonSize |> Bounds.contains uiCoord then
-        ( model, Lamdera.sendToBackend (SubmitMailRequest model.current) )
+        case ( model.submitStatus, validateUserId model.current.to ) of
+            ( NotSubmitted, Just recipient ) ->
+                ( { model | submitStatus = Submitting }
+                , sendToBackend (SubmitMailRequest { content = model.current.content, to = recipient })
+                )
+
+            _ ->
+                ( model, cmdNone )
 
     else
-        ( close config model, Cmd.none )
+        ( close config model, cmdNone )
+
+
+validateUserId : String -> Maybe (Id UserId)
+validateUserId string =
+    case String.toInt string of
+        Just int ->
+            Id.fromInt int |> Just
+
+        Nothing ->
+            Nothing
+
+
+toData : MailEditor -> MailEditorData
+toData model =
+    { to = model.current.to
+    , content = model.current.content
+    , currentImage = model.currentImage
+    }
 
 
 handleKeyDown : MailEditor -> MailEditor
@@ -278,9 +330,9 @@ undo model =
             { model
                 | undo = rest
                 , current = head
-                , mesh = mesh head.content
                 , redo = model.current :: model.redo
             }
+                |> updateMailMesh
 
         [] ->
             model
@@ -293,9 +345,9 @@ redo model =
             { model
                 | redo = rest
                 , current = head
-                , mesh = mesh head.content
                 , undo = model.current :: model.undo
             }
+                |> updateMailMesh
 
         [] ->
             model
@@ -307,6 +359,16 @@ mailWidth =
 
 mailHeight =
     144
+
+
+updateMailMesh : MailEditor -> MailEditor
+updateMailMesh model =
+    { model
+        | mesh =
+            WebGL.indexedTriangles
+                (mailMesh ++ List.concatMap imageMesh model.current.content)
+                (List.range 0 (List.length model.current.content) |> List.concatMap Grid.getIndices)
+    }
 
 
 mailMesh : List Vertex
@@ -504,7 +566,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                     [ Shaders.blend ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
-                    submitButtonMesh
+                    textInputMesh
                     { texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                     , view =
@@ -512,9 +574,38 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                             (zoomFactor * 2 / toFloat windowWidth)
                             (zoomFactor * -2 / toFloat windowHeight)
                             1
-                            |> Coord.translateMat4 submitButtonPosition
+                            |> Coord.translateMat4 textInputPosition
                     }
-                :: (if showHoverImage then
+                :: (case validateUserId model.current.to of
+                        Just _ ->
+                            [ WebGL.entityWith
+                                [ Shaders.blend ]
+                                Shaders.vertexShader
+                                Shaders.fragmentShader
+                                (if model.submitStatus == Submitting then
+                                    submittingButtonMesh
+
+                                 else if Bounds.fromCoordAndSize submitButtonPosition submitButtonSize |> Bounds.contains mousePosition_ then
+                                    submitButtonHoverMesh
+
+                                 else
+                                    submitButtonMesh
+                                )
+                                { texture = texture
+                                , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                                , view =
+                                    Mat4.makeScale3
+                                        (zoomFactor * 2 / toFloat windowWidth)
+                                        (zoomFactor * -2 / toFloat windowHeight)
+                                        1
+                                        |> Coord.translateMat4 submitButtonPosition
+                                }
+                            ]
+
+                        Nothing ->
+                            []
+                   )
+                ++ (if showHoverImage then
                         [ WebGL.entityWith
                             [ Shaders.blend ]
                             Shaders.simpleVertexShader
@@ -559,8 +650,49 @@ submitButtonMesh =
     let
         vertices =
             spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+                ++ textMesh "SUBMIT" ( 12, 7 )
+    in
+    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+
+
+submittingButtonMesh : WebGL.Mesh Vertex
+submittingButtonMesh =
+    let
+        vertices =
+            spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+                ++ textMesh "SUBMITTING" ( 2, 7 )
+    in
+    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+
+
+submitButtonHoverMesh : WebGL.Mesh Vertex
+submitButtonHoverMesh =
+    let
+        vertices =
+            spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
                 ++ spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ textMesh "SUBMIT" ( 12, 7 )
+    in
+    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+
+
+textInputPosition =
+    Coord.fromTuple ( 0, 80 )
+
+
+textInputSize =
+    Coord.fromTuple ( 70, 19 )
+
+
+textInputMesh : WebGL.Mesh Vertex
+textInputMesh =
+    let
+        vertices =
+            spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
+                ++ spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+                ++ textMesh "TO:" ( 3, 7 )
     in
     WebGL.indexedTriangles vertices (getQuadIndices vertices)
 
@@ -580,18 +712,21 @@ textMesh string position =
         |> List.foldl
             (\char state ->
                 let
+                    code =
+                        Char.toCode char |> Debug.log "a"
+
                     index : Int
                     index =
-                        Char.toCode char - Char.toCode 'A'
+                        code - Char.toCode '\''
                 in
-                if index >= 0 && index < 26 then
+                if code >= 39 && code <= 90 then
                     { offset = state.offset + charWidth char
                     , vertices =
                         state.vertices
                             ++ spriteMesh
                                 (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple)
                                 charSize
-                                ( 378 + index * 5, 144 )
+                                ( 764 + index * 5, 0 )
                                 ( 5, 5 )
                     }
 
@@ -618,6 +753,9 @@ charWidth char =
             6
 
         'W' ->
+            6
+
+        '@' ->
             6
 
         'Y' ->

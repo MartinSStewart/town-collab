@@ -24,7 +24,7 @@ import Id exposing (Id, UserId)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import MailEditor
+import MailEditor exposing (MailStatus(..))
 import Quantity exposing (Quantity(..))
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
@@ -342,15 +342,37 @@ updateFromFrontend currentTime sessionId clientId msg model =
                 Nothing ->
                     ( model, Cmd.none )
 
-        UpdateMailEditorRequest mailEditor ->
-            case getUserFromSessionId sessionId model of
-                Just ( userId, _ ) ->
-                    ( updateUser userId (\user -> { user | mailEditor = mailEditor }) model
-                    , Cmd.none
-                    )
+        MailEditorToBackend mailEditorToBackend ->
+            case mailEditorToBackend of
+                MailEditor.SubmitMailRequest { content, to } ->
+                    case getUserFromSessionId sessionId model of
+                        Just ( userId, _ ) ->
+                            ( { model
+                                | mail =
+                                    AssocList.insert
+                                        (AssocList.size model.mail |> Id.fromInt)
+                                        { content = content
+                                        , status = MailWaitingPickup
+                                        , from = userId
+                                        , to = to
+                                        }
+                                        model.mail
+                              }
+                            , MailEditor.SubmitMailResponse |> MailEditorToFrontend |> Lamdera.sendToFrontend clientId
+                            )
 
-                Nothing ->
-                    ( model, Cmd.none )
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                MailEditor.UpdateMailEditorRequest mailEditor ->
+                    case getUserFromSessionId sessionId model of
+                        Just ( userId, _ ) ->
+                            ( updateUser userId (\user -> { user | mailEditor = mailEditor }) model
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
 
 sendConfirmationEmailRateLimit : Duration
@@ -578,7 +600,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             , undoCurrent = user.undoCurrent
             , viewBounds = viewBounds
             , trains = model.trains
-            , mail = AssocList.map (\_ mail -> { status = mail.status, sender = mail.sender }) model.mail
+            , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model.mail
             , mailEditor = user.mailEditor
             }
     in

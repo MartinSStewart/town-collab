@@ -43,7 +43,7 @@ maxSpeed =
 moveTrain :
     Time.Posix
     -> Time.Posix
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
     -> Train
     -> Train
 moveTrain startTime endTime state train =
@@ -84,7 +84,7 @@ moveTrain startTime endTime state train =
 moveTrainHelper :
     Time.Posix
     -> Quantity Float TileLocalUnit
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
     -> Train
     -> Train
 moveTrainHelper time distanceLeft state train =
@@ -183,7 +183,7 @@ moveTrainHelper time distanceLeft state train =
 findNextTile :
     Time.Posix
     -> Point2d WorldUnit WorldUnit
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
@@ -213,7 +213,7 @@ findNextTileHelper :
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, sender : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
     -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
     -> Maybe Train
 findNextTileHelper time neighborCellPos position speed direction state tiles =
@@ -249,7 +249,7 @@ findNextTileHelper time neighborCellPos position speed direction state tiles =
 checkPath :
     Time.Posix
     -> { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
-    -> AssocList.Dict (Id MailId) { a | status : MailStatus, sender : Id UserId }
+    -> AssocList.Dict (Id MailId) { a | status : MailStatus, from : Id UserId }
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
@@ -284,7 +284,7 @@ checkPath time tile mail neighborCellPos position speed direction railPath =
             if
                 (tile.value == PostOffice)
                     && List.any
-                        (\mail_ -> tile.userId == mail_.sender && mail_.status == MailWaitingPickup)
+                        (\mail_ -> tile.userId == mail_.from && mail_.status == MailWaitingPickup)
                         (AssocList.values mail)
             then
                 Just { time = time, userId = tile.userId }
