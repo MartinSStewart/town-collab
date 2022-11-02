@@ -896,14 +896,14 @@ mainMouseButtonUp mousePosition mouseState model =
             }
 
         canOpenMailEditor =
-            case model.mailEditor.showMailEditor of
-                MailEditorClosed ->
+            case ( model.mailEditor.showMailEditor, model.currentTile ) of
+                ( MailEditorClosed, Nothing ) ->
                     True
 
-                MailEditorClosing { startTime } ->
+                ( MailEditorClosing { startTime }, Nothing ) ->
                     Duration.from startTime model.time |> Quantity.greaterThan MailEditor.openAnimationLength
 
-                MailEditorOpening _ ->
+                _ ->
                     False
     in
     ( if isSmallDistance && canOpenMailEditor then
@@ -1030,9 +1030,6 @@ mouseWorldPosition model =
 placeTile : Tile -> FrontendLoaded -> FrontendLoaded
 placeTile tile model =
     let
-        _ =
-            Debug.log "abc" model.currentTile
-
         model2 =
             if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
                 updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
