@@ -2,9 +2,9 @@ module MailEditor exposing
     ( BackendMail
     , FrontendMail
     , Image(..)
-    , MailEditor
     , MailEditorData
     , MailStatus(..)
+    , Model
     , ShowMailEditor(..)
     , ToBackend(..)
     , ToFrontend(..)
@@ -22,14 +22,12 @@ module MailEditor exposing
     , updateFromBackend
     )
 
-import Audio exposing (Audio)
 import Bounds
 import Coord exposing (Coord)
 import Duration exposing (Duration)
 import Frame2d
 import Grid exposing (Vertex)
 import Id exposing (Id, TrainId, UserId)
-import Lamdera
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
@@ -43,7 +41,6 @@ import Time
 import Units exposing (MailPixelUnit, UiPixelUnit, WorldUnit)
 import Vector2d
 import WebGL
-import WebGL.Settings.Blend as Blend
 import WebGL.Texture
 
 
@@ -68,7 +65,7 @@ type MailStatus
     | MailReceived
 
 
-type alias MailEditor =
+type alias Model =
     { mesh : WebGL.Mesh Vertex
     , currentImage : Image
     , undo : List EditorState
@@ -77,6 +74,7 @@ type alias MailEditor =
     , showMailEditor : ShowMailEditor
     , lastPlacedImage : Maybe Time.Posix
     , submitStatus : SubmitStatus
+    , textInputFocused : Bool
     }
 
 
@@ -107,7 +105,7 @@ openAnimationLength =
     Duration.milliseconds 300
 
 
-isOpen : MailEditor -> Bool
+isOpen : Model -> Bool
 isOpen { showMailEditor } =
     case showMailEditor of
         MailEditorClosed ->
@@ -126,7 +124,7 @@ type ShowMailEditor
     | MailEditorClosing { startTime : Time.Posix, startPosition : Point2d Pixels Pixels }
 
 
-initEditor : MailEditorData -> MailEditor
+initEditor : MailEditorData -> Model
 initEditor data =
     { current = { content = data.content, to = data.to }
     , undo = []
@@ -136,6 +134,7 @@ initEditor data =
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
     , submitStatus = NotSubmitted
+    , textInputFocused = False
     }
         |> updateMailMesh
 
@@ -174,7 +173,7 @@ getImageData image =
             { textureSize = ( 24, 24 ), texturePosition = ( 556, 0 ) }
 
 
-updateFromBackend : { a | time : Time.Posix } -> ToFrontend -> MailEditor -> MailEditor
+updateFromBackend : { a | time : Time.Posix } -> ToFrontend -> Model -> Model
 updateFromBackend config toFrontend mailEditor =
     case toFrontend of
         SubmitMailResponse ->
@@ -200,8 +199,8 @@ handleMouseDown :
     -> Int
     -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Time.Posix }
     -> Point2d Pixels Pixels
-    -> MailEditor
-    -> ( MailEditor, cmd )
+    -> Model
+    -> ( Model, cmd )
 handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosition model =
     let
         uiCoord : Coord UiPixelUnit
@@ -269,7 +268,7 @@ validateUserId string =
             Nothing
 
 
-toData : MailEditor -> MailEditorData
+toData : Model -> MailEditorData
 toData model =
     { to = model.current.to
     , content = model.current.content
@@ -277,12 +276,12 @@ toData model =
     }
 
 
-handleKeyDown : MailEditor -> MailEditor
+handleKeyDown : Model -> Model
 handleKeyDown model =
     model
 
 
-close : { a | time : Time.Posix } -> MailEditor -> MailEditor
+close : { a | time : Time.Posix } -> Model -> Model
 close config model =
     { model
         | showMailEditor =
@@ -298,7 +297,7 @@ close config model =
     }
 
 
-open : { a | time : Time.Posix } -> Point2d Pixels Pixels -> MailEditor -> MailEditor
+open : { a | time : Time.Posix } -> Point2d Pixels Pixels -> Model -> Model
 open config startPosition model =
     { model | showMailEditor = MailEditorOpening { startTime = config.time, startPosition = startPosition } }
 
@@ -323,7 +322,7 @@ validImagePosition imageData position =
         && (y < mailHeight + round (toFloat h / -2))
 
 
-undo : MailEditor -> MailEditor
+undo : Model -> Model
 undo model =
     case model.undo of
         head :: rest ->
@@ -338,7 +337,7 @@ undo model =
             model
 
 
-redo : MailEditor -> MailEditor
+redo : Model -> Model
 redo model =
     case model.redo of
         head :: rest ->
@@ -361,7 +360,7 @@ mailHeight =
     144
 
 
-updateMailMesh : MailEditor -> MailEditor
+updateMailMesh : Model -> Model
 updateMailMesh model =
     { model
         | mesh =
@@ -443,7 +442,7 @@ drawMail :
             , zoomFactor : Int
             , viewPoint : Point2d WorldUnit WorldUnit
         }
-    -> MailEditor
+    -> Model
     -> List WebGL.Entity
 drawMail texture mousePosition windowWidth windowHeight config model =
     let
@@ -713,7 +712,7 @@ textMesh string position =
             (\char state ->
                 let
                     code =
-                        Char.toCode char |> Debug.log "a"
+                        Char.toCode char
 
                     index : Int
                     index =
