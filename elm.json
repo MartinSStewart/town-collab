@@ -41,6 +41,7 @@
             "ktonon/elm-crypto": "1.1.2",
             "lamdera/codecs": "1.0.0",
             "lamdera/core": "1.0.0",
+            "lamdera/program-test": "2.0.0",
             "mdgriffith/elm-ui": "1.1.8",
             "mgold/elm-nonempty-list": "4.2.0",
             "mpizenberg/elm-pointer-events": "4.0.2",
@@ -53,13 +54,18 @@
             "elm/file": "1.0.5",
             "elm/regex": "1.0.0",
             "elm/virtual-dom": "1.0.2",
+            "elm-explorations/test": "2.0.0",
             "folkertdev/elm-flate": "2.0.5",
+            "folkertdev/elm-sha2": "1.0.0",
             "ianmackenzie/elm-geometry": "3.9.0",
-            "ktonon/elm-word": "2.1.2"
+            "ktonon/elm-word": "2.1.2",
+            "rtfeldman/elm-hex": "1.0.0"
         }
     },
     "test-dependencies": {
-        "direct": { "elm-explorations/test": "2.0.0" },
+        "direct": {
+            "elm-explorations/test": "2.0.0"
+        },
         "indirect": {}
     }
 }

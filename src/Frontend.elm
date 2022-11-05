@@ -474,7 +474,11 @@ updateLoaded audioData msg model =
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
-                    keyMsgCanvasUpdate key model
+                    if MailEditor.isOpen model.mailEditor then
+                        ( { model | mailEditor = MailEditor.handleKeyDown model key model.mailEditor }, Cmd.none )
+
+                    else
+                        keyMsgCanvasUpdate key model
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -824,13 +828,7 @@ keyMsgCanvasUpdate key model =
             handleRedo ()
 
         ( Keyboard.Escape, _, _ ) ->
-            ( if MailEditor.isOpen model.mailEditor then
-                { model | mailEditor = MailEditor.close model model.mailEditor }
-
-              else
-                { model | currentTile = Nothing }
-            , Cmd.none
-            )
+            ( { model | currentTile = Nothing }, Cmd.none )
 
         ( Keyboard.Spacebar, False, False ) ->
             ( case Tile.fromChar ' ' of

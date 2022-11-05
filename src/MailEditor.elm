@@ -11,6 +11,7 @@ module MailEditor exposing
     , close
     , drawMail
     , getImageData
+    , handleKeyDown
     , handleMouseDown
     , init
     , initEditor
@@ -28,6 +29,7 @@ import Duration exposing (Duration)
 import Frame2d
 import Grid exposing (Vertex)
 import Id exposing (Id, TrainId, UserId)
+import Keyboard exposing (Key(..))
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
@@ -67,6 +69,7 @@ type MailStatus
 
 type alias Model =
     { mesh : WebGL.Mesh Vertex
+    , textInputMesh : WebGL.Mesh Vertex
     , currentImage : Image
     , undo : List EditorState
     , current : EditorState
@@ -130,6 +133,7 @@ initEditor data =
     , undo = []
     , redo = []
     , mesh = WebGL.triangleFan []
+    , textInputMesh = WebGL.triangleFan []
     , currentImage = BlueStamp
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
@@ -203,6 +207,9 @@ handleMouseDown :
     -> ( Model, cmd )
 handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosition model =
     let
+        model2 =
+            { model | textInputFocused = False }
+
         uiCoord : Coord UiPixelUnit
         uiCoord =
             screenToWorld windowWidth windowHeight config mousePosition
@@ -219,43 +226,43 @@ handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosit
 
         imageData : ImageData
         imageData =
-            getImageData model.currentImage
+            getImageData model2.currentImage
 
         oldEditorState : EditorState
         oldEditorState =
-            model.current
+            model2.current
 
         newEditorState : EditorState
         newEditorState =
             { oldEditorState
-                | content = oldEditorState.content ++ [ { position = mailCoord, image = model.currentImage } ]
+                | content = oldEditorState.content ++ [ { position = mailCoord, image = model2.currentImage } ]
             }
     in
     if validImagePosition imageData mailCoord then
         let
-            model2 =
-                { model
-                    | current = newEditorState
-                    , undo = oldEditorState :: List.take 50 model.undo
-                    , redo = []
-                    , lastPlacedImage = Just config.time
-                }
-                    |> updateMailMesh
+            model3 =
+                addChange newEditorState { model2 | lastPlacedImage = Just config.time }
         in
-        ( model2, UpdateMailEditorRequest (toData model2) |> sendToBackend )
+        ( model3, UpdateMailEditorRequest (toData model3) |> sendToBackend )
+
+    else if Bounds.fromCoordAndSize textInputPosition textInputSize |> Bounds.contains uiCoord then
+        ( { model2 | textInputFocused = True }, cmdNone )
 
     else if Bounds.fromCoordAndSize submitButtonPosition submitButtonSize |> Bounds.contains uiCoord then
-        case ( model.submitStatus, validateUserId model.current.to ) of
+        case ( model2.submitStatus, validateUserId model2.current.to ) of
             ( NotSubmitted, Just recipient ) ->
-                ( { model | submitStatus = Submitting }
-                , sendToBackend (SubmitMailRequest { content = model.current.content, to = recipient })
+                ( { model2 | submitStatus = Submitting }
+                , sendToBackend (SubmitMailRequest { content = model2.current.content, to = recipient })
                 )
 
             _ ->
-                ( model, cmdNone )
+                ( model2, cmdNone )
+
+    else if model.textInputFocused then
+        ( model2, cmdNone )
 
     else
-        ( close config model, cmdNone )
+        ( close config model2, cmdNone )
 
 
 validateUserId : String -> Maybe (Id UserId)
@@ -276,9 +283,72 @@ toData model =
     }
 
 
-handleKeyDown : Model -> Model
-handleKeyDown model =
-    model
+handleKeyDown : { a | time : Time.Posix } -> Key -> Model -> Model
+handleKeyDown config key model =
+    case key of
+        Escape ->
+            if model.textInputFocused then
+                { model | textInputFocused = False }
+
+            else
+                close config model
+
+        Character char ->
+            if model.textInputFocused then
+                addChange_
+                    (\editorState ->
+                        { editorState
+                            | to = editorState.to ++ char
+                        }
+                    )
+                    model
+
+            else
+                { model | currentImage = model.currentImage }
+
+        Backspace ->
+            if model.textInputFocused then
+                addChange_
+                    (\editorState ->
+                        { editorState
+                            | to = editorState.to
+                        }
+                    )
+                    model
+
+            else
+                model
+
+        Spacebar ->
+            if model.textInputFocused then
+                addChange_
+                    (\editorState ->
+                        { editorState
+                            | to = editorState.to ++ " "
+                        }
+                    )
+                    model
+
+            else
+                { model | currentImage = model.currentImage }
+
+        _ ->
+            model
+
+
+addChange : EditorState -> Model -> Model
+addChange editorState model =
+    { model
+        | undo = model.current :: model.undo
+        , current = editorState
+        , redo = []
+    }
+        |> updateMailMesh
+
+
+addChange_ : (EditorState -> EditorState) -> Model -> Model
+addChange_ editorStateFunc model =
+    addChange (editorStateFunc model.current) model
 
 
 close : { a | time : Time.Posix } -> Model -> Model
@@ -294,6 +364,7 @@ close config model =
 
                 MailEditorClosed ->
                     MailEditorClosed
+        , textInputFocused = False
     }
 
 
@@ -367,6 +438,10 @@ updateMailMesh model =
             WebGL.indexedTriangles
                 (mailMesh ++ List.concatMap imageMesh model.current.content)
                 (List.range 0 (List.length model.current.content) |> List.concatMap Grid.getIndices)
+        , textInputMesh =
+            WebGL.indexedTriangles
+                (textMesh model.current.to ( 15, 7 ))
+                (List.range 0 (String.length model.current.to) |> List.concatMap Grid.getIndices)
     }
 
 
@@ -565,7 +640,29 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                     [ Shaders.blend ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
-                    textInputMesh
+                    (if
+                        model.textInputFocused
+                            || Bounds.contains mousePosition_ (Bounds.fromCoordAndSize textInputPosition textInputSize)
+                     then
+                        textInputHoverMesh
+
+                     else
+                        textInputMesh
+                    )
+                    { texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                    , view =
+                        Mat4.makeScale3
+                            (zoomFactor * 2 / toFloat windowWidth)
+                            (zoomFactor * -2 / toFloat windowHeight)
+                            1
+                            |> Coord.translateMat4 textInputPosition
+                    }
+                :: WebGL.entityWith
+                    [ Shaders.blend ]
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
+                    model.textInputMesh
                     { texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                     , view =
@@ -691,6 +788,17 @@ textInputMesh =
         vertices =
             spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
                 ++ spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+                ++ textMesh "TO:" ( 3, 7 )
+    in
+    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+
+
+textInputHoverMesh : WebGL.Mesh Vertex
+textInputHoverMesh =
+    let
+        vertices =
+            spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
+                ++ spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ textMesh "TO:" ( 3, 7 )
     in
     WebGL.indexedTriangles vertices (getQuadIndices vertices)
