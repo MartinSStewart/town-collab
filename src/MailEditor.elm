@@ -238,15 +238,18 @@ handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosit
                 | content = oldEditorState.content ++ [ { position = mailCoord, image = model2.currentImage } ]
             }
     in
-    if validImagePosition imageData mailCoord then
+    if Bounds.fromCoordAndSize textInputPosition textInputSize |> Bounds.contains uiCoord then
+        ( { model2 | textInputFocused = True }, cmdNone )
+
+    else if model.textInputFocused then
+        ( model2, cmdNone )
+
+    else if validImagePosition imageData mailCoord then
         let
             model3 =
                 addChange newEditorState { model2 | lastPlacedImage = Just config.time }
         in
         ( model3, UpdateMailEditorRequest (toData model3) |> sendToBackend )
-
-    else if Bounds.fromCoordAndSize textInputPosition textInputSize |> Bounds.contains uiCoord then
-        ( { model2 | textInputFocused = True }, cmdNone )
 
     else if Bounds.fromCoordAndSize submitButtonPosition submitButtonSize |> Bounds.contains uiCoord then
         case ( model2.submitStatus, validateUserId model2.current.to ) of
@@ -257,9 +260,6 @@ handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosit
 
             _ ->
                 ( model2, cmdNone )
-
-    else if model.textInputFocused then
-        ( model2, cmdNone )
 
     else
         ( close config model2, cmdNone )
@@ -283,18 +283,14 @@ toData model =
     }
 
 
-handleKeyDown : { a | time : Time.Posix } -> Key -> Model -> Model
-handleKeyDown config key model =
-    case key of
-        Escape ->
-            if model.textInputFocused then
+handleKeyDown : { a | time : Time.Posix } -> Bool -> Key -> Model -> Model
+handleKeyDown config ctrlHeld key model =
+    if model.textInputFocused then
+        case key of
+            Escape ->
                 { model | textInputFocused = False }
 
-            else
-                close config model
-
-        Character char ->
-            if model.textInputFocused then
+            Character char ->
                 addChange_
                     (\editorState ->
                         { editorState
@@ -303,24 +299,14 @@ handleKeyDown config key model =
                     )
                     model
 
-            else
-                { model | currentImage = model.currentImage }
-
-        Backspace ->
-            if model.textInputFocused then
+            Backspace ->
                 addChange_
                     (\editorState ->
-                        { editorState
-                            | to = editorState.to
-                        }
+                        { editorState | to = String.dropRight 1 editorState.to }
                     )
                     model
 
-            else
-                model
-
-        Spacebar ->
-            if model.textInputFocused then
+            Spacebar ->
                 addChange_
                     (\editorState ->
                         { editorState
@@ -329,11 +315,37 @@ handleKeyDown config key model =
                     )
                     model
 
-            else
-                { model | currentImage = model.currentImage }
+            _ ->
+                model
 
-        _ ->
-            model
+    else
+        case key of
+            Escape ->
+                close config model
+
+            Character "z" ->
+                if ctrlHeld then
+                    undo model
+
+                else
+                    model
+
+            Character "y" ->
+                if ctrlHeld then
+                    redo model
+
+                else
+                    model
+
+            Character "Z" ->
+                if ctrlHeld then
+                    redo model
+
+                else
+                    model
+
+            _ ->
+                model
 
 
 addChange : EditorState -> Model -> Model
@@ -577,6 +589,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                                 |> Quantity.greaterThan openAnimationLength
                             )
                                 && validImagePosition imageData (uiPixelToMailPixel tilePosition)
+                                && not model.textInputFocused
 
                         MailEditorClosed ->
                             False
@@ -826,7 +839,12 @@ textMesh string position =
                     index =
                         code - Char.toCode '\''
                 in
-                if code >= 39 && code <= 90 then
+                if char == ' ' then
+                    { offset = state.offset + 4
+                    , vertices = state.vertices
+                    }
+
+                else if code >= 39 && code <= 90 then
                     { offset = state.offset + charWidth char
                     , vertices =
                         state.vertices
@@ -838,7 +856,15 @@ textMesh string position =
                     }
 
                 else
-                    state
+                    { offset = state.offset + 6
+                    , vertices =
+                        state.vertices
+                            ++ spriteMesh
+                                (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple)
+                                charSize
+                                ( 1019, 5 )
+                                ( 5, 5 )
+                    }
             )
             { offset = 0, vertices = [] }
         |> .vertices

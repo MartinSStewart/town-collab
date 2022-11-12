@@ -475,7 +475,16 @@ updateLoaded audioData msg model =
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
                     if MailEditor.isOpen model.mailEditor then
-                        ( { model | mailEditor = MailEditor.handleKeyDown model key model.mailEditor }, Cmd.none )
+                        ( { model
+                            | mailEditor =
+                                MailEditor.handleKeyDown
+                                    model
+                                    (keyDown Keyboard.Control model || keyDown Keyboard.Meta model)
+                                    key
+                                    model.mailEditor
+                          }
+                        , Cmd.none
+                        )
 
                     else
                         keyMsgCanvasUpdate key model
@@ -788,22 +797,14 @@ keyMsgCanvasUpdate key model =
     let
         handleUndo () =
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if MailEditor.isOpen model.mailEditor then
-                    ( { model | mailEditor = MailEditor.undo model.mailEditor }, Cmd.none )
-
-                else
-                    ( updateLocalModel Change.LocalUndo model, Cmd.none )
+                ( updateLocalModel Change.LocalUndo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
         handleRedo () =
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                if MailEditor.isOpen model.mailEditor then
-                    ( { model | mailEditor = MailEditor.redo model.mailEditor }, Cmd.none )
-
-                else
-                    ( updateLocalModel Change.LocalRedo model, Cmd.none )
+                ( updateLocalModel Change.LocalRedo model, Cmd.none )
 
             else
                 ( model, Cmd.none )
