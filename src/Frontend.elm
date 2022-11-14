@@ -1769,10 +1769,18 @@ canvasView model =
                     ++ Train.draw model.mail model.trains viewMatrix trainTexture
                     ++ List.filterMap
                         (\flag ->
+                            let
+                                flagMesh =
+                                    if flag.isReceived then
+                                        receivingMailFlagMeshes
+
+                                    else
+                                        sendingMailFlagMeshes
+                            in
                             case
                                 Array.get
                                     (Time.posixToMillis model.time |> toFloat |> (*) 0.005 |> round |> modBy 3)
-                                    flagMeshes
+                                    flagMesh
                             of
                                 Just flagMesh_ ->
                                     let
@@ -1859,7 +1867,7 @@ canvasView model =
         )
 
 
-getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit }
+getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
 getFlags model =
     let
         localModel =
@@ -1867,8 +1875,14 @@ getFlags model =
 
         hasMailWaitingPickup : Bool
         hasMailWaitingPickup =
-            MailEditor.getMailByUserId localModel.user model.mail
+            MailEditor.getMailFrom localModel.user model.mail
                 |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
+                |> List.isEmpty
+                |> not
+
+        hasReceivedNewMail =
+            MailEditor.getMailTo localModel.user model.mail
+                |> List.filter (\( _, mail ) -> mail.status == MailReceived)
                 |> List.isEmpty
                 |> not
     in
@@ -1876,18 +1890,32 @@ getFlags model =
         (\coord postOffices ->
             case Grid.getCell coord localModel.grid of
                 Just cell ->
-                    List.filterMap
+                    List.concatMap
                         (\tile ->
-                            if tile.value == PostOffice && hasMailWaitingPickup then
-                                Just
-                                    { position =
+                            (if tile.value == PostOffice && hasMailWaitingPickup then
+                                [ { position =
                                         Grid.cellAndLocalCoordToAscii ( coord, tile.position )
                                             |> Coord.toPoint2d
-                                            |> Point2d.translateBy postOfficeFlagOffset
-                                    }
+                                            |> Point2d.translateBy postOfficeSendingMailFlagOffset
+                                  , isReceived = False
+                                  }
+                                ]
 
-                            else
-                                Nothing
+                             else
+                                []
+                            )
+                                ++ (if tile.value == PostOffice && hasReceivedNewMail then
+                                        [ { position =
+                                                Grid.cellAndLocalCoordToAscii ( coord, tile.position )
+                                                    |> Coord.toPoint2d
+                                                    |> Point2d.translateBy postOfficeReceivedMailFlagOffset
+                                          , isReceived = True
+                                          }
+                                        ]
+
+                                    else
+                                        []
+                                   )
                         )
                         (GridCell.flatten cell)
                         ++ postOffices
@@ -1900,8 +1928,13 @@ getFlags model =
         []
 
 
-postOfficeFlagOffset : Vector2d WorldUnit WorldUnit
-postOfficeFlagOffset =
+postOfficeSendingMailFlagOffset : Vector2d WorldUnit WorldUnit
+postOfficeSendingMailFlagOffset =
+    Vector2d.unsafe { x = 3.5, y = 2 + 1 / 18 }
+
+
+postOfficeReceivedMailFlagOffset : Vector2d WorldUnit WorldUnit
+postOfficeReceivedMailFlagOffset =
     Vector2d.unsafe { x = 3.5, y = 1 + 13 / 18 }
 
 
@@ -1925,15 +1958,15 @@ drawText meshes viewMatrix texture =
             )
 
 
-flagMeshes : Array (WebGL.Mesh Vertex)
-flagMeshes =
+sendingMailFlagMeshes : Array (WebGL.Mesh Vertex)
+sendingMailFlagMeshes =
     List.range 0 2
-        |> List.map flagMesh
+        |> List.map sendingMailFlagMesh
         |> Array.fromList
 
 
-flagMesh : Int -> WebGL.Mesh Vertex
-flagMesh frame =
+sendingMailFlagMesh : Int -> WebGL.Mesh Vertex
+sendingMailFlagMesh frame =
     let
         width =
             11
@@ -1943,6 +1976,33 @@ flagMesh frame =
 
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels ( 72, 594 + frame * 6 ) ( width, 6 )
+    in
+    WebGL.triangleFan
+        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft }
+        , { position = Vec3.vec3 width 0 0, texturePosition = topRight }
+        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight }
+        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft }
+        ]
+
+
+receivingMailFlagMeshes : Array (WebGL.Mesh Vertex)
+receivingMailFlagMeshes =
+    List.range 0 2
+        |> List.map receivingMailFlagMesh
+        |> Array.fromList
+
+
+receivingMailFlagMesh : Int -> WebGL.Mesh Vertex
+receivingMailFlagMesh frame =
+    let
+        width =
+            11
+
+        height =
+            6
+
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePositionPixels ( 90, 594 + frame * 6 ) ( width, 6 )
     in
     WebGL.triangleFan
         [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft }

@@ -155,7 +155,7 @@ update msg model =
                             case ( oldTrain.stoppedAtPostOffice, newTrain.stoppedAtPostOffice ) of
                                 ( Nothing, Just { userId } ) ->
                                     case
-                                        MailEditor.getMailByUserId userId state.mail
+                                        MailEditor.getMailFrom userId state.mail
                                             |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
                                     of
                                         ( mailId, mail ) :: _ ->

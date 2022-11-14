@@ -12,7 +12,8 @@ module MailEditor exposing
     , close
     , drawMail
     , getImageData
-    , getMailByUserId
+    , getMailFrom
+    , getMailTo
     , handleKeyDown
     , handleMouseDown
     , init
@@ -69,11 +70,11 @@ backendMailToFrontend mail =
     { status = mail.status, from = mail.from, to = mail.to }
 
 
-getMailByUserId :
+getMailFrom :
     Id UserId
     -> AssocList.Dict (Id MailId) { a | from : Id UserId }
     -> List ( Id MailId, { a | from : Id UserId } )
-getMailByUserId userId dict =
+getMailFrom userId dict =
     AssocList.toList dict
         |> List.filterMap
             (\( mailId, mail ) ->
@@ -85,10 +86,27 @@ getMailByUserId userId dict =
             )
 
 
+getMailTo :
+    Id UserId
+    -> AssocList.Dict (Id MailId) { a | to : Id UserId }
+    -> List ( Id MailId, { a | to : Id UserId } )
+getMailTo userId dict =
+    AssocList.toList dict
+        |> List.filterMap
+            (\( mailId, mail ) ->
+                if mail.to == userId then
+                    Just ( mailId, mail )
+
+                else
+                    Nothing
+            )
+
+
 type MailStatus
     = MailWaitingPickup
     | MailInTransit (Id TrainId)
     | MailReceived
+    | MailReceivedAndViewed
 
 
 type alias Model =

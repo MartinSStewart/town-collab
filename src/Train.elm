@@ -295,16 +295,6 @@ moveCoachHelper distanceLeft pathIsReversed coach =
             distanceTravelled : Quantity Float TileLocalUnit
             distanceTravelled =
                 tToDistance newTClamped |> Quantity.minus currentDistance |> Quantity.abs
-
-            _ =
-                Debug.log ""
-                    { distanceLeft = distanceLeft
-                    , reversed = pathIsReversed
-                    , coach = coach
-                    , currentDistance = currentDistance
-                    , newT = newT
-                    , distanceTravelled = distanceTravelled
-                    }
         in
         case coach.previousPaths of
             nextPath :: restOfPath ->
