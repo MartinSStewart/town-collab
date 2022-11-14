@@ -85,6 +85,7 @@ type alias FrontendLoaded =
     , viewPoint : Point2d WorldUnit WorldUnit
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
     , texture : Maybe Texture
+    , trainTexture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
     , devicePixelRatio : Float
@@ -169,6 +170,7 @@ type FrontendMsg_
     | UrlChanged Url
     | NoOpFrontendMsg
     | TextureLoaded (Result WebGL.Texture.Error Texture)
+    | TrainTextureLoaded (Result WebGL.Texture.Error Texture)
     | KeyMsg Keyboard.Msg
     | KeyDown Keyboard.RawKey
     | WindowResized (Coord Pixels)
@@ -215,8 +217,9 @@ type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | TrainUpdate (AssocList.Dict (Id TrainId) Train)
+    | TrainBroadcast (AssocList.Dict (Id TrainId) Train)
     | MailEditorToFrontend MailEditor.ToFrontend
+    | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
 
 
 type EmailEvent

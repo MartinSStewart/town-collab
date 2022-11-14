@@ -18,13 +18,12 @@ import Email.Html
 import EmailAddress exposing (EmailAddress)
 import Env
 import EverySet exposing (EverySet)
-import Frontend
 import Grid exposing (Grid)
-import Id exposing (Id, UserId)
+import Id exposing (Id, MailId, TrainId, UserId)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import MailEditor exposing (MailStatus(..))
+import MailEditor exposing (BackendMail, MailStatus(..))
 import Quantity exposing (Quantity(..))
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
@@ -137,6 +136,7 @@ update msg model =
 
         WorldUpdateTimeElapsed time ->
             let
+                newTrains : AssocList.Dict (Id TrainId) Train
                 newTrains =
                     case model.lastWorldUpdate of
                         Just lastWorldUpdate ->
@@ -146,12 +146,53 @@ update msg model =
 
                         Nothing ->
                             model.trains
+
+                pickedUpMail : { mail : AssocList.Dict (Id MailId) BackendMail, mailChanged : Bool }
+                pickedUpMail =
+                    AssocList.merge
+                        (\_ _ a -> a)
+                        (\trainId oldTrain newTrain state ->
+                            case ( oldTrain.stoppedAtPostOffice, newTrain.stoppedAtPostOffice ) of
+                                ( Nothing, Just { userId } ) ->
+                                    case
+                                        MailEditor.getMailByUserId userId state.mail
+                                            |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
+                                    of
+                                        ( mailId, mail ) :: _ ->
+                                            { mail =
+                                                AssocList.update
+                                                    mailId
+                                                    (\_ -> Just { mail | status = MailInTransit trainId })
+                                                    state.mail
+                                            , mailChanged = True
+                                            }
+
+                                        [] ->
+                                            state
+
+                                _ ->
+                                    state
+                        )
+                        (\_ _ a -> a)
+                        model.trains
+                        newTrains
+                        { mailChanged = False, mail = model.mail }
             in
             ( { model
                 | lastWorldUpdate = Just time
                 , trains = newTrains
+                , mail = pickedUpMail.mail
               }
-            , Lamdera.broadcast (TrainUpdate newTrains)
+            , Cmd.batch
+                [ Lamdera.broadcast (TrainBroadcast newTrains)
+                , if pickedUpMail.mailChanged then
+                    AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) pickedUpMail.mail
+                        |> MailBroadcast
+                        |> Lamdera.broadcast
+
+                  else
+                    Cmd.none
+                ]
             )
 
 
@@ -347,8 +388,8 @@ updateFromFrontend currentTime sessionId clientId msg model =
                 MailEditor.SubmitMailRequest { content, to } ->
                     case getUserFromSessionId sessionId model of
                         Just ( userId, _ ) ->
-                            ( { model
-                                | mail =
+                            let
+                                newMail =
                                     AssocList.insert
                                         (AssocList.size model.mail |> Id.fromInt)
                                         { content = content
@@ -357,8 +398,14 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                         , to = to
                                         }
                                         model.mail
-                              }
-                            , MailEditor.SubmitMailResponse |> MailEditorToFrontend |> Lamdera.sendToFrontend clientId
+                            in
+                            ( { model | mail = newMail }
+                            , Cmd.batch
+                                [ MailEditor.SubmitMailResponse |> MailEditorToFrontend |> Lamdera.sendToFrontend clientId
+                                , MailBroadcast
+                                    (AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) newMail)
+                                    |> Lamdera.broadcast
+                                ]
                             )
 
                         Nothing ->
@@ -551,6 +598,7 @@ handleAddingTrain tile position =
         in
         { position = position
         , path = path
+        , previousPaths = []
         , t = 0.5
         , speed = speed
         , stoppedAtPostOffice = Nothing

@@ -8,9 +8,11 @@ module MailEditor exposing
     , ShowMailEditor(..)
     , ToBackend(..)
     , ToFrontend(..)
+    , backendMailToFrontend
     , close
     , drawMail
     , getImageData
+    , getMailByUserId
     , handleKeyDown
     , handleMouseDown
     , init
@@ -23,12 +25,13 @@ module MailEditor exposing
     , updateFromBackend
     )
 
+import AssocList
 import Bounds
 import Coord exposing (Coord)
 import Duration exposing (Duration)
 import Frame2d
 import Grid exposing (Vertex)
-import Id exposing (Id, TrainId, UserId)
+import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard exposing (Key(..))
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -59,6 +62,27 @@ type alias FrontendMail =
     , from : Id UserId
     , to : Id UserId
     }
+
+
+backendMailToFrontend : BackendMail -> FrontendMail
+backendMailToFrontend mail =
+    { status = mail.status, from = mail.from, to = mail.to }
+
+
+getMailByUserId :
+    Id UserId
+    -> AssocList.Dict (Id MailId) { a | from : Id UserId }
+    -> List ( Id MailId, { a | from : Id UserId } )
+getMailByUserId userId dict =
+    AssocList.toList dict
+        |> List.filterMap
+            (\( mailId, mail ) ->
+                if mail.from == userId then
+                    Just ( mailId, mail )
+
+                else
+                    Nothing
+            )
 
 
 type MailStatus

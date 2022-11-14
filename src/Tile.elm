@@ -10,6 +10,7 @@ module Tile exposing
     , hasCollision
     , hasCollisionWithCoord
     , pathDirection
+    , railDataReverse
     , railPathData
     , reverseDirection
     , rotateAntiClockwise
@@ -291,6 +292,16 @@ railPathStrafeRightSmall =
     , tToDistance = \t -> 0.76 * turnLength * t |> Quantity
     , startExitDirection = pathStartDirection strafeRightSmallPath
     , endExitDirection = pathExitDirection strafeRightSmallPath
+    }
+
+
+railDataReverse : RailData -> RailData
+railDataReverse railData =
+    { path = \t -> railData.path (1 - t)
+    , distanceToT = \distance -> 1 - railData.distanceToT distance
+    , tToDistance = \t -> railData.tToDistance (1 - t)
+    , startExitDirection = railData.endExitDirection
+    , endExitDirection = railData.startExitDirection
     }
 
 

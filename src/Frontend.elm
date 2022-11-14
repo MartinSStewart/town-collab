@@ -6,7 +6,6 @@ port module Frontend exposing
     , view
     )
 
-import Angle
 import Array exposing (Array)
 import AssocList
 import Audio exposing (Audio, AudioCmd, AudioData)
@@ -19,7 +18,6 @@ import Browser.Navigation
 import Change exposing (Change(..))
 import Coord exposing (Coord)
 import Dict exposing (Dict)
-import Direction2d
 import Duration exposing (Duration)
 import Element exposing (Element)
 import Element.Background
@@ -44,7 +42,7 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel
-import MailEditor exposing (ShowMailEditor(..))
+import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
@@ -282,6 +280,7 @@ loadedInit time loading loadingData =
             , viewPoint = Coord.toPoint2d loading.viewPoint
             , viewPointLastInterval = Point2d.origin
             , texture = Nothing
+            , trainTexture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
             , devicePixelRatio = loading.devicePixelRatio
@@ -321,6 +320,15 @@ loadedInit time loading loadingData =
             }
             "/texture.png"
             |> Task.attempt TextureLoaded
+        , WebGL.Texture.loadWith
+            { magnify = WebGL.Texture.nearest
+            , minify = WebGL.Texture.nearest
+            , horizontalWrap = WebGL.Texture.clampToEdge
+            , verticalWrap = WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/trains.png"
+            |> Task.attempt TrainTextureLoaded
         , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
         ]
     )
@@ -785,6 +793,14 @@ updateLoaded audioData msg model =
 
         VisibilityChanged ->
             ( { model | currentTile = Nothing }, Cmd.none )
+
+        TrainTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( { model | trainTexture = Just texture }, Cmd.none )
+
+                Err _ ->
+                    ( model, Cmd.none )
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1388,11 +1404,16 @@ updateLoadedFromBackend msg model =
         UnsubscribeEmailConfirmed ->
             ( model, Cmd.none )
 
-        TrainUpdate trains ->
+        TrainBroadcast trains ->
             ( { model | trains = trains }, Cmd.none )
 
         MailEditorToFrontend mailEditorToFrontend ->
-            ( { model | mailEditor = MailEditor.updateFromBackend model mailEditorToFrontend model.mailEditor }, Cmd.none )
+            ( { model | mailEditor = MailEditor.updateFromBackend model mailEditorToFrontend model.mailEditor }
+            , Cmd.none
+            )
+
+        MailBroadcast mail ->
+            ( { model | mail = mail }, Cmd.none )
 
 
 lostConnection : FrontendLoaded -> Bool
@@ -1726,8 +1747,8 @@ canvasView model =
                 MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
             )
         ]
-        (case model.texture of
-            Just texture ->
+        (case ( model.texture, model.trainTexture ) of
+            ( Just texture, Just trainTexture ) ->
                 let
                     textureSize =
                         WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
@@ -1744,7 +1765,7 @@ canvasView model =
                     )
                     viewMatrix
                     texture
-                    ++ drawTrains model.trains viewMatrix texture
+                    ++ Train.draw model.mail model.trains viewMatrix trainTexture
                     ++ List.filterMap
                         (\flag ->
                             case
@@ -1832,7 +1853,7 @@ canvasView model =
                         model
                         model.mailEditor
 
-            Nothing ->
+            _ ->
                 []
         )
 
@@ -1842,6 +1863,13 @@ getFlags model =
     let
         localModel =
             LocalGrid.localModel model.localModel
+
+        hasMailWaitingPickup : Bool
+        hasMailWaitingPickup =
+            MailEditor.getMailByUserId localModel.user model.mail
+                |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
+                |> List.isEmpty
+                |> not
     in
     Bounds.coordRangeFold
         (\coord postOffices ->
@@ -1849,10 +1877,7 @@ getFlags model =
                 Just cell ->
                     List.filterMap
                         (\tile ->
-                            if
-                                (tile.value == PostOffice)
-                                    && List.any (\mail -> mail.from == tile.userId) (AssocList.values model.mail)
-                            then
+                            if tile.value == PostOffice && hasMailWaitingPickup then
                                 Just
                                     { position =
                                         Grid.cellAndLocalCoordToAscii ( coord, tile.position )
@@ -1897,80 +1922,6 @@ drawText meshes viewMatrix texture =
                     , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
                     }
             )
-
-
-drawTrains : AssocList.Dict (Id TrainId) Train -> Mat4 -> Texture -> List WebGL.Entity
-drawTrains trains viewMatrix texture =
-    List.concatMap
-        (\( _, train ) ->
-            let
-                railData =
-                    Tile.railPathData train.path
-
-                { x, y } =
-                    Train.actualPosition train |> Point2d.unwrap
-
-                trainFrame =
-                    Direction2d.angleFrom
-                        Direction2d.x
-                        (Tile.pathDirection railData.path train.t
-                            |> (if Quantity.lessThanZero train.speed then
-                                    Direction2d.reverse
-
-                                else
-                                    identity
-                               )
-                        )
-                        |> Angle.inTurns
-                        |> (*) 20
-                        |> round
-                        |> modBy 20
-            in
-            case Array.get trainFrame trainMeshes of
-                Just trainMesh_ ->
-                    [ WebGL.entityWith
-                        [ WebGL.Settings.DepthTest.default, Shaders.blend ]
-                        Shaders.vertexShader
-                        Shaders.fragmentShader
-                        trainMesh_
-                        { view = Mat4.makeTranslate3 (x * Units.tileSize) (y * Units.tileSize) (Grid.tileZ True y 0) |> Mat4.mul viewMatrix
-                        , texture = texture
-                        , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
-                        }
-                    ]
-
-                Nothing ->
-                    []
-        )
-        (AssocList.toList trains)
-
-
-trainFrames =
-    20
-
-
-trainMeshes : Array (WebGL.Mesh Vertex)
-trainMeshes =
-    List.range 0 (trainFrames - 1)
-        |> List.map trainMesh
-        |> Array.fromList
-
-
-trainMesh : Int -> WebGL.Mesh Vertex
-trainMesh frame =
-    let
-        offsetY =
-            -5
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePosition_ ( 11, frame * 2 ) ( 2, 2 )
-    in
-    WebGL.triangleFan
-        [ { position = Vec3.vec3 -Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topLeft }
-        , { position = Vec3.vec3 Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topRight }
-        , { position = Vec3.vec3 Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomRight }
-        , { position = Vec3.vec3 -Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomLeft }
-        ]
 
 
 flagMeshes : Array (WebGL.Mesh Vertex)

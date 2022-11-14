@@ -19,6 +19,7 @@ module Grid exposing
     , localTileCoordPlusWorld
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
+    , localTilePointPlusWorldCoord
     , mesh
     , moveUndoPoint
     , region
@@ -76,6 +77,14 @@ localTilePointPlusCellLocalCoord :
     -> Point2d TileLocalUnit TileLocalUnit
     -> Point2d CellLocalUnit CellLocalUnit
 localTilePointPlusCellLocalCoord cellLocal local =
+    Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d cellLocal)
+
+
+localTilePointPlusWorldCoord :
+    Coord WorldUnit
+    -> Point2d TileLocalUnit TileLocalUnit
+    -> Point2d WorldUnit WorldUnit
+localTilePointPlusWorldCoord cellLocal local =
     Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d cellLocal)
 
 
