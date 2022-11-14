@@ -546,7 +546,14 @@ draw mail trains viewMatrix trainTexture =
                             coachFrame =
                                 Direction2d.angleFrom
                                     Direction2d.x
-                                    (Tile.pathDirection railData_.path coach.t)
+                                    (Tile.pathDirection railData_.path coach.t
+                                        |> (if Quantity.lessThanZero train.speed then
+                                                Direction2d.reverse
+
+                                            else
+                                                identity
+                                           )
+                                    )
                                     |> Angle.inTurns
                                     |> (*) trainFrames
                                     |> round
