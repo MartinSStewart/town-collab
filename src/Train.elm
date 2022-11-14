@@ -1,4 +1,4 @@
-module Train exposing (Train, actualPosition, draw, getCoach, maxSpeed, moveTrain)
+module Train exposing (Train, actualPosition, defaultMaxSpeed, draw, getCoach, moveTrain)
 
 import Angle
 import Array exposing (Array)
@@ -68,7 +68,7 @@ getCoach train =
         coach : CoachData
         coach =
             moveCoachHelper
-                (Quantity 1)
+                (Quantity 1.9)
                 False
                 { position = train.position
                 , path = train.path
@@ -99,17 +99,19 @@ acceleration =
     1
 
 
-maxSpeed =
+defaultMaxSpeed : number
+defaultMaxSpeed =
     5
 
 
 moveTrain :
-    Time.Posix
+    Float
+    -> Time.Posix
     -> Time.Posix
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
     -> Train
     -> Train
-moveTrain startTime endTime state train =
+moveTrain maxSpeed startTime endTime state train =
     let
         timeElapsed_ =
             Duration.inSeconds (Duration.from startTime endTime) |> min 10
@@ -209,7 +211,7 @@ moveTrainHelper time distanceLeft state train =
                         { position = newTrain.position
                         , path = newTrain.path
                         , previousPaths =
-                            { position = train.position, path = train.path, reversed = newTrain.t > 0.5 }
+                            { position = train.position, path = train.path, reversed = newT > 0.5 }
                                 :: List.take 3 train.previousPaths
                         , t = newTrain.t
                         , speed = newTrain.speed
@@ -293,6 +295,16 @@ moveCoachHelper distanceLeft pathIsReversed coach =
             distanceTravelled : Quantity Float TileLocalUnit
             distanceTravelled =
                 tToDistance newTClamped |> Quantity.minus currentDistance |> Quantity.abs
+
+            _ =
+                Debug.log ""
+                    { distanceLeft = distanceLeft
+                    , reversed = pathIsReversed
+                    , coach = coach
+                    , currentDistance = currentDistance
+                    , newT = newT
+                    , distanceTravelled = distanceTravelled
+                    }
         in
         case coach.previousPaths of
             nextPath :: restOfPath ->
@@ -302,7 +314,7 @@ moveCoachHelper distanceLeft pathIsReversed coach =
                     { position = nextPath.position
                     , path = nextPath.path
                     , previousPaths = restOfPath
-                    , t = 1
+                    , t = 0
                     , speed = Quantity.abs coach.speed
                     }
 
@@ -318,7 +330,14 @@ moveCoachHelper distanceLeft pathIsReversed coach =
                 }
 
     else
-        { coach | t = newTClamped }
+        { coach
+            | t =
+                if pathIsReversed then
+                    1 - newTClamped
+
+                else
+                    newTClamped
+        }
 
 
 findNextTile :
@@ -486,18 +505,16 @@ draw mail trains viewMatrix trainTexture =
                         |> modBy trainFrames
 
                 drawCoach =
-                    True
+                    AssocList.values mail
+                        |> List.any
+                            (\mail_ ->
+                                case mail_.status of
+                                    MailInTransit mailTrainId ->
+                                        mailTrainId == trainId
 
-                --AssocList.values mail
-                --    |> List.any
-                --        (\mail_ ->
-                --            case mail_.status of
-                --                MailInTransit mailTrainId ->
-                --                    mailTrainId == trainId
-                --
-                --                _ ->
-                --                    False
-                --        )
+                                    _ ->
+                                        False
+                            )
             in
             (case Array.get trainFrame trainEngineMeshes of
                 Just trainMesh_ ->

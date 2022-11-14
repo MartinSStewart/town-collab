@@ -124,8 +124,8 @@ audioLoaded audioData model =
                                 Train.actualPosition train
                         in
                         Just
-                            { playbackRate = 0.9 * (abs (Quantity.unwrap train.speed) / Train.maxSpeed) + 0.1
-                            , volume = volume model position * Quantity.unwrap train.speed / Train.maxSpeed |> abs
+                            { playbackRate = 0.9 * (abs (Quantity.unwrap train.speed) / Train.defaultMaxSpeed) + 0.1
+                            , volume = volume model position * Quantity.unwrap train.speed / Train.defaultMaxSpeed |> abs
                             }
 
                     else
@@ -774,6 +774,7 @@ updateLoaded audioData msg model =
                     AssocList.map
                         (\_ train ->
                             Train.moveTrain
+                                Train.defaultMaxSpeed
                                 model.time
                                 time
                                 { grid = localGrid.grid, mail = AssocList.empty }

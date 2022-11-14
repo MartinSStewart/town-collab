@@ -141,7 +141,7 @@ update msg model =
                     case model.lastWorldUpdate of
                         Just lastWorldUpdate ->
                             AssocList.map
-                                (\_ train -> Train.moveTrain lastWorldUpdate time model train)
+                                (\_ train -> Train.moveTrain Train.defaultMaxSpeed lastWorldUpdate time model train)
                                 model.trains
 
                         Nothing ->

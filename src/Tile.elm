@@ -298,8 +298,8 @@ railPathStrafeRightSmall =
 railDataReverse : RailData -> RailData
 railDataReverse railData =
     { path = \t -> railData.path (1 - t)
-    , distanceToT = \distance -> 1 - railData.distanceToT distance
-    , tToDistance = \t -> railData.tToDistance (1 - t)
+    , distanceToT = \distance -> railData.distanceToT distance
+    , tToDistance = \t -> railData.tToDistance t
     , startExitDirection = railData.endExitDirection
     , endExitDirection = railData.startExitDirection
     }
@@ -318,8 +318,8 @@ railPathData railPath =
 
         RailPathVertical { offsetX, offsetY, length } ->
             { path = \t -> Point2d.unsafe { x = toFloat offsetX + 0.5, y = t * toFloat length + toFloat offsetY }
-            , distanceToT = \(Quantity distance) -> distance / toFloat length
-            , tToDistance = \t -> toFloat length * t |> Quantity
+            , distanceToT = \(Quantity distance) -> distance / (toFloat length * 1.3)
+            , tToDistance = \t -> toFloat length * 1.3 * t |> Quantity
             , startExitDirection = Up
             , endExitDirection = Down
             }
