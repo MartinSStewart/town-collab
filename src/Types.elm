@@ -30,7 +30,7 @@ import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
 import EverySet exposing (EverySet)
-import Grid exposing (Grid, Vertex)
+import Grid exposing (Grid)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
 import Id exposing (Id, MailId, TrainId, UserId)
@@ -43,7 +43,7 @@ import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, Sh
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import SendGrid
-import Shaders exposing (DebrisVertex)
+import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import Tile exposing (Tile)
 import Time

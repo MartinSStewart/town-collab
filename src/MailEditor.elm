@@ -14,7 +14,6 @@ module MailEditor exposing
     , getImageData
     , getMailFrom
     , getMailTo
-    , getQuadIndices
     , handleKeyDown
     , handleMouseDown
     , init
@@ -33,7 +32,6 @@ import Bounds
 import Coord exposing (Coord)
 import Duration exposing (Duration)
 import Frame2d
-import Grid exposing (Vertex)
 import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard exposing (Key(..))
 import Math.Matrix4 as Mat4
@@ -43,7 +41,8 @@ import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
-import Shaders exposing (SimpleVertex)
+import Shaders exposing (SimpleVertex, Vertex)
+import Sprite
 import Tile
 import Time
 import Units exposing (MailPixelUnit, UiPixelUnit, WorldUnit)
@@ -263,8 +262,8 @@ handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosit
         mailCoord =
             uiCoord
                 |> Coord.minusTuple
-                    (Coord.fromTuple imageData.textureSize
-                        |> Coord.divideTuple (Coord.fromTuple ( 2, 2 ))
+                    (Coord.tuple imageData.textureSize
+                        |> Coord.divideTuple (Coord.tuple ( 2, 2 ))
                     )
                 |> uiPixelToMailPixel
 
@@ -431,7 +430,7 @@ open config startPosition model =
 
 uiPixelToMailPixel : Coord UiPixelUnit -> Coord MailPixelUnit
 uiPixelToMailPixel coord =
-    coord |> Coord.addTuple (Coord.fromTuple ( mailWidth // 2, mailHeight // 2 )) |> Coord.toTuple |> Coord.fromTuple
+    coord |> Coord.addTuple (Coord.tuple ( mailWidth // 2, mailHeight // 2 )) |> Coord.toTuple |> Coord.tuple
 
 
 validImagePosition : ImageData -> Coord MailPixelUnit -> Bool
@@ -493,11 +492,11 @@ updateMailMesh model =
         | mesh =
             WebGL.indexedTriangles
                 (mailMesh ++ List.concatMap imageMesh model.current.content)
-                (List.range 0 (List.length model.current.content) |> List.concatMap Grid.getIndices)
+                (List.range 0 (List.length model.current.content) |> List.concatMap Sprite.getIndices)
         , textInputMesh =
             WebGL.indexedTriangles
                 (textMesh model.current.to ( 15, 7 ))
-                (List.range 0 (String.length model.current.to) |> List.concatMap Grid.getIndices)
+                (List.range 0 (String.length model.current.to) |> List.concatMap Sprite.getIndices)
     }
 
 
@@ -620,7 +619,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                 tilePosition : Coord UiPixelUnit
                 tilePosition =
                     mousePosition_
-                        |> Coord.addTuple (Coord.fromTuple ( imageWidth // -2, imageHeight // -2 ))
+                        |> Coord.addTuple (Coord.tuple ( imageWidth // -2, imageHeight // -2 ))
 
                 ( tileX, tileY ) =
                     Coord.toTuple tilePosition
@@ -681,7 +680,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                     Shaders.fragmentShader
                     model.mesh
                     { texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , view =
                         Mat4.makeScale3
                             (zoomFactor * 2 / toFloat windowWidth)
@@ -707,7 +706,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                         textInputMesh
                     )
                     { texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , view =
                         Mat4.makeScale3
                             (zoomFactor * 2 / toFloat windowWidth)
@@ -721,7 +720,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                     Shaders.fragmentShader
                     model.textInputMesh
                     { texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , view =
                         Mat4.makeScale3
                             (zoomFactor * 2 / toFloat windowWidth)
@@ -745,7 +744,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                                     submitButtonMesh
                                 )
                                 { texture = texture
-                                , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                                , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , view =
                                     Mat4.makeScale3
                                         (zoomFactor * 2 / toFloat windowWidth)
@@ -765,9 +764,9 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                             Shaders.simpleFragmentShader
                             square
                             { texture = texture
-                            , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
-                            , texturePosition = Coord.fromTuple imageData.texturePosition |> Coord.toVec2
-                            , textureScale = Coord.fromTuple imageData.textureSize |> Coord.toVec2
+                            , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                            , texturePosition = Coord.tuple imageData.texturePosition |> Coord.toVec2
+                            , textureScale = Coord.tuple imageData.textureSize |> Coord.toVec2
                             , view =
                                 Mat4.makeScale3
                                     (zoomFactor * 2 / toFloat windowWidth)
@@ -790,87 +789,87 @@ drawMail texture mousePosition windowWidth windowHeight config model =
 
 submitButtonPosition : Coord UiPixelUnit
 submitButtonPosition =
-    Coord.fromTuple ( 75, 80 )
+    Coord.tuple ( 75, 80 )
 
 
 submitButtonSize : Coord UiPixelUnit
 submitButtonSize =
-    Coord.fromTuple ( 50, 19 )
+    Coord.tuple ( 50, 19 )
 
 
 submitButtonMesh : WebGL.Mesh Vertex
 submitButtonMesh =
     let
         vertices =
-            spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+            Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
                 ++ textMesh "SUBMIT" ( 12, 7 )
     in
-    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 submittingButtonMesh : WebGL.Mesh Vertex
 submittingButtonMesh =
     let
         vertices =
-            spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+            Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ textMesh "SUBMITTING" ( 2, 7 )
     in
-    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 submitButtonHoverMesh : WebGL.Mesh Vertex
 submitButtonHoverMesh =
     let
         vertices =
-            spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+            Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ textMesh "SUBMIT" ( 12, 7 )
     in
-    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 textInputPosition =
-    Coord.fromTuple ( 0, 80 )
+    Coord.tuple ( 0, 80 )
 
 
 textInputSize =
-    Coord.fromTuple ( 70, 19 )
+    Coord.tuple ( 70, 19 )
 
 
 textInputMesh : WebGL.Mesh Vertex
 textInputMesh =
     let
         vertices =
-            spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
-                ++ spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+            Sprite.spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
                 ++ textMesh "TO:" ( 3, 7 )
     in
-    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 textInputHoverMesh : WebGL.Mesh Vertex
 textInputHoverMesh =
     let
         vertices =
-            spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
-                ++ spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+            Sprite.spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ textMesh "TO:" ( 3, 7 )
     in
-    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 charSize : Coord UiPixelUnit
 charSize =
-    Coord.fromTuple ( 5, 5 )
+    Coord.tuple ( 5, 5 )
 
 
 textMesh : String -> ( Int, Int ) -> List Vertex
 textMesh string position =
     let
         position_ =
-            Coord.fromTuple position
+            Coord.tuple position
     in
     String.toList string
         |> List.foldl
@@ -892,7 +891,7 @@ textMesh string position =
                     { offset = state.offset + charWidth char
                     , vertices =
                         state.vertices
-                            ++ spriteMesh
+                            ++ Sprite.spriteMesh
                                 (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple)
                                 charSize
                                 ( 764 + index * 5, 0 )
@@ -903,7 +902,7 @@ textMesh string position =
                     { offset = state.offset + 6
                     , vertices =
                         state.vertices
-                            ++ spriteMesh
+                            ++ Sprite.spriteMesh
                                 (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple)
                                 charSize
                                 ( 1019, 5 )
@@ -942,11 +941,6 @@ charWidth char =
             5
 
 
-getQuadIndices : List a -> List ( Int, Int, Int )
-getQuadIndices list =
-    List.range 0 (List.length list // 4 - 1) |> List.concatMap Grid.getIndices
-
-
 imageMesh : { position : Coord MailPixelUnit, image : Image } -> List Vertex
 imageMesh { position, image } =
     let
@@ -961,19 +955,6 @@ imageMesh { position, image } =
 
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels imageData.texturePosition ( width, height )
-    in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0, texturePosition = topLeft }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0, texturePosition = topRight }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) 0, texturePosition = bottomRight }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) 0, texturePosition = bottomLeft }
-    ]
-
-
-spriteMesh : ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
-spriteMesh ( x, y ) ( Quantity width, Quantity height ) texturePosition textureSize =
-    let
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels texturePosition textureSize
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0, texturePosition = topLeft }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0, texturePosition = topRight }

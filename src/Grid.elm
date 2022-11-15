@@ -2,7 +2,6 @@ module Grid exposing
     ( Grid(..)
     , GridChange
     , LocalGridChange
-    , Vertex
     , addChange
     , allCells
     , allCellsDict
@@ -13,7 +12,6 @@ module Grid exposing
     , empty
     , from
     , getCell
-    , getIndices
     , getTile
     , localChangeToChange
     , localTileCoordPlusWorld
@@ -42,7 +40,9 @@ import Math.Vector3 as Vec3 exposing (Vec3)
 import Pixels
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
-import Tile exposing (Tile)
+import Shaders exposing (Vertex)
+import Sprite
+import Tile exposing (Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import Vector2d
 import WebGL
@@ -64,7 +64,7 @@ from =
 
 localTileCoordPlusWorld : Coord WorldUnit -> Coord TileLocalUnit -> Coord WorldUnit
 localTileCoordPlusWorld world local =
-    Coord.toTuple local |> Coord.fromTuple |> Coord.addTuple world
+    Coord.toTuple local |> Coord.tuple |> Coord.addTuple world
 
 
 localTilePointPlusWorld : Coord WorldUnit -> Point2d TileLocalUnit TileLocalUnit -> Point2d WorldUnit WorldUnit
@@ -94,11 +94,11 @@ worldToCellAndLocalCoord ( Quantity x, Quantity y ) =
         offset =
             1000000
     in
-    ( Coord.fromTuple
+    ( Coord.tuple
         ( (x + (Units.cellSize * offset)) // Units.cellSize - offset
         , (y + (Units.cellSize * offset)) // Units.cellSize - offset
         )
-    , Coord.fromTuple
+    , Coord.tuple
         ( modBy Units.cellSize x
         , modBy Units.cellSize y
         )
@@ -114,7 +114,7 @@ worldToCellAndLocalPoint point =
         { x, y } =
             Point2d.unwrap point
     in
-    ( Coord.fromTuple
+    ( Coord.tuple
         ( (floor x + (Units.cellSize * offset)) // Units.cellSize - offset
         , (floor y + (Units.cellSize * offset)) // Units.cellSize - offset
         )
@@ -129,9 +129,9 @@ cellAndLocalCoordToAscii : ( Coord CellUnit, Coord CellLocalUnit ) -> Coord Worl
 cellAndLocalCoordToAscii ( cell, local ) =
     Coord.addTuple
         (Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
-        (Coord.toTuple local |> Coord.fromTuple)
+        (Coord.toTuple local |> Coord.tuple)
         |> Coord.toTuple
-        |> Coord.fromTuple
+        |> Coord.tuple
 
 
 cellAndLocalPointToWorld : Coord CellUnit -> Point2d CellLocalUnit CellLocalUnit -> Point2d WorldUnit WorldUnit
@@ -186,7 +186,7 @@ closeNeighborCells cellPosition localPosition =
         (\offset ->
             let
                 ( Quantity x, Quantity y ) =
-                    Coord.fromTuple offset
+                    Coord.tuple offset
                         |> Coord.multiplyTuple ( maxSize, maxSize )
                         |> Coord.addTuple localPosition
 
@@ -214,11 +214,11 @@ closeNeighborCells cellPosition localPosition =
 
                 newCellPos : Coord CellUnit
                 newCellPos =
-                    Coord.fromTuple offset |> Coord.addTuple cellPosition
+                    Coord.tuple offset |> Coord.addTuple cellPosition
             in
             if ( a, b ) == offset then
                 ( newCellPos
-                , Coord.fromTuple
+                , Coord.tuple
                     ( localX - Units.cellSize * a
                     , localY - Units.cellSize * b
                     )
@@ -285,7 +285,7 @@ allCellsDict (Grid grid) =
 
 region : Bounds CellUnit -> Grid -> Grid
 region bounds (Grid grid) =
-    Dict.filter (\coord _ -> Bounds.contains (Coord.fromTuple coord) bounds) grid |> Grid
+    Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds) grid |> Grid
 
 
 getCell : Coord CellUnit -> Grid -> Maybe Cell
@@ -298,12 +298,8 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
     Dict.insert ( x, y ) value grid |> Grid
 
 
-type alias Vertex =
-    { position : Vec3, texturePosition : Vec2 }
-
-
-mesh : Coord CellUnit -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile } -> WebGL.Mesh Vertex
-mesh cellPosition tiles =
+mesh : Coord CellUnit -> Id UserId -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile } -> WebGL.Mesh Vertex
+mesh cellPosition currentUserId tiles =
     let
         list : List { position : Coord WorldUnit, userId : Id UserId, value : Tile }
         list =
@@ -315,36 +311,22 @@ mesh cellPosition tiles =
                     }
                 )
                 tiles
-
-        indices : List ( Int, Int, Int )
-        indices =
-            List.range 0
-                ((List.map
-                    (\item ->
-                        case Tile.getData item.value |> .texturePositionTopLayer of
-                            Just _ ->
-                                2
-
-                            Nothing ->
-                                1
-                    )
-                    list
-                    |> List.sum
-                 )
-                    - 1
-                )
-                |> List.concatMap getIndices
     in
     List.map
-        (\{ position, value } ->
+        (\{ position, userId, value } ->
             let
+                data : TileData
                 data =
                     Tile.getData value
             in
             tileMeshHelper False position data.texturePosition data.size
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
-                            tileMeshHelper True position topLayer.texturePosition data.size
+                            if value == PostOffice && userId /= currentUserId then
+                                tileMeshHelper True position ( 4, 35 ) data.size
+
+                            else
+                                tileMeshHelper True position topLayer.texturePosition data.size
 
                         Nothing ->
                             []
@@ -352,23 +334,31 @@ mesh cellPosition tiles =
         )
         list
         |> List.concat
-        |> (\vertices -> WebGL.indexedTriangles vertices indices)
+        |> (++) (grassMesh (cellAndLocalCoordToAscii ( cellPosition, Coord.tuple ( 0, 0 ) )))
+        |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
+
+
+grassMesh : Coord WorldUnit -> List Vertex
+grassMesh ( Quantity x, Quantity y ) =
+    List.range 0 3
+        |> List.concatMap
+            (\x2 ->
+                List.range 0 3
+                    |> List.concatMap
+                        (\y2 ->
+                            Sprite.spriteMeshWithZ
+                                ( (x2 * 4 + x) * Units.tileSize, (y2 * 4 + y) * Units.tileSize )
+                                0.9
+                                (Coord.tuple ( 72, 72 ))
+                                ( 198, 216 )
+                                ( 72, 72 )
+                        )
+            )
 
 
 tileMesh : ( Quantity Int WorldUnit, Quantity Int WorldUnit ) -> Tile -> WebGL.Mesh Vertex
 tileMesh position tile =
     let
-        indices =
-            List.range 0
-                (case Tile.getData tile |> .texturePositionTopLayer of
-                    Just _ ->
-                        1
-
-                    Nothing ->
-                        0
-                )
-                |> List.concatMap getIndices
-
         data =
             Tile.getData tile
     in
@@ -380,7 +370,7 @@ tileMesh position tile =
                 Nothing ->
                     []
            )
-        |> (\vertices -> WebGL.indexedTriangles vertices indices)
+        |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
 tileMeshHelper :
@@ -434,13 +424,6 @@ tileZ isTopLayer y height =
     )
         + (y + toFloat height)
         / -1000
-
-
-getIndices : number -> List ( number, number, number )
-getIndices indexOffset =
-    [ ( 4 * indexOffset + 3, 4 * indexOffset + 1, 4 * indexOffset )
-    , ( 4 * indexOffset + 2, 4 * indexOffset + 1, 4 * indexOffset + 3 )
-    ]
 
 
 removeUser : Id UserId -> Grid -> Grid

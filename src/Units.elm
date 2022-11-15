@@ -67,7 +67,7 @@ cellSize =
 
 cellToTile : Coord CellUnit -> Coord WorldUnit
 cellToTile coord =
-    Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toTuple |> Coord.fromTuple
+    Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toTuple |> Coord.tuple
 
 
 tileSize : number

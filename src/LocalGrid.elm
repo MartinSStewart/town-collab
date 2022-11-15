@@ -168,7 +168,7 @@ update_ msg model =
             { model
                 | grid =
                     Grid.allCellsDict model.grid
-                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.fromTuple coord) bounds)
+                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
                         |> Dict.union (List.map (Tuple.mapFirst Coord.toTuple) newCells |> Dict.fromList)
                         |> Grid.from
                 , viewBounds = bounds

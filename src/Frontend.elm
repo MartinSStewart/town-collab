@@ -26,7 +26,7 @@ import Element.Font
 import Element.Input
 import Env
 import EverySet exposing (EverySet)
-import Grid exposing (Grid, Vertex)
+import Grid exposing (Grid)
 import GridCell
 import Html exposing (Html)
 import Html.Attributes
@@ -51,8 +51,9 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
-import Shaders exposing (DebrisVertex)
+import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
+import Sprite
 import Task
 import Tile exposing (RailPathType(..), Tile(..))
 import Time
@@ -1034,7 +1035,7 @@ placeTile tile model =
         cursorPosition =
             mouseWorldPosition model
                 |> Coord.floorPoint
-                |> Coord.minusTuple (Coord.fromTuple tileSize |> Coord.divideTuple (Coord.fromTuple ( 2, 2 )))
+                |> Coord.minusTuple (Coord.tuple tileSize |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
 
         ( cellPos, localPos ) =
             Grid.worldToCellAndLocalCoord cursorPosition
@@ -1144,7 +1145,7 @@ createDebrisMesh appStartTime removedTiles =
                 |> List.sum
                 |> (+) -1
                 |> List.range 0
-                |> List.concatMap Grid.getIndices
+                |> List.concatMap Sprite.getIndices
     in
     List.map
         (\{ position, tile, time } ->
@@ -1244,28 +1245,30 @@ updateMeshes oldModel newModel =
         oldHiddenForAll =
             LocalGrid.localModel oldModel.localModel |> .adminHiddenUsers |> showHighlighted oldModel
 
+        localModel : LocalGrid_
+        localModel =
+            LocalGrid.localModel newModel.localModel
+
         newCells : Dict ( Int, Int ) GridCell.Cell
         newCells =
-            LocalGrid.localModel newModel.localModel |> .grid |> Grid.allCellsDict
+            localModel.grid |> Grid.allCellsDict
 
         newHidden : EverySet (Id UserId)
         newHidden =
-            LocalGrid.localModel newModel.localModel |> .hiddenUsers |> showHighlighted newModel
+            localModel.hiddenUsers |> showHighlighted newModel
 
         newHiddenForAll : EverySet (Id UserId)
         newHiddenForAll =
-            LocalGrid.localModel newModel.localModel |> .adminHiddenUsers |> showHighlighted newModel
+            localModel.adminHiddenUsers |> showHighlighted newModel
 
-        newMesh : GridCell.Cell -> ( Int, Int ) -> WebGL.Mesh Grid.Vertex
+        newMesh : GridCell.Cell -> ( Int, Int ) -> WebGL.Mesh Vertex
         newMesh newCell rawCoord =
             let
                 coord : Coord CellUnit
                 coord =
-                    Coord.fromTuple rawCoord
+                    Coord.tuple rawCoord
             in
-            Grid.mesh
-                coord
-                (GridCell.flatten newCell)
+            Grid.mesh coord localModel.user (GridCell.flatten newCell)
 
         hiddenUnchanged : Bool
         hiddenUnchanged =
@@ -1693,7 +1696,7 @@ viewBoundingBox model =
         viewMin =
             screenToWorld model Point2d.origin
                 |> Point2d.translateBy
-                    (Coord.fromTuple ( -1, -1 )
+                    (Coord.tuple ( -1, -1 )
                         |> Units.cellToTile
                         |> Coord.toVector2d
                     )
@@ -1753,12 +1756,12 @@ canvasView model =
             ( Just texture, Just trainTexture ) ->
                 let
                     textureSize =
-                        WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                        WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                 in
                 drawText
                     (Dict.filter
                         (\key _ ->
-                            Coord.fromTuple key
+                            Coord.tuple key
                                 |> Units.cellToTile
                                 |> Coord.toPoint2d
                                 |> (\p -> BoundingBox2d.contains p viewBounds_)
@@ -1860,7 +1863,7 @@ canvasView model =
                                     (uiZoomFactor * -2 / toFloat windowHeight)
                                     1
                                     |> Coord.translateMat4
-                                        (Coord.fromTuple ( -windowWidth // (uiZoomFactor * 2), -windowHeight // (uiZoomFactor * 2) ))
+                                        (Coord.tuple ( -windowWidth // (uiZoomFactor * 2), -windowHeight // (uiZoomFactor * 2) ))
                             , texture = texture
                             , textureSize = textureSize
                             }
@@ -1959,7 +1962,7 @@ postOfficeReceivedMailFlagOffset =
     Vector2d.unsafe { x = 3.5, y = 1 + 13 / 18 }
 
 
-drawText : Dict ( Int, Int ) (WebGL.Mesh Grid.Vertex) -> Mat4 -> Texture -> List WebGL.Entity
+drawText : Dict ( Int, Int ) (WebGL.Mesh Vertex) -> Mat4 -> Texture -> List WebGL.Entity
 drawText meshes viewMatrix texture =
     Dict.toList meshes
         |> List.map
@@ -1974,7 +1977,7 @@ drawText meshes viewMatrix texture =
                     mesh
                     { view = viewMatrix
                     , texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.fromTuple |> Coord.toVec2
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     }
             )
 
@@ -2042,7 +2045,7 @@ createUserIdMesh userId =
         vertices =
             MailEditor.textMesh id ( 2, 2 )
     in
-    WebGL.indexedTriangles vertices (MailEditor.getQuadIndices vertices)
+    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 subscriptions : AudioData -> FrontendModel_ -> Sub FrontendMsg_

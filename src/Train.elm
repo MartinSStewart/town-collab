@@ -6,7 +6,7 @@ import AssocList
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import Duration exposing (Duration, Seconds)
-import Grid exposing (Grid, Vertex)
+import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, MailId, TrainId, UserId)
 import MailEditor exposing (FrontendMail, MailStatus(..))
@@ -14,7 +14,7 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
-import Shaders
+import Shaders exposing (Vertex)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Time
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
@@ -515,7 +515,7 @@ draw mail trains viewMatrix trainTexture =
                         trainMesh_
                         { view = Mat4.makeTranslate3 (x * Units.tileSize) (y * Units.tileSize) (Grid.tileZ True y 0) |> Mat4.mul viewMatrix
                         , texture = trainTexture
-                        , textureSize = WebGL.Texture.size trainTexture |> Coord.fromTuple |> Coord.toVec2
+                        , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
                         }
                     ]
 
@@ -563,7 +563,7 @@ draw mail trains viewMatrix trainTexture =
                                             (Grid.tileZ True coachPosition.y 0)
                                             |> Mat4.mul viewMatrix
                                     , texture = trainTexture
-                                    , textureSize = WebGL.Texture.size trainTexture |> Coord.fromTuple |> Coord.toVec2
+                                    , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
                                     }
                                 ]
 

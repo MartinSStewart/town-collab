@@ -1,6 +1,7 @@
 module Shaders exposing
     ( DebrisVertex
     , SimpleVertex
+    , Vertex
     , blend
     , colorAndTextureFragmentShader
     , colorAndTextureVertexShader
@@ -15,7 +16,6 @@ module Shaders exposing
     )
 
 import Element
-import Grid exposing (Vertex)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -28,6 +28,10 @@ import WebGL.Texture exposing (Texture)
 
 type alias SimpleVertex =
     { position : Vec2 }
+
+
+type alias Vertex =
+    { position : Vec3, texturePosition : Vec2 }
 
 
 blend : Setting
@@ -44,7 +48,7 @@ colorToVec3 color =
     Math.Vector3.vec3 red green blue
 
 
-vertexShader : Shader Grid.Vertex { u | view : Mat4, textureSize : Vec2 } { vcoord : Vec2 }
+vertexShader : Shader Vertex { u | view : Mat4, textureSize : Vec2 } { vcoord : Vec2 }
 vertexShader =
     [glsl|
 attribute vec3 position;

@@ -7,7 +7,6 @@ module Coord exposing
     , area
     , divideTuple
     , floorPoint
-    , fromTuple
     , maxTuple
     , minTuple
     , minusTuple
@@ -21,6 +20,7 @@ module Coord exposing
     , toVector2d
     , toggleSet
     , translateMat4
+    , tuple
     )
 
 import EverySet exposing (EverySet)
@@ -51,7 +51,7 @@ translateMat4 ( Quantity x, Quantity y ) =
 
 origin : Coord units
 origin =
-    fromTuple ( 0, 0 )
+    tuple ( 0, 0 )
 
 
 addTuple : Coord unit -> Coord unit -> Coord unit
@@ -115,7 +115,7 @@ roundPoint point2d =
         { x, y } =
             Point2d.unwrap point2d
     in
-    fromTuple ( round x, round y )
+    tuple ( round x, round y )
 
 
 floorPoint : Point2d units coordinate -> Coord units
@@ -124,7 +124,7 @@ floorPoint point2d =
         { x, y } =
             Point2d.unwrap point2d
     in
-    fromTuple ( floor x, floor y )
+    tuple ( floor x, floor y )
 
 
 toVector2d : Coord units -> Vector2d units coordinate
@@ -137,8 +137,8 @@ toTuple ( Quantity x, Quantity y ) =
     ( x, y )
 
 
-fromTuple : ( Int, Int ) -> Coord units
-fromTuple ( x, y ) =
+tuple : ( Int, Int ) -> Coord units
+tuple ( x, y ) =
     ( Quantity x, Quantity y )
 
 

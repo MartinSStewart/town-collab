@@ -10,7 +10,7 @@ import Url.Parser.Query
 
 startPointAt : Coord WorldUnit
 startPointAt =
-    Coord.fromTuple ( 0, 0 )
+    Coord.tuple ( 0, 0 )
 
 
 coordQueryParser : Url.Parser.Query.Parser (Coord WorldUnit)
