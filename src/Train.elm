@@ -1,4 +1,4 @@
-module Train exposing (Train, actualPosition, defaultMaxSpeed, draw, getCoach, moveTrain)
+module Train exposing (Train, actualPosition, carryingMail, defaultMaxSpeed, draw, getCoach, moveTrain)
 
 import Angle
 import Array exposing (Array)
@@ -9,6 +9,7 @@ import Duration exposing (Duration, Seconds)
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, MailId, TrainId, UserId)
+import List.Extra as List
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3
@@ -105,13 +106,14 @@ defaultMaxSpeed =
 
 
 moveTrain :
-    Float
+    Id TrainId
+    -> Float
     -> Time.Posix
     -> Time.Posix
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
-moveTrain maxSpeed startTime endTime state train =
+moveTrain trainId maxSpeed startTime endTime state train =
     let
         timeElapsed_ =
             Duration.inSeconds (Duration.from startTime endTime) |> min 10
@@ -143,16 +145,17 @@ moveTrain maxSpeed startTime endTime state train =
             )
                 |> Quantity
     in
-    moveTrainHelper startTime distance state { train | speed = Quantity newSpeed }
+    moveTrainHelper trainId startTime distance state { train | speed = Quantity newSpeed }
 
 
 moveTrainHelper :
-    Time.Posix
+    Id TrainId
+    -> Time.Posix
     -> Quantity Float TileLocalUnit
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
-moveTrainHelper time distanceLeft state train =
+moveTrainHelper trainId time distanceLeft state train =
     let
         { path, distanceToT, tToDistance, startExitDirection, endExitDirection } =
             Tile.railPathData train.path
@@ -189,6 +192,7 @@ moveTrainHelper time distanceLeft state train =
             in
             case
                 findNextTile
+                    trainId
                     time
                     position
                     state
@@ -205,6 +209,7 @@ moveTrainHelper time distanceLeft state train =
             of
                 Just newTrain ->
                     moveTrainHelper
+                        trainId
                         time
                         (distanceLeft |> Quantity.minus distanceTravelled)
                         state
@@ -331,49 +336,51 @@ moveCoachHelper distanceLeft pathIsReversed coach =
 
 
 findNextTile :
-    Time.Posix
+    Id TrainId
+    -> Time.Posix
     -> Point2d WorldUnit WorldUnit
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
     -> Maybe TrainData
-findNextTile time position state speed direction list =
+findNextTile trainId time position state speed direction list =
     case list of
         ( neighborCellPos, _ ) :: rest ->
             case Grid.getCell neighborCellPos state.grid of
                 Just cell ->
-                    case findNextTileHelper time neighborCellPos position speed direction state (GridCell.flatten cell) of
+                    case findNextTileHelper trainId time neighborCellPos position speed direction state (GridCell.flatten cell) of
                         Just newTrain ->
                             Just newTrain
 
                         Nothing ->
-                            findNextTile time position state speed direction rest
+                            findNextTile trainId time position state speed direction rest
 
                 Nothing ->
-                    findNextTile time position state speed direction rest
+                    findNextTile trainId time position state speed direction rest
 
         [] ->
             Nothing
 
 
 findNextTileHelper :
-    Time.Posix
+    Id TrainId
+    -> Time.Posix
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId } }
+    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
     -> Maybe TrainData
-findNextTileHelper time neighborCellPos position speed direction state tiles =
+findNextTileHelper trainId time neighborCellPos position speed direction state tiles =
     case tiles of
         tile :: rest ->
             let
                 maybeNewTrain : Maybe TrainData
                 maybeNewTrain =
                     List.filterMap
-                        (checkPath time tile state.mail neighborCellPos position speed direction)
+                        (checkPath trainId time tile state.mail neighborCellPos position speed direction)
                         (case Tile.getData tile.value |> .railPath of
                             NoRailPath ->
                                 []
@@ -391,23 +398,24 @@ findNextTileHelper time neighborCellPos position speed direction state tiles =
                     Just newTrain
 
                 Nothing ->
-                    findNextTileHelper time neighborCellPos position speed direction state rest
+                    findNextTileHelper trainId time neighborCellPos position speed direction state rest
 
         [] ->
             Nothing
 
 
 checkPath :
-    Time.Posix
+    Id TrainId
+    -> Time.Posix
     -> { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
-    -> AssocList.Dict (Id MailId) { a | status : MailStatus, from : Id UserId }
+    -> AssocList.Dict (Id MailId) { a | status : MailStatus, from : Id UserId, to : Id UserId }
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> RailPath
     -> Maybe TrainData
-checkPath time tile mail neighborCellPos position speed direction railPath =
+checkPath trainId time tile mail neighborCellPos position speed direction railPath =
     let
         railData : RailData
         railData =
@@ -432,16 +440,27 @@ checkPath time tile mail neighborCellPos position speed direction railPath =
             Tile.reverseDirection direction == railData.endExitDirection
 
         stoppedAtPostOffice () =
-            if
-                (tile.value == PostOffice)
-                    && List.any
-                        (\mail_ -> tile.userId == mail_.from && mail_.status == MailWaitingPickup)
-                        (AssocList.values mail)
-            then
-                Just { time = time, userId = tile.userId }
+            case ( tile.value, carryingMail mail trainId ) of
+                ( PostOffice, Nothing ) ->
+                    if
+                        List.any
+                            (\mail_ -> tile.userId == mail_.from && mail_.status == MailWaitingPickup)
+                            (AssocList.values mail)
+                    then
+                        Just { time = time, userId = tile.userId }
 
-            else
-                Nothing
+                    else
+                        Nothing
+
+                ( PostOffice, Just ( _, mailCarried ) ) ->
+                    if mailCarried.to == tile.userId then
+                        Just { time = time, userId = tile.userId }
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
     in
     if (Point2d.distanceFrom worldPoint0 position |> Quantity.lessThan (Units.tileUnit 0.1)) && validDirection0 then
         { position =
@@ -493,18 +512,6 @@ draw mail trains viewMatrix trainTexture =
                         |> (*) trainFrames
                         |> round
                         |> modBy trainFrames
-
-                drawCoach =
-                    AssocList.values mail
-                        |> List.any
-                            (\mail_ ->
-                                case mail_.status of
-                                    MailInTransit mailTrainId ->
-                                        mailTrainId == trainId
-
-                                    _ ->
-                                        False
-                            )
             in
             (case Array.get trainFrame trainEngineMeshes of
                 Just trainMesh_ ->
@@ -522,59 +529,77 @@ draw mail trains viewMatrix trainTexture =
                 Nothing ->
                     []
             )
-                ++ (if drawCoach then
-                        let
-                            coach =
-                                getCoach train
+                ++ (case carryingMail mail trainId of
+                        Just _ ->
+                            let
+                                coach =
+                                    getCoach train
 
-                            railData_ =
-                                Tile.railPathData coach.path
+                                railData_ =
+                                    Tile.railPathData coach.path
 
-                            coachPosition =
-                                actualPosition coach |> Point2d.unwrap
+                                coachPosition =
+                                    actualPosition coach |> Point2d.unwrap
 
-                            coachFrame =
-                                Direction2d.angleFrom
-                                    Direction2d.x
-                                    (Tile.pathDirection railData_.path coach.t
-                                        |> (if Quantity.lessThanZero train.speed then
-                                                Direction2d.reverse
+                                coachFrame =
+                                    Direction2d.angleFrom
+                                        Direction2d.x
+                                        (Tile.pathDirection railData_.path coach.t
+                                            |> (if Quantity.lessThanZero train.speed then
+                                                    Direction2d.reverse
 
-                                            else
-                                                identity
-                                           )
-                                    )
-                                    |> Angle.inTurns
-                                    |> (*) trainFrames
-                                    |> round
-                                    |> modBy trainFrames
-                        in
-                        case Array.get coachFrame trainCoachMeshes of
-                            Just trainMesh_ ->
-                                [ WebGL.entityWith
-                                    [ WebGL.Settings.DepthTest.default, Shaders.blend ]
-                                    Shaders.vertexShader
-                                    Shaders.fragmentShader
-                                    trainMesh_
-                                    { view =
-                                        Mat4.makeTranslate3
-                                            (coachPosition.x * Units.tileSize)
-                                            (coachPosition.y * Units.tileSize)
-                                            (Grid.tileZ True coachPosition.y 0)
-                                            |> Mat4.mul viewMatrix
-                                    , texture = trainTexture
-                                    , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
-                                    }
-                                ]
+                                                else
+                                                    identity
+                                               )
+                                        )
+                                        |> Angle.inTurns
+                                        |> (*) trainFrames
+                                        |> round
+                                        |> modBy trainFrames
+                            in
+                            case Array.get coachFrame trainCoachMeshes of
+                                Just trainMesh_ ->
+                                    [ WebGL.entityWith
+                                        [ WebGL.Settings.DepthTest.default, Shaders.blend ]
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        trainMesh_
+                                        { view =
+                                            Mat4.makeTranslate3
+                                                (coachPosition.x * Units.tileSize)
+                                                (coachPosition.y * Units.tileSize)
+                                                (Grid.tileZ True coachPosition.y 0)
+                                                |> Mat4.mul viewMatrix
+                                        , texture = trainTexture
+                                        , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
+                                        }
+                                    ]
 
-                            Nothing ->
-                                []
+                                Nothing ->
+                                    []
 
-                    else
-                        []
+                        Nothing ->
+                            []
                    )
         )
         (AssocList.toList trains)
+
+
+carryingMail :
+    AssocList.Dict (Id MailId) { a | status : MailStatus }
+    -> Id TrainId
+    -> Maybe ( Id MailId, { a | status : MailStatus } )
+carryingMail mail trainId =
+    AssocList.toList mail
+        |> List.find
+            (\( _, mail_ ) ->
+                case mail_.status of
+                    MailInTransit mailTrainId ->
+                        mailTrainId == trainId
+
+                    _ ->
+                        False
+            )
 
 
 trainFrames =

@@ -16,7 +16,6 @@ module Tile exposing
     , reverseDirection
     , rotateAntiClockwise
     , rotateClockwise
-    , texturePosition
     , texturePositionPixels
     , texturePosition_
     , trainHouseLeftRailPath
@@ -28,10 +27,8 @@ import Axis2d
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Direction2d exposing (Direction2d)
-import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import Math.Vector2 exposing (Vec2)
-import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
@@ -363,15 +360,6 @@ railPathData railPath =
 
         RailPathStrafeRightSmall ->
             railPathStrafeRightSmall
-
-
-texturePosition : Tile -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
-texturePosition tile =
-    let
-        data =
-            getData tile
-    in
-    texturePosition_ data.texturePosition data.size
 
 
 texturePosition_ : ( Int, Int ) -> ( Int, Int ) -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }

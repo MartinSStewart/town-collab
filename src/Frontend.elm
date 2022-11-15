@@ -674,7 +674,7 @@ updateLoaded audioData msg model =
                 playTrainWhistle =
                     (case model.lastTrainWhistle of
                         Just whistleTime ->
-                            Duration.from whistleTime time |> Quantity.greaterThan (Duration.seconds 120)
+                            Duration.from whistleTime time |> Quantity.greaterThan (Duration.seconds 180)
 
                         Nothing ->
                             True
@@ -774,8 +774,9 @@ updateLoaded audioData msg model =
                 , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                 , trains =
                     AssocList.map
-                        (\_ train ->
+                        (\trainId train ->
                             Train.moveTrain
+                                trainId
                                 Train.defaultMaxSpeed
                                 model.time
                                 time
@@ -1897,15 +1898,16 @@ getFlags model =
         localModel =
             LocalGrid.localModel model.localModel
 
-        hasMailWaitingPickup : Bool
-        hasMailWaitingPickup =
-            MailEditor.getMailFrom localModel.user model.mail
+        hasMailWaitingPickup : Id UserId -> Bool
+        hasMailWaitingPickup userId =
+            MailEditor.getMailFrom userId model.mail
                 |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
                 |> List.isEmpty
                 |> not
 
-        hasReceivedNewMail =
-            MailEditor.getMailTo localModel.user model.mail
+        hasReceivedNewMail : Id UserId -> Bool
+        hasReceivedNewMail userId =
+            MailEditor.getMailTo userId model.mail
                 |> List.filter (\( _, mail ) -> mail.status == MailReceived)
                 |> List.isEmpty
                 |> not
@@ -1916,7 +1918,7 @@ getFlags model =
                 Just cell ->
                     List.concatMap
                         (\tile ->
-                            (if tile.value == PostOffice && hasMailWaitingPickup then
+                            (if tile.value == PostOffice && hasMailWaitingPickup tile.userId then
                                 [ { position =
                                         Grid.cellAndLocalCoordToAscii ( coord, tile.position )
                                             |> Coord.toPoint2d
@@ -1928,7 +1930,7 @@ getFlags model =
                              else
                                 []
                             )
-                                ++ (if tile.value == PostOffice && hasReceivedNewMail then
+                                ++ (if tile.value == PostOffice && hasReceivedNewMail tile.userId then
                                         [ { position =
                                                 Grid.cellAndLocalCoordToAscii ( coord, tile.position )
                                                     |> Coord.toPoint2d

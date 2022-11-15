@@ -141,34 +141,47 @@ update msg model =
                     case model.lastWorldUpdate of
                         Just lastWorldUpdate ->
                             AssocList.map
-                                (\_ train -> Train.moveTrain Train.defaultMaxSpeed lastWorldUpdate time model train)
+                                (\trainId train ->
+                                    Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
+                                )
                                 model.trains
 
                         Nothing ->
                             model.trains
 
-                pickedUpMail : { mail : AssocList.Dict (Id MailId) BackendMail, mailChanged : Bool }
-                pickedUpMail =
+                updateMail : { mail : AssocList.Dict (Id MailId) BackendMail, mailChanged : Bool }
+                updateMail =
                     AssocList.merge
                         (\_ _ a -> a)
                         (\trainId oldTrain newTrain state ->
                             case ( oldTrain.stoppedAtPostOffice, newTrain.stoppedAtPostOffice ) of
                                 ( Nothing, Just { userId } ) ->
-                                    case
-                                        MailEditor.getMailFrom userId state.mail
-                                            |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
-                                    of
-                                        ( mailId, mail ) :: _ ->
+                                    case Train.carryingMail state.mail trainId of
+                                        Just ( mailId, mail ) ->
                                             { mail =
                                                 AssocList.update
                                                     mailId
-                                                    (\_ -> Just { mail | status = MailInTransit trainId })
+                                                    (\_ -> Just { mail | status = MailReceived })
                                                     state.mail
                                             , mailChanged = True
                                             }
 
-                                        [] ->
-                                            state
+                                        Nothing ->
+                                            case
+                                                MailEditor.getMailFrom userId state.mail
+                                                    |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
+                                            of
+                                                ( mailId, mail ) :: _ ->
+                                                    { mail =
+                                                        AssocList.update
+                                                            mailId
+                                                            (\_ -> Just { mail | status = MailInTransit trainId })
+                                                            state.mail
+                                                    , mailChanged = True
+                                                    }
+
+                                                [] ->
+                                                    state
 
                                 _ ->
                                     state
@@ -181,12 +194,12 @@ update msg model =
             ( { model
                 | lastWorldUpdate = Just time
                 , trains = newTrains
-                , mail = pickedUpMail.mail
+                , mail = updateMail.mail
               }
             , Cmd.batch
                 [ Lamdera.broadcast (TrainBroadcast newTrains)
-                , if pickedUpMail.mailChanged then
-                    AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) pickedUpMail.mail
+                , if updateMail.mailChanged then
+                    AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) updateMail.mail
                         |> MailBroadcast
                         |> Lamdera.broadcast
 
