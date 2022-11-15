@@ -14,6 +14,7 @@ module MailEditor exposing
     , getImageData
     , getMailFrom
     , getMailTo
+    , getQuadIndices
     , handleKeyDown
     , handleMouseDown
     , init
@@ -22,6 +23,7 @@ module MailEditor exposing
     , open
     , openAnimationLength
     , redo
+    , textMesh
     , undo
     , updateFromBackend
     )

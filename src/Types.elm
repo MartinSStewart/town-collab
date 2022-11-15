@@ -112,6 +112,7 @@ type alias FrontendLoaded =
     , mailEditor : Model
     , currentTile : Maybe { tile : Tile, mesh : WebGL.Mesh Vertex }
     , lastTileRotation : List Time.Posix
+    , userIdMesh : WebGL.Mesh Vertex
     }
 
 

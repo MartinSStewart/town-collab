@@ -152,7 +152,7 @@ audioLoaded audioData model =
 
         volumeOffset : Float
         volumeOffset =
-            mailEditorVolumeScale * 0.5 / ((List.map .volume movingTrains |> List.sum) + 1)
+            mailEditorVolumeScale * 0.3 / ((List.map .volume movingTrains |> List.sum) + 1)
 
         trainSounds =
             List.map
@@ -307,6 +307,7 @@ loadedInit time loading loadingData =
             , mailEditor = MailEditor.initEditor loadingData.mailEditor
             , currentTile = Nothing
             , lastTileRotation = []
+            , userIdMesh = createUserIdMesh loadingData.user
             }
     in
     ( updateMeshes model model
@@ -1848,6 +1849,22 @@ canvasView model =
                             Nothing ->
                                 []
                        )
+                    ++ [ WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            model.userIdMesh
+                            { view =
+                                Mat4.makeScale3
+                                    (uiZoomFactor * 2 / toFloat windowWidth)
+                                    (uiZoomFactor * -2 / toFloat windowHeight)
+                                    1
+                                    |> Coord.translateMat4
+                                        (Coord.fromTuple ( -windowWidth // (uiZoomFactor * 2), -windowHeight // (uiZoomFactor * 2) ))
+                            , texture = texture
+                            , textureSize = textureSize
+                            }
+                       ]
                     ++ MailEditor.drawMail
                         texture
                         (case model.mouseLeft of
@@ -1865,6 +1882,10 @@ canvasView model =
             _ ->
                 []
         )
+
+
+uiZoomFactor =
+    3
 
 
 getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
@@ -2010,6 +2031,18 @@ receivingMailFlagMesh frame =
         , { position = Vec3.vec3 width height 0, texturePosition = bottomRight }
         , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft }
         ]
+
+
+createUserIdMesh : Id UserId -> WebGL.Mesh Vertex
+createUserIdMesh userId =
+    let
+        id =
+            "USER ID: " ++ String.fromInt (Id.toInt userId)
+
+        vertices =
+            MailEditor.textMesh id ( 2, 2 )
+    in
+    WebGL.indexedTriangles vertices (MailEditor.getQuadIndices vertices)
 
 
 subscriptions : AudioData -> FrontendModel_ -> Sub FrontendMsg_
