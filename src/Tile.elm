@@ -566,20 +566,20 @@ getData tile =
                     |> CustomCollision
             , char = 'h'
             , railPath = NoRailPath
-            , nextClockwise = HouseDown
+            , nextClockwise = HouseLeft
             }
 
         HouseRight ->
-            { texturePosition = ( 0, 1 )
-            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 0, 5 ) }
-            , size = ( 3, 3 )
+            { texturePosition = ( 11, 4 )
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 11, 16 ) }
+            , size = ( 2, 4 )
             , collisionMask =
                 [ ( 0, 1 )
                 , ( 1, 1 )
-                , ( 2, 1 )
                 , ( 0, 2 )
                 , ( 1, 2 )
-                , ( 2, 2 )
+                , ( 0, 3 )
+                , ( 1, 3 )
                 ]
                     |> Set.fromList
                     |> CustomCollision
@@ -589,8 +589,8 @@ getData tile =
             }
 
         HouseUp ->
-            { texturePosition = ( 0, 1 )
-            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 0, 5 ) }
+            { texturePosition = ( 15, 12 )
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 15, 15 ) }
             , size = ( 3, 3 )
             , collisionMask =
                 [ ( 0, 1 )
@@ -604,26 +604,26 @@ getData tile =
                     |> CustomCollision
             , char = 'h'
             , railPath = NoRailPath
-            , nextClockwise = HouseDown
+            , nextClockwise = HouseRight
             }
 
         HouseLeft ->
-            { texturePosition = ( 0, 1 )
-            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 0, 5 ) }
-            , size = ( 3, 3 )
+            { texturePosition = ( 11, 0 )
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 11, 8 ) }
+            , size = ( 2, 4 )
             , collisionMask =
                 [ ( 0, 1 )
                 , ( 1, 1 )
-                , ( 2, 1 )
                 , ( 0, 2 )
                 , ( 1, 2 )
-                , ( 2, 2 )
+                , ( 0, 3 )
+                , ( 1, 3 )
                 ]
                     |> Set.fromList
                     |> CustomCollision
             , char = 'h'
             , railPath = NoRailPath
-            , nextClockwise = HouseDown
+            , nextClockwise = HouseUp
             }
 
         RailHorizontal ->
