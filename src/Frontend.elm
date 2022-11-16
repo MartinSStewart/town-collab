@@ -37,6 +37,7 @@ import Id exposing (Id, TrainId, UserId)
 import Json.Decode
 import Json.Encode
 import Keyboard
+import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
@@ -777,27 +778,43 @@ updateLoaded audioData msg model =
                 localGrid : LocalGrid_
                 localGrid =
                     LocalGrid.localModel model.localModel
-            in
-            ( { model
-                | time = time
-                , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
-                , trains =
-                    AssocList.map
-                        (\trainId train ->
-                            Train.moveTrain
-                                trainId
-                                Train.defaultMaxSpeed
-                                model.time
-                                time
-                                { grid = localGrid.grid, mail = AssocList.empty }
-                                train
+
+                newViewPoint =
+                    Point2d.translateBy
+                        (Keyboard.Arrows.arrows model.pressedKeys
+                            |> (\{ x, y } -> Vector2d.unsafe { x = toFloat x, y = toFloat -y })
                         )
-                        model.trains
-                , removedTileParticles =
-                    List.filter
-                        (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
-                        model.removedTileParticles
-              }
+                        model.viewPoint
+
+                model2 =
+                    { model
+                        | time = time
+                        , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
+                        , trains =
+                            AssocList.map
+                                (\trainId train ->
+                                    Train.moveTrain
+                                        trainId
+                                        Train.defaultMaxSpeed
+                                        model.time
+                                        time
+                                        { grid = localGrid.grid, mail = AssocList.empty }
+                                        train
+                                )
+                                model.trains
+                        , removedTileParticles =
+                            List.filter
+                                (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
+                                model.removedTileParticles
+                        , viewPoint = newViewPoint
+                    }
+            in
+            ( case ( newViewPoint == model.viewPoint, model2.mouseLeft, model2.currentTile ) of
+                ( False, MouseButtonDown _, Just currentTile ) ->
+                    placeTile True currentTile.tile model2
+
+                _ ->
+                    model2
             , Cmd.none
             )
 
