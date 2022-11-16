@@ -458,7 +458,7 @@ type CollisionMask
     | CustomCollision (Set ( Int, Int ))
 
 
-hasCollision : Coord CellLocalUnit -> TileData -> Coord CellLocalUnit -> TileData -> Bool
+hasCollision : Coord a -> TileData -> Coord a -> TileData -> Bool
 hasCollision positionA tileA positionB tileB =
     let
         ( Quantity x, Quantity y ) =

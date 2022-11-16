@@ -554,7 +554,7 @@ updateLoaded audioData msg model =
                             |> (\model2 ->
                                     case model2.currentTile of
                                         Just { tile } ->
-                                            placeTile tile model2
+                                            placeTile False tile model2
 
                                         Nothing ->
                                             model2
@@ -646,6 +646,14 @@ updateLoaded audioData msg model =
                         MouseButtonUp _ ->
                             MouseButtonUp { current = mousePosition }
               }
+                |> (\model2 ->
+                        case ( model2.currentTile, model2.mouseLeft ) of
+                            ( Just { tile }, MouseButtonDown _ ) ->
+                                placeTile True tile model2
+
+                            _ ->
+                                model2
+                   )
             , Cmd.none
             )
 
@@ -898,7 +906,12 @@ mainMouseButtonUp mousePosition mouseState model =
                 , viewPoint =
                     case ( MailEditor.isOpen model.mailEditor, model.mouseMiddle, model.tool ) of
                         ( False, MouseButtonUp _, DragTool ) ->
-                            offsetViewPoint model mouseState.start mousePosition
+                            case model.currentTile of
+                                Just _ ->
+                                    model.viewPoint
+
+                                Nothing ->
+                                    offsetViewPoint model mouseState.start mousePosition
 
                         _ ->
                             model.viewPoint
@@ -1019,88 +1032,106 @@ mouseWorldPosition model =
         |> screenToWorld model
 
 
-placeTile : Tile -> FrontendLoaded -> FrontendLoaded
-placeTile tile model =
+placeTile : Bool -> Tile -> FrontendLoaded -> FrontendLoaded
+placeTile isDragPlacement tile model =
     let
-        model2 =
-            if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
-                updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
+        _ =
+            Debug.log "a" ""
 
-            else
-                model
+        tileData =
+            Tile.getData tile
 
-        tileSize : ( Int, Int )
-        tileSize =
-            Tile.getData tile |> .size
-
+        cursorPosition : Coord WorldUnit
         cursorPosition =
             mouseWorldPosition model
                 |> Coord.floorPoint
-                |> Coord.minusTuple (Coord.tuple tileSize |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
+                |> Coord.minusTuple (Coord.tuple tileData.size |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
 
-        ( cellPos, localPos ) =
-            Grid.worldToCellAndLocalCoord cursorPosition
+        hasCollision : Bool
+        hasCollision =
+            case model.lastTilePlaced of
+                Just lastPlaced ->
+                    Tile.hasCollision cursorPosition tileData lastPlaced.position (Tile.getData lastPlaced.tile)
 
-        neighborCells : List ( Coord CellUnit, Coord Units.CellLocalUnit )
-        neighborCells =
-            ( cellPos, localPos ) :: Grid.closeNeighborCells cellPos localPos
-
-        oldGrid : Grid
-        oldGrid =
-            LocalGrid.localModel model2.localModel |> .grid
-
-        model3 =
-            updateLocalModel
-                (Change.LocalGridChange
-                    { position = cursorPosition
-                    , change = tile
-                    }
-                )
-                model2
-
-        newGrid : Grid
-        newGrid =
-            LocalGrid.localModel model3.localModel |> .grid
-
-        removedTiles =
-            List.concatMap
-                (\( neighborCellPos, _ ) ->
-                    let
-                        oldCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
-                        oldCell =
-                            Grid.getCell neighborCellPos oldGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
-
-                        newCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
-                        newCell =
-                            Grid.getCell neighborCellPos newGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
-                    in
-                    List.foldl
-                        (\item state ->
-                            if List.any ((==) item) newCell then
-                                state
-
-                            else
-                                { time = model.time
-                                , tile = item.value
-                                , position = Grid.cellAndLocalCoordToAscii ( neighborCellPos, item.position )
-                                }
-                                    :: state
-                        )
-                        []
-                        oldCell
-                )
-                neighborCells
+                Nothing ->
+                    False
     in
-    { model3
-        | lastTilePlaced =
-            Just
-                { time = model.time
-                , overwroteTiles = List.isEmpty removedTiles |> not
-                , tile = tile
-                }
-        , removedTileParticles = removedTiles ++ model3.removedTileParticles
-        , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
-    }
+    if isDragPlacement && hasCollision then
+        model
+
+    else
+        let
+            model2 =
+                if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
+                    updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
+
+                else
+                    model
+
+            ( cellPos, localPos ) =
+                Grid.worldToCellAndLocalCoord cursorPosition
+
+            neighborCells : List ( Coord CellUnit, Coord Units.CellLocalUnit )
+            neighborCells =
+                ( cellPos, localPos ) :: Grid.closeNeighborCells cellPos localPos
+
+            oldGrid : Grid
+            oldGrid =
+                LocalGrid.localModel model2.localModel |> .grid
+
+            model3 =
+                updateLocalModel
+                    (Change.LocalGridChange
+                        { position = cursorPosition
+                        , change = tile
+                        }
+                    )
+                    model2
+
+            newGrid : Grid
+            newGrid =
+                LocalGrid.localModel model3.localModel |> .grid
+
+            removedTiles =
+                List.concatMap
+                    (\( neighborCellPos, _ ) ->
+                        let
+                            oldCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                            oldCell =
+                                Grid.getCell neighborCellPos oldGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
+
+                            newCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
+                            newCell =
+                                Grid.getCell neighborCellPos newGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
+                        in
+                        List.foldl
+                            (\item state ->
+                                if List.any ((==) item) newCell then
+                                    state
+
+                                else
+                                    { time = model.time
+                                    , tile = item.value
+                                    , position = Grid.cellAndLocalCoordToAscii ( neighborCellPos, item.position )
+                                    }
+                                        :: state
+                            )
+                            []
+                            oldCell
+                    )
+                    neighborCells
+        in
+        { model3
+            | lastTilePlaced =
+                Just
+                    { time = model.time
+                    , overwroteTiles = List.isEmpty removedTiles |> not
+                    , tile = tile
+                    , position = cursorPosition
+                    }
+            , removedTileParticles = removedTiles ++ model3.removedTileParticles
+            , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
+        }
 
 
 createDebrisMesh : Time.Posix -> List RemovedTileParticle -> WebGL.Mesh DebrisVertex
@@ -1373,8 +1404,11 @@ actualViewPoint model =
             offsetViewPoint model start current
 
         ( False, MouseButtonDown { start, current }, _ ) ->
-            case model.tool of
-                DragTool ->
+            case model.currentTile of
+                Just _ ->
+                    model.viewPoint
+
+                Nothing ->
                     offsetViewPoint model start current
 
         _ ->

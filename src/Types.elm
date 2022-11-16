@@ -103,7 +103,7 @@ type alias FrontendLoaded =
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
-    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool, tile : Tile }
+    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex

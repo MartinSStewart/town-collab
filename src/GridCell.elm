@@ -32,6 +32,9 @@ addValue userId position line (Cell cell) =
     let
         userUndoPoint =
             Dict.get (Id.toInt userId) cell.undoPoint |> Maybe.withDefault 0
+
+        value =
+            { userId = userId, position = position, value = line }
     in
     Cell
         { history =
@@ -50,81 +53,69 @@ addValue userId position line (Cell cell) =
                 ( [], userUndoPoint )
                 cell.history
                 |> Tuple.first
-                |> (\list ->
-                        { userId = userId, position = position, value = line } :: list
-                   )
+                |> (\list -> value :: list)
         , undoPoint =
             Dict.insert
                 (Id.toInt userId)
                 (userUndoPoint + 1)
                 cell.undoPoint
-        , cache = cell.cache
+        , cache = stepCacheHelper value cell.cache
         }
-        |> updateCache
+
+
+cellBounds : Bounds unit
+cellBounds =
+    Nonempty
+        (Coord.tuple ( 0, 0 ))
+        [ Coord.tuple ( Units.cellSize - 1, Units.cellSize - 1 ) ]
+        |> Bounds.fromCoords
 
 
 updateCache : Cell -> Cell
 updateCache (Cell cell) =
-    let
-        hiddenUsers =
-            EverySet.empty
-
-        hiddenUsersForAll =
-            EverySet.empty
-
-        hidden =
-            EverySet.union hiddenUsers hiddenUsersForAll
-
-        cellBounds : Bounds unit
-        cellBounds =
-            Nonempty
-                (Coord.tuple ( 0, 0 ))
-                [ Coord.tuple ( Units.cellSize - 1, Units.cellSize - 1 ) ]
-                |> Bounds.fromCoords
-    in
     { history = cell.history
     , undoPoint = cell.undoPoint
-    , cache =
-        List.foldr
-            (\({ userId, position, value } as item) state ->
-                if EverySet.member userId hidden then
-                    state
-
-                else
-                    case Dict.get (Id.toInt userId) state.undoPoint of
-                        Just stepsLeft ->
-                            if stepsLeft > 0 then
-                                let
-                                    data =
-                                        Tile.getData value
-                                in
-                                { list =
-                                    (if Bounds.contains position cellBounds && value /= EmptyTile then
-                                        [ item ]
-
-                                     else
-                                        []
-                                    )
-                                        ++ List.filter
-                                            (\item2 ->
-                                                Tile.hasCollision position data item2.position (Tile.getData item2.value)
-                                                    |> not
-                                            )
-                                            state.list
-                                , undoPoint = Dict.insert (Id.toInt userId) (stepsLeft - 1) state.undoPoint
-                                }
-
-                            else
-                                state
-
-                        Nothing ->
-                            state
-            )
-            { list = [], undoPoint = cell.undoPoint }
-            cell.history
-            |> .list
+    , cache = List.foldr stepCache { list = [], undoPoint = cell.undoPoint } cell.history |> .list
     }
         |> Cell
+
+
+stepCache ({ userId, position, value } as item) state =
+    case Dict.get (Id.toInt userId) state.undoPoint of
+        Just stepsLeft ->
+            if stepsLeft > 0 then
+                { list = stepCacheHelper item state.list
+                , undoPoint = Dict.insert (Id.toInt userId) (stepsLeft - 1) state.undoPoint
+                }
+
+            else
+                state
+
+        Nothing ->
+            state
+
+
+stepCacheHelper :
+    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+stepCacheHelper ({ userId, position, value } as item) cache =
+    let
+        data =
+            Tile.getData value
+    in
+    (if Bounds.contains position cellBounds && value /= EmptyTile then
+        [ item ]
+
+     else
+        []
+    )
+        ++ List.filter
+            (\item2 ->
+                Tile.hasCollision position data item2.position (Tile.getData item2.value)
+                    |> not
+            )
+            cache
 
 
 removeUser : Id UserId -> Cell -> Cell
