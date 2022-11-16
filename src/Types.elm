@@ -81,7 +81,7 @@ type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : AssocList.Dict (Id TrainId) Train
-    , meshes : Dict RawCellCoord (WebGL.Mesh Vertex)
+    , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
     , viewPoint : Point2d WorldUnit WorldUnit
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
     , texture : Maybe Texture

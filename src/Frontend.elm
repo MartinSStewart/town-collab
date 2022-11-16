@@ -51,11 +51,12 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
+import Set exposing (Set)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import Task
-import Tile exposing (RailPathType(..), Tile(..))
+import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Time
 import Train exposing (Train)
 import Types exposing (..)
@@ -1032,26 +1033,28 @@ mouseWorldPosition model =
         |> screenToWorld model
 
 
+cursorPosition : TileData -> FrontendLoaded -> Coord WorldUnit
+cursorPosition tileData model =
+    mouseWorldPosition model
+        |> Coord.floorPoint
+        |> Coord.minusTuple (Coord.tuple tileData.size |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
+
+
 placeTile : Bool -> Tile -> FrontendLoaded -> FrontendLoaded
 placeTile isDragPlacement tile model =
     let
-        _ =
-            Debug.log "a" ""
-
         tileData =
             Tile.getData tile
 
-        cursorPosition : Coord WorldUnit
-        cursorPosition =
-            mouseWorldPosition model
-                |> Coord.floorPoint
-                |> Coord.minusTuple (Coord.tuple tileData.size |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
+        cursorPosition_ : Coord WorldUnit
+        cursorPosition_ =
+            cursorPosition tileData model
 
         hasCollision : Bool
         hasCollision =
             case model.lastTilePlaced of
                 Just lastPlaced ->
-                    Tile.hasCollision cursorPosition tileData lastPlaced.position (Tile.getData lastPlaced.tile)
+                    Tile.hasCollision cursorPosition_ tileData lastPlaced.position (Tile.getData lastPlaced.tile)
 
                 Nothing ->
                     False
@@ -1069,7 +1072,7 @@ placeTile isDragPlacement tile model =
                     model
 
             ( cellPos, localPos ) =
-                Grid.worldToCellAndLocalCoord cursorPosition
+                Grid.worldToCellAndLocalCoord cursorPosition_
 
             neighborCells : List ( Coord CellUnit, Coord Units.CellLocalUnit )
             neighborCells =
@@ -1082,7 +1085,7 @@ placeTile isDragPlacement tile model =
             model3 =
                 updateLocalModel
                     (Change.LocalGridChange
-                        { position = cursorPosition
+                        { position = cursorPosition_
                         , change = tile
                         }
                     )
@@ -1127,7 +1130,7 @@ placeTile isDragPlacement tile model =
                     { time = model.time
                     , overwroteTiles = List.isEmpty removedTiles |> not
                     , tile = tile
-                    , position = cursorPosition
+                    , position = cursorPosition_
                     }
             , removedTileParticles = removedTiles ++ model3.removedTileParticles
             , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
@@ -1260,23 +1263,6 @@ updateMeshes oldModel newModel =
         oldCells =
             LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
-        showHighlighted : { a | userHoverHighlighted : Maybe b } -> EverySet b -> EverySet b
-        showHighlighted model hidden =
-            EverySet.diff
-                hidden
-                ([ model.userHoverHighlighted ]
-                    |> List.filterMap identity
-                    |> EverySet.fromList
-                )
-
-        oldHidden : EverySet (Id UserId)
-        oldHidden =
-            LocalGrid.localModel oldModel.localModel |> .hiddenUsers |> showHighlighted oldModel
-
-        oldHiddenForAll : EverySet (Id UserId)
-        oldHiddenForAll =
-            LocalGrid.localModel oldModel.localModel |> .adminHiddenUsers |> showHighlighted oldModel
-
         localModel : LocalGrid_
         localModel =
             LocalGrid.localModel newModel.localModel
@@ -1285,33 +1271,55 @@ updateMeshes oldModel newModel =
         newCells =
             localModel.grid |> Grid.allCellsDict
 
-        newHidden : EverySet (Id UserId)
-        newHidden =
-            localModel.hiddenUsers |> showHighlighted newModel
+        currentTile : FrontendLoaded -> Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ) }
+        currentTile model =
+            case model.currentTile of
+                Just { tile } ->
+                    let
+                        position =
+                            cursorPosition (Tile.getData tile) model
 
-        newHiddenForAll : EverySet (Id UserId)
-        newHiddenForAll =
-            localModel.adminHiddenUsers |> showHighlighted newModel
+                        ( cellPosition, localPosition ) =
+                            Grid.worldToCellAndLocalCoord position
+                    in
+                    { tile = tile
+                    , position = position
+                    , cellPosition =
+                        Grid.closeNeighborCells cellPosition localPosition
+                            |> List.map Tuple.first
+                            |> (::) cellPosition
+                            |> List.map Coord.toTuple
+                            |> Set.fromList
+                    }
+                        |> Just
 
-        newMesh : GridCell.Cell -> ( Int, Int ) -> WebGL.Mesh Vertex
+                Nothing ->
+                    Nothing
+
+        oldCurrentTile =
+            currentTile oldModel
+
+        newCurrentTile =
+            currentTile newModel
+
+        currentTileUnchanged =
+            oldCurrentTile == newCurrentTile
+
+        newMesh : GridCell.Cell -> ( Int, Int ) -> { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
         newMesh newCell rawCoord =
             let
                 coord : Coord CellUnit
                 coord =
                     Coord.tuple rawCoord
             in
-            Grid.mesh coord localModel.user (GridCell.flatten newCell)
-
-        hiddenUnchanged : Bool
-        hiddenUnchanged =
-            oldHidden == newHidden && oldHiddenForAll == newHiddenForAll
-
-        hiddenChanges : List (Id UserId)
-        hiddenChanges =
-            EverySet.union (EverySet.diff newHidden oldHidden) (EverySet.diff oldHidden newHidden)
-                |> EverySet.union (EverySet.diff newHiddenForAll oldHiddenForAll)
-                |> EverySet.union (EverySet.diff oldHiddenForAll newHiddenForAll)
-                |> EverySet.toList
+            { foreground =
+                Grid.foregroundMesh
+                    newCurrentTile
+                    coord
+                    localModel.user
+                    (GridCell.flatten newCell)
+            , background = Grid.backgroundMesh coord
+            }
     in
     { newModel
         | meshes =
@@ -1320,19 +1328,27 @@ updateMeshes oldModel newModel =
                     case Dict.get coord oldCells of
                         Just oldCell ->
                             if oldCell == newCell then
-                                case Dict.get coord newModel.meshes of
-                                    Just mesh ->
-                                        if hiddenUnchanged then
+                                if
+                                    ((Maybe.map .cellPosition newCurrentTile
+                                        |> Maybe.withDefault Set.empty
+                                        |> Set.member coord
+                                     )
+                                        || (Maybe.map .cellPosition oldCurrentTile
+                                                |> Maybe.withDefault Set.empty
+                                                |> Set.member coord
+                                           )
+                                    )
+                                        && not currentTileUnchanged
+                                then
+                                    newMesh newCell coord
+
+                                else
+                                    case Dict.get coord newModel.meshes of
+                                        Just mesh ->
                                             mesh
 
-                                        else if List.any (\userId -> GridCell.hasChangesBy userId newCell) hiddenChanges then
+                                        Nothing ->
                                             newMesh newCell coord
-
-                                        else
-                                            mesh
-
-                                    Nothing ->
-                                        newMesh newCell coord
 
                             else
                                 newMesh newCell coord
@@ -1467,7 +1483,7 @@ lostConnection model =
 
 
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
-view _ model =
+view audioData model =
     { title =
         case model of
             Loading _ ->
@@ -1503,7 +1519,7 @@ view _ model =
                         :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
                         :: mouseAttributes
                     )
-                    (Element.html (canvasView loadedModel))
+                    (Element.html (canvasView audioData loadedModel))
         , Html.node "style"
             []
             [ Html.text "@font-face { font-family: ascii; src: url('ascii.ttf'); }" ]
@@ -1747,8 +1763,8 @@ viewBoundingBox_ model =
     BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
-canvasView : FrontendLoaded -> Html FrontendMsg_
-canvasView model =
+canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
+canvasView audioData model =
     let
         viewBounds_ =
             viewBoundingBox model
@@ -1792,19 +1808,19 @@ canvasView model =
                 let
                     textureSize =
                         WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+
+                    meshes =
+                        Dict.filter
+                            (\key _ ->
+                                Coord.tuple key
+                                    |> Units.cellToTile
+                                    |> Coord.toPoint2d
+                                    |> (\p -> BoundingBox2d.contains p viewBounds_)
+                            )
+                            model.meshes
                 in
-                drawText
-                    (Dict.filter
-                        (\key _ ->
-                            Coord.tuple key
-                                |> Units.cellToTile
-                                |> Coord.toPoint2d
-                                |> (\p -> BoundingBox2d.contains p viewBounds_)
-                        )
-                        model.meshes
-                    )
-                    viewMatrix
-                    texture
+                drawBackground meshes viewMatrix texture
+                    ++ drawForeground meshes viewMatrix texture
                     ++ Train.draw model.mail model.trains viewMatrix trainTexture
                     ++ List.filterMap
                         (\flag ->
@@ -1865,6 +1881,31 @@ canvasView model =
 
                                     ( w, h ) =
                                         Tile.getData currentTile.tile |> .size
+
+                                    offsetX =
+                                        case model.lastTilePlaced of
+                                            Just { tile, time } ->
+                                                let
+                                                    timeElapsed =
+                                                        Duration.from time model.time
+                                                in
+                                                if
+                                                    (timeElapsed
+                                                        |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
+                                                    )
+                                                        && (tile == EmptyTile)
+                                                then
+                                                    timeElapsed
+                                                        |> Duration.inSeconds
+                                                        |> (*) 40
+                                                        |> cos
+                                                        |> (*) 2
+
+                                                else
+                                                    0
+
+                                            Nothing ->
+                                                0
                                 in
                                 [ WebGL.entityWith
                                     [ Shaders.blend ]
@@ -1874,13 +1915,17 @@ canvasView model =
                                     { view =
                                         viewMatrix
                                             |> Mat4.translate3
-                                                (toFloat (mouseX - (w // 2)) * Units.tileSize)
+                                                (toFloat (mouseX - (w // 2)) * Units.tileSize + offsetX)
                                                 (toFloat (mouseY - (h // 2)) * Units.tileSize)
                                                 0
                                     , texture = texture
                                     , textureSize = textureSize
-                                    , color = Vec4.vec4 1 1 1 0.5
-                                    , time = Duration.from model.startTime model.time |> Duration.inSeconds
+                                    , color =
+                                        if currentTile.tile == EmptyTile then
+                                            Vec4.vec4 1 1 1 1
+
+                                        else
+                                            Vec4.vec4 1 1 1 0.5
                                     }
                                 ]
 
@@ -1998,8 +2043,12 @@ postOfficeReceivedMailFlagOffset =
     Vector2d.unsafe { x = 3.5, y = 1 + 13 / 18 }
 
 
-drawText : Dict ( Int, Int ) (WebGL.Mesh Vertex) -> Mat4 -> Texture -> List WebGL.Entity
-drawText meshes viewMatrix texture =
+drawForeground :
+    Dict ( Int, Int ) { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
+    -> Mat4
+    -> Texture
+    -> List WebGL.Entity
+drawForeground meshes viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -2010,7 +2059,31 @@ drawText meshes viewMatrix texture =
                     ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
-                    mesh
+                    mesh.foreground
+                    { view = viewMatrix
+                    , texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    }
+            )
+
+
+drawBackground :
+    Dict ( Int, Int ) { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
+    -> Mat4
+    -> Texture
+    -> List WebGL.Entity
+drawBackground meshes viewMatrix texture =
+    Dict.toList meshes
+        |> List.map
+            (\( _, mesh ) ->
+                WebGL.entityWith
+                    [ WebGL.Settings.cullFace WebGL.Settings.back
+                    , WebGL.Settings.DepthTest.default
+                    , Shaders.blend
+                    ]
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
+                    mesh.background
                     { view = viewMatrix
                     , texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -2038,10 +2111,10 @@ sendingMailFlagMesh frame =
             Tile.texturePositionPixels ( 72, 594 + frame * 6 ) ( width, 6 )
     in
     WebGL.triangleFan
-        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft }
-        , { position = Vec3.vec3 width 0 0, texturePosition = topRight }
-        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight }
-        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft }
+        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
+        , { position = Vec3.vec3 width 0 0, texturePosition = topRight, opacity = 1 }
+        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight, opacity = 1 }
+        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft, opacity = 1 }
         ]
 
 
@@ -2065,10 +2138,10 @@ receivingMailFlagMesh frame =
             Tile.texturePositionPixels ( 90, 594 + frame * 6 ) ( width, 6 )
     in
     WebGL.triangleFan
-        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft }
-        , { position = Vec3.vec3 width 0 0, texturePosition = topRight }
-        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight }
-        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft }
+        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
+        , { position = Vec3.vec3 width 0 0, texturePosition = topRight, opacity = 1 }
+        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight, opacity = 1 }
+        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft, opacity = 1 }
         ]
 
 

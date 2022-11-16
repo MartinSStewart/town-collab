@@ -1,5 +1,6 @@
 module GridCell exposing
     ( Cell(..)
+    , Value
     , addValue
     , changeCount
     , empty
@@ -12,7 +13,6 @@ module GridCell exposing
 import Bounds exposing (Bounds)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
-import EverySet exposing (EverySet)
 import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty(..))
 import Tile exposing (Tile(..))
@@ -20,11 +20,11 @@ import Units exposing (CellLocalUnit)
 
 
 type Cell
-    = Cell
-        { history : List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
-        , undoPoint : Dict Int Int
-        , cache : List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
-        }
+    = Cell { history : List Value, undoPoint : Dict Int Int, cache : List Value }
+
+
+type alias Value =
+    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
 
 
 addValue : Id UserId -> Coord CellLocalUnit -> Tile -> Cell -> Cell
@@ -80,6 +80,10 @@ updateCache (Cell cell) =
         |> Cell
 
 
+stepCache :
+    Value
+    -> { list : List Value, undoPoint : Dict Int number }
+    -> { list : List Value, undoPoint : Dict Int number }
 stepCache ({ userId, position, value } as item) state =
     case Dict.get (Id.toInt userId) state.undoPoint of
         Just stepsLeft ->
@@ -95,10 +99,7 @@ stepCache ({ userId, position, value } as item) state =
             state
 
 
-stepCacheHelper :
-    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
-    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
-    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+stepCacheHelper : Value -> List Value -> List Value
 stepCacheHelper ({ userId, position, value } as item) cache =
     let
         data =

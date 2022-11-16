@@ -18,10 +18,10 @@ spriteMeshWithZ ( x, y ) z ( Quantity width, Quantity height ) texturePosition t
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels texturePosition textureSize
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z, texturePosition = topLeft }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z, texturePosition = topRight }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z, texturePosition = bottomRight }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z, texturePosition = bottomLeft }
+    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z, texturePosition = topLeft, opacity = 1 }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z, texturePosition = topRight, opacity = 1 }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z, texturePosition = bottomRight, opacity = 1 }
+    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z, texturePosition = bottomLeft, opacity = 1 }
     ]
 
 

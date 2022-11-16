@@ -5,11 +5,13 @@ module Grid exposing
     , addChange
     , allCells
     , allCellsDict
+    , backgroundMesh
     , cellAndLocalCoordToAscii
     , cellAndLocalPointToWorld
     , changeCount
     , closeNeighborCells
     , empty
+    , foregroundMesh
     , from
     , getCell
     , getTile
@@ -18,7 +20,6 @@ module Grid exposing
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
     , localTilePointPlusWorldCoord
-    , mesh
     , moveUndoPoint
     , region
     , removeUser
@@ -298,8 +299,13 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
     Dict.insert ( x, y ) value grid |> Grid
 
 
-mesh : Coord CellUnit -> Id UserId -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile } -> WebGL.Mesh Vertex
-mesh cellPosition currentUserId tiles =
+foregroundMesh :
+    Maybe { a | tile : Tile, position : Coord WorldUnit }
+    -> Coord CellUnit
+    -> Id UserId
+    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    -> WebGL.Mesh Vertex
+foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
     let
         list : List { position : Coord WorldUnit, userId : Id UserId, value : Tile }
         list =
@@ -318,15 +324,33 @@ mesh cellPosition currentUserId tiles =
                 data : TileData
                 data =
                     Tile.getData value
+
+                opacity =
+                    case maybeCurrentTile of
+                        Just currentTile ->
+                            if
+                                Tile.hasCollision
+                                    currentTile.position
+                                    (Tile.getData currentTile.tile)
+                                    position
+                                    data
+                            then
+                                0.5
+
+                            else
+                                1
+
+                        Nothing ->
+                            1
             in
-            tileMeshHelper False position data.texturePosition data.size
+            tileMeshHelper opacity False position data.texturePosition data.size
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             if value == PostOffice && userId /= currentUserId then
-                                tileMeshHelper True position ( 4, 35 ) data.size
+                                tileMeshHelper opacity True position ( 4, 35 ) data.size
 
                             else
-                                tileMeshHelper True position topLayer.texturePosition data.size
+                                tileMeshHelper opacity True position topLayer.texturePosition data.size
 
                         Nothing ->
                             []
@@ -334,7 +358,12 @@ mesh cellPosition currentUserId tiles =
         )
         list
         |> List.concat
-        |> (++) (grassMesh (cellAndLocalCoordToAscii ( cellPosition, Coord.tuple ( 0, 0 ) )))
+        |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
+
+
+backgroundMesh : Coord CellUnit -> WebGL.Mesh Vertex
+backgroundMesh cellPosition =
+    grassMesh (cellAndLocalCoordToAscii ( cellPosition, Coord.tuple ( 0, 0 ) ))
         |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
@@ -362,24 +391,30 @@ tileMesh position tile =
         data =
             Tile.getData tile
     in
-    tileMeshHelper False position data.texturePosition data.size
-        ++ (case data.texturePositionTopLayer of
-                Just topLayer ->
-                    tileMeshHelper True position topLayer.texturePosition data.size
+    (if tile == EmptyTile then
+        Sprite.spriteMesh (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 324, 223 ) ( 30, 29 )
 
-                Nothing ->
-                    []
-           )
+     else
+        tileMeshHelper 1 False position data.texturePosition data.size
+            ++ (case data.texturePositionTopLayer of
+                    Just topLayer ->
+                        tileMeshHelper 1 True position topLayer.texturePosition data.size
+
+                    Nothing ->
+                        []
+               )
+    )
         |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
 tileMeshHelper :
-    Bool
+    Float
+    -> Bool
     -> ( Quantity Int WorldUnit, Quantity Int WorldUnit )
     -> ( Int, Int )
     -> ( Int, Int )
     -> List Vertex
-tileMeshHelper isTopLayer position texturePosition size =
+tileMeshHelper opacity isTopLayer position texturePosition size =
     let
         { topLeft, topRight, bottomLeft, bottomRight } =
             Tile.texturePosition_ texturePosition size
@@ -405,6 +440,7 @@ tileMeshHelper isTopLayer position texturePosition size =
                     (uvRecord.y - topLeftRecord.y + toFloat y * Units.tileSize)
                     (tileZ isTopLayer (toFloat y) height)
             , texturePosition = uv
+            , opacity = opacity
             }
         )
         [ topLeft

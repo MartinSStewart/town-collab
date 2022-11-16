@@ -31,7 +31,7 @@ type alias SimpleVertex =
 
 
 type alias Vertex =
-    { position : Vec3, texturePosition : Vec2 }
+    { position : Vec3, texturePosition : Vec2, opacity : Float }
 
 
 blend : Setting
@@ -48,18 +48,21 @@ colorToVec3 color =
     Math.Vector3.vec3 red green blue
 
 
-vertexShader : Shader Vertex { u | view : Mat4, textureSize : Vec2 } { vcoord : Vec2 }
+vertexShader : Shader Vertex { u | view : Mat4, textureSize : Vec2 } { vcoord : Vec2, opacity2 : Float }
 vertexShader =
     [glsl|
 attribute vec3 position;
 attribute vec2 texturePosition;
+attribute float opacity;
 uniform mat4 view;
 uniform vec2 textureSize;
 varying vec2 vcoord;
+varying float opacity2; 
 
 void main () {
     gl_Position = view * vec4(position, 1.0);
     vcoord = texturePosition / textureSize;
+    opacity2 = opacity;
 }|]
 
 
@@ -129,19 +132,20 @@ void main () {
 }|]
 
 
-fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2 }
+fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2, opacity2 : Float }
 fragmentShader =
     [glsl|
 precision mediump float;
 uniform sampler2D texture;
 varying vec2 vcoord;
+varying float opacity2;
 
 void main () {
     vec4 color = texture2D(texture, vcoord);
     if (color.a == 0.0) {
         discard;
     }
-    gl_FragColor = color;
+    gl_FragColor = vec4(color.xyz, opacity2);
 }|]
 
 
@@ -161,7 +165,7 @@ type alias DebrisVertex =
     { position : Vec2, texturePosition : Vec2, initialSpeed : Vec2, startTime : Float }
 
 
-debrisVertexShader : Shader DebrisVertex { u | view : Mat4, time : Float, textureSize : Vec2 } { vcoord : Vec2 }
+debrisVertexShader : Shader DebrisVertex { u | view : Mat4, time : Float, textureSize : Vec2 } { vcoord : Vec2, opacity2 : Float }
 debrisVertexShader =
     [glsl|
 attribute vec2 position;
@@ -172,9 +176,11 @@ uniform mat4 view;
 uniform float time;
 uniform vec2 textureSize;
 varying vec2 vcoord;
+varying float opacity2;
 
 void main () {
     float seconds = time - startTime;
     gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
     vcoord = texturePosition / textureSize;
+    opacity2 = 1.0;
 }|]
