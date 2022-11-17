@@ -42,6 +42,7 @@ import Pixels
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
+import Simplex
 import Sprite
 import Tile exposing (Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
@@ -375,14 +376,65 @@ grassMesh ( Quantity x, Quantity y ) =
                 List.range 0 3
                     |> List.concatMap
                         (\y2 ->
-                            Sprite.spriteMeshWithZ
-                                ( (x2 * 4 + x) * Units.tileSize, (y2 * 4 + y) * Units.tileSize )
-                                0.9
-                                (Coord.tuple ( 72, 72 ))
-                                ( 198, 216 )
-                                ( 72, 72 )
+                            let
+                                getValue : Int -> Int -> Bool
+                                getValue x3 y3 =
+                                    Simplex.fractal2d
+                                        fractalConfig
+                                        permutationTable
+                                        (toFloat (x3 + x2) / 2 + toFloat x)
+                                        (toFloat (y3 + y2) / 2 + toFloat y)
+                                        > 0
+
+                                draw : Int -> Int -> List Vertex
+                                draw textureX textureY =
+                                    Sprite.spriteMeshWithZ
+                                        ( (x2 * 4 + x) * Units.tileSize, (y2 * 4 + y) * Units.tileSize )
+                                        0.9
+                                        (Coord.tuple ( 72, 72 ))
+                                        ( textureX, textureY )
+                                        ( 72, 72 )
+                            in
+                            if getValue 0 0 then
+                                draw 198 216
+
+                            else
+                                case
+                                    ( ( getValue -1 -1, getValue 0 -1, getValue 1 -1 )
+                                    , ( getValue -1 0, getValue 1 0 )
+                                    , ( getValue -1 1, getValue 0 1, getValue 1 1 )
+                                    )
+                                of
+                                    ( ( True, False, False ), ( False, False ), ( False, False, False ) ) ->
+                                        draw 198 216
+
+                                    ( ( True, False ), ( True, False ) ) ->
+                                        draw 360 216
+
+                                    ( ( True, False ), ( False, False ) ) ->
+                                        draw 360 288
+
+                                    ( ( True, False ), ( False, True ) ) ->
+                                        draw 360 360
+
+                                    _ ->
+                                        []
                         )
             )
+
+
+fractalConfig : Simplex.FractalConfig
+fractalConfig =
+    { steps = 2
+    , stepSize = 8
+    , persistence = 1
+    , scale = 160
+    }
+
+
+permutationTable : Simplex.PermutationTable
+permutationTable =
+    Simplex.permutationTableFromInt 123
 
 
 tileMesh : ( Quantity Int WorldUnit, Quantity Int WorldUnit ) -> Tile -> WebGL.Mesh Vertex
