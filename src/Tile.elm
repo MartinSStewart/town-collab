@@ -58,6 +58,10 @@ type Tile
     | RailBottomToLeft
     | RailTopToRight
     | RailTopToLeft
+    | RailBottomToRightLarge
+    | RailBottomToLeftLarge
+    | RailTopToRightLarge
+    | RailTopToLeftLarge
     | RailCrossing
     | RailStrafeDown
     | RailStrafeUp
@@ -113,6 +117,10 @@ type RailPath
     | RailPathBottomToLeft
     | RailPathTopToRight
     | RailPathTopToLeft
+    | RailPathBottomToRightLarge
+    | RailPathBottomToLeftLarge
+    | RailPathTopToRightLarge
+    | RailPathTopToLeftLarge
     | RailPathStrafeDown
     | RailPathStrafeUp
     | RailPathStrafeLeft
@@ -128,8 +136,17 @@ trackTurnRadius =
     4
 
 
+trackTurnRadiusLarge : number
+trackTurnRadiusLarge =
+    6
+
+
 turnLength =
     trackTurnRadius * pi / 2
+
+
+turnLengthLarge =
+    trackTurnRadiusLarge * pi / 2
 
 
 type alias RailData =
@@ -213,6 +230,46 @@ railPathTopToLeft =
     , tToDistance = \t -> turnLength * t |> Quantity
     , startExitDirection = pathStartDirection topToLeftPath
     , endExitDirection = pathExitDirection topToLeftPath
+    }
+
+
+railPathBottomToRightLarge : RailData
+railPathBottomToRightLarge =
+    { path = bottomToRightPathLarge
+    , distanceToT = \(Quantity distance) -> distance / turnLengthLarge
+    , tToDistance = \t -> turnLengthLarge * t |> Quantity
+    , startExitDirection = pathStartDirection bottomToRightPathLarge
+    , endExitDirection = pathExitDirection bottomToRightPathLarge
+    }
+
+
+railPathBottomToLeftLarge : RailData
+railPathBottomToLeftLarge =
+    { path = bottomToLeftPathLarge
+    , distanceToT = \(Quantity distance) -> distance / turnLengthLarge
+    , tToDistance = \t -> turnLengthLarge * t |> Quantity
+    , startExitDirection = pathStartDirection bottomToLeftPathLarge
+    , endExitDirection = pathExitDirection bottomToLeftPathLarge
+    }
+
+
+railPathTopToRightLarge : RailData
+railPathTopToRightLarge =
+    { path = topToRightPathLarge
+    , distanceToT = \(Quantity distance) -> distance / turnLengthLarge
+    , tToDistance = \t -> turnLengthLarge * t |> Quantity
+    , startExitDirection = pathStartDirection topToRightPathLarge
+    , endExitDirection = pathExitDirection topToRightPathLarge
+    }
+
+
+railPathTopToLeftLarge : RailData
+railPathTopToLeftLarge =
+    { path = topToLeftPathLarge
+    , distanceToT = \(Quantity distance) -> distance / turnLengthLarge
+    , tToDistance = \t -> turnLengthLarge * t |> Quantity
+    , startExitDirection = pathStartDirection topToLeftPathLarge
+    , endExitDirection = pathExitDirection topToLeftPathLarge
     }
 
 
@@ -337,6 +394,18 @@ railPathData railPath =
         RailPathTopToLeft ->
             railPathTopToLeft
 
+        RailPathBottomToRightLarge ->
+            railPathBottomToRightLarge
+
+        RailPathBottomToLeftLarge ->
+            railPathBottomToLeftLarge
+
+        RailPathTopToRightLarge ->
+            railPathTopToRightLarge
+
+        RailPathTopToLeftLarge ->
+            railPathTopToLeftLarge
+
         RailPathStrafeDown ->
             railPathStrafeDown
 
@@ -427,6 +496,10 @@ allTiles =
     , RailBottomToLeft
     , RailTopToRight
     , RailTopToLeft
+    , RailBottomToRightLarge
+    , RailBottomToLeftLarge
+    , RailTopToRightLarge
+    , RailTopToLeftLarge
     , RailCrossing
     , RailStrafeUp
     , RailStrafeDown
@@ -728,6 +801,126 @@ getData tile =
             , char = 's'
             , railPath = SingleRailPath RailPathTopToLeft
             , nextClockwise = RailTopToRight
+            }
+
+        RailBottomToRightLarge ->
+            { texturePosition = ( 0, 43 )
+            , texturePositionTopLayer = Nothing
+            , size = ( 6, 6 )
+            , collisionMask =
+                [ ( 5, 0 )
+                , ( 4, 0 )
+                , ( 3, 0 )
+                , ( 2, 0 )
+                , ( 5, 1 )
+                , ( 4, 1 )
+                , ( 3, 1 )
+                , ( 2, 1 )
+                , ( 1, 1 )
+                , ( 2, 2 )
+                , ( 1, 2 )
+                , ( 1, 3 )
+                , ( 0, 3 )
+                , ( 1, 4 )
+                , ( 0, 4 )
+                , ( 1, 5 )
+                , ( 0, 5 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'Q'
+            , railPath = SingleRailPath RailPathBottomToRightLarge
+            , nextClockwise = RailBottomToLeftLarge
+            }
+
+        RailBottomToLeftLarge ->
+            { texturePosition = ( 6, 43 )
+            , texturePositionTopLayer = Nothing
+            , size = ( 6, 6 )
+            , collisionMask =
+                [ ( 0, 0 )
+                , ( 1, 0 )
+                , ( 2, 0 )
+                , ( 3, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                , ( 2, 1 )
+                , ( 3, 1 )
+                , ( 4, 1 )
+                , ( 3, 2 )
+                , ( 4, 2 )
+                , ( 4, 3 )
+                , ( 5, 3 )
+                , ( 4, 4 )
+                , ( 5, 4 )
+                , ( 4, 5 )
+                , ( 5, 5 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'W'
+            , railPath = SingleRailPath RailPathBottomToLeftLarge
+            , nextClockwise = RailTopToLeftLarge
+            }
+
+        RailTopToRightLarge ->
+            { texturePosition = ( 0, 49 )
+            , texturePositionTopLayer = Nothing
+            , size = ( 6, 6 )
+            , collisionMask =
+                [ ( 5, 5 )
+                , ( 4, 5 )
+                , ( 3, 5 )
+                , ( 2, 5 )
+                , ( 5, 4 )
+                , ( 4, 4 )
+                , ( 3, 4 )
+                , ( 2, 4 )
+                , ( 1, 4 )
+                , ( 2, 3 )
+                , ( 1, 3 )
+                , ( 1, 2 )
+                , ( 0, 2 )
+                , ( 1, 1 )
+                , ( 0, 1 )
+                , ( 1, 0 )
+                , ( 0, 0 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'A'
+            , railPath = SingleRailPath RailPathTopToRightLarge
+            , nextClockwise = RailBottomToRightLarge
+            }
+
+        RailTopToLeftLarge ->
+            { texturePosition = ( 6, 49 )
+            , texturePositionTopLayer = Nothing
+            , size = ( 6, 6 )
+            , collisionMask =
+                [ ( 0, 5 )
+                , ( 1, 5 )
+                , ( 2, 5 )
+                , ( 3, 5 )
+                , ( 0, 4 )
+                , ( 1, 4 )
+                , ( 2, 4 )
+                , ( 3, 4 )
+                , ( 4, 4 )
+                , ( 3, 3 )
+                , ( 4, 3 )
+                , ( 4, 2 )
+                , ( 5, 2 )
+                , ( 4, 1 )
+                , ( 5, 1 )
+                , ( 4, 0 )
+                , ( 5, 0 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , char = 'S'
+            , railPath = SingleRailPath RailPathTopToLeftLarge
+            , nextClockwise = RailTopToRightLarge
             }
 
         RailCrossing ->
@@ -1347,6 +1540,38 @@ bottomToRightPath t =
     Point2d.unsafe
         { x = trackTurnRadius - (trackTurnRadius - 0.5) * sin (t * pi / 2)
         , y = trackTurnRadius - (trackTurnRadius - 0.5) * cos (t * pi / 2)
+        }
+
+
+topToLeftPathLarge : Float -> Point2d TileLocalUnit TileLocalUnit
+topToLeftPathLarge t =
+    Point2d.unsafe
+        { x = (trackTurnRadiusLarge - 0.5) * sin (t * pi / 2)
+        , y = (trackTurnRadiusLarge - 0.5) * cos (t * pi / 2)
+        }
+
+
+topToRightPathLarge : Float -> Point2d TileLocalUnit TileLocalUnit
+topToRightPathLarge t =
+    Point2d.unsafe
+        { x = trackTurnRadiusLarge - (trackTurnRadiusLarge - 0.5) * sin (t * pi / 2)
+        , y = (trackTurnRadiusLarge - 0.5) * cos (t * pi / 2)
+        }
+
+
+bottomToLeftPathLarge : Float -> Point2d TileLocalUnit TileLocalUnit
+bottomToLeftPathLarge t =
+    Point2d.unsafe
+        { x = (trackTurnRadiusLarge - 0.5) * sin (t * pi / 2)
+        , y = trackTurnRadiusLarge - (trackTurnRadiusLarge - 0.5) * cos (t * pi / 2)
+        }
+
+
+bottomToRightPathLarge : Float -> Point2d TileLocalUnit TileLocalUnit
+bottomToRightPathLarge t =
+    Point2d.unsafe
+        { x = trackTurnRadiusLarge - (trackTurnRadiusLarge - 0.5) * sin (t * pi / 2)
+        , y = trackTurnRadiusLarge - (trackTurnRadiusLarge - 0.5) * cos (t * pi / 2)
         }
 
 

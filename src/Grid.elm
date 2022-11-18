@@ -364,16 +364,26 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
 
 backgroundMesh : Coord CellUnit -> WebGL.Mesh Vertex
 backgroundMesh cellPosition =
-    grassMesh (cellAndLocalCoordToAscii ( cellPosition, Coord.tuple ( 0, 0 ) ))
+    grassMesh cellPosition
         |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
-grassMesh : Coord WorldUnit -> List Vertex
-grassMesh ( Quantity x, Quantity y ) =
-    List.range 0 3
+grassMesh : Coord CellUnit -> List Vertex
+grassMesh cellPosition =
+    let
+        perCell =
+            4
+
+        ( Quantity cellX, Quantity cellY ) =
+            cellPosition
+
+        ( Quantity x, Quantity y ) =
+            cellAndLocalCoordToAscii ( cellPosition, Coord.origin )
+    in
+    List.range 0 (perCell - 1)
         |> List.concatMap
             (\x2 ->
-                List.range 0 3
+                List.range 0 (perCell - 1)
                     |> List.concatMap
                         (\y2 ->
                             let
@@ -382,14 +392,14 @@ grassMesh ( Quantity x, Quantity y ) =
                                     Simplex.fractal2d
                                         fractalConfig
                                         permutationTable
-                                        (toFloat (x3 + x2) / 2 + toFloat x)
-                                        (toFloat (y3 + y2) / 2 + toFloat y)
+                                        (toFloat (x3 + x2) / perCell + toFloat cellX)
+                                        (toFloat (y3 + y2) / perCell + toFloat cellY)
                                         > 0
 
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.spriteMeshWithZ
-                                        ( (x2 * 4 + x) * Units.tileSize, (y2 * 4 + y) * Units.tileSize )
+                                        ( (x2 * perCell + x) * Units.tileSize, (y2 * perCell + y) * Units.tileSize )
                                         0.9
                                         (Coord.tuple ( 72, 72 ))
                                         ( textureX, textureY )
@@ -400,25 +410,62 @@ grassMesh ( Quantity x, Quantity y ) =
 
                             else
                                 case
-                                    ( ( getValue -1 -1, getValue 0 -1, getValue 1 -1 )
-                                    , ( getValue -1 0, getValue 1 0 )
-                                    , ( getValue -1 1, getValue 0 1, getValue 1 1 )
+                                    ( {- Top -} getValue 0 -1
+                                    , ( getValue -1 0, getValue 1 0 ) {- Left, Right -}
+                                    , {- Bottom -} getValue 0 1
                                     )
                                 of
-                                    ( ( True, False, False ), ( False, False ), ( False, False, False ) ) ->
-                                        draw 198 216
+                                    ( False, ( False, False ), False ) ->
+                                        draw 432 288
 
-                                    ( ( True, False ), ( True, False ) ) ->
-                                        draw 360 216
+                                    ( True, ( False, False ), False ) ->
+                                        draw 432 216
 
-                                    ( ( True, False ), ( False, False ) ) ->
+                                    ( False, ( True, False ), False ) ->
                                         draw 360 288
 
-                                    ( ( True, False ), ( False, True ) ) ->
+                                    ( True, ( True, False ), False ) ->
+                                        draw 360 216
+
+                                    ( False, ( False, True ), False ) ->
+                                        let
+                                            _ =
+                                                Debug.log "a" "a"
+                                        in
+                                        draw 504 288
+
+                                    ( True, ( False, True ), False ) ->
+                                        draw 504 216
+
+                                    ( False, ( True, True ), False ) ->
+                                        draw 504 504
+
+                                    ( True, ( True, True ), False ) ->
+                                        draw 504 432
+
+                                    ( False, ( False, False ), True ) ->
+                                        draw 432 360
+
+                                    ( True, ( False, False ), True ) ->
+                                        draw 432 648
+
+                                    ( False, ( True, False ), True ) ->
                                         draw 360 360
 
-                                    _ ->
-                                        []
+                                    ( True, ( True, False ), True ) ->
+                                        draw 360 648
+
+                                    ( False, ( False, True ), True ) ->
+                                        draw 504 360
+
+                                    ( True, ( False, True ), True ) ->
+                                        draw 504 648
+
+                                    ( False, ( True, True ), True ) ->
+                                        draw 504 576
+
+                                    ( True, ( True, True ), True ) ->
+                                        draw 198 216
                         )
             )
 
@@ -426,9 +473,9 @@ grassMesh ( Quantity x, Quantity y ) =
 fractalConfig : Simplex.FractalConfig
 fractalConfig =
     { steps = 2
-    , stepSize = 8
-    , persistence = 1
-    , scale = 160
+    , stepSize = 14
+    , persistence = 2
+    , scale = 5
     }
 
 
