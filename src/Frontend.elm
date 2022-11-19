@@ -2111,7 +2111,7 @@ getFlags model =
                 Just cell ->
                     List.concatMap
                         (\tile ->
-                            (if tile.value == PostOffice && hasMailWaitingPickup tile.userId then
+                            (if hasMailWaitingPickup tile.userId then
                                 [ { position =
                                         Grid.cellAndLocalCoordToWorld ( coord, tile.position )
                                             |> Coord.toPoint2d
@@ -2123,7 +2123,7 @@ getFlags model =
                              else
                                 []
                             )
-                                ++ (if tile.value == PostOffice && hasReceivedNewMail tile.userId then
+                                ++ (if hasReceivedNewMail tile.userId then
                                         [ { position =
                                                 Grid.cellAndLocalCoordToWorld ( coord, tile.position )
                                                     |> Coord.toPoint2d
@@ -2136,7 +2136,7 @@ getFlags model =
                                         []
                                    )
                         )
-                        (GridCell.flatten cell)
+                        (GridCell.getPostOffices cell)
                         ++ postOffices
 
                 Nothing ->

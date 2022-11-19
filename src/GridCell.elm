@@ -8,6 +8,7 @@ module GridCell exposing
     , dataToCell
     , empty
     , flatten
+    , getPostOffices
     , hasChangesBy
     , moveUndoPoint
     , removeUser
@@ -45,6 +46,23 @@ type Cell
 
 type alias Value =
     { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+
+
+getPostOffices : Cell -> List { position : Coord CellLocalUnit, userId : Id UserId }
+getPostOffices (Cell cell) =
+    if List.any (\{ value } -> value == PostOffice) cell.history then
+        List.filterMap
+            (\value ->
+                if value.value == PostOffice then
+                    Just { userId = value.userId, position = value.position }
+
+                else
+                    Nothing
+            )
+            cell.cache
+
+    else
+        []
 
 
 addValue : Id UserId -> Coord CellLocalUnit -> Tile -> Cell -> Cell
