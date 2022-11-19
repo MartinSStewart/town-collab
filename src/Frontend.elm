@@ -19,11 +19,6 @@ import Change exposing (Change(..))
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
-import Element exposing (Element)
-import Element.Background
-import Element.Border
-import Element.Font
-import Element.Input
 import Env
 import Grid exposing (Grid)
 import GridCell
@@ -31,7 +26,6 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel
-import Icons
 import Id exposing (Id, TrainId, UserId)
 import Json.Decode
 import Json.Encode
@@ -60,7 +54,6 @@ import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Time
 import Train exposing (Train)
 import Types exposing (..)
-import UiColors
 import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
@@ -391,7 +384,7 @@ init url key =
         { key = key
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
         , devicePixelRatio = 1
-        , zoomFactor = 2
+        , zoomFactor = 1
         , time = Nothing
         , viewPoint = viewPoint
         , mousePosition = Point2d.origin
@@ -625,15 +618,28 @@ updateLoaded audioData msg model =
                                         model.lastTileRotation
                         }
             in
-            ( case ( event.deltaY > 0, model.currentTile ) of
-                ( True, Just currentTile ) ->
-                    rotationHelper Tile.rotateClockwise currentTile.tile
+            ( if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                { model
+                    | zoomFactor =
+                        (if event.deltaY > 0 then
+                            model.zoomFactor - 1
 
-                ( False, Just currentTile ) ->
-                    rotationHelper Tile.rotateAntiClockwise currentTile.tile
+                         else
+                            model.zoomFactor + 1
+                        )
+                            |> clamp 1 3
+                }
 
-                ( _, Nothing ) ->
-                    model
+              else
+                case ( event.deltaY > 0, model.currentTile ) of
+                    ( True, Just currentTile ) ->
+                        rotationHelper Tile.rotateClockwise currentTile.tile
+
+                    ( False, Just currentTile ) ->
+                        rotationHelper Tile.rotateAntiClockwise currentTile.tile
+
+                    ( _, Nothing ) ->
+                        model
             , Cmd.none
             )
 
@@ -1575,57 +1581,13 @@ view audioData model =
     , body =
         [ case model of
             Loading _ ->
-                Element.layout
-                    [ Element.width Element.fill
-                    , Element.height Element.fill
-                    ]
-                    (Element.text "Loading")
+                Html.text "Loading"
 
             Loaded loadedModel ->
-                Element.layout
-                    (Element.width Element.fill
-                        :: Element.height Element.fill
-                        :: Element.clip
-                        :: Element.inFront
-                            (if MailEditor.isOpen loadedModel.mailEditor then
-                                Element.none
-
-                             else
-                                toolbarView loadedModel
-                            )
-                        :: Element.htmlAttribute (Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg))
-                        :: mouseAttributes
-                    )
-                    (Element.html (canvasView audioData loadedModel))
+                canvasView audioData loadedModel
+        , Html.node "style" [] [ Html.text "body { overflow: hidden; }" ]
         ]
     }
-
-
-offlineWarningView : Element msg
-offlineWarningView =
-    Element.text "⚠ Unable to reach server. Your changes won't be saved."
-        |> Element.el
-            [ Element.Background.color UiColors.warning
-            , Element.padding 8
-            , Element.Border.rounded 4
-            , Element.centerX
-            , Element.moveUp 8
-            ]
-
-
-mouseAttributes : List (Element.Attribute FrontendMsg_)
-mouseAttributes =
-    [ Html.Events.Extra.Mouse.onMove
-        (\{ clientPos } ->
-            MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-        )
-    , Html.Events.Extra.Mouse.onUp
-        (\{ clientPos, button } ->
-            MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-        )
-    , Html.Events.Extra.Wheel.onWheel MouseWheel
-    ]
-        |> List.map Element.htmlAttribute
 
 
 currentUserId : FrontendLoaded -> Id UserId
@@ -1641,151 +1603,6 @@ canUndo model =
 canRedo : FrontendLoaded -> Bool
 canRedo model =
     LocalGrid.localModel model.localModel |> .redoHistory |> List.isEmpty |> not
-
-
-toolbarView : FrontendLoaded -> Element FrontendMsg_
-toolbarView model =
-    let
-        zoomView =
-            List.range 1 3
-                |> List.map
-                    (\zoom ->
-                        toolbarButton
-                            [ if model.zoomFactor == zoom then
-                                Element.Background.color UiColors.buttonActive
-
-                              else
-                                Element.Background.color UiColors.button
-                            ]
-                            (ZoomFactorPressed zoom)
-                            True
-                            (Element.el [ Element.moveDown 1 ] (Element.text (String.fromInt zoom ++ "x")))
-                    )
-
-        toolView =
-            List.map
-                (\( toolDefault, isTool, icon ) ->
-                    toolbarButton
-                        [ if isTool model.tool then
-                            Element.Background.color UiColors.buttonActive
-
-                          else
-                            Element.Background.color UiColors.button
-                        ]
-                        (SelectToolPressed toolDefault)
-                        True
-                        icon
-                )
-                tools
-
-        undoRedoView =
-            [ toolbarButton
-                []
-                UndoPressed
-                (canUndo model)
-                (Element.image
-                    [ Element.width (Element.px 22) ]
-                    { src = "undo.svg", description = "Undo button" }
-                )
-            , toolbarButton
-                []
-                RedoPressed
-                (canRedo model)
-                (Element.image
-                    [ Element.width (Element.px 22) ]
-                    { src = "redo.svg", description = "Undo button" }
-                )
-            ]
-
-        copyView =
-            [ toolbarButton
-                []
-                CopyPressed
-                True
-                (Element.image
-                    [ Element.width (Element.px 22) ]
-                    { src = "copy.svg", description = "Copy text button" }
-                )
-            , toolbarButton
-                []
-                CutPressed
-                True
-                (Element.image
-                    [ Element.width (Element.px 22) ]
-                    { src = "cut.svg", description = "Cut text button" }
-                )
-            ]
-
-        groups =
-            [ Element.el [ Element.paddingXY 4 0 ] (Element.text "🔎") :: zoomView
-            , toolView
-            , undoRedoView
-            , copyView
-            ]
-                |> List.map (Element.row [ Element.spacing 2 ])
-    in
-    Element.wrappedRow
-        [ Element.Background.color UiColors.background
-        , Element.spacingXY 10 8
-        , Element.padding 6
-        , Element.Border.color UiColors.border
-        , Element.Border.width 1
-        , Element.Border.rounded 3
-        , Element.Font.color UiColors.text
-        , Element.above
-            (if lostConnection model then
-                offlineWarningView
-
-             else
-                Element.none
-            )
-        ]
-        groups
-        |> Element.el
-            [ Element.paddingXY 8 0
-            , Element.alignBottom
-            , Element.centerX
-            , Element.moveUp 8
-            ]
-
-
-tools : List ( ToolType, ToolType -> Bool, Element msg )
-tools =
-    [ ( DragTool, (==) DragTool, Icons.dragTool )
-    ]
-
-
-toolbarButton : List (Element.Attribute msg) -> msg -> Bool -> Element msg -> Element msg
-toolbarButton attributes onPress isEnabled label =
-    Element.Input.button
-        (Element.Background.color UiColors.button
-            :: Element.width (Element.px 40)
-            :: Element.height (Element.px 40)
-            :: Element.mouseOver
-                (if isEnabled then
-                    [ Element.Background.color UiColors.buttonActive ]
-
-                 else
-                    []
-                )
-            :: Element.Border.width 1
-            :: Element.Border.rounded 2
-            :: Element.Border.color UiColors.border
-            :: attributes
-        )
-        { onPress = Just onPress
-        , label =
-            Element.el
-                [ if isEnabled then
-                    Element.alpha 1
-
-                  else
-                    Element.alpha 0.5
-                , Element.centerX
-                , Element.centerY
-                ]
-                label
-        }
 
 
 findPixelPerfectSize : FrontendLoaded -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
@@ -1876,6 +1693,15 @@ canvasView audioData model =
             (\{ clientPos, button } ->
                 MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
             )
+        , Html.Events.Extra.Mouse.onMove
+            (\{ clientPos } ->
+                MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+            )
+        , Html.Events.Extra.Mouse.onUp
+            (\{ clientPos, button } ->
+                MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+            )
+        , Html.Events.Extra.Wheel.onWheel MouseWheel
         ]
         (case ( model.texture, model.trainTexture ) of
             ( Just texture, Just trainTexture ) ->
