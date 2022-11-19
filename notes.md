@@ -1,0 +1,1 @@
+* Improve performance of removedTiles check by returning that data when a tile is added rather and diffing the old and new cells
