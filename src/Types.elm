@@ -30,7 +30,7 @@ import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
 import EverySet exposing (EverySet)
-import Grid exposing (Grid)
+import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
 import Id exposing (Id, MailId, TrainId, UserId)
@@ -230,7 +230,7 @@ type EmailEvent
 
 type alias LoadingData_ =
     { user : Id UserId
-    , grid : Grid
+    , grid : GridData
     , hiddenUsers : EverySet (Id UserId)
     , adminHiddenUsers : EverySet (Id UserId)
     , undoHistory : List (Dict RawCellCoord Int)

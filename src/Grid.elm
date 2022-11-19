@@ -1,6 +1,7 @@
 module Grid exposing
     ( Grid(..)
     , GridChange
+    , GridData
     , LocalGridChange
     , addChange
     , allCells
@@ -11,6 +12,7 @@ module Grid exposing
     , cellAndLocalPointToWorld
     , changeCount
     , closeNeighborCells
+    , dataToGrid
     , empty
     , foregroundMesh
     , from
@@ -35,21 +37,29 @@ import Basics.Extra
 import Bounds exposing (Bounds)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
-import GridCell exposing (Cell)
+import GridCell exposing (Cell, CellData)
 import Id exposing (Id, UserId)
 import List.Extra as List
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3 exposing (Vec3)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
-import Random
 import Shaders exposing (Vertex)
-import Simplex
 import Sprite
+import Terrain exposing (TerrainUnit)
 import Tile exposing (CollisionMask(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import Vector2d
 import WebGL
+
+
+type GridData
+    = GridData (Dict ( Int, Int ) CellData)
+
+
+dataToGrid : GridData -> Grid
+dataToGrid (GridData gridData) =
+    Dict.map (\coord cell -> GridCell.dataToCell (Coord.tuple coord) cell) gridData |> Grid
 
 
 type Grid
@@ -167,7 +177,7 @@ moveUndoPoint : Id UserId -> Dict RawCellCoord Int -> Grid -> Grid
 moveUndoPoint userId undoPoint (Grid grid) =
     Dict.foldl
         (\coord moveAmount newGrid ->
-            Dict.update coord (Maybe.map (GridCell.moveUndoPoint userId moveAmount)) newGrid
+            Dict.update coord (Maybe.map (GridCell.moveUndoPoint userId moveAmount (Coord.tuple coord))) newGrid
         )
         grid
         undoPoint
@@ -256,20 +266,20 @@ canAddChange change =
         ( tileW, tileH ) =
             tileData.size
     in
-    List.range 0 (1 + tileW // terrainSize)
+    List.range 0 (1 + tileW // Terrain.terrainSize)
         |> List.any
             (\x2 ->
-                List.range 0 (1 + tileH // terrainSize)
+                List.range 0 (1 + tileH // Terrain.terrainSize)
                     |> List.any
                         (\y2 ->
                             let
                                 x3 =
-                                    x2 + (x // terrainSize)
+                                    x2 + (x // Terrain.terrainSize)
 
                                 y3 =
-                                    y2 + (y // terrainSize)
+                                    y2 + (y // Terrain.terrainSize)
                             in
-                            if isGroundTerrain (Coord.xy x3 y3) cellPosition then
+                            if Terrain.isGroundTerrain (Coord.xy x3 y3) cellPosition then
                                 False
 
                             else
@@ -278,94 +288,22 @@ canAddChange change =
                                     terrainPosition =
                                         cellAndLocalCoordToWorld
                                             ( cellPosition
-                                            , Coord.tuple ( x3 * terrainSize, y3 * terrainSize )
+                                            , Coord.tuple ( x3 * Terrain.terrainSize, y3 * Terrain.terrainSize )
                                             )
                                 in
                                 Tile.hasCollision
                                     change.position
                                     tileData
                                     terrainPosition
-                                    { size = ( terrainSize, terrainSize ), collisionMask = DefaultCollision }
+                                    { size = ( Terrain.terrainSize, Terrain.terrainSize ), collisionMask = DefaultCollision }
                         )
             )
         |> not
 
 
-terrainCoord : Int -> Int -> Coord TerrainUnit
-terrainCoord x y =
-    Coord.xy x y
-
-
-terrainToLocalCoord : Coord TerrainUnit -> Coord CellLocalUnit
-terrainToLocalCoord coord =
-    Coord.multiplyTuple ( terrainSize, terrainSize ) coord |> Coord.toTuple |> Coord.tuple
-
-
-treeSize =
-    Tile.getData PineTree |> .size
-
-
-randomTreePosition : Coord CellLocalUnit -> Random.Generator (Coord CellLocalUnit)
-randomTreePosition offset =
-    Random.map2 (\x y -> Coord.xy x y |> Coord.addTuple offset)
-        (Random.int 0 (terrainSize - Tuple.first treeSize))
-        (Random.int 0 (terrainSize - Tuple.second treeSize))
-
-
-randomTrees : Float -> Coord CellLocalUnit -> Random.Generator (List (Coord CellLocalUnit))
-randomTrees chance offset =
-    let
-        chance2 : Float
-        chance2 =
-            20 * chance ^ 3 |> min 3
-    in
-    Random.weighted
-        ( 0.98, 0 )
-        [ ( 0.02, 1 ) ]
-        |> Random.andThen
-            (\extraTree ->
-                Random.list (round chance2 + extraTree) (randomTreePosition offset)
-            )
-
-
 addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
-        newCell (( Quantity cellX, Quantity cellY ) as newCellPosition) =
-            List.range 0 (terrainDivisionsPerCell - 1)
-                |> List.concatMap
-                    (\x ->
-                        List.range 0 (terrainDivisionsPerCell - 1)
-                            |> List.map (\y -> terrainCoord x y)
-                    )
-                |> List.foldl
-                    (\(( Quantity terrainX, Quantity terrainY ) as terrainCoord_) cell ->
-                        let
-                            position : Coord CellLocalUnit
-                            position =
-                                terrainToLocalCoord terrainCoord_
-
-                            seed =
-                                Random.initialSeed (cellX * 269 + cellY * 229 + terrainX * 67 + terrainY)
-
-                            treeDensity : Float
-                            treeDensity =
-                                getTerrainValue terrainCoord_ newCellPosition
-                        in
-                        if treeDensity > 0 then
-                            Random.step (randomTrees treeDensity position) seed
-                                |> Tuple.first
-                                |> List.foldl
-                                    (\treePosition cell2 ->
-                                        GridCell.addValue (Id.fromInt -1) treePosition PineTree cell2
-                                    )
-                                    cell
-
-                        else
-                            cell
-                    )
-                    GridCell.empty
-
         ( cellPosition, localPosition ) =
             worldToCellAndLocalCoord change.position
 
@@ -379,7 +317,7 @@ addChange change grid =
                                 cell
 
                             Nothing ->
-                                newCell newCellPos
+                                GridCell.empty newCellPos
                         )
                             |> GridCell.addValue change.userId newLocalPos change.change
                             |> Tuple.pair newCellPos
@@ -390,7 +328,7 @@ addChange change grid =
             cell
 
         Nothing ->
-            newCell cellPosition
+            GridCell.empty cellPosition
     )
         |> GridCell.addValue change.userId localPosition change.change
         |> (\cell_ ->
@@ -418,9 +356,11 @@ allCellsDict (Grid grid) =
     grid
 
 
-region : Bounds CellUnit -> Grid -> Grid
+region : Bounds CellUnit -> Grid -> GridData
 region bounds (Grid grid) =
-    Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds) grid |> Grid
+    Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds) grid
+        |> Dict.map (\_ cell -> GridCell.cellToData cell)
+        |> GridData
 
 
 getCell : Coord CellUnit -> Grid -> Maybe Cell
@@ -501,61 +441,6 @@ backgroundMesh cellPosition =
         |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
-terrainDivisionsPerCell : number
-terrainDivisionsPerCell =
-    4
-
-
-terrainSize : Int
-terrainSize =
-    Units.cellSize // terrainDivisionsPerCell
-
-
-createTerrainLookup : Coord CellUnit -> Array2D Bool
-createTerrainLookup cellPosition =
-    List.range -1 terrainDivisionsPerCell
-        |> List.map
-            (\x2 ->
-                List.range -1 terrainDivisionsPerCell
-                    |> List.map (\y2 -> getTerrainValue (Coord.xy x2 y2) cellPosition > 0)
-            )
-        |> Array2D.fromList
-
-
-type TerrainUnit
-    = TerrainUnit Never
-
-
-getTerrainValue : Coord TerrainUnit -> Coord CellUnit -> Float
-getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
-    Simplex.fractal2d
-        fractalConfig
-        permutationTable
-        (toFloat x / terrainDivisionsPerCell + toFloat cellX)
-        (toFloat y / terrainDivisionsPerCell + toFloat cellY)
-
-
-isGroundTerrain : Coord TerrainUnit -> Coord CellUnit -> Bool
-isGroundTerrain ( Quantity x, Quantity y ) cellPosition =
-    let
-        getValue x2 y2 =
-            getTerrainValue (Coord.xy (x + x2) (y + y2)) cellPosition > 0
-    in
-    case
-        ( {- Top -} getValue 0 -1
-        , ( getValue -1 0, getValue 0 0, getValue 1 0 ) {- Left, Center, Right -}
-        , {- Bottom -} getValue 0 1
-        )
-    of
-        --( True, ( True, _, True ), True ) ->
-        --    True
-        ( _, ( _, True, _ ), _ ) ->
-            True
-
-        ( _, ( _, False, _ ), _ ) ->
-            False
-
-
 getTerrainLookupValue : Coord TerrainUnit -> Array2D Bool -> Bool
 getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
     Array2D.get (x + 1) (y + 1) lookup |> Maybe.withDefault True
@@ -566,15 +451,15 @@ grassMesh cellPosition =
     let
         lookup : Array2D Bool
         lookup =
-            createTerrainLookup cellPosition
+            Terrain.createTerrainLookup cellPosition
 
         ( Quantity x, Quantity y ) =
             cellAndLocalCoordToWorld ( cellPosition, Coord.origin )
     in
-    List.range 0 (terrainDivisionsPerCell - 1)
+    List.range 0 (Terrain.terrainDivisionsPerCell - 1)
         |> List.concatMap
             (\x2 ->
-                List.range 0 (terrainDivisionsPerCell - 1)
+                List.range 0 (Terrain.terrainDivisionsPerCell - 1)
                     |> List.concatMap
                         (\y2 ->
                             let
@@ -585,8 +470,8 @@ grassMesh cellPosition =
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.spriteMeshWithZ
-                                        ( (x2 * terrainDivisionsPerCell + x) * Units.tileSize
-                                        , (y2 * terrainDivisionsPerCell + y) * Units.tileSize
+                                        ( (x2 * Terrain.terrainDivisionsPerCell + x) * Units.tileSize
+                                        , (y2 * Terrain.terrainDivisionsPerCell + y) * Units.tileSize
                                         )
                                         0.9
                                         (Coord.tuple ( 72, 72 ))
@@ -689,20 +574,6 @@ grassMesh cellPosition =
             )
 
 
-fractalConfig : Simplex.FractalConfig
-fractalConfig =
-    { steps = 2
-    , stepSize = 14
-    , persistence = 2
-    , scale = 5
-    }
-
-
-permutationTable : Simplex.PermutationTable
-permutationTable =
-    Simplex.permutationTableFromInt 123
-
-
 tileMesh : ( Quantity Int WorldUnit, Quantity Int WorldUnit ) -> Tile -> WebGL.Mesh Vertex
 tileMesh position tile =
     let
@@ -783,7 +654,7 @@ tileZ isTopLayer y height =
 removeUser : Id UserId -> Grid -> Grid
 removeUser userId grid =
     allCellsDict grid
-        |> Dict.map (\_ cell -> GridCell.removeUser userId cell)
+        |> Dict.map (\coord cell -> GridCell.removeUser userId (Coord.tuple coord) cell)
         |> from
 
 

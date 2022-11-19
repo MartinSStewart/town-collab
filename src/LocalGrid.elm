@@ -5,7 +5,7 @@ import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerCha
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
-import Grid exposing (Grid)
+import Grid exposing (Grid, GridData)
 import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
@@ -39,7 +39,7 @@ localModel localModel_ =
 init :
     { a
         | user : Id UserId
-        , grid : Grid
+        , grid : GridData
         , hiddenUsers : EverySet (Id UserId)
         , adminHiddenUsers : EverySet (Id UserId)
         , undoHistory : List (Dict RawCellCoord Int)
@@ -50,7 +50,7 @@ init :
     -> LocalModel Change LocalGrid
 init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds } =
     LocalGrid
-        { grid = grid
+        { grid = Grid.dataToGrid grid
         , user = user
         , undoHistory = undoHistory
         , redoHistory = redoHistory
