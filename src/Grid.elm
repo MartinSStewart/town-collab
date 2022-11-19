@@ -42,6 +42,7 @@ import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3 exposing (Vec3)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
+import Random
 import Shaders exposing (Vertex)
 import Simplex
 import Sprite
@@ -267,11 +268,8 @@ canAddChange change =
 
                                 y3 =
                                     y2 + (y // terrainSize)
-
-                                _ =
-                                    Debug.log "b" ( ( x3, y3 ), ( x2, y2 ), ( x, y ) )
                             in
-                            if isGroundTerrain x3 y3 cellPosition then
+                            if isGroundTerrain (Coord.xy x3 y3) cellPosition then
                                 False
 
                             else
@@ -282,9 +280,6 @@ canAddChange change =
                                             ( cellPosition
                                             , Coord.tuple ( x3 * terrainSize, y3 * terrainSize )
                                             )
-
-                                    _ =
-                                        Debug.log "a" ( change.position, terrainPosition )
                                 in
                                 Tile.hasCollision
                                     change.position
@@ -296,27 +291,75 @@ canAddChange change =
         |> not
 
 
+terrainCoord : Int -> Int -> Coord TerrainUnit
+terrainCoord x y =
+    Coord.xy x y
+
+
+terrainToLocalCoord : Coord TerrainUnit -> Coord CellLocalUnit
+terrainToLocalCoord coord =
+    Coord.multiplyTuple ( terrainSize, terrainSize ) coord |> Coord.toTuple |> Coord.tuple
+
+
+treeSize =
+    Tile.getData PineTree |> .size
+
+
+randomTreePosition : Coord CellLocalUnit -> Random.Generator (Coord CellLocalUnit)
+randomTreePosition offset =
+    Random.map2 (\x y -> Coord.xy x y |> Coord.addTuple offset)
+        (Random.int 0 (terrainSize - Tuple.first treeSize))
+        (Random.int 0 (terrainSize - Tuple.second treeSize))
+
+
+randomTrees : Float -> Coord CellLocalUnit -> Random.Generator (List (Coord CellLocalUnit))
+randomTrees chance offset =
+    let
+        chance2 : Float
+        chance2 =
+            20 * chance ^ 3 |> min 3
+    in
+    Random.weighted
+        ( 0.98, 0 )
+        [ ( 0.02, 1 ) ]
+        |> Random.andThen
+            (\extraTree ->
+                Random.list (round chance2 + extraTree) (randomTreePosition offset)
+            )
+
+
 addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
-        newCell () =
+        newCell (( Quantity cellX, Quantity cellY ) as newCellPosition) =
             List.range 0 (terrainDivisionsPerCell - 1)
                 |> List.concatMap
                     (\x ->
                         List.range 0 (terrainDivisionsPerCell - 1)
-                            |> List.map (\y -> ( x, y ))
+                            |> List.map (\y -> terrainCoord x y)
                     )
                 |> List.foldl
-                    (\( x, y ) cell ->
+                    (\(( Quantity terrainX, Quantity terrainY ) as terrainCoord_) cell ->
                         let
+                            position : Coord CellLocalUnit
                             position =
-                                Coord.tuple ( x * terrainSize, y * terrainSize )
+                                terrainToLocalCoord terrainCoord_
 
+                            seed =
+                                Random.initialSeed (cellX * 269 + cellY * 229 + terrainX * 67 + terrainY)
+
+                            treeDensity : Float
                             treeDensity =
-                                getTerrainValue x y cellPosition
+                                getTerrainValue terrainCoord_ newCellPosition
                         in
                         if treeDensity > 0 then
-                            GridCell.addValue (Id.fromInt -1) position PineTree cell
+                            Random.step (randomTrees treeDensity position) seed
+                                |> Tuple.first
+                                |> List.foldl
+                                    (\treePosition cell2 ->
+                                        GridCell.addValue (Id.fromInt -1) treePosition PineTree cell2
+                                    )
+                                    cell
 
                         else
                             cell
@@ -336,7 +379,7 @@ addChange change grid =
                                 cell
 
                             Nothing ->
-                                newCell ()
+                                newCell newCellPos
                         )
                             |> GridCell.addValue change.userId newLocalPos change.change
                             |> Tuple.pair newCellPos
@@ -347,7 +390,7 @@ addChange change grid =
             cell
 
         Nothing ->
-            newCell ()
+            newCell cellPosition
     )
         |> GridCell.addValue change.userId localPosition change.change
         |> (\cell_ ->
@@ -474,7 +517,7 @@ createTerrainLookup cellPosition =
         |> List.map
             (\x2 ->
                 List.range -1 terrainDivisionsPerCell
-                    |> List.map (\y2 -> getTerrainValue x2 y2 cellPosition > 0)
+                    |> List.map (\y2 -> getTerrainValue (Coord.xy x2 y2) cellPosition > 0)
             )
         |> Array2D.fromList
 
@@ -483,8 +526,8 @@ type TerrainUnit
     = TerrainUnit Never
 
 
-getTerrainValue : Int -> Int -> Coord CellUnit -> Float
-getTerrainValue x y ( Quantity cellX, Quantity cellY ) =
+getTerrainValue : Coord TerrainUnit -> Coord CellUnit -> Float
+getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
     Simplex.fractal2d
         fractalConfig
         permutationTable
@@ -492,11 +535,11 @@ getTerrainValue x y ( Quantity cellX, Quantity cellY ) =
         (toFloat y / terrainDivisionsPerCell + toFloat cellY)
 
 
-isGroundTerrain : Int -> Int -> Coord CellUnit -> Bool
-isGroundTerrain x y cellPosition =
+isGroundTerrain : Coord TerrainUnit -> Coord CellUnit -> Bool
+isGroundTerrain ( Quantity x, Quantity y ) cellPosition =
     let
         getValue x2 y2 =
-            getTerrainValue (x + x2) (y + y2) cellPosition > 0
+            getTerrainValue (Coord.xy (x + x2) (y + y2)) cellPosition > 0
     in
     case
         ( {- Top -} getValue 0 -1
@@ -504,9 +547,8 @@ isGroundTerrain x y cellPosition =
         , {- Bottom -} getValue 0 1
         )
     of
-        ( True, ( True, _, True ), True ) ->
-            True
-
+        --( True, ( True, _, True ), True ) ->
+        --    True
         ( _, ( _, True, _ ), _ ) ->
             True
 
@@ -514,9 +556,9 @@ isGroundTerrain x y cellPosition =
             False
 
 
-getTerrainLookupValue : Int -> Int -> Array2D Bool -> Bool
-getTerrainLookupValue x3 y3 lookup =
-    Array2D.get (x3 + 1) (y3 + 1) lookup |> Maybe.withDefault True
+getTerrainLookupValue : Coord TerrainUnit -> Array2D Bool -> Bool
+getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
+    Array2D.get (x + 1) (y + 1) lookup |> Maybe.withDefault True
 
 
 grassMesh : Coord CellUnit -> List Vertex
@@ -536,8 +578,9 @@ grassMesh cellPosition =
                     |> List.concatMap
                         (\y2 ->
                             let
+                                getValue : Int -> Int -> Bool
                                 getValue x3 y3 =
-                                    getTerrainLookupValue (x2 + x3) (y2 + y3) lookup
+                                    getTerrainLookupValue (Coord.xy (x2 + x3) (y2 + y3)) lookup
 
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
@@ -638,7 +681,8 @@ grassMesh cellPosition =
                                                 draw 504 576
 
                                             ( True, ( True, True ), True ) ->
-                                                draw 198 216
+                                                --draw 198 216
+                                                draw 432 288
                             in
                             corners ++ tile
                         )

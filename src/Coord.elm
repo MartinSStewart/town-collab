@@ -21,6 +21,7 @@ module Coord exposing
     , toggleSet
     , translateMat4
     , tuple
+    , xy
     )
 
 import EverySet exposing (EverySet)
@@ -139,6 +140,11 @@ toTuple ( Quantity x, Quantity y ) =
 
 tuple : ( Int, Int ) -> Coord units
 tuple ( x, y ) =
+    ( Quantity x, Quantity y )
+
+
+xy : Int -> Int -> Coord units
+xy x y =
     ( Quantity x, Quantity y )
 
 
