@@ -6,6 +6,7 @@ module Grid exposing
     , allCells
     , allCellsDict
     , backgroundMesh
+    , canAddChange
     , cellAndLocalCoordToAscii
     , cellAndLocalPointToWorld
     , changeCount
@@ -242,35 +243,20 @@ closeNeighborCells cellPosition localPosition =
         ]
 
 
+canAddChange : GridChange -> Bool
+canAddChange change =
+    let
+        ( cellPosition, ( Quantity x, Quantity y ) ) =
+            worldToCellAndLocalCoord change.position
 
---canAddChange : GridChange -> Grid -> Bool
---canAddChange change grid =
---    let
---        ( cellPosition, localPosition ) =
---            worldToCellAndLocalCoord change.position
---
---        neighborCells_ : List ( Coord CellUnit, Cell )
---        neighborCells_ =
---            closeNeighborCells cellPosition localPosition
---                |> List.map
---                    (\( newCellPos, newLocalPos ) ->
---                        getCell newCellPos grid
---                            |> Maybe.withDefault GridCell.empty
---                            |> GridCell.addValue change.userId newLocalPos change.change
---                            |> Tuple.pair newCellPos
---                    )
---    in
---    getCell cellPosition grid
---        |> Maybe.withDefault GridCell.empty
---        |> GridCell.addValue change.userId localPosition change.change
---        |> (\cell_ ->
---                List.foldl
---                    (\( neighborPos, neighbor ) grid2 ->
---                        setCell neighborPos neighbor grid2
---                    )
---                    (setCell cellPosition cell_ grid)
---                    neighborCells_
---           )
+        tileData : TileData
+        tileData =
+            Tile.getData change.change
+
+        --a =
+        --    List.range 0 ()
+    in
+    isGroundTerrain (x // terrainDivisionsPerCell) (y // terrainDivisionsPerCell) cellPosition
 
 
 addChange : GridChange -> Grid -> Grid
@@ -405,22 +391,46 @@ terrainDivisionsPerCell =
 
 
 createTerrainLookup : Coord CellUnit -> Array2D Bool
-createTerrainLookup ( Quantity cellX, Quantity cellY ) =
+createTerrainLookup cellPosition =
     List.range -1 terrainDivisionsPerCell
         |> List.map
             (\x2 ->
                 List.range -1 terrainDivisionsPerCell
-                    |> List.map
-                        (\y2 ->
-                            Simplex.fractal2d
-                                fractalConfig
-                                permutationTable
-                                (toFloat x2 / terrainDivisionsPerCell + toFloat cellX)
-                                (toFloat y2 / terrainDivisionsPerCell + toFloat cellY)
-                                > 0
-                        )
+                    |> List.map (\y2 -> getTerrainValue x2 y2 cellPosition)
             )
         |> Array2D.fromList
+
+
+getTerrainValue : Int -> Int -> Coord CellUnit -> Bool
+getTerrainValue x y ( Quantity cellX, Quantity cellY ) =
+    Simplex.fractal2d
+        fractalConfig
+        permutationTable
+        (toFloat x / terrainDivisionsPerCell + toFloat cellX)
+        (toFloat y / terrainDivisionsPerCell + toFloat cellY)
+        > 0
+
+
+isGroundTerrain : Int -> Int -> Coord CellUnit -> Bool
+isGroundTerrain x y cellPosition =
+    let
+        getValue x2 y2 =
+            getTerrainValue (x + x2) (y + y2) cellPosition
+    in
+    case
+        ( {- Top -} getValue 0 -1
+        , ( getValue -1 0, getValue 0 0, getValue 1 0 ) {- Left, Center, Right -}
+        , {- Bottom -} getValue 0 1
+        )
+    of
+        ( True, ( True, _, True ), True ) ->
+            True
+
+        ( _, ( _, True, _ ), _ ) ->
+            True
+
+        ( _, ( _, False, _ ), _ ) ->
+            False
 
 
 getTerrainLookupValue : Int -> Int -> Array2D Bool -> Bool

@@ -1890,11 +1890,17 @@ canvasView audioData model =
                     ++ (case model.currentTile of
                             Just currentTile ->
                                 let
-                                    ( mouseX, mouseY ) =
-                                        mouseWorldPosition model |> Coord.floorPoint |> Coord.toTuple
+                                    mousePosition : Coord WorldUnit
+                                    mousePosition =
+                                        mouseWorldPosition model
+                                            |> Coord.floorPoint
+                                            |> Coord.minusTuple (tileSize |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
 
-                                    ( w, h ) =
-                                        Tile.getData currentTile.tile |> .size
+                                    ( mouseX, mouseY ) =
+                                        Coord.toTuple mousePosition
+
+                                    tileSize =
+                                        Tile.getData currentTile.tile |> .size |> Coord.tuple
 
                                     offsetX =
                                         case model.lastTilePlaced of
@@ -1929,8 +1935,8 @@ canvasView audioData model =
                                     { view =
                                         viewMatrix
                                             |> Mat4.translate3
-                                                (toFloat (mouseX - (w // 2)) * Units.tileSize + offsetX)
-                                                (toFloat (mouseY - (h // 2)) * Units.tileSize)
+                                                (toFloat mouseX * Units.tileSize + offsetX)
+                                                (toFloat mouseY * Units.tileSize)
                                                 0
                                     , texture = texture
                                     , textureSize = textureSize
@@ -1938,8 +1944,17 @@ canvasView audioData model =
                                         if currentTile.tile == EmptyTile then
                                             Vec4.vec4 1 1 1 1
 
-                                        else
+                                        else if
+                                            Grid.canAddChange
+                                                { position = mousePosition
+                                                , change = currentTile.tile
+                                                , userId = currentUserId model
+                                                }
+                                        then
                                             Vec4.vec4 1 1 1 0.5
+
+                                        else
+                                            Vec4.vec4 1 0 0 0.5
                                     }
                                 ]
 
