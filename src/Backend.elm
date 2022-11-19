@@ -19,6 +19,7 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
+import GridCell
 import Id exposing (Id, MailId, TrainId, UserId)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
@@ -355,6 +356,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
             of
                 Just oldBounds ->
                     let
+                        newCells : List ( Coord CellUnit, GridCell.CellData )
                         newCells =
                             Bounds.coordRangeFold
                                 (\coord newCells_ ->
@@ -364,7 +366,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                     else
                                         case Grid.getCell coord model.grid of
                                             Just cell ->
-                                                ( coord, cell ) :: newCells_
+                                                ( coord, GridCell.cellToData cell ) :: newCells_
 
                                             Nothing ->
                                                 newCells_

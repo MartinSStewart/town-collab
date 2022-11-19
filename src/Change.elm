@@ -26,7 +26,7 @@ type LocalChange
 
 
 type ClientChange
-    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.Cell ))
+    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData ))
 
 
 type ServerChange

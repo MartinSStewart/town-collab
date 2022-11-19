@@ -29,7 +29,7 @@ randomTreePosition : Coord CellLocalUnit -> Random.Generator (Coord CellLocalUni
 randomTreePosition offset =
     Random.map2 (\x y -> Coord.xy x y |> Coord.addTuple offset)
         (Random.int 0 (terrainSize - Tuple.first treeSize))
-        (Random.int 0 (terrainSize - Tuple.second treeSize))
+        (Random.int -1 (terrainSize - Tuple.second treeSize))
 
 
 randomTrees : Float -> Coord CellLocalUnit -> Random.Generator (List (Coord CellLocalUnit))

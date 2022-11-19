@@ -32,7 +32,7 @@ type CellData
 
 dataToCell : Coord CellUnit -> CellData -> Cell
 dataToCell cellPosition (CellData cellData) =
-    Cell { history = cellData.history, undoPoint = cellData.undoPoint, cache = addTrees cellPosition }
+    Cell { history = cellData.history, undoPoint = cellData.undoPoint, cache = [] } |> updateCache cellPosition
 
 
 cellToData : Cell -> CellData

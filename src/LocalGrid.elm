@@ -6,6 +6,7 @@ import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid, GridData)
+import GridCell
 import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
@@ -165,11 +166,16 @@ update_ msg model =
             { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }
 
         ClientChange (ViewBoundsChange bounds newCells) ->
+            let
+                newCells2 : List ( ( Int, Int ), GridCell.Cell )
+                newCells2 =
+                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
+            in
             { model
                 | grid =
                     Grid.allCellsDict model.grid
                         |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
-                        |> Dict.union (List.map (Tuple.mapFirst Coord.toTuple) newCells |> Dict.fromList)
+                        |> Dict.union (Dict.fromList newCells2)
                         |> Grid.from
                 , viewBounds = bounds
             }
