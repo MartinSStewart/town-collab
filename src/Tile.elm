@@ -86,6 +86,9 @@ type Tile
     | RailTopToRight_SplitLeft
     | RailTopToLeft_SplitDown
     | PostOffice
+    | MowedGrass1
+    | MowedGrass4
+    | PineTree
 
 
 type Direction
@@ -524,6 +527,9 @@ allTiles =
     , RailTopToRight_SplitLeft
     , RailTopToLeft_SplitDown
     , PostOffice
+    , MowedGrass1
+    , MowedGrass4
+    , PineTree
     ]
 
 
@@ -533,9 +539,9 @@ type CollisionMask
 
 
 hasCollision :
-    Coord a
+    Coord c
     -> { a | size : ( Int, Int ), collisionMask : CollisionMask }
-    -> Coord a
+    -> Coord c
     -> { b | size : ( Int, Int ), collisionMask : CollisionMask }
     -> Bool
 hasCollision positionA tileA positionB tileB =
@@ -1392,6 +1398,36 @@ getData tile =
                 SingleRailPath
                     (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
             , nextClockwise = PostOffice
+            }
+
+        MowedGrass1 ->
+            { texturePosition = ( 11, 20 )
+            , texturePositionTopLayer = Nothing
+            , size = ( 1, 1 )
+            , collisionMask = DefaultCollision
+            , char = 'b'
+            , railPath = NoRailPath
+            , nextClockwise = MowedGrass4
+            }
+
+        MowedGrass4 ->
+            { texturePosition = ( 11, 20 )
+            , texturePositionTopLayer = Nothing
+            , size = ( 4, 4 )
+            , collisionMask = DefaultCollision
+            , char = 'B'
+            , railPath = NoRailPath
+            , nextClockwise = MowedGrass4
+            }
+
+        PineTree ->
+            { texturePosition = ( 11, 24 )
+            , texturePositionTopLayer = Nothing
+            , size = ( 1, 2 )
+            , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
+            , char = '1'
+            , railPath = NoRailPath
+            , nextClockwise = PineTree
             }
 
 

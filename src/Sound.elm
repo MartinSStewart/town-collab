@@ -15,6 +15,7 @@ type Sound
     | EraseSound
     | PageTurnSound
     | WhooshSound
+    | ErrorSound
 
 
 allSounds =
@@ -25,6 +26,7 @@ allSounds =
     , EraseSound
     , PageTurnSound
     , WhooshSound
+    , ErrorSound
     ]
 
 
@@ -79,6 +81,9 @@ load onLoad =
 
                 WhooshSound ->
                     "/whoosh.mp3"
+
+                ErrorSound ->
+                    "/error.mp3"
             )
                 |> Audio.loadAudio (onLoad sound)
         )

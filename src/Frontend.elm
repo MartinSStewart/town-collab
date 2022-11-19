@@ -25,7 +25,6 @@ import Element.Border
 import Element.Font
 import Element.Input
 import Env
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Html exposing (Html)
@@ -210,6 +209,12 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , case model.lastPlacementError of
+        Just time ->
+            playSound ErrorSound time |> Audio.scaleVolume 0.4
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
 
@@ -311,6 +316,7 @@ loadedInit time loading loadingData =
             , currentTile = Nothing
             , lastTileRotation = []
             , userIdMesh = createUserIdMesh loadingData.user
+            , lastPlacementError = Nothing
             }
     in
     ( updateMeshes model model
@@ -1075,9 +1081,54 @@ placeTile isDragPlacement tile model =
 
                 Nothing ->
                     False
+
+        change =
+            { position = cursorPosition_
+            , change = tile
+            }
     in
     if isDragPlacement && hasCollision then
         model
+
+    else if not (Grid.canAddChange change) then
+        if tile == EmptyTile then
+            { model
+                | lastTilePlaced =
+                    Just
+                        { time =
+                            case model.lastTilePlaced of
+                                Just lastTilePlaced ->
+                                    if
+                                        Duration.from lastTilePlaced.time model.time
+                                            |> Quantity.lessThan (Duration.milliseconds 100)
+                                    then
+                                        lastTilePlaced.time
+
+                                    else
+                                        model.time
+
+                                Nothing ->
+                                    model.time
+                        , overwroteTiles = False
+                        , tile = tile
+                        , position = cursorPosition_
+                        }
+            }
+
+        else
+            { model
+                | lastPlacementError =
+                    case model.lastPlacementError of
+                        Just time ->
+                            if Duration.from time model.time |> Quantity.lessThan (Duration.milliseconds 150) then
+                                model.lastPlacementError
+
+                            else
+                                Just model.time
+
+                        Nothing ->
+                            Just model.time
+            }
 
     else
         let
@@ -1099,19 +1150,15 @@ placeTile isDragPlacement tile model =
             oldGrid =
                 LocalGrid.localModel model2.localModel |> .grid
 
+            model3 : FrontendLoaded
             model3 =
-                updateLocalModel
-                    (Change.LocalGridChange
-                        { position = cursorPosition_
-                        , change = tile
-                        }
-                    )
-                    model2
+                updateLocalModel (Change.LocalGridChange change) model2
 
             newGrid : Grid
             newGrid =
                 LocalGrid.localModel model3.localModel |> .grid
 
+            removedTiles : List { time : Time.Posix, tile : Tile, position : Coord WorldUnit }
             removedTiles =
                 List.concatMap
                     (\( neighborCellPos, _ ) ->
@@ -1144,7 +1191,20 @@ placeTile isDragPlacement tile model =
         { model3
             | lastTilePlaced =
                 Just
-                    { time = model.time
+                    { time =
+                        case model.lastTilePlaced of
+                            Just lastTilePlaced ->
+                                if
+                                    Duration.from lastTilePlaced.time model.time
+                                        |> Quantity.lessThan (Duration.milliseconds 100)
+                                then
+                                    lastTilePlaced.time
+
+                                else
+                                    model.time
+
+                            Nothing ->
+                                model.time
                     , overwroteTiles = List.isEmpty removedTiles |> not
                     , tile = tile
                     , position = cursorPosition_
@@ -1902,6 +1962,31 @@ canvasView audioData model =
                                     tileSize =
                                         Tile.getData currentTile.tile |> .size |> Coord.tuple
 
+                                    lastPlacementOffset : () -> Float
+                                    lastPlacementOffset () =
+                                        case model.lastPlacementError of
+                                            Just time ->
+                                                let
+                                                    timeElapsed =
+                                                        Duration.from time model.time
+                                                in
+                                                if
+                                                    timeElapsed
+                                                        |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
+                                                then
+                                                    timeElapsed
+                                                        |> Duration.inSeconds
+                                                        |> (*) 40
+                                                        |> cos
+                                                        |> (*) 2
+
+                                                else
+                                                    0
+
+                                            Nothing ->
+                                                0
+
+                                    offsetX : Float
                                     offsetX =
                                         case model.lastTilePlaced of
                                             Just { tile, time } ->
@@ -1922,10 +2007,10 @@ canvasView audioData model =
                                                         |> (*) 2
 
                                                 else
-                                                    0
+                                                    lastPlacementOffset ()
 
                                             Nothing ->
-                                                0
+                                                lastPlacementOffset ()
                                 in
                                 [ WebGL.entityWith
                                     [ Shaders.blend ]

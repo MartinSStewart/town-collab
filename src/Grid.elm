@@ -242,7 +242,7 @@ closeNeighborCells cellPosition localPosition =
         ]
 
 
-canAddChange : GridChange -> Bool
+canAddChange : { a | position : Coord WorldUnit, change : Tile } -> Bool
 canAddChange change =
     let
         ( cellPosition, ( Quantity x, Quantity y ) ) =
@@ -251,14 +251,27 @@ canAddChange change =
         tileData : TileData
         tileData =
             Tile.getData change.change
+
+        ( tileW, tileH ) =
+            tileData.size
     in
-    List.range 0 (maxTileSize // terrainSize)
+    List.range 0 (1 + tileW // terrainSize)
         |> List.any
             (\x2 ->
-                List.range 0 (maxTileSize // terrainSize)
+                List.range 0 (1 + tileH // terrainSize)
                     |> List.any
                         (\y2 ->
-                            if isGroundTerrain x2 y2 cellPosition then
+                            let
+                                x3 =
+                                    x2 + (x // terrainSize)
+
+                                y3 =
+                                    y2 + (y // terrainSize)
+
+                                _ =
+                                    Debug.log "b" ( ( x3, y3 ), ( x2, y2 ), ( x, y ) )
+                            in
+                            if isGroundTerrain x3 y3 cellPosition then
                                 False
 
                             else
@@ -267,8 +280,11 @@ canAddChange change =
                                     terrainPosition =
                                         cellAndLocalCoordToWorld
                                             ( cellPosition
-                                            , Coord.tuple ( x2 * terrainSize, y2 * terrainSize )
+                                            , Coord.tuple ( x3 * terrainSize, y3 * terrainSize )
                                             )
+
+                                    _ =
+                                        Debug.log "a" ( change.position, terrainPosition )
                                 in
                                 Tile.hasCollision
                                     change.position
@@ -283,6 +299,30 @@ canAddChange change =
 addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
+        newCell () =
+            List.range 0 (terrainDivisionsPerCell - 1)
+                |> List.concatMap
+                    (\x ->
+                        List.range 0 (terrainDivisionsPerCell - 1)
+                            |> List.map (\y -> ( x, y ))
+                    )
+                |> List.foldl
+                    (\( x, y ) cell ->
+                        let
+                            position =
+                                Coord.tuple ( x * terrainSize, y * terrainSize )
+
+                            treeDensity =
+                                getTerrainValue x y cellPosition
+                        in
+                        if treeDensity > 0 then
+                            GridCell.addValue (Id.fromInt -1) position PineTree cell
+
+                        else
+                            cell
+                    )
+                    GridCell.empty
+
         ( cellPosition, localPosition ) =
             worldToCellAndLocalCoord change.position
 
@@ -291,14 +331,24 @@ addChange change grid =
             closeNeighborCells cellPosition localPosition
                 |> List.map
                     (\( newCellPos, newLocalPos ) ->
-                        getCell newCellPos grid
-                            |> Maybe.withDefault GridCell.empty
+                        (case getCell newCellPos grid of
+                            Just cell ->
+                                cell
+
+                            Nothing ->
+                                newCell ()
+                        )
                             |> GridCell.addValue change.userId newLocalPos change.change
                             |> Tuple.pair newCellPos
                     )
     in
-    getCell cellPosition grid
-        |> Maybe.withDefault GridCell.empty
+    (case getCell cellPosition grid of
+        Just cell ->
+            cell
+
+        Nothing ->
+            newCell ()
+    )
         |> GridCell.addValue change.userId localPosition change.change
         |> (\cell_ ->
                 List.foldl
@@ -424,26 +474,29 @@ createTerrainLookup cellPosition =
         |> List.map
             (\x2 ->
                 List.range -1 terrainDivisionsPerCell
-                    |> List.map (\y2 -> getTerrainValue x2 y2 cellPosition)
+                    |> List.map (\y2 -> getTerrainValue x2 y2 cellPosition > 0)
             )
         |> Array2D.fromList
 
 
-getTerrainValue : Int -> Int -> Coord CellUnit -> Bool
+type TerrainUnit
+    = TerrainUnit Never
+
+
+getTerrainValue : Int -> Int -> Coord CellUnit -> Float
 getTerrainValue x y ( Quantity cellX, Quantity cellY ) =
     Simplex.fractal2d
         fractalConfig
         permutationTable
         (toFloat x / terrainDivisionsPerCell + toFloat cellX)
         (toFloat y / terrainDivisionsPerCell + toFloat cellY)
-        > 0
 
 
 isGroundTerrain : Int -> Int -> Coord CellUnit -> Bool
 isGroundTerrain x y cellPosition =
     let
         getValue x2 y2 =
-            getTerrainValue (x + x2) (y + y2) cellPosition
+            getTerrainValue (x + x2) (y + y2) cellPosition > 0
     in
     case
         ( {- Top -} getValue 0 -1

@@ -15,6 +15,7 @@ import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty(..))
+import Random
 import Tile exposing (Tile(..))
 import Units exposing (CellLocalUnit)
 
