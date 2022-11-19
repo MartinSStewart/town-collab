@@ -464,7 +464,7 @@ checkPath trainId time tile mail neighborCellPos position speed direction railPa
     in
     if (Point2d.distanceFrom worldPoint0 position |> Quantity.lessThan (Units.tileUnit 0.1)) && validDirection0 then
         { position =
-            Grid.cellAndLocalCoordToAscii ( neighborCellPos, tile.position )
+            Grid.cellAndLocalCoordToWorld ( neighborCellPos, tile.position )
         , t = 0
         , speed = Quantity.abs speed
         , path = railPath
@@ -474,7 +474,7 @@ checkPath trainId time tile mail neighborCellPos position speed direction railPa
 
     else if (Point2d.distanceFrom worldPoint1 position |> Quantity.lessThan (Units.tileUnit 0.1)) && validDirection1 then
         { position =
-            Grid.cellAndLocalCoordToAscii ( neighborCellPos, tile.position )
+            Grid.cellAndLocalCoordToWorld ( neighborCellPos, tile.position )
         , t = 1
         , speed = Quantity.abs speed |> Quantity.negate
         , path = railPath

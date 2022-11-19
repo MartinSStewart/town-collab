@@ -1,5 +1,6 @@
 module Tile exposing
-    ( Direction(..)
+    ( CollisionMask(..)
+    , Direction(..)
     , RailData
     , RailPath(..)
     , RailPathType(..)
@@ -531,7 +532,12 @@ type CollisionMask
     | CustomCollision (Set ( Int, Int ))
 
 
-hasCollision : Coord a -> TileData -> Coord a -> TileData -> Bool
+hasCollision :
+    Coord a
+    -> { a | size : ( Int, Int ), collisionMask : CollisionMask }
+    -> Coord a
+    -> { b | size : ( Int, Int ), collisionMask : CollisionMask }
+    -> Bool
 hasCollision positionA tileA positionB tileB =
     let
         ( Quantity x, Quantity y ) =

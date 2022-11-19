@@ -1132,7 +1132,7 @@ placeTile isDragPlacement tile model =
                                 else
                                     { time = model.time
                                     , tile = item.value
-                                    , position = Grid.cellAndLocalCoordToAscii ( neighborCellPos, item.position )
+                                    , position = Grid.cellAndLocalCoordToWorld ( neighborCellPos, item.position )
                                     }
                                         :: state
                             )
@@ -2028,7 +2028,7 @@ getFlags model =
                         (\tile ->
                             (if tile.value == PostOffice && hasMailWaitingPickup tile.userId then
                                 [ { position =
-                                        Grid.cellAndLocalCoordToAscii ( coord, tile.position )
+                                        Grid.cellAndLocalCoordToWorld ( coord, tile.position )
                                             |> Coord.toPoint2d
                                             |> Point2d.translateBy postOfficeSendingMailFlagOffset
                                   , isReceived = False
@@ -2040,7 +2040,7 @@ getFlags model =
                             )
                                 ++ (if tile.value == PostOffice && hasReceivedNewMail tile.userId then
                                         [ { position =
-                                                Grid.cellAndLocalCoordToAscii ( coord, tile.position )
+                                                Grid.cellAndLocalCoordToWorld ( coord, tile.position )
                                                     |> Coord.toPoint2d
                                                     |> Point2d.translateBy postOfficeReceivedMailFlagOffset
                                           , isReceived = True

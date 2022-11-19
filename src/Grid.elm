@@ -7,7 +7,7 @@ module Grid exposing
     , allCellsDict
     , backgroundMesh
     , canAddChange
-    , cellAndLocalCoordToAscii
+    , cellAndLocalCoordToWorld
     , cellAndLocalPointToWorld
     , changeCount
     , closeNeighborCells
@@ -40,13 +40,12 @@ import Id exposing (Id, UserId)
 import List.Extra as List
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3 exposing (Vec3)
-import Pixels
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Simplex
 import Sprite
-import Tile exposing (Tile(..), TileData)
+import Tile exposing (CollisionMask(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import Vector2d
 import WebGL
@@ -129,8 +128,8 @@ worldToCellAndLocalPoint point =
     )
 
 
-cellAndLocalCoordToAscii : ( Coord CellUnit, Coord CellLocalUnit ) -> Coord WorldUnit
-cellAndLocalCoordToAscii ( cell, local ) =
+cellAndLocalCoordToWorld : ( Coord CellUnit, Coord CellLocalUnit ) -> Coord WorldUnit
+cellAndLocalCoordToWorld ( cell, local ) =
     Coord.addTuple
         (Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
         (Coord.toTuple local |> Coord.tuple)
@@ -191,7 +190,7 @@ closeNeighborCells cellPosition localPosition =
             let
                 ( Quantity x, Quantity y ) =
                     Coord.tuple offset
-                        |> Coord.multiplyTuple ( maxSize, maxSize )
+                        |> Coord.multiplyTuple ( maxTileSize - 1, maxTileSize - 1 )
                         |> Coord.addTuple localPosition
 
                 ( Quantity localX, Quantity localY ) =
@@ -252,11 +251,33 @@ canAddChange change =
         tileData : TileData
         tileData =
             Tile.getData change.change
-
-        --a =
-        --    List.range 0 ()
     in
-    isGroundTerrain (x // terrainDivisionsPerCell) (y // terrainDivisionsPerCell) cellPosition
+    List.range 0 (maxTileSize // terrainSize)
+        |> List.any
+            (\x2 ->
+                List.range 0 (maxTileSize // terrainSize)
+                    |> List.any
+                        (\y2 ->
+                            if isGroundTerrain x2 y2 cellPosition then
+                                False
+
+                            else
+                                let
+                                    terrainPosition : Coord WorldUnit
+                                    terrainPosition =
+                                        cellAndLocalCoordToWorld
+                                            ( cellPosition
+                                            , Coord.tuple ( x2 * terrainSize, y2 * terrainSize )
+                                            )
+                                in
+                                Tile.hasCollision
+                                    change.position
+                                    tileData
+                                    terrainPosition
+                                    { size = ( terrainSize, terrainSize ), collisionMask = DefaultCollision }
+                        )
+            )
+        |> not
 
 
 addChange : GridChange -> Grid -> Grid
@@ -289,7 +310,8 @@ addChange change grid =
            )
 
 
-maxSize =
+maxTileSize : number
+maxTileSize =
     6
 
 
@@ -330,7 +352,7 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
         list =
             List.map
                 (\{ userId, position, value } ->
-                    { position = cellAndLocalCoordToAscii ( cellPosition, position )
+                    { position = cellAndLocalCoordToWorld ( cellPosition, position )
                     , userId = userId
                     , value = value
                     }
@@ -386,8 +408,14 @@ backgroundMesh cellPosition =
         |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
+terrainDivisionsPerCell : number
 terrainDivisionsPerCell =
     4
+
+
+terrainSize : Int
+terrainSize =
+    Units.cellSize // terrainDivisionsPerCell
 
 
 createTerrainLookup : Coord CellUnit -> Array2D Bool
@@ -446,7 +474,7 @@ grassMesh cellPosition =
             createTerrainLookup cellPosition
 
         ( Quantity x, Quantity y ) =
-            cellAndLocalCoordToAscii ( cellPosition, Coord.origin )
+            cellAndLocalCoordToWorld ( cellPosition, Coord.origin )
     in
     List.range 0 (terrainDivisionsPerCell - 1)
         |> List.concatMap
@@ -682,7 +710,7 @@ getTile coord grid =
                                 (\tile ->
                                     { userId = tile.userId
                                     , value = tile.value
-                                    , position = cellAndLocalCoordToAscii ( cellPos2, tile.position )
+                                    , position = cellAndLocalCoordToWorld ( cellPos2, tile.position )
                                     }
                                 )
 
