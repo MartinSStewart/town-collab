@@ -29,6 +29,7 @@ module Grid exposing
     , worldToCellAndLocalPoint
     )
 
+import Array2D exposing (Array2D)
 import Basics.Extra
 import Bounds exposing (Bounds)
 import Coord exposing (Coord, RawCellCoord)
@@ -241,6 +242,37 @@ closeNeighborCells cellPosition localPosition =
         ]
 
 
+
+--canAddChange : GridChange -> Grid -> Bool
+--canAddChange change grid =
+--    let
+--        ( cellPosition, localPosition ) =
+--            worldToCellAndLocalCoord change.position
+--
+--        neighborCells_ : List ( Coord CellUnit, Cell )
+--        neighborCells_ =
+--            closeNeighborCells cellPosition localPosition
+--                |> List.map
+--                    (\( newCellPos, newLocalPos ) ->
+--                        getCell newCellPos grid
+--                            |> Maybe.withDefault GridCell.empty
+--                            |> GridCell.addValue change.userId newLocalPos change.change
+--                            |> Tuple.pair newCellPos
+--                    )
+--    in
+--    getCell cellPosition grid
+--        |> Maybe.withDefault GridCell.empty
+--        |> GridCell.addValue change.userId localPosition change.change
+--        |> (\cell_ ->
+--                List.foldl
+--                    (\( neighborPos, neighbor ) grid2 ->
+--                        setCell neighborPos neighbor grid2
+--                    )
+--                    (setCell cellPosition cell_ grid)
+--                    neighborCells_
+--           )
+
+
 addChange : GridChange -> Grid -> Grid
 addChange change grid =
     let
@@ -368,104 +400,156 @@ backgroundMesh cellPosition =
         |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
+terrainDivisionsPerCell =
+    4
+
+
+createTerrainLookup : Coord CellUnit -> Array2D Bool
+createTerrainLookup ( Quantity cellX, Quantity cellY ) =
+    List.range -1 terrainDivisionsPerCell
+        |> List.map
+            (\x2 ->
+                List.range -1 terrainDivisionsPerCell
+                    |> List.map
+                        (\y2 ->
+                            Simplex.fractal2d
+                                fractalConfig
+                                permutationTable
+                                (toFloat x2 / terrainDivisionsPerCell + toFloat cellX)
+                                (toFloat y2 / terrainDivisionsPerCell + toFloat cellY)
+                                > 0
+                        )
+            )
+        |> Array2D.fromList
+
+
+getTerrainLookupValue : Int -> Int -> Array2D Bool -> Bool
+getTerrainLookupValue x3 y3 lookup =
+    Array2D.get (x3 + 1) (y3 + 1) lookup |> Maybe.withDefault True
+
+
 grassMesh : Coord CellUnit -> List Vertex
 grassMesh cellPosition =
     let
-        perCell =
-            4
-
-        ( Quantity cellX, Quantity cellY ) =
-            cellPosition
+        lookup : Array2D Bool
+        lookup =
+            createTerrainLookup cellPosition
 
         ( Quantity x, Quantity y ) =
             cellAndLocalCoordToAscii ( cellPosition, Coord.origin )
     in
-    List.range 0 (perCell - 1)
+    List.range 0 (terrainDivisionsPerCell - 1)
         |> List.concatMap
             (\x2 ->
-                List.range 0 (perCell - 1)
+                List.range 0 (terrainDivisionsPerCell - 1)
                     |> List.concatMap
                         (\y2 ->
                             let
-                                getValue : Int -> Int -> Bool
                                 getValue x3 y3 =
-                                    Simplex.fractal2d
-                                        fractalConfig
-                                        permutationTable
-                                        (toFloat (x3 + x2) / perCell + toFloat cellX)
-                                        (toFloat (y3 + y2) / perCell + toFloat cellY)
-                                        > 0
+                                    getTerrainLookupValue (x2 + x3) (y2 + y3) lookup
 
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.spriteMeshWithZ
-                                        ( (x2 * perCell + x) * Units.tileSize, (y2 * perCell + y) * Units.tileSize )
+                                        ( (x2 * terrainDivisionsPerCell + x) * Units.tileSize
+                                        , (y2 * terrainDivisionsPerCell + y) * Units.tileSize
+                                        )
                                         0.9
                                         (Coord.tuple ( 72, 72 ))
                                         ( textureX, textureY )
                                         ( 72, 72 )
-                            in
-                            if getValue 0 0 then
-                                draw 198 216
 
-                            else
-                                case
-                                    ( {- Top -} getValue 0 -1
-                                    , ( getValue -1 0, getValue 1 0 ) {- Left, Right -}
-                                    , {- Bottom -} getValue 0 1
-                                    )
-                                of
-                                    ( False, ( False, False ), False ) ->
-                                        draw 432 288
+                                corners =
+                                    [ { side1 = getValue 0 -1
+                                      , corner = getValue -1 -1
+                                      , side2 = getValue -1 0
+                                      , texturePos = ( 432, 504 )
+                                      }
+                                    , { side1 = getValue 0 -1
+                                      , corner = getValue 1 -1
+                                      , side2 = getValue 1 0
+                                      , texturePos = ( 360, 504 )
+                                      }
+                                    , { side1 = getValue 0 1
+                                      , corner = getValue 1 1
+                                      , side2 = getValue 1 0
+                                      , texturePos = ( 360, 432 )
+                                      }
+                                    , { side1 = getValue 0 1
+                                      , corner = getValue -1 1
+                                      , side2 = getValue -1 0
+                                      , texturePos = ( 432, 432 )
+                                      }
+                                    ]
+                                        |> List.concatMap
+                                            (\{ side1, corner, side2, texturePos } ->
+                                                if side1 == False && corner == True && side2 == False then
+                                                    draw (Tuple.first texturePos) (Tuple.second texturePos)
 
-                                    ( True, ( False, False ), False ) ->
-                                        draw 432 216
+                                                else
+                                                    []
+                                            )
 
-                                    ( False, ( True, False ), False ) ->
-                                        draw 360 288
-
-                                    ( True, ( True, False ), False ) ->
-                                        draw 360 216
-
-                                    ( False, ( False, True ), False ) ->
-                                        let
-                                            _ =
-                                                Debug.log "a" "a"
-                                        in
-                                        draw 504 288
-
-                                    ( True, ( False, True ), False ) ->
-                                        draw 504 216
-
-                                    ( False, ( True, True ), False ) ->
-                                        draw 504 504
-
-                                    ( True, ( True, True ), False ) ->
-                                        draw 504 432
-
-                                    ( False, ( False, False ), True ) ->
-                                        draw 432 360
-
-                                    ( True, ( False, False ), True ) ->
-                                        draw 432 648
-
-                                    ( False, ( True, False ), True ) ->
-                                        draw 360 360
-
-                                    ( True, ( True, False ), True ) ->
-                                        draw 360 648
-
-                                    ( False, ( False, True ), True ) ->
-                                        draw 504 360
-
-                                    ( True, ( False, True ), True ) ->
-                                        draw 504 648
-
-                                    ( False, ( True, True ), True ) ->
-                                        draw 504 576
-
-                                    ( True, ( True, True ), True ) ->
+                                tile =
+                                    if getValue 0 0 then
                                         draw 198 216
+
+                                    else
+                                        case
+                                            ( {- Top -} getValue 0 -1
+                                            , ( getValue -1 0, getValue 1 0 ) {- Left, Right -}
+                                            , {- Bottom -} getValue 0 1
+                                            )
+                                        of
+                                            ( False, ( False, False ), False ) ->
+                                                draw 432 288
+
+                                            ( True, ( False, False ), False ) ->
+                                                draw 432 216
+
+                                            ( False, ( True, False ), False ) ->
+                                                draw 360 288
+
+                                            ( True, ( True, False ), False ) ->
+                                                draw 360 216
+
+                                            ( False, ( False, True ), False ) ->
+                                                draw 504 288
+
+                                            ( True, ( False, True ), False ) ->
+                                                draw 504 216
+
+                                            ( False, ( True, True ), False ) ->
+                                                draw 504 504
+
+                                            ( True, ( True, True ), False ) ->
+                                                draw 504 432
+
+                                            ( False, ( False, False ), True ) ->
+                                                draw 432 360
+
+                                            ( True, ( False, False ), True ) ->
+                                                draw 432 648
+
+                                            ( False, ( True, False ), True ) ->
+                                                draw 360 360
+
+                                            ( True, ( True, False ), True ) ->
+                                                draw 360 648
+
+                                            ( False, ( False, True ), True ) ->
+                                                draw 504 360
+
+                                            ( True, ( False, True ), True ) ->
+                                                draw 504 648
+
+                                            ( False, ( True, True ), True ) ->
+                                                draw 504 576
+
+                                            ( True, ( True, True ), True ) ->
+                                                draw 198 216
+                            in
+                            corners ++ tile
                         )
             )
 

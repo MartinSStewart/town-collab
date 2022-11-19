@@ -48,7 +48,8 @@
             "mgold/elm-nonempty-list": "4.2.0",
             "mpizenberg/elm-pointer-events": "4.0.2",
             "ohanhi/keyboard": "2.0.1",
-            "pzp1997/assoc-list": "1.0.0"
+            "pzp1997/assoc-list": "1.0.0",
+            "tortus/elm-array-2d": "3.0.0"
         },
         "indirect": {
             "avh4/elm-color": "1.0.0",
