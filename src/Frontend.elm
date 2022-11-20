@@ -734,10 +734,10 @@ updateLoaded audioData msg model =
             ( model |> (\m -> { m | tool = toolType }), Cmd.none )
 
         UndoPressed ->
-            ( model |> updateLocalModel Change.LocalUndo, Cmd.none )
+            ( model |> updateLocalModel Change.LocalUndo |> Tuple.first, Cmd.none )
 
         RedoPressed ->
-            ( model |> updateLocalModel Change.LocalRedo, Cmd.none )
+            ( model |> updateLocalModel Change.LocalRedo |> Tuple.first, Cmd.none )
 
         CopyPressed ->
             -- TODO
@@ -758,6 +758,7 @@ updateLoaded audioData msg model =
                         else
                             model.userHoverHighlighted
                 }
+                |> Tuple.first
             , Cmd.none
             )
 
@@ -768,7 +769,7 @@ updateLoaded audioData msg model =
             ( { model | userHoverHighlighted = Nothing }, Cmd.none )
 
         HideForAllTogglePressed userToHide ->
-            ( updateLocalModel (Change.LocalToggleUserVisibilityForAll userToHide) model, Cmd.none )
+            ( updateLocalModel (Change.LocalToggleUserVisibilityForAll userToHide) model |> Tuple.first, Cmd.none )
 
         ToggleAdminEnabledPressed ->
             ( if Just (currentUserId model) == Env.adminUserId then
@@ -782,6 +783,7 @@ updateLoaded audioData msg model =
         HideUserPressed { userId, hidePoint } ->
             ( { model | highlightContextMenu = Nothing }
                 |> updateLocalModel (Change.LocalHideUser userId hidePoint)
+                |> Tuple.first
             , Cmd.none
             )
 
@@ -855,14 +857,14 @@ keyMsgCanvasUpdate key model =
     let
         handleUndo () =
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel Change.LocalUndo model, Cmd.none )
+                ( updateLocalModel Change.LocalUndo model |> Tuple.first, Cmd.none )
 
             else
                 ( model, Cmd.none )
 
         handleRedo () =
             if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel Change.LocalRedo model, Cmd.none )
+                ( updateLocalModel Change.LocalRedo model |> Tuple.first, Cmd.none )
 
             else
                 ( model, Cmd.none )
@@ -1001,12 +1003,18 @@ mainMouseButtonUp mousePosition mouseState model =
     )
 
 
-updateLocalModel : Change.LocalChange -> FrontendLoaded -> FrontendLoaded
+updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
 updateLocalModel msg model =
-    { model
+    let
+        ( newLocalModel, outMsg ) =
+            LocalGrid.update model.time (LocalChange msg) model.localModel
+    in
+    ( { model
         | pendingChanges = model.pendingChanges ++ [ msg ]
-        , localModel = LocalGrid.update model.time (LocalChange msg) model.localModel
-    }
+        , localModel = newLocalModel
+      }
+    , outMsg
+    )
 
 
 screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
@@ -1140,7 +1148,7 @@ placeTile isDragPlacement tile model =
         let
             model2 =
                 if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
-                    updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time }
+                    updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time } |> Tuple.first
 
                 else
                     model
@@ -1156,8 +1164,7 @@ placeTile isDragPlacement tile model =
             oldGrid =
                 LocalGrid.localModel model2.localModel |> .grid
 
-            model3 : FrontendLoaded
-            model3 =
+            ( model3, outMsg ) =
                 updateLocalModel (Change.LocalGridChange change) model2
 
             newGrid : Grid
@@ -1166,33 +1173,19 @@ placeTile isDragPlacement tile model =
 
             removedTiles : List { time : Time.Posix, tile : Tile, position : Coord WorldUnit }
             removedTiles =
-                List.concatMap
-                    (\( neighborCellPos, _ ) ->
-                        let
-                            oldCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
-                            oldCell =
-                                Grid.getCell neighborCellPos oldGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
+                case outMsg of
+                    LocalGrid.NoOutMsg ->
+                        []
 
-                            newCell : List { userId : Id UserId, position : Coord Units.CellLocalUnit, value : Tile }
-                            newCell =
-                                Grid.getCell neighborCellPos newGrid |> Maybe.map GridCell.flatten |> Maybe.withDefault []
-                        in
-                        List.foldl
-                            (\item state ->
-                                if List.any ((==) item) newCell then
-                                    state
-
-                                else
-                                    { time = model.time
-                                    , tile = item.value
-                                    , position = Grid.cellAndLocalCoordToWorld ( neighborCellPos, item.position )
-                                    }
-                                        :: state
+                    LocalGrid.TilesRemoved tiles ->
+                        List.map
+                            (\removedTile ->
+                                { tile = removedTile.tile
+                                , time = model.time
+                                , position = removedTile.position
+                                }
                             )
-                            []
-                            oldCell
-                    )
-                    neighborCells
+                            tiles
         in
         { model3
             | lastTilePlaced =
@@ -1388,8 +1381,8 @@ updateMeshes oldModel newModel =
         currentTileUnchanged =
             oldCurrentTile == newCurrentTile
 
-        newMesh : GridCell.Cell -> ( Int, Int ) -> { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
-        newMesh newCell rawCoord =
+        newMesh : Maybe (WebGL.Mesh Vertex) -> GridCell.Cell -> ( Int, Int ) -> { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
+        newMesh backgroundMesh newCell rawCoord =
             let
                 coord : Coord CellUnit
                 coord =
@@ -1401,7 +1394,13 @@ updateMeshes oldModel newModel =
                     coord
                     localModel.user
                     (GridCell.flatten newCell)
-            , background = Grid.backgroundMesh coord
+            , background =
+                case backgroundMesh of
+                    Just background ->
+                        background
+
+                    Nothing ->
+                        Grid.backgroundMesh coord
             }
     in
     { newModel
@@ -1423,7 +1422,7 @@ updateMeshes oldModel newModel =
                                     )
                                         && not currentTileUnchanged
                                 then
-                                    newMesh newCell coord
+                                    newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
 
                                 else
                                     case Dict.get coord newModel.meshes of
@@ -1431,13 +1430,13 @@ updateMeshes oldModel newModel =
                                             mesh
 
                                         Nothing ->
-                                            newMesh newCell coord
+                                            newMesh Nothing newCell coord
 
                             else
-                                newMesh newCell coord
+                                newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
 
                         Nothing ->
-                            newMesh newCell coord
+                            newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
                 )
                 newCells
     }
@@ -1475,6 +1474,7 @@ viewBoundsUpdate ( model, cmd ) =
                     model.time
                     (ClientChange (Change.ViewBoundsChange newBounds []))
                     model.localModel
+                    |> Tuple.first
           }
         , Cmd.batch [ cmd, Lamdera.sendToBackend (ChangeViewBounds newBounds) ]
         )

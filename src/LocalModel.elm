@@ -8,9 +8,9 @@ type LocalModel msg model
     = LocalModel { localMsgs : List ( Time.Posix, msg ), localModel : model, model : model }
 
 
-type alias Config msg model =
+type alias Config msg model outMsg =
     { msgEqual : msg -> msg -> Bool
-    , update : msg -> model -> model
+    , update : msg -> model -> ( model, outMsg )
     }
 
 
@@ -19,13 +19,19 @@ init model =
     LocalModel { localMsgs = [], localModel = model, model = model }
 
 
-update : Config msg model -> Time.Posix -> msg -> LocalModel msg model -> LocalModel msg model
+update : Config msg model outMsg -> Time.Posix -> msg -> LocalModel msg model -> ( LocalModel msg model, outMsg )
 update config time msg (LocalModel localModel_) =
-    LocalModel
+    let
+        ( newModel, outMsg ) =
+            config.update msg localModel_.localModel
+    in
+    ( LocalModel
         { localMsgs = localModel_.localMsgs ++ [ ( time, msg ) ]
-        , localModel = config.update msg localModel_.localModel
+        , localModel = newModel
         , model = localModel_.model
         }
+    , outMsg
+    )
 
 
 localModel : LocalModel msg model -> model
@@ -38,11 +44,11 @@ localMsgs (LocalModel localModel_) =
     localModel_.localMsgs
 
 
-updateFromBackend : Config msg model -> Nonempty msg -> LocalModel msg model -> LocalModel msg model
+updateFromBackend : Config msg model outMsg -> Nonempty msg -> LocalModel msg model -> LocalModel msg model
 updateFromBackend config msgs (LocalModel localModel_) =
     let
         newModel =
-            List.Nonempty.foldl config.update localModel_.model msgs
+            List.Nonempty.foldl (\msg model -> config.update msg model |> Tuple.first) localModel_.model msgs
 
         newLocalMsgs =
             List.Nonempty.foldl
@@ -68,6 +74,10 @@ updateFromBackend config msgs (LocalModel localModel_) =
     in
     LocalModel
         { localMsgs = newLocalMsgs
-        , localModel = List.foldl config.update newModel (List.map Tuple.second newLocalMsgs)
+        , localModel =
+            List.foldl
+                (\msg model -> config.update msg model |> Tuple.first)
+                newModel
+                (List.map Tuple.second newLocalMsgs)
         , model = newModel
         }

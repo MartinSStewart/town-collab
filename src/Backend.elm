@@ -497,7 +497,7 @@ updateLocalChange ( userId, _ ) change model =
                                 Nothing
                     in
                     ( { model
-                        | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+                        | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid |> .grid
                         , trains =
                             case maybeTrain of
                                 Just train ->

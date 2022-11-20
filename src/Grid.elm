@@ -301,13 +301,19 @@ canAddChange change =
         |> not
 
 
-addChange : GridChange -> Grid -> Grid
+addChange :
+    GridChange
+    -> Grid
+    ->
+        { grid : Grid
+        , removed : List { tile : Tile, position : Coord WorldUnit, userId : Id UserId }
+        }
 addChange change grid =
     let
         ( cellPosition, localPosition ) =
             worldToCellAndLocalCoord change.position
 
-        neighborCells_ : List ( Coord CellUnit, Cell )
+        neighborCells_ : List ( Coord CellUnit, { cell : Cell, removed : List GridCell.Value } )
         neighborCells_ =
             closeNeighborCells cellPosition localPosition
                 |> List.map
@@ -332,12 +338,28 @@ addChange change grid =
     )
         |> GridCell.addValue change.userId localPosition change.change
         |> (\cell_ ->
-                List.foldl
-                    (\( neighborPos, neighbor ) grid2 ->
-                        setCell neighborPos neighbor grid2
-                    )
-                    (setCell cellPosition cell_ grid)
-                    neighborCells_
+                { grid =
+                    List.foldl
+                        (\( neighborPos, neighbor ) grid2 ->
+                            setCell neighborPos neighbor.cell grid2
+                        )
+                        (setCell cellPosition cell_.cell grid)
+                        neighborCells_
+                , removed =
+                    ( cellPosition, cell_ )
+                        :: neighborCells_
+                        |> List.concatMap
+                            (\( neighborPos, neighbor ) ->
+                                List.map
+                                    (\removed ->
+                                        { tile = removed.value
+                                        , position = cellAndLocalCoordToWorld ( neighborPos, removed.position )
+                                        , userId = removed.userId
+                                        }
+                                    )
+                                    neighbor.removed
+                            )
+                }
            )
 
 

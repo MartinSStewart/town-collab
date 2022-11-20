@@ -1,4 +1,4 @@
-module LocalGrid exposing (LocalGrid, LocalGrid_, incrementUndoCurrent, init, localModel, update, updateFromBackend)
+module LocalGrid exposing (LocalGrid, LocalGrid_, OutMsg(..), incrementUndoCurrent, init, localModel, update, updateFromBackend)
 
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
@@ -10,10 +10,11 @@ import GridCell
 import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
+import Tile exposing (Tile)
 import Time
 import Train exposing (Train)
 import Undo
-import Units exposing (CellLocalUnit, CellUnit)
+import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 
 
 type LocalGrid
@@ -63,7 +64,7 @@ init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHidd
         |> LocalModel.init
 
 
-update : Time.Posix -> Change -> LocalModel Change LocalGrid -> LocalModel Change LocalGrid
+update : Time.Posix -> Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, OutMsg )
 update time change localModel_ =
     LocalModel.update config time change localModel_
 
@@ -87,83 +88,107 @@ incrementUndoCurrent cellPosition localPosition undoCurrent =
             undoCurrent
 
 
-update_ : Change -> LocalGrid_ -> LocalGrid_
+type OutMsg
+    = TilesRemoved (List { tile : Tile, position : Coord WorldUnit, userId : Id UserId })
+    | NoOutMsg
+
+
+update_ : Change -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 update_ msg model =
     case msg of
         LocalChange (LocalGridChange gridChange) ->
             let
                 ( cellPosition, localPosition ) =
                     Grid.worldToCellAndLocalCoord gridChange.position
+
+                change =
+                    Grid.addChange (Grid.localChangeToChange model.user gridChange) model.grid
             in
-            { model
+            ( { model
                 | redoHistory = []
                 , grid =
                     if Bounds.contains cellPosition model.viewBounds then
-                        Grid.addChange (Grid.localChangeToChange model.user gridChange) model.grid
+                        change.grid
 
                     else
                         model.grid
                 , undoCurrent = incrementUndoCurrent cellPosition localPosition model.undoCurrent
-            }
+              }
+            , TilesRemoved change.removed
+            )
 
         LocalChange LocalRedo ->
-            case Undo.redo model of
+            ( case Undo.redo model of
                 Just newModel ->
                     { newModel | grid = Grid.moveUndoPoint model.user newModel.undoCurrent model.grid }
 
                 Nothing ->
                     model
+            , NoOutMsg
+            )
 
         LocalChange LocalUndo ->
-            case Undo.undo model of
+            ( case Undo.undo model of
                 Just newModel ->
                     { newModel | grid = Grid.moveUndoPoint model.user (Dict.map (\_ a -> -a) model.undoCurrent) model.grid }
 
                 Nothing ->
                     model
+            , NoOutMsg
+            )
 
         LocalChange LocalAddUndo ->
-            Undo.add model
+            ( Undo.add model, NoOutMsg )
 
         LocalChange (LocalHideUser userId_ _) ->
-            { model
+            ( { model
                 | hiddenUsers =
                     if userId_ == model.user then
                         model.hiddenUsers
 
                     else
                         EverySet.insert userId_ model.hiddenUsers
-            }
+              }
+            , NoOutMsg
+            )
 
         LocalChange (LocalUnhideUser userId_) ->
-            { model
+            ( { model
                 | hiddenUsers =
                     if userId_ == model.user then
                         model.hiddenUsers
 
                     else
                         EverySet.remove userId_ model.hiddenUsers
-            }
+              }
+            , NoOutMsg
+            )
 
         LocalChange (LocalToggleUserVisibilityForAll hideUserId) ->
-            { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }
+            ( { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }, NoOutMsg )
 
         ServerChange (ServerGridChange gridChange) ->
-            if
+            ( if
                 Bounds.contains
                     (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first)
                     model.viewBounds
-            then
-                { model | grid = Grid.addChange gridChange model.grid }
+              then
+                { model | grid = Grid.addChange gridChange model.grid |> .grid }
 
-            else
+              else
                 model
+            , NoOutMsg
+            )
 
         ServerChange (ServerUndoPoint undoPoint) ->
-            { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
+            ( { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
+            , NoOutMsg
+            )
 
         ServerChange (ServerToggleUserVisibilityForAll hideUserId) ->
-            { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }
+            ( { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }
+            , NoOutMsg
+            )
 
         ClientChange (ViewBoundsChange bounds newCells) ->
             let
@@ -171,17 +196,19 @@ update_ msg model =
                 newCells2 =
                     List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
             in
-            { model
+            ( { model
                 | grid =
                     Grid.allCellsDict model.grid
                         |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
                         |> Dict.union (Dict.fromList newCells2)
                         |> Grid.from
                 , viewBounds = bounds
-            }
+              }
+            , NoOutMsg
+            )
 
 
-config : LocalModel.Config Change LocalGrid
+config : LocalModel.Config Change LocalGrid OutMsg
 config =
     { msgEqual =
         \msg0 msg1 ->
@@ -191,5 +218,5 @@ config =
 
                 _ ->
                     msg0 == msg1
-    , update = \msg (LocalGrid model) -> update_ msg model |> LocalGrid
+    , update = \msg (LocalGrid model) -> update_ msg model |> Tuple.mapFirst LocalGrid
     }

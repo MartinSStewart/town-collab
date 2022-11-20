@@ -65,7 +65,7 @@ getPostOffices (Cell cell) =
         []
 
 
-addValue : Id UserId -> Coord CellLocalUnit -> Tile -> Cell -> Cell
+addValue : Id UserId -> Coord CellLocalUnit -> Tile -> Cell -> { cell : Cell, removed : List Value }
 addValue userId position line (Cell cell) =
     let
         userUndoPoint =
@@ -73,32 +73,38 @@ addValue userId position line (Cell cell) =
 
         value =
             { userId = userId, position = position, value = line }
+
+        { remaining, removed } =
+            stepCacheHelperWithRemoved value cell.cache
     in
-    Cell
-        { history =
-            List.foldr
-                (\change ( newHistory, counter ) ->
-                    if change.userId == userId then
-                        if counter > 0 then
-                            ( change :: newHistory, counter - 1 )
+    { cell =
+        Cell
+            { history =
+                List.foldr
+                    (\change ( newHistory, counter ) ->
+                        if change.userId == userId then
+                            if counter > 0 then
+                                ( change :: newHistory, counter - 1 )
+
+                            else
+                                ( newHistory, counter )
 
                         else
-                            ( newHistory, counter )
-
-                    else
-                        ( change :: newHistory, counter )
-                )
-                ( [], userUndoPoint )
-                cell.history
-                |> Tuple.first
-                |> (\list -> value :: list)
-        , undoPoint =
-            Dict.insert
-                (Id.toInt userId)
-                (userUndoPoint + 1)
-                cell.undoPoint
-        , cache = stepCacheHelper value cell.cache
-        }
+                            ( change :: newHistory, counter )
+                    )
+                    ( [], userUndoPoint )
+                    cell.history
+                    |> Tuple.first
+                    |> (\list -> value :: list)
+            , undoPoint =
+                Dict.insert
+                    (Id.toInt userId)
+                    (userUndoPoint + 1)
+                    cell.undoPoint
+            , cache = remaining
+            }
+    , removed = removed
+    }
 
 
 cellBounds : Bounds unit
@@ -160,6 +166,32 @@ stepCacheHelper ({ userId, position, value } as item) cache =
                     |> not
             )
             cache
+
+
+stepCacheHelperWithRemoved : Value -> List Value -> { remaining : List Value, removed : List Value }
+stepCacheHelperWithRemoved ({ userId, position, value } as item) cache =
+    let
+        data =
+            Tile.getData value
+
+        ( remaining, removed ) =
+            List.partition
+                (\item2 ->
+                    Tile.hasCollision position data item2.position (Tile.getData item2.value)
+                        |> not
+                )
+                cache
+    in
+    { remaining =
+        (if Bounds.contains position cellBounds && value /= EmptyTile then
+            [ item ]
+
+         else
+            []
+        )
+            ++ remaining
+    , removed = removed
+    }
 
 
 removeUser : Id UserId -> Coord CellUnit -> Cell -> Cell
