@@ -35,12 +35,12 @@ type Bounds unit
 
 width : Bounds unit -> Quantity Int unit
 width bounds_ =
-    maximum bounds_ |> Coord.minusTuple (minimum bounds_) |> Tuple.first
+    maximum bounds_ |> Coord.minus (minimum bounds_) |> Tuple.first
 
 
 height : Bounds unit -> Quantity Int unit
 height bounds_ =
-    maximum bounds_ |> Coord.minusTuple (minimum bounds_) |> Tuple.second
+    maximum bounds_ |> Coord.minus (minimum bounds_) |> Tuple.second
 
 
 minimum : Bounds unit -> Coord unit
@@ -86,29 +86,29 @@ fromCoords coords =
 
 fromCoordAndSize : Coord unit -> Coord unit -> Bounds unit
 fromCoordAndSize coord size =
-    fromCoords (Nonempty coord [ Coord.addTuple coord size ])
+    fromCoords (Nonempty coord [ Coord.plus coord size ])
 
 
 centerAndHalfSize : Coord unit -> Coord unit -> Bounds unit
 centerAndHalfSize centerPoint halfSize =
     bounds
-        (centerPoint |> Coord.minusTuple halfSize)
-        (centerPoint |> Coord.addTuple halfSize)
+        (centerPoint |> Coord.minus halfSize)
+        (centerPoint |> Coord.plus halfSize)
 
 
 translate : Coord unit -> Bounds unit -> Bounds unit
 translate coord (Bounds bounds_) =
     Bounds
-        { min = Coord.addTuple coord bounds_.min
-        , max = Coord.addTuple coord bounds_.max
+        { min = Coord.plus coord bounds_.min
+        , max = Coord.plus coord bounds_.max
         }
 
 
 expand : Quantity Int unit -> Bounds unit -> Bounds unit
 expand expandBy (Bounds bounds_) =
     Bounds
-        { min = Coord.minusTuple ( expandBy, expandBy ) bounds_.min
-        , max = Coord.addTuple ( expandBy, expandBy ) bounds_.max
+        { min = Coord.minus ( expandBy, expandBy ) bounds_.min
+        , max = Coord.plus ( expandBy, expandBy ) bounds_.max
         }
 
 
@@ -167,7 +167,7 @@ center (Bounds bounds_) =
 
 addToMax : Coord unit -> Bounds unit -> Bounds unit
 addToMax coord (Bounds bounds_) =
-    Bounds { min = bounds_.min, max = Coord.addTuple coord bounds_.max }
+    Bounds { min = bounds_.min, max = Coord.plus coord bounds_.max }
 
 
 boundsToBounds2d : Bounds units -> BoundingBox2d units coordinate

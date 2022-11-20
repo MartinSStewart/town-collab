@@ -78,7 +78,7 @@ from =
 
 localTileCoordPlusWorld : Coord WorldUnit -> Coord TileLocalUnit -> Coord WorldUnit
 localTileCoordPlusWorld world local =
-    Coord.toTuple local |> Coord.tuple |> Coord.addTuple world
+    Coord.toTuple local |> Coord.tuple |> Coord.plus world
 
 
 localTilePointPlusWorld : Coord WorldUnit -> Point2d TileLocalUnit TileLocalUnit -> Point2d WorldUnit WorldUnit
@@ -141,7 +141,7 @@ worldToCellAndLocalPoint point =
 
 cellAndLocalCoordToWorld : ( Coord CellUnit, Coord CellLocalUnit ) -> Coord WorldUnit
 cellAndLocalCoordToWorld ( cell, local ) =
-    Coord.addTuple
+    Coord.plus
         (Coord.multiplyTuple ( Units.cellSize, Units.cellSize ) cell)
         (Coord.toTuple local |> Coord.tuple)
         |> Coord.toTuple
@@ -202,7 +202,7 @@ closeNeighborCells cellPosition localPosition =
                 ( Quantity x, Quantity y ) =
                     Coord.tuple offset
                         |> Coord.multiplyTuple ( maxTileSize - 1, maxTileSize - 1 )
-                        |> Coord.addTuple localPosition
+                        |> Coord.plus localPosition
 
                 ( Quantity localX, Quantity localY ) =
                     localPosition
@@ -228,7 +228,7 @@ closeNeighborCells cellPosition localPosition =
 
                 newCellPos : Coord CellUnit
                 newCellPos =
-                    Coord.tuple offset |> Coord.addTuple cellPosition
+                    Coord.tuple offset |> Coord.plus cellPosition
             in
             if ( a, b ) == offset then
                 ( newCellPos
@@ -454,13 +454,12 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
         )
         list
         |> List.concat
-        |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
+        |> Sprite.toMesh
 
 
 backgroundMesh : Coord CellUnit -> WebGL.Mesh Vertex
 backgroundMesh cellPosition =
-    grassMesh cellPosition
-        |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
+    grassMesh cellPosition |> Sprite.toMesh
 
 
 getTerrainLookupValue : Coord TerrainUnit -> Array2D Bool -> Bool
@@ -596,16 +595,16 @@ grassMesh cellPosition =
             )
 
 
-tileMesh : ( Quantity Int WorldUnit, Quantity Int WorldUnit ) -> Tile -> WebGL.Mesh Vertex
+tileMesh : Coord unit -> Tile -> List Vertex
 tileMesh position tile =
     let
         data =
             Tile.getData tile
     in
-    (if tile == EmptyTile then
+    if tile == EmptyTile then
         Sprite.spriteMesh (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 324, 223 ) ( 30, 29 )
 
-     else
+    else
         tileMeshHelper 1 False position data.texturePosition data.size
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
@@ -614,14 +613,12 @@ tileMesh position tile =
                     Nothing ->
                         []
                )
-    )
-        |> (\vertices -> WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices))
 
 
 tileMeshHelper :
     Float
     -> Bool
-    -> ( Quantity Int WorldUnit, Quantity Int WorldUnit )
+    -> Coord unit
     -> ( Int, Int )
     -> ( Int, Int )
     -> List Vertex

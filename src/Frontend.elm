@@ -54,7 +54,7 @@ import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Time
 import Train exposing (Train)
 import Types exposing (..)
-import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
+import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, UiPixelUnit, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -310,6 +310,7 @@ loadedInit time loading loadingData =
             , lastTileRotation = []
             , userIdMesh = createUserIdMesh loadingData.user
             , lastPlacementError = Nothing
+            , tileHotkeys = Dict.empty
             }
     in
     ( updateMeshes model model
@@ -373,11 +374,11 @@ init url key =
             Bounds.bounds
                 (Grid.worldToCellAndLocalCoord viewPoint
                     |> Tuple.first
-                    |> Coord.addTuple ( Units.cellUnit -2, Units.cellUnit -2 )
+                    |> Coord.plus ( Units.cellUnit -2, Units.cellUnit -2 )
                 )
                 (Grid.worldToCellAndLocalCoord viewPoint
                     |> Tuple.first
-                    |> Coord.addTuple ( Units.cellUnit 2, Units.cellUnit 2 )
+                    |> Coord.plus ( Units.cellUnit 2, Units.cellUnit 2 )
                 )
     in
     ( Loading
@@ -607,7 +608,11 @@ updateLoaded audioData msg model =
 
                     else
                         { model
-                            | currentTile = Just { tile = nextTile, mesh = Grid.tileMesh Coord.origin nextTile }
+                            | currentTile =
+                                Just
+                                    { tile = nextTile
+                                    , mesh = Grid.tileMesh Coord.origin nextTile |> Sprite.toMesh
+                                    }
                             , lastTileRotation =
                                 model.time
                                     :: List.filter
@@ -855,63 +860,65 @@ replaceUrl url model =
 keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 keyMsgCanvasUpdate key model =
     let
-        handleUndo () =
-            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                ( updateLocalModel Change.LocalUndo model |> Tuple.first, Cmd.none )
-
-            else
-                ( model, Cmd.none )
+        ctrlOrMeta =
+            keyDown Keyboard.Control model || keyDown Keyboard.Meta model
 
         handleRedo () =
-            if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+            if ctrlOrMeta then
                 ( updateLocalModel Change.LocalRedo model |> Tuple.first, Cmd.none )
 
             else
                 ( model, Cmd.none )
     in
-    case ( key, keyDown Keyboard.Control model, keyDown Keyboard.Meta model ) of
-        ( Keyboard.Character "z", True, _ ) ->
-            handleUndo ()
+    case ( key, ctrlOrMeta ) of
+        ( Keyboard.Character "z", True ) ->
+            if ctrlOrMeta then
+                ( updateLocalModel Change.LocalUndo model |> Tuple.first, Cmd.none )
 
-        ( Keyboard.Character "z", _, True ) ->
-            handleUndo ()
+            else
+                ( model, Cmd.none )
 
-        ( Keyboard.Character "Z", True, _ ) ->
+        ( Keyboard.Character "Z", True ) ->
             handleRedo ()
 
-        ( Keyboard.Character "Z", _, True ) ->
+        ( Keyboard.Character "y", True ) ->
             handleRedo ()
 
-        ( Keyboard.Character "y", True, _ ) ->
-            handleRedo ()
-
-        ( Keyboard.Character "y", _, True ) ->
-            handleRedo ()
-
-        ( Keyboard.Escape, _, _ ) ->
+        ( Keyboard.Escape, _ ) ->
             ( { model | currentTile = Nothing }, Cmd.none )
 
-        ( Keyboard.Spacebar, False, False ) ->
-            ( case Tile.fromChar ' ' of
+        ( Keyboard.Spacebar, True ) ->
+            ( { model | tileHotkeys = Dict.update " " (\_ -> Maybe.map .tile model.currentTile) model.tileHotkeys }
+            , Cmd.none
+            )
+
+        ( Keyboard.Character string, True ) ->
+            ( { model | tileHotkeys = Dict.update string (\_ -> Maybe.map .tile model.currentTile) model.tileHotkeys }
+            , Cmd.none
+            )
+
+        ( Keyboard.Spacebar, False ) ->
+            ( case Dict.get " " model.tileHotkeys of
                 Just tile ->
-                    { model | currentTile = Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile } }
+                    { model
+                        | currentTile =
+                            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile |> Sprite.toMesh }
+                    }
 
                 Nothing ->
                     model
             , Cmd.none
             )
 
-        ( Keyboard.Character char, False, False ) ->
-            ( case String.toList char of
-                head :: _ ->
-                    case Tile.fromChar head of
-                        Just tile ->
-                            { model | currentTile = Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile } }
+        ( Keyboard.Character string, False ) ->
+            ( case Dict.get string model.tileHotkeys of
+                Just tile ->
+                    { model
+                        | currentTile =
+                            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile |> Sprite.toMesh }
+                    }
 
-                        Nothing ->
-                            model
-
-                [] ->
+                Nothing ->
                     model
             , Cmd.none
             )
@@ -1074,7 +1081,7 @@ cursorPosition : TileData -> FrontendLoaded -> Coord WorldUnit
 cursorPosition tileData model =
     mouseWorldPosition model
         |> Coord.floorPoint
-        |> Coord.minusTuple (Coord.tuple tileData.size |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
+        |> Coord.minus (Coord.tuple tileData.size |> Coord.divide (Coord.tuple ( 2, 2 )))
 
 
 placeTile : Bool -> Tile -> FrontendLoaded -> FrontendLoaded
@@ -1153,23 +1160,8 @@ placeTile isDragPlacement tile model =
                 else
                     model
 
-            ( cellPos, localPos ) =
-                Grid.worldToCellAndLocalCoord cursorPosition_
-
-            neighborCells : List ( Coord CellUnit, Coord Units.CellLocalUnit )
-            neighborCells =
-                ( cellPos, localPos ) :: Grid.closeNeighborCells cellPos localPos
-
-            oldGrid : Grid
-            oldGrid =
-                LocalGrid.localModel model2.localModel |> .grid
-
             ( model3, outMsg ) =
                 updateLocalModel (Change.LocalGridChange change) model2
-
-            newGrid : Grid
-            newGrid =
-                LocalGrid.localModel model3.localModel |> .grid
 
             removedTiles : List { time : Time.Posix, tile : Tile, position : Coord WorldUnit }
             removedTiles =
@@ -1275,7 +1267,7 @@ createDebrisMesh appStartTime removedTiles =
         )
         list
         |> List.concat
-        |> (\vertices -> WebGL.indexedTriangles vertices indices)
+        |> Sprite.toMesh
 
 
 createDebrisMeshHelper :
@@ -1456,7 +1448,7 @@ viewBoundsUpdate ( model, cmd ) =
                 |> Coord.floorPoint
                 |> Grid.worldToCellAndLocalCoord
                 |> Tuple.first
-                |> Coord.addTuple ( Units.cellUnit 1, Units.cellUnit 1 )
+                |> Coord.plus ( Units.cellUnit 1, Units.cellUnit 1 )
 
         bounds =
             Bounds.bounds min_ max_
@@ -1593,16 +1585,6 @@ view audioData model =
 currentUserId : FrontendLoaded -> Id UserId
 currentUserId =
     .localModel >> LocalGrid.localModel >> .user
-
-
-canUndo : FrontendLoaded -> Bool
-canUndo model =
-    LocalGrid.localModel model.localModel |> .undoHistory |> List.isEmpty |> not
-
-
-canRedo : FrontendLoaded -> Bool
-canRedo model =
-    LocalGrid.localModel model.localModel |> .redoHistory |> List.isEmpty |> not
 
 
 findPixelPerfectSize : FrontendLoaded -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
@@ -1780,7 +1762,7 @@ canvasView audioData model =
                                     mousePosition =
                                         mouseWorldPosition model
                                             |> Coord.floorPoint
-                                            |> Coord.minusTuple (tileSize |> Coord.divideTuple (Coord.tuple ( 2, 2 )))
+                                            |> Coord.minus (tileSize |> Coord.divide (Coord.tuple ( 2, 2 )))
 
                                     ( mouseX, mouseY ) =
                                         Coord.toTuple mousePosition
@@ -1887,6 +1869,20 @@ canvasView audioData model =
                             , texture = texture
                             , textureSize = textureSize
                             }
+                       , WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            toolbarMesh
+                            { view =
+                                Mat4.makeScale3
+                                    (uiZoomFactor * 2 / toFloat windowWidth)
+                                    (uiZoomFactor * -2 / toFloat windowHeight)
+                                    1
+                                    |> Coord.translateMat4 (toolbarPosition model.windowSize)
+                            , texture = texture
+                            , textureSize = textureSize
+                            }
                        ]
                     ++ MailEditor.drawMail
                         texture
@@ -1908,7 +1904,7 @@ canvasView audioData model =
 
 
 uiZoomFactor =
-    3
+    1
 
 
 getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
@@ -2115,3 +2111,51 @@ subscriptions _ model =
                     , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         ]
+
+
+pixelToUi : Coord Pixels -> Coord UiPixelUnit
+pixelToUi coord =
+    Coord.divide (Coord.xy uiZoomFactor uiZoomFactor) coord |> Coord.toTuple |> Coord.tuple
+
+
+toolbarSize : Coord UiPixelUnit
+toolbarSize =
+    Coord.xy 600 200
+
+
+toolbarPosition : Coord Pixels -> Coord UiPixelUnit
+toolbarPosition windowSize =
+    pixelToUi windowSize
+        |> Coord.yOnly
+        |> Coord.divide (Coord.xy 1 2)
+        |> Coord.plus (Coord.xy 0 -2)
+        |> Coord.minus (Coord.divide (Coord.xy 2 1) toolbarSize)
+
+
+toolbarTile : Coord UiPixelUnit -> Tile -> List Vertex
+toolbarTile offset tile =
+    let
+        tileData =
+            Tile.getData tile
+
+        buttonSize =
+            Coord.xy 80 80
+
+        bottomRight =
+            offset |> Coord.plus buttonSize
+    in
+    Sprite.spriteMesh (Coord.toTuple offset) bottomRight ( 380, 153 ) ( 1, 1 )
+        ++ Sprite.spriteMesh
+            (offset |> Coord.plus (Coord.xy 2 2) |> Coord.toTuple)
+            (bottomRight |> Coord.minus (Coord.xy 4 4))
+            ( 381, 153 )
+            ( 1, 1 )
+        ++ Grid.tileMesh offset tile
+
+
+toolbarMesh : WebGL.Mesh Vertex
+toolbarMesh =
+    Sprite.spriteMesh ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
+        ++ Sprite.spriteMesh ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
+        ++ toolbarTile (Coord.xy 0 0) PostOffice
+        |> Sprite.toMesh

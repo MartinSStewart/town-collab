@@ -37,7 +37,7 @@ clusterHelper coords allBounds =
                     toCoarseGrid coord
 
                 bounds =
-                    Bounds.bounds boundsMin (Coord.addTuple maxSize boundsMin)
+                    Bounds.bounds boundsMin (Coord.plus maxSize boundsMin)
 
                 ( inside, outside ) =
                     Set.partition (\a -> Bounds.contains (Coord.tuple a) bounds) coords

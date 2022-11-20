@@ -4,9 +4,7 @@ import Array2D exposing (Array2D)
 import Coord exposing (Coord)
 import Quantity exposing (Quantity(..))
 import Random
-import Shaders exposing (Vertex)
 import Simplex
-import Sprite
 import Tile exposing (Tile(..))
 import Units exposing (CellLocalUnit, CellUnit)
 
@@ -27,7 +25,7 @@ treeSize =
 
 randomTreePosition : Coord CellLocalUnit -> Random.Generator (Coord CellLocalUnit)
 randomTreePosition offset =
-    Random.map2 (\x y -> Coord.xy x y |> Coord.addTuple offset)
+    Random.map2 (\x y -> Coord.xy x y |> Coord.plus offset)
         (Random.int 0 (terrainSize - Tuple.first treeSize))
         (Random.int -1 (terrainSize - Tuple.second treeSize))
 

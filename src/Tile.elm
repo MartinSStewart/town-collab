@@ -7,7 +7,6 @@ module Tile exposing
     , Tile(..)
     , TileData
     , allTiles
-    , fromChar
     , getData
     , hasCollision
     , hasCollisionWithCoord
@@ -35,16 +34,6 @@ import Quantity exposing (Quantity(..))
 import Set exposing (Set)
 import Units exposing (CellLocalUnit, TileLocalUnit, WorldUnit)
 import Vector2d
-
-
-charToTile : Dict Char Tile
-charToTile =
-    List.map (\tile -> ( getData tile |> .char, tile )) allTiles |> Dict.fromList
-
-
-fromChar : Char -> Maybe Tile
-fromChar char =
-    Dict.get char charToTile
 
 
 type Tile
@@ -472,7 +461,6 @@ type alias TileData =
     , texturePositionTopLayer : Maybe { yOffset : Int, texturePosition : ( Int, Int ) }
     , size : ( Int, Int )
     , collisionMask : CollisionMask
-    , char : Char
     , railPath : RailPathType
     , nextClockwise : Tile
     }
@@ -581,7 +569,7 @@ hasCollision positionA tileA positionB tileB =
             let
                 ( Quantity offsetX, Quantity offsetY ) =
                     positionB
-                        |> Coord.minusTuple positionA
+                        |> Coord.minus positionA
 
                 intersection =
                     Set.map (\( cx, cy ) -> ( cx + offsetX, cy + offsetY )) setB
@@ -607,7 +595,7 @@ hasCollisionWithCoord positionA positionB tileB =
             (x >= x2 && x < x2 + width2) && (y >= y2 && y < y2 + height2)
 
         CustomCollision setB ->
-            Set.member (positionA |> Coord.minusTuple positionB |> Coord.toTuple) setB
+            Set.member (positionA |> Coord.minus positionB |> Coord.toTuple) setB
 
 
 getData : Tile -> TileData
@@ -618,7 +606,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = ' '
             , railPath = NoRailPath
             , nextClockwise = EmptyTile
             }
@@ -637,7 +624,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'h'
             , railPath = NoRailPath
             , nextClockwise = HouseLeft
             }
@@ -656,7 +642,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'h'
             , railPath = NoRailPath
             , nextClockwise = HouseDown
             }
@@ -675,7 +660,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'h'
             , railPath = NoRailPath
             , nextClockwise = HouseRight
             }
@@ -694,7 +678,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'h'
             , railPath = NoRailPath
             , nextClockwise = HouseUp
             }
@@ -704,7 +687,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = 'r'
             , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
             , nextClockwise = RailVertical
             }
@@ -714,7 +696,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = 'R'
             , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
             , nextClockwise = RailHorizontal
             }
@@ -738,7 +719,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'q'
             , railPath = SingleRailPath RailPathBottomToRight
             , nextClockwise = RailBottomToLeft
             }
@@ -762,7 +742,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'w'
             , railPath = SingleRailPath RailPathBottomToLeft
             , nextClockwise = RailTopToLeft
             }
@@ -786,7 +765,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'a'
             , railPath = SingleRailPath RailPathTopToRight
             , nextClockwise = RailBottomToRight
             }
@@ -810,7 +788,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 's'
             , railPath = SingleRailPath RailPathTopToLeft
             , nextClockwise = RailTopToRight
             }
@@ -842,7 +819,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'Q'
             , railPath = SingleRailPath RailPathBottomToRightLarge
             , nextClockwise = RailBottomToLeftLarge
             }
@@ -874,7 +850,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'W'
             , railPath = SingleRailPath RailPathBottomToLeftLarge
             , nextClockwise = RailTopToLeftLarge
             }
@@ -906,7 +881,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'A'
             , railPath = SingleRailPath RailPathTopToRightLarge
             , nextClockwise = RailBottomToRightLarge
             }
@@ -938,7 +912,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'S'
             , railPath = SingleRailPath RailPathTopToLeftLarge
             , nextClockwise = RailTopToRightLarge
             }
@@ -948,7 +921,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = 'e'
             , railPath =
                 DoubleRailPath
                     (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
@@ -975,7 +947,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'n'
             , railPath = SingleRailPath RailPathStrafeDown
             , nextClockwise = RailStrafeLeft
             }
@@ -999,7 +970,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'm'
             , railPath = SingleRailPath RailPathStrafeUp
             , nextClockwise = RailStrafeRight
             }
@@ -1023,7 +993,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'N'
             , railPath = SingleRailPath RailPathStrafeLeft
             , nextClockwise = RailStrafeUp
             }
@@ -1047,7 +1016,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'M'
             , railPath = SingleRailPath RailPathStrafeRight
             , nextClockwise = RailStrafeDown
             }
@@ -1072,7 +1040,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 't'
             , railPath = SingleRailPath trainHouseRightRailPath
             , nextClockwise = TrainHouseLeft
             }
@@ -1097,7 +1064,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'T'
             , railPath = SingleRailPath trainHouseLeftRailPath
             , nextClockwise = TrainHouseRight
             }
@@ -1107,7 +1073,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
-            , char = 'u'
             , railPath = SingleRailPath RailPathStrafeDownSmall
             , nextClockwise = RailStrafeLeftSmall
             }
@@ -1117,7 +1082,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 4, 2 )
             , collisionMask = DefaultCollision
-            , char = 'j'
             , railPath = SingleRailPath RailPathStrafeUpSmall
             , nextClockwise = RailStrafeRightSmall
             }
@@ -1127,7 +1091,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
-            , char = 'U'
             , railPath = SingleRailPath RailPathStrafeLeftSmall
             , nextClockwise = RailStrafeUpSmall
             }
@@ -1137,7 +1100,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 2, 4 )
             , collisionMask = DefaultCollision
-            , char = 'J'
             , railPath = SingleRailPath RailPathStrafeRightSmall
             , nextClockwise = RailStrafeDownSmall
             }
@@ -1147,7 +1109,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = 'z'
             , railPath = NoRailPath
             , nextClockwise = Sidewalk
             }
@@ -1157,7 +1118,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = 'x'
             , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
             , nextClockwise = SidewalkVerticalRailCrossing
             }
@@ -1167,7 +1127,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = 'X'
             , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
             , nextClockwise = SidewalkHorizontalRailCrossing
             }
@@ -1191,7 +1150,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'i'
             , railPath =
                 DoubleRailPath
                     RailPathBottomToRight
@@ -1218,7 +1176,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'o'
             , railPath =
                 DoubleRailPath
                     RailPathBottomToLeft
@@ -1245,7 +1202,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'k'
             , railPath =
                 DoubleRailPath
                     RailPathTopToRight
@@ -1272,7 +1228,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'l'
             , railPath =
                 DoubleRailPath
                     RailPathTopToLeft
@@ -1299,7 +1254,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'I'
             , railPath =
                 DoubleRailPath
                     RailPathBottomToRight
@@ -1326,7 +1280,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'O'
             , railPath =
                 DoubleRailPath
                     RailPathBottomToLeft
@@ -1353,7 +1306,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'K'
             , railPath =
                 DoubleRailPath
                     RailPathTopToRight
@@ -1380,7 +1332,6 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
-            , char = 'L'
             , railPath =
                 DoubleRailPath
                     RailPathTopToLeft
@@ -1393,7 +1344,6 @@ getData tile =
             , texturePositionTopLayer = Just { yOffset = -1, texturePosition = ( 0, 33 ) }
             , size = ( 4, 5 )
             , collisionMask = postOfficeCollision
-            , char = 'p'
             , railPath =
                 SingleRailPath
                     (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
@@ -1405,7 +1355,6 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 1, 1 )
             , collisionMask = DefaultCollision
-            , char = 'b'
             , railPath = NoRailPath
             , nextClockwise = MowedGrass4
             }
@@ -1415,17 +1364,15 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = ( 4, 4 )
             , collisionMask = DefaultCollision
-            , char = 'B'
             , railPath = NoRailPath
             , nextClockwise = MowedGrass4
             }
 
         PineTree ->
             { texturePosition = ( 11, 24 )
-            , texturePositionTopLayer = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = ( 11, 24 ) }
             , size = ( 1, 2 )
             , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
-            , char = '1'
             , railPath = NoRailPath
             , nextClockwise = PineTree
             }

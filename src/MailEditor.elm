@@ -261,9 +261,9 @@ handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosit
         mailCoord : Coord MailPixelUnit
         mailCoord =
             uiCoord
-                |> Coord.minusTuple
+                |> Coord.minus
                     (Coord.tuple imageData.textureSize
-                        |> Coord.divideTuple (Coord.tuple ( 2, 2 ))
+                        |> Coord.divide (Coord.tuple ( 2, 2 ))
                     )
                 |> uiPixelToMailPixel
 
@@ -430,7 +430,7 @@ open config startPosition model =
 
 uiPixelToMailPixel : Coord UiPixelUnit -> Coord MailPixelUnit
 uiPixelToMailPixel coord =
-    coord |> Coord.addTuple (Coord.tuple ( mailWidth // 2, mailHeight // 2 )) |> Coord.toTuple |> Coord.tuple
+    coord |> Coord.plus (Coord.tuple ( mailWidth // 2, mailHeight // 2 )) |> Coord.toTuple |> Coord.tuple
 
 
 validImagePosition : ImageData -> Coord MailPixelUnit -> Bool
@@ -619,7 +619,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                 tilePosition : Coord UiPixelUnit
                 tilePosition =
                     mousePosition_
-                        |> Coord.addTuple (Coord.tuple ( imageWidth // -2, imageHeight // -2 ))
+                        |> Coord.plus (Coord.tuple ( imageWidth // -2, imageHeight // -2 ))
 
                 ( tileX, tileY ) =
                     Coord.toTuple tilePosition

@@ -2,17 +2,17 @@ module Coord exposing
     ( Coord
     , RawCellCoord
     , absTuple
-    , addTuple
     , addTuple_
     , area
-    , divideTuple
+    , divide
     , floorPoint
     , maxTuple
     , minTuple
-    , minusTuple
+    , minus
     , minusTuple_
     , multiplyTuple
     , origin
+    , plus
     , roundPoint
     , toPoint2d
     , toTuple
@@ -21,7 +21,9 @@ module Coord exposing
     , toggleSet
     , translateMat4
     , tuple
+    , xOnly
     , xy
+    , yOnly
     )
 
 import EverySet exposing (EverySet)
@@ -55,8 +57,8 @@ origin =
     tuple ( 0, 0 )
 
 
-addTuple : Coord unit -> Coord unit -> Coord unit
-addTuple ( x0, y0 ) ( x1, y1 ) =
+plus : Coord unit -> Coord unit -> Coord unit
+plus ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.plus x0 x1, Quantity.plus y0 y1 )
 
 
@@ -65,8 +67,8 @@ addTuple_ ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.plus (Quantity x0) x1, Quantity.plus (Quantity y0) y1 )
 
 
-minusTuple : Coord unit -> Coord unit -> Coord unit
-minusTuple ( x0, y0 ) ( x1, y1 ) =
+minus : Coord unit -> Coord unit -> Coord unit
+minus ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.minus x0 x1, Quantity.minus y0 y1 )
 
 
@@ -80,8 +82,8 @@ multiplyTuple ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.multiplyBy x0 x1, Quantity.multiplyBy y0 y1 )
 
 
-divideTuple : Coord unit -> Coord unit -> Coord unit
-divideTuple ( Quantity x0, Quantity y0 ) ( Quantity x1, Quantity y1 ) =
+divide : Coord unit -> Coord unit -> Coord unit
+divide ( Quantity x0, Quantity y0 ) ( Quantity x1, Quantity y1 ) =
     ( x1 // x0 |> Quantity, y1 // y0 |> Quantity )
 
 
@@ -159,3 +161,13 @@ toggleSet value set =
 
     else
         EverySet.insert value set
+
+
+xOnly : Coord a -> Coord a
+xOnly ( Quantity x, _ ) =
+    ( Quantity x, Quantity 0 )
+
+
+yOnly : Coord a -> Coord a
+yOnly ( _, Quantity y ) =
+    ( Quantity 0, Quantity y )

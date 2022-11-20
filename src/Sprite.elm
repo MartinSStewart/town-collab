@@ -1,10 +1,11 @@
-module Sprite exposing (getIndices, getQuadIndices, spriteMesh, spriteMeshWithZ)
+module Sprite exposing (getIndices, getQuadIndices, spriteMesh, spriteMeshWithZ, toMesh)
 
 import Coord exposing (Coord)
 import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Tile
+import WebGL
 
 
 spriteMesh : ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
@@ -35,3 +36,8 @@ getIndices indexOffset =
     [ ( 4 * indexOffset + 3, 4 * indexOffset + 1, 4 * indexOffset )
     , ( 4 * indexOffset + 2, 4 * indexOffset + 1, 4 * indexOffset + 3 )
     ]
+
+
+toMesh : List a -> WebGL.Mesh a
+toMesh vertices =
+    WebGL.indexedTriangles vertices (getQuadIndices vertices)
