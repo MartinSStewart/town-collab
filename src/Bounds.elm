@@ -64,7 +64,7 @@ multiplyBy scalar (Bounds bounds_) =
 bounds : Coord unit -> Coord unit -> Bounds unit
 bounds min_ max_ =
     Bounds
-        { min = Coord.minTuple min_ max_
+        { min = Coord.minimum min_ max_
         , max = Coord.maxTuple min_ max_
         }
 

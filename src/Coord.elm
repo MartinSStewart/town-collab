@@ -7,7 +7,7 @@ module Coord exposing
     , divide
     , floorPoint
     , maxTuple
-    , minTuple
+    , minimum
     , minus
     , minusTuple_
     , multiplyTuple
@@ -21,9 +21,13 @@ module Coord exposing
     , toggleSet
     , translateMat4
     , tuple
+    , x
     , xOnly
+    , xRaw
     , xy
+    , y
     , yOnly
+    , yRaw
     )
 
 import EverySet exposing (EverySet)
@@ -41,15 +45,15 @@ type alias RawCellCoord =
 area : Coord unit -> Int
 area coord =
     let
-        ( x, y ) =
+        ( x_, y_ ) =
             toTuple coord
     in
-    x * y
+    x_ * y_
 
 
 translateMat4 : Coord unit -> Mat4 -> Mat4
-translateMat4 ( Quantity x, Quantity y ) =
-    Mat4.translate3 (toFloat x) (toFloat y) 0
+translateMat4 ( Quantity x_, Quantity y_ ) =
+    Mat4.translate3 (toFloat x_) (toFloat y_) 0
 
 
 origin : Coord units
@@ -87,8 +91,8 @@ divide ( Quantity x0, Quantity y0 ) ( Quantity x1, Quantity y1 ) =
     ( x1 // x0 |> Quantity, y1 // y0 |> Quantity )
 
 
-minTuple : Coord unit -> Coord unit -> Coord unit
-minTuple ( x0, y0 ) ( x1, y1 ) =
+minimum : Coord unit -> Coord unit -> Coord unit
+minimum ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.min x0 x1, Quantity.min y0 y1 )
 
 
@@ -103,51 +107,71 @@ absTuple ( x0, y0 ) =
 
 
 toVec2 : Coord units -> Vec2
-toVec2 ( Quantity x, Quantity y ) =
-    Math.Vector2.vec2 (toFloat x) (toFloat y)
+toVec2 ( Quantity x_, Quantity y_ ) =
+    Math.Vector2.vec2 (toFloat x_) (toFloat y_)
 
 
 toPoint2d : Coord units -> Point2d units coordinate
-toPoint2d ( x, y ) =
-    Point2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
+toPoint2d ( x_, y_ ) =
+    Point2d.xy (Quantity.toFloatQuantity x_) (Quantity.toFloatQuantity y_)
 
 
 roundPoint : Point2d units coordinate -> Coord units
 roundPoint point2d =
     let
-        { x, y } =
+        point =
             Point2d.unwrap point2d
     in
-    tuple ( round x, round y )
+    tuple ( round point.x, round point.y )
 
 
 floorPoint : Point2d units coordinate -> Coord units
 floorPoint point2d =
     let
-        { x, y } =
+        point =
             Point2d.unwrap point2d
     in
-    tuple ( floor x, floor y )
+    tuple ( floor point.x, floor point.y )
 
 
 toVector2d : Coord units -> Vector2d units coordinate
-toVector2d ( x, y ) =
-    Vector2d.xy (Quantity.toFloatQuantity x) (Quantity.toFloatQuantity y)
+toVector2d ( x_, y_ ) =
+    Vector2d.xy (Quantity.toFloatQuantity x_) (Quantity.toFloatQuantity y_)
 
 
 toTuple : Coord units -> ( Int, Int )
-toTuple ( Quantity x, Quantity y ) =
-    ( x, y )
+toTuple ( Quantity x_, Quantity y_ ) =
+    ( x_, y_ )
 
 
 tuple : ( Int, Int ) -> Coord units
-tuple ( x, y ) =
-    ( Quantity x, Quantity y )
+tuple ( x_, y_ ) =
+    ( Quantity x_, Quantity y_ )
 
 
 xy : Int -> Int -> Coord units
-xy x y =
-    ( Quantity x, Quantity y )
+xy x_ y_ =
+    ( Quantity x_, Quantity y_ )
+
+
+x : Coord units -> Quantity Int units
+x ( x_, _ ) =
+    x_
+
+
+y : Coord units -> Quantity Int units
+y ( _, y_ ) =
+    y_
+
+
+xRaw : Coord units -> Int
+xRaw ( Quantity x_, _ ) =
+    x_
+
+
+yRaw : Coord units -> Int
+yRaw ( _, Quantity y_ ) =
+    y_
 
 
 type alias Coord units =
@@ -164,10 +188,10 @@ toggleSet value set =
 
 
 xOnly : Coord a -> Coord a
-xOnly ( Quantity x, _ ) =
-    ( Quantity x, Quantity 0 )
+xOnly ( Quantity x_, _ ) =
+    ( Quantity x_, Quantity 0 )
 
 
 yOnly : Coord a -> Coord a
-yOnly ( _, Quantity y ) =
-    ( Quantity 0, Quantity y )
+yOnly ( _, Quantity y_ ) =
+    ( Quantity 0, Quantity y_ )

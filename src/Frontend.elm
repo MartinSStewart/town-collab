@@ -2120,7 +2120,7 @@ pixelToUi coord =
 
 toolbarSize : Coord UiPixelUnit
 toolbarSize =
-    Coord.xy 600 200
+    Coord.xy 748 174
 
 
 toolbarPosition : Coord Pixels -> Coord UiPixelUnit
@@ -2132,30 +2132,100 @@ toolbarPosition windowSize =
         |> Coord.minus (Coord.divide (Coord.xy 2 1) toolbarSize)
 
 
-toolbarTile : Coord UiPixelUnit -> Tile -> List Vertex
-toolbarTile offset tile =
-    let
-        tileData =
-            Tile.getData tile
+toolbarButtonSize : Coord units
+toolbarButtonSize =
+    Coord.xy 80 80
 
-        buttonSize =
-            Coord.xy 80 80
 
-        bottomRight =
-            offset |> Coord.plus buttonSize
-    in
-    Sprite.spriteMesh (Coord.toTuple offset) bottomRight ( 380, 153 ) ( 1, 1 )
+toolbarTileButton : Coord UiPixelUnit -> Tile -> List Vertex
+toolbarTileButton offset tile =
+    Sprite.spriteMesh (Coord.toTuple offset) toolbarButtonSize ( 380, 153 ) ( 1, 1 )
         ++ Sprite.spriteMesh
             (offset |> Coord.plus (Coord.xy 2 2) |> Coord.toTuple)
-            (bottomRight |> Coord.minus (Coord.xy 4 4))
+            (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
             ( 381, 153 )
             ( 1, 1 )
-        ++ Grid.tileMesh offset tile
+        ++ tileMesh offset tile
 
 
 toolbarMesh : WebGL.Mesh Vertex
 toolbarMesh =
     Sprite.spriteMesh ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
         ++ Sprite.spriteMesh ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
-        ++ toolbarTile (Coord.xy 0 0) PostOffice
+        ++ (List.indexedMap
+                (\index tile ->
+                    let
+                        x =
+                            (Coord.xRaw toolbarButtonSize + 2) * (index // 2) + 6
+
+                        y =
+                            (Coord.yRaw toolbarButtonSize + 2) * modBy 2 index + 6
+                    in
+                    toolbarTileButton (Coord.xy x y) tile
+                )
+                buttonTiles
+                |> List.concat
+           )
         |> Sprite.toMesh
+
+
+buttonTiles : List Tile
+buttonTiles =
+    [ EmptyTile
+    , PostOffice
+    , HouseDown
+    , TrainHouseRight
+    , RailBottomToLeft
+    , RailBottomToLeft_SplitRight
+    , RailBottomToLeft_SplitUp
+    , RailStrafeRightSmall
+    , RailStrafeRight
+    , RailBottomToLeftLarge
+    , RailHorizontal
+    , RailCrossing
+    , SidewalkHorizontalRailCrossing
+    , Sidewalk
+    , MowedGrass1
+    , MowedGrass4
+    , PineTree
+    ]
+
+
+tileMesh : Coord unit -> Tile -> List Vertex
+tileMesh position tile =
+    let
+        data : TileData
+        data =
+            Tile.getData tile
+
+        size : Coord units
+        size =
+            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.size)
+                |> Coord.minimum toolbarButtonSize
+
+        spriteSize =
+            if data.size == ( 1, 1 ) then
+                Coord.multiplyTuple ( 2, 2 ) size
+
+            else
+                size
+
+        position2 =
+            position |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize) |> Coord.plus (Coord.divide (Coord.xy 2 2) toolbarButtonSize)
+
+        texturePosition : Coord units
+        texturePosition =
+            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.texturePosition)
+    in
+    Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition) (Coord.toTuple size)
+        ++ (case data.texturePositionTopLayer of
+                Just topLayer ->
+                    let
+                        texturePosition2 =
+                            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple topLayer.texturePosition)
+                    in
+                    Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
+
+                Nothing ->
+                    []
+           )

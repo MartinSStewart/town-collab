@@ -17,7 +17,7 @@ view : { viewPoint : Coord Units.WorldUnit, viewSize : Coord Units.WorldUnit } -
 view view_ =
     let
         viewPoint_ =
-            Coord.minTuple ( Units.tileUnit 100, Units.tileUnit 100 ) view_.viewPoint
+            Coord.minimum ( Units.tileUnit 100, Units.tileUnit 100 ) view_.viewPoint
                 |> Coord.maxTuple ( Units.tileUnit -100, Units.tileUnit -100 )
 
         maxSize =
@@ -25,7 +25,7 @@ view view_ =
     in
     View
         { viewPoint = viewPoint_
-        , viewSize = Coord.absTuple view_.viewSize |> Coord.minTuple maxSize
+        , viewSize = Coord.absTuple view_.viewSize |> Coord.minimum maxSize
         }
 
 

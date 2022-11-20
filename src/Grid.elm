@@ -457,18 +457,13 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
         |> Sprite.toMesh
 
 
-backgroundMesh : Coord CellUnit -> WebGL.Mesh Vertex
-backgroundMesh cellPosition =
-    grassMesh cellPosition |> Sprite.toMesh
-
-
 getTerrainLookupValue : Coord TerrainUnit -> Array2D Bool -> Bool
 getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
     Array2D.get (x + 1) (y + 1) lookup |> Maybe.withDefault True
 
 
-grassMesh : Coord CellUnit -> List Vertex
-grassMesh cellPosition =
+backgroundMesh : Coord CellUnit -> WebGL.Mesh Vertex
+backgroundMesh cellPosition =
     let
         lookup : Array2D Bool
         lookup =
@@ -593,9 +588,10 @@ grassMesh cellPosition =
                             corners ++ tile
                         )
             )
+        |> Sprite.toMesh
 
 
-tileMesh : Coord unit -> Tile -> List Vertex
+tileMesh : Coord WorldUnit -> Tile -> List Vertex
 tileMesh position tile =
     let
         data =
@@ -618,7 +614,7 @@ tileMesh position tile =
 tileMeshHelper :
     Float
     -> Bool
-    -> Coord unit
+    -> Coord WorldUnit
     -> ( Int, Int )
     -> ( Int, Int )
     -> List Vertex
