@@ -15,6 +15,7 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector3 as Vec3
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
+import Random
 import Shaders exposing (Vertex)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Time
@@ -379,19 +380,29 @@ findNextTileHelper trainId time neighborCellPos position speed direction state t
             let
                 maybeNewTrain : Maybe TrainData
                 maybeNewTrain =
-                    List.filterMap
-                        (checkPath trainId time tile state.mail neighborCellPos position speed direction)
-                        (case Tile.getData tile.value |> .railPath of
-                            NoRailPath ->
-                                []
+                    case
+                        List.filterMap
+                            (checkPath trainId time tile state.mail neighborCellPos position speed direction)
+                            (case Tile.getData tile.value |> .railPath of
+                                NoRailPath ->
+                                    []
 
-                            SingleRailPath path1 ->
-                                [ path1 ]
+                                SingleRailPath path1 ->
+                                    [ path1 ]
 
-                            DoubleRailPath path1 path2 ->
-                                [ path1, path2 ]
-                        )
-                        |> List.head
+                                DoubleRailPath path1 path2 ->
+                                    [ path1, path2 ]
+                            )
+                    of
+                        firstPath :: restOfPaths ->
+                            Random.step
+                                (Random.uniform firstPath restOfPaths)
+                                (Time.posixToMillis time |> Random.initialSeed)
+                                |> Tuple.first
+                                |> Just
+
+                        [] ->
+                            Nothing
             in
             case maybeNewTrain of
                 Just newTrain ->
