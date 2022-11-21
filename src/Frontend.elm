@@ -24,6 +24,7 @@ import Grid exposing (Grid)
 import GridCell
 import Html exposing (Html)
 import Html.Attributes
+import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel
 import Id exposing (Id, TrainId, UserId)
@@ -269,15 +270,26 @@ tryLoading frontendLoading =
         |> Maybe.withDefault ( Loading frontendLoading, Cmd.none )
 
 
+defaultTileHotkeys : Dict String Tile
 defaultTileHotkeys =
     Dict.fromList
-        [ ( "h", HouseDown )
-        , ( "p", PostOffice )
-        , ( "r", RailHorizontal )
-        , ( "t", PineTree )
-        , ( "b", RailBottomToLeft )
-        , ( "B", RailBottomToLeftLarge )
-        , ( "e", EmptyTile )
+        [ ( "1", EmptyTile )
+        , ( "2", PostOffice )
+        , ( "3", HouseDown )
+        , ( "4", TrainHouseRight )
+        , ( "q", RailBottomToLeft )
+        , ( "w", RailBottomToLeft_SplitRight )
+        , ( "e", RailBottomToRight_SplitLeft )
+        , ( "r", RailStrafeRightSmall )
+        , ( "a", RailStrafeRight )
+        , ( "s", RailBottomToLeftLarge )
+        , ( "d", RailHorizontal )
+        , ( "f", RailCrossing )
+        , ( "z", SidewalkHorizontalRailCrossing )
+        , ( "x", Sidewalk )
+        , ( "c", MowedGrass1 )
+        , ( "v", MowedGrass4 )
+        , ( "b", PineTree )
         ]
 
 
@@ -1704,6 +1716,7 @@ canvasView audioData model =
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
+        , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
         , Html.Events.Extra.Mouse.onDown
             (\{ clientPos, button } ->
                 MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
