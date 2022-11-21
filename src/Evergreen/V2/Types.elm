@@ -176,6 +176,9 @@ type alias FrontendLoaded =
     , lastTileRotation : List Time.Posix
     , userIdMesh : WebGL.Mesh Evergreen.V2.Shaders.Vertex
     , lastPlacementError : Maybe Time.Posix
+    , tileHotkeys : Dict.Dict String Evergreen.V2.Tile.Tile
+    , toolbarMesh : WebGL.Mesh Evergreen.V2.Shaders.Vertex
+    , previousTileHover : Maybe Evergreen.V2.Tile.Tile
     }
 
 

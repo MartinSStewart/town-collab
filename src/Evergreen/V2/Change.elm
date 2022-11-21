@@ -29,7 +29,7 @@ type ServerChange
 
 
 type ClientChange
-    = ViewBoundsChange (Evergreen.V2.Bounds.Bounds Evergreen.V2.Units.CellUnit) (List ( Evergreen.V2.Coord.Coord Evergreen.V2.Units.CellUnit, Evergreen.V2.GridCell.Cell ))
+    = ViewBoundsChange (Evergreen.V2.Bounds.Bounds Evergreen.V2.Units.CellUnit) (List ( Evergreen.V2.Coord.Coord Evergreen.V2.Units.CellUnit, Evergreen.V2.GridCell.CellData ))
 
 
 type Change
