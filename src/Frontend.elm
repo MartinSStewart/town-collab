@@ -54,7 +54,7 @@ import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Time
 import Train exposing (Train)
 import Types exposing (..)
-import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, UiPixelUnit, WorldUnit)
+import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -272,6 +272,9 @@ tryLoading frontendLoading =
 loadedInit : Time.Posix -> FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
 loadedInit time loading loadingData =
     let
+        currentTile =
+            Nothing
+
         model : FrontendLoaded
         model =
             { key = loading.key
@@ -306,11 +309,20 @@ loadedInit time loading loadingData =
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
             , mailEditor = MailEditor.initEditor loadingData.mailEditor
-            , currentTile = Nothing
+            , currentTile = currentTile
             , lastTileRotation = []
             , userIdMesh = createUserIdMesh loadingData.user
             , lastPlacementError = Nothing
-            , tileHotkeys = Dict.empty
+            , tileHotkeys =
+                Dict.fromList
+                    [ ( "h", HouseDown )
+                    , ( "p", PostOffice )
+                    , ( "r", RailHorizontal )
+                    , ( "t", PineTree )
+                    , ( "b", RailBottomToLeft )
+                    ]
+            , toolbarMesh = toolbarMesh currentTile
+            , previousTileHover = Nothing
             }
     in
     ( updateMeshes model model
@@ -554,11 +566,11 @@ updateLoaded audioData msg model =
                                     { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                         }
                             |> (\model2 ->
-                                    case model2.currentTile of
-                                        Just { tile } ->
+                                    case ( model2.currentTile, model2.previousTileHover ) of
+                                        ( Just { tile }, Nothing ) ->
                                             placeTile False tile model2
 
-                                        Nothing ->
+                                        _ ->
                                             model2
                                )
 
@@ -571,7 +583,7 @@ updateLoaded audioData msg model =
 
                       else
                         model
-                    , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
+                    , Cmd.none
                     )
 
         MouseUp button mousePosition ->
@@ -649,6 +661,36 @@ updateLoaded audioData msg model =
             )
 
         MouseMove mousePosition ->
+            let
+                mousePosition2 : Coord Pixels
+                mousePosition2 =
+                    mousePosition
+                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                        |> Coord.roundPoint
+
+                tileHover =
+                    List.indexedMap
+                        (\index tile ->
+                            let
+                                topLeft =
+                                    toolbarToPixel
+                                        model.devicePixelRatio
+                                        model.windowSize
+                                        (toolbarTileButtonPosition index)
+                            in
+                            if
+                                Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
+                                    |> Bounds.contains mousePosition2
+                            then
+                                Just tile
+
+                            else
+                                Nothing
+                        )
+                        buttonTiles
+                        |> List.filterMap identity
+                        |> List.head
+            in
             ( { model
                 | mouseLeft =
                     case model.mouseLeft of
@@ -664,6 +706,13 @@ updateLoaded audioData msg model =
 
                         MouseButtonUp _ ->
                             MouseButtonUp { current = mousePosition }
+                , toolbarMesh =
+                    if model.previousTileHover == tileHover then
+                        model.toolbarMesh
+
+                    else
+                        toolbarMesh tileHover
+                , previousTileHover = tileHover
               }
                 |> (\model2 ->
                         case ( model2.currentTile, model2.mouseLeft ) of
@@ -900,10 +949,7 @@ keyMsgCanvasUpdate key model =
         ( Keyboard.Spacebar, False ) ->
             ( case Dict.get " " model.tileHotkeys of
                 Just tile ->
-                    { model
-                        | currentTile =
-                            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile |> Sprite.toMesh }
-                    }
+                    setCurrentTile tile model
 
                 Nothing ->
                     model
@@ -913,10 +959,7 @@ keyMsgCanvasUpdate key model =
         ( Keyboard.Character string, False ) ->
             ( case Dict.get string model.tileHotkeys of
                 Just tile ->
-                    { model
-                        | currentTile =
-                            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile |> Sprite.toMesh }
-                    }
+                    setCurrentTile tile model
 
                 Nothing ->
                     model
@@ -925,6 +968,14 @@ keyMsgCanvasUpdate key model =
 
         _ ->
             ( model, Cmd.none )
+
+
+setCurrentTile : Tile -> FrontendLoaded -> FrontendLoaded
+setCurrentTile tile model =
+    { model
+        | currentTile =
+            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile |> Sprite.toMesh }
+    }
 
 
 mainMouseButtonUp :
@@ -974,38 +1025,42 @@ mainMouseButtonUp mousePosition mouseState model =
                 _ ->
                     False
     in
-    ( if isSmallDistance && canOpenMailEditor then
-        let
-            localModel : LocalGrid_
-            localModel =
-                LocalGrid.localModel model2.localModel
+    ( case ( model.previousTileHover, isSmallDistance, canOpenMailEditor ) of
+        ( Just tileHover, True, _ ) ->
+            setCurrentTile tileHover model2
 
-            maybeTile : Maybe { userId : Id UserId, value : Tile, position : Coord WorldUnit }
-            maybeTile =
-                Grid.getTile (screenToWorld model2 mousePosition |> Coord.floorPoint) localModel.grid
-        in
-        case maybeTile of
-            Just tile ->
-                if tile.userId == localModel.user && tile.value == PostOffice then
-                    { model2
-                        | mailEditor =
-                            MailEditor.open
-                                model
-                                (Coord.toPoint2d tile.position
-                                    |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                    |> worldToScreen model2
-                                )
-                                model.mailEditor
-                    }
+        ( Nothing, True, True ) ->
+            let
+                localModel : LocalGrid_
+                localModel =
+                    LocalGrid.localModel model2.localModel
 
-                else
+                maybeTile : Maybe { userId : Id UserId, value : Tile, position : Coord WorldUnit }
+                maybeTile =
+                    Grid.getTile (screenToWorld model2 mousePosition |> Coord.floorPoint) localModel.grid
+            in
+            case maybeTile of
+                Just tile ->
+                    if tile.userId == localModel.user && tile.value == PostOffice then
+                        { model2
+                            | mailEditor =
+                                MailEditor.open
+                                    model
+                                    (Coord.toPoint2d tile.position
+                                        |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
+                                        |> worldToScreen model2
+                                    )
+                                    model.mailEditor
+                        }
+
+                    else
+                        model2
+
+                Nothing ->
                     model2
 
-            Nothing ->
-                model2
-
-      else
-        model2
+        _ ->
+            model2
     , Cmd.none
     )
 
@@ -1222,33 +1277,6 @@ createDebrisMesh appStartTime removedTiles =
                         in
                         y + height
                     )
-
-        indices : List ( Int, Int, Int )
-        indices =
-            List.map
-                (\{ tile } ->
-                    let
-                        data =
-                            Tile.getData tile
-
-                        ( textureW, textureH ) =
-                            data.size
-                    in
-                    textureW
-                        * textureH
-                        * (case data.texturePositionTopLayer of
-                            Just _ ->
-                                2
-
-                            Nothing ->
-                                1
-                          )
-                )
-                list
-                |> List.sum
-                |> (+) -1
-                |> List.range 0
-                |> List.concatMap Sprite.getIndices
     in
     List.map
         (\{ position, tile, time } ->
@@ -1755,8 +1783,8 @@ canvasView audioData model =
                             , time = Duration.from model.startTime model.time |> Duration.inSeconds
                             }
                        ]
-                    ++ (case model.currentTile of
-                            Just currentTile ->
+                    ++ (case ( model.previousTileHover, model.currentTile ) of
+                            ( Nothing, Just currentTile ) ->
                                 let
                                     mousePosition : Coord WorldUnit
                                     mousePosition =
@@ -1851,7 +1879,7 @@ canvasView audioData model =
                                     }
                                 ]
 
-                            Nothing ->
+                            _ ->
                                 []
                        )
                     ++ [ WebGL.entityWith
@@ -1861,11 +1889,11 @@ canvasView audioData model =
                             model.userIdMesh
                             { view =
                                 Mat4.makeScale3
-                                    (uiZoomFactor * 2 / toFloat windowWidth)
-                                    (uiZoomFactor * -2 / toFloat windowHeight)
+                                    (2 / toFloat windowWidth)
+                                    (-2 / toFloat windowHeight)
                                     1
                                     |> Coord.translateMat4
-                                        (Coord.tuple ( -windowWidth // (uiZoomFactor * 2), -windowHeight // (uiZoomFactor * 2) ))
+                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                             , texture = texture
                             , textureSize = textureSize
                             }
@@ -1873,13 +1901,15 @@ canvasView audioData model =
                             [ Shaders.blend ]
                             Shaders.vertexShader
                             Shaders.fragmentShader
-                            toolbarMesh
+                            model.toolbarMesh
                             { view =
                                 Mat4.makeScale3
-                                    (uiZoomFactor * 2 / toFloat windowWidth)
-                                    (uiZoomFactor * -2 / toFloat windowHeight)
+                                    (2 / toFloat windowWidth)
+                                    (-2 / toFloat windowHeight)
                                     1
-                                    |> Coord.translateMat4 (toolbarPosition model.windowSize)
+                                    |> Coord.translateMat4
+                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                                    |> Coord.translateMat4 (toolbarPosition model.devicePixelRatio model.windowSize)
                             , texture = texture
                             , textureSize = textureSize
                             }
@@ -1901,10 +1931,6 @@ canvasView audioData model =
             _ ->
                 []
         )
-
-
-uiZoomFactor =
-    1
 
 
 getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
@@ -2113,22 +2139,17 @@ subscriptions _ model =
         ]
 
 
-pixelToUi : Coord Pixels -> Coord UiPixelUnit
-pixelToUi coord =
-    Coord.divide (Coord.xy uiZoomFactor uiZoomFactor) coord |> Coord.toTuple |> Coord.tuple
-
-
-toolbarSize : Coord UiPixelUnit
+toolbarSize : Coord Pixels
 toolbarSize =
     Coord.xy 748 174
 
 
-toolbarPosition : Coord Pixels -> Coord UiPixelUnit
-toolbarPosition windowSize =
-    pixelToUi windowSize
-        |> Coord.yOnly
-        |> Coord.divide (Coord.xy 1 2)
-        |> Coord.plus (Coord.xy 0 -2)
+toolbarPosition : Float -> Coord Pixels -> Coord Pixels
+toolbarPosition devicePixelRatio windowSize =
+    windowSize
+        |> Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio )
+        |> Coord.divide (Coord.xy 2 1)
+        |> Coord.plus (Coord.xy 0 -4)
         |> Coord.minus (Coord.divide (Coord.xy 2 1) toolbarSize)
 
 
@@ -2137,31 +2158,39 @@ toolbarButtonSize =
     Coord.xy 80 80
 
 
-toolbarTileButton : Coord UiPixelUnit -> Tile -> List Vertex
-toolbarTileButton offset tile =
-    Sprite.spriteMesh (Coord.toTuple offset) toolbarButtonSize ( 380, 153 ) ( 1, 1 )
+toolbarTileButton : Bool -> Coord ToolbarUnit -> Tile -> List Vertex
+toolbarTileButton highlight offset tile =
+    Sprite.spriteMesh (Coord.toTuple offset)
+        toolbarButtonSize
+        ( if highlight then
+            379
+
+          else
+            380
+        , 153
+        )
+        ( 1, 1 )
         ++ Sprite.spriteMesh
             (offset |> Coord.plus (Coord.xy 2 2) |> Coord.toTuple)
             (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
-            ( 381, 153 )
+            ( if highlight then
+                379
+
+              else
+                381
+            , 153
+            )
             ( 1, 1 )
         ++ tileMesh offset tile
 
 
-toolbarMesh : WebGL.Mesh Vertex
-toolbarMesh =
+toolbarMesh : Maybe Tile -> WebGL.Mesh Vertex
+toolbarMesh currentTile =
     Sprite.spriteMesh ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
         ++ Sprite.spriteMesh ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
         ++ (List.indexedMap
                 (\index tile ->
-                    let
-                        x =
-                            (Coord.xRaw toolbarButtonSize + 2) * (index // 2) + 6
-
-                        y =
-                            (Coord.yRaw toolbarButtonSize + 2) * modBy 2 index + 6
-                    in
-                    toolbarTileButton (Coord.xy x y) tile
+                    toolbarTileButton (Just tile == currentTile) (toolbarTileButtonPosition index) tile
                 )
                 buttonTiles
                 |> List.concat
@@ -2191,6 +2220,22 @@ buttonTiles =
     ]
 
 
+type ToolbarUnit
+    = ToolbarUnit Never
+
+
+toolbarTileButtonPosition : Int -> Coord ToolbarUnit
+toolbarTileButtonPosition index =
+    Coord.xy
+        ((Coord.xRaw toolbarButtonSize + 2) * (index // 2) + 6)
+        ((Coord.yRaw toolbarButtonSize + 2) * modBy 2 index + 6)
+
+
+toolbarToPixel : Float -> Coord Pixels -> Coord ToolbarUnit -> Coord Pixels
+toolbarToPixel devicePixelRatio windowSize coord =
+    toolbarPosition devicePixelRatio windowSize |> Coord.changeUnit |> Coord.plus coord |> Coord.changeUnit
+
+
 tileMesh : Coord unit -> Tile -> List Vertex
 tileMesh position tile =
     let
@@ -2217,15 +2262,23 @@ tileMesh position tile =
         texturePosition =
             Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.texturePosition)
     in
-    Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition) (Coord.toTuple size)
-        ++ (case data.texturePositionTopLayer of
-                Just topLayer ->
-                    let
-                        texturePosition2 =
-                            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple topLayer.texturePosition)
-                    in
-                    Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
+    if tile == EmptyTile then
+        Sprite.spriteMesh
+            (Coord.plus (Coord.xy 10 12) position |> Coord.toTuple)
+            (Coord.tuple ( 30 * 2, 29 * 2 ))
+            ( 324, 223 )
+            ( 30, 29 )
 
-                Nothing ->
-                    []
-           )
+    else
+        Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition) (Coord.toTuple size)
+            ++ (case data.texturePositionTopLayer of
+                    Just topLayer ->
+                        let
+                            texturePosition2 =
+                                Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple topLayer.texturePosition)
+                        in
+                        Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
+
+                    Nothing ->
+                        []
+               )

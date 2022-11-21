@@ -115,6 +115,8 @@ type alias FrontendLoaded =
     , userIdMesh : WebGL.Mesh Vertex
     , lastPlacementError : Maybe Time.Posix
     , tileHotkeys : Dict String Tile
+    , toolbarMesh : WebGL.Mesh Vertex
+    , previousTileHover : Maybe Tile
     }
 
 

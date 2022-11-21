@@ -4,6 +4,7 @@ module Coord exposing
     , absTuple
     , addTuple_
     , area
+    , changeUnit
     , divide
     , floorPoint
     , maxTuple
@@ -11,6 +12,7 @@ module Coord exposing
     , minus
     , minusTuple_
     , multiplyTuple
+    , multiplyTuple_
     , origin
     , plus
     , roundPoint
@@ -66,6 +68,11 @@ plus ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.plus x0 x1, Quantity.plus y0 y1 )
 
 
+changeUnit : Coord a -> Coord b
+changeUnit ( Quantity x_, Quantity y_ ) =
+    ( Quantity x_, Quantity y_ )
+
+
 addTuple_ : ( Int, Int ) -> Coord unit -> Coord unit
 addTuple_ ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.plus (Quantity x0) x1, Quantity.plus (Quantity y0) y1 )
@@ -84,6 +91,13 @@ minusTuple_ ( x0, y0 ) ( x1, y1 ) =
 multiplyTuple : ( Int, Int ) -> Coord unit -> Coord unit
 multiplyTuple ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.multiplyBy x0 x1, Quantity.multiplyBy y0 y1 )
+
+
+multiplyTuple_ : ( Float, Float ) -> Coord unit -> Coord unit
+multiplyTuple_ ( x0, y0 ) ( x1, y1 ) =
+    ( Quantity.toFloatQuantity x1 |> Quantity.multiplyBy x0 |> Quantity.round
+    , Quantity.toFloatQuantity y1 |> Quantity.multiplyBy y0 |> Quantity.round
+    )
 
 
 divide : Coord unit -> Coord unit -> Coord unit

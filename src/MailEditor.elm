@@ -45,7 +45,7 @@ import Shaders exposing (SimpleVertex, Vertex)
 import Sprite
 import Tile
 import Time
-import Units exposing (MailPixelUnit, UiPixelUnit, WorldUnit)
+import Units exposing (MailPixelUnit, WorldUnit)
 import Vector2d
 import WebGL
 import WebGL.Texture
@@ -795,6 +795,10 @@ submitButtonPosition =
 submitButtonSize : Coord UiPixelUnit
 submitButtonSize =
     Coord.tuple ( 50, 19 )
+
+
+type UiPixelUnit
+    = UiPixelUnit Never
 
 
 submitButtonMesh : WebGL.Mesh Vertex
