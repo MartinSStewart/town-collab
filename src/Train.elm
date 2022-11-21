@@ -397,7 +397,7 @@ findNextTileHelper trainId time neighborCellPos position speed direction state t
                         firstPath :: restOfPaths ->
                             Random.step
                                 (Random.uniform firstPath restOfPaths)
-                                (Time.posixToMillis time |> Random.initialSeed)
+                                (Time.posixToMillis time + Id.toInt trainId |> Random.initialSeed)
                                 |> Tuple.first
                                 |> Just
 
