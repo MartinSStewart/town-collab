@@ -1,1 +1,0 @@
-* Trains get stuck on the large turns

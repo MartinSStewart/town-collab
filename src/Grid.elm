@@ -201,7 +201,7 @@ closeNeighborCells cellPosition localPosition =
             let
                 ( Quantity x, Quantity y ) =
                     Coord.tuple offset
-                        |> Coord.multiplyTuple ( maxTileSize - 1, maxTileSize - 1 )
+                        |> Coord.multiplyTuple ( maxTileSize, maxTileSize )
                         |> Coord.plus localPosition
 
                 ( Quantity localX, Quantity localY ) =
