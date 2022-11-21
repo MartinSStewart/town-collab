@@ -269,6 +269,18 @@ tryLoading frontendLoading =
         |> Maybe.withDefault ( Loading frontendLoading, Cmd.none )
 
 
+defaultTileHotkeys =
+    Dict.fromList
+        [ ( "h", HouseDown )
+        , ( "p", PostOffice )
+        , ( "r", RailHorizontal )
+        , ( "t", PineTree )
+        , ( "b", RailBottomToLeft )
+        , ( "B", RailBottomToLeftLarge )
+        , ( "e", EmptyTile )
+        ]
+
+
 loadedInit : Time.Posix -> FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
 loadedInit time loading loadingData =
     let
@@ -313,15 +325,8 @@ loadedInit time loading loadingData =
             , lastTileRotation = []
             , userIdMesh = createUserIdMesh loadingData.user
             , lastPlacementError = Nothing
-            , tileHotkeys =
-                Dict.fromList
-                    [ ( "h", HouseDown )
-                    , ( "p", PostOffice )
-                    , ( "r", RailHorizontal )
-                    , ( "t", PineTree )
-                    , ( "b", RailBottomToLeft )
-                    ]
-            , toolbarMesh = toolbarMesh currentTile
+            , tileHotkeys = defaultTileHotkeys
+            , toolbarMesh = toolbarMesh defaultTileHotkeys currentTile
             , previousTileHover = Nothing
             }
     in
@@ -711,7 +716,7 @@ updateLoaded audioData msg model =
                         model.toolbarMesh
 
                     else
-                        toolbarMesh tileHover
+                        toolbarMesh model.tileHotkeys tileHover
                 , previousTileHover = tileHover
               }
                 |> (\model2 ->
@@ -1605,7 +1610,7 @@ view audioData model =
 
             Loaded loadedModel ->
                 canvasView audioData loadedModel
-        , Html.node "style" [] [ Html.text "body { overflow: hidden; }" ]
+        , Html.node "style" [] [ Html.text "body { overflow: hidden; margin: 0; }" ]
         ]
     }
 
@@ -2114,7 +2119,7 @@ createUserIdMesh userId =
             "USER ID: " ++ String.fromInt (Id.toInt userId)
 
         vertices =
-            MailEditor.textMesh id ( 2, 2 )
+            Sprite.textMesh 2 id (Coord.xy 2 2)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -2158,8 +2163,12 @@ toolbarButtonSize =
     Coord.xy 80 80
 
 
-toolbarTileButton : Bool -> Coord ToolbarUnit -> Tile -> List Vertex
-toolbarTileButton highlight offset tile =
+toolbarTileButton : Maybe String -> Bool -> Coord ToolbarUnit -> Tile -> List Vertex
+toolbarTileButton maybeHotkey highlight offset tile =
+    let
+        charSize =
+            Sprite.charSize |> Coord.multiplyTuple ( 2, 2 )
+    in
     Sprite.spriteMesh (Coord.toTuple offset)
         toolbarButtonSize
         ( if highlight then
@@ -2182,15 +2191,41 @@ toolbarTileButton highlight offset tile =
             )
             ( 1, 1 )
         ++ tileMesh offset tile
+        ++ (case maybeHotkey of
+                Just hotkey ->
+                    Sprite.spriteMesh
+                        (Coord.plus
+                            (Coord.xy 0 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize + 4))
+                            offset
+                            |> Coord.toTuple
+                        )
+                        (Coord.plus (Coord.xy 2 -4) charSize)
+                        ( 380, 153 )
+                        ( 1, 1 )
+                        ++ Sprite.textMesh
+                            2
+                            hotkey
+                            (Coord.plus
+                                (Coord.xy 2 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize))
+                                offset
+                            )
+
+                Nothing ->
+                    []
+           )
 
 
-toolbarMesh : Maybe Tile -> WebGL.Mesh Vertex
-toolbarMesh currentTile =
+toolbarMesh : Dict String Tile -> Maybe Tile -> WebGL.Mesh Vertex
+toolbarMesh hotkeys currentTile =
     Sprite.spriteMesh ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
         ++ Sprite.spriteMesh ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
         ++ (List.indexedMap
                 (\index tile ->
-                    toolbarTileButton (Just tile == currentTile) (toolbarTileButtonPosition index) tile
+                    toolbarTileButton
+                        (Dict.toList hotkeys |> List.find (Tuple.second >> (==) tile) |> Maybe.map Tuple.first)
+                        (Just tile == currentTile)
+                        (toolbarTileButtonPosition index)
+                        tile
                 )
                 buttonTiles
                 |> List.concat
@@ -2206,7 +2241,7 @@ buttonTiles =
     , TrainHouseRight
     , RailBottomToLeft
     , RailBottomToLeft_SplitRight
-    , RailBottomToLeft_SplitUp
+    , RailBottomToRight_SplitLeft
     , RailStrafeRightSmall
     , RailStrafeRight
     , RailBottomToLeftLarge

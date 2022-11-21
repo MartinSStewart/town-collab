@@ -1,6 +1,7 @@
-module Sprite exposing (getIndices, getQuadIndices, spriteMesh, spriteMeshWithZ, toMesh)
+module Sprite exposing (charSize, getIndices, getQuadIndices, spriteMesh, spriteMeshWithZ, textMesh, toMesh)
 
 import Coord exposing (Coord)
+import List.Extra as List
 import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
@@ -41,3 +42,56 @@ getIndices indexOffset =
 toMesh : List a -> WebGL.Mesh a
 toMesh vertices =
     WebGL.indexedTriangles vertices (getQuadIndices vertices)
+
+
+asciiChars : List Char
+asciiChars =
+    (List.range 32 126 ++ List.range 161 172 ++ List.range 174 255)
+        |> List.map Char.fromCode
+        |> (++) [ '░', '▒', '▓', '█' ]
+        |> (++) [ '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌' ]
+
+
+charsPerRow : number
+charsPerRow =
+    25
+
+
+charSize : Coord unit
+charSize =
+    Coord.xy 10 18
+
+
+charTexturePosition : Char -> Coord unit
+charTexturePosition char =
+    case List.findIndex ((==) char) asciiChars of
+        Just index ->
+            Coord.xy
+                (768 + modBy charsPerRow index * Coord.xRaw charSize)
+                (index // charsPerRow |> (*) (Coord.yRaw charSize))
+
+        Nothing ->
+            Coord.xy 0 0
+
+
+textMesh : Int -> String -> Coord unit -> List Vertex
+textMesh charScale string position =
+    let
+        charSize_ =
+            Coord.multiplyTuple ( charScale, charScale ) charSize
+    in
+    String.toList string
+        |> List.foldl
+            (\char state ->
+                { offset = state.offset + Coord.xRaw charSize_
+                , vertices =
+                    state.vertices
+                        ++ spriteMesh
+                            (Coord.addTuple_ ( state.offset, 0 ) position |> Coord.toTuple)
+                            charSize_
+                            (charTexturePosition char |> Coord.toTuple)
+                            (Coord.toTuple charSize)
+                }
+            )
+            { offset = 0, vertices = [] }
+        |> .vertices

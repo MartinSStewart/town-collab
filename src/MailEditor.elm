@@ -22,7 +22,6 @@ module MailEditor exposing
     , open
     , openAnimationLength
     , redo
-    , textMesh
     , undo
     , updateFromBackend
     )
@@ -495,7 +494,7 @@ updateMailMesh model =
                 (List.range 0 (List.length model.current.content) |> List.concatMap Sprite.getIndices)
         , textInputMesh =
             WebGL.indexedTriangles
-                (textMesh model.current.to ( 15, 7 ))
+                (Sprite.textMesh 1 model.current.to (Coord.xy 15 7))
                 (List.range 0 (String.length model.current.to) |> List.concatMap Sprite.getIndices)
     }
 
@@ -807,7 +806,7 @@ submitButtonMesh =
         vertices =
             Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
-                ++ textMesh "SUBMIT" ( 12, 7 )
+                ++ Sprite.textMesh 1 "SUBMIT" (Coord.xy 12 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -818,7 +817,7 @@ submittingButtonMesh =
         vertices =
             Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ textMesh "SUBMITTING" ( 2, 7 )
+                ++ Sprite.textMesh 1 "SUBMITTING" (Coord.xy 2 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -829,7 +828,7 @@ submitButtonHoverMesh =
         vertices =
             Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ textMesh "SUBMIT" ( 12, 7 )
+                ++ Sprite.textMesh 1 "SUBMIT" (Coord.xy 12 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -848,7 +847,7 @@ textInputMesh =
         vertices =
             Sprite.spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
-                ++ textMesh "TO:" ( 3, 7 )
+                ++ Sprite.textMesh 1 "TO:" (Coord.xy 3 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -859,7 +858,7 @@ textInputHoverMesh =
         vertices =
             Sprite.spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ textMesh "TO:" ( 3, 7 )
+                ++ Sprite.textMesh 1 "TO:" (Coord.xy 3 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -867,82 +866,6 @@ textInputHoverMesh =
 charSize : Coord UiPixelUnit
 charSize =
     Coord.tuple ( 5, 5 )
-
-
-textMesh : String -> ( Int, Int ) -> List Vertex
-textMesh string position =
-    let
-        position_ =
-            Coord.tuple position
-    in
-    String.toList string
-        |> List.foldl
-            (\char state ->
-                let
-                    code =
-                        Char.toCode char
-
-                    index : Int
-                    index =
-                        code - Char.toCode '\''
-                in
-                if char == ' ' then
-                    { offset = state.offset + 4
-                    , vertices = state.vertices
-                    }
-
-                else if code >= 39 && code <= 90 then
-                    { offset = state.offset + charWidth char
-                    , vertices =
-                        state.vertices
-                            ++ Sprite.spriteMesh
-                                (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple)
-                                charSize
-                                ( 764 + index * 5, 0 )
-                                ( 5, 5 )
-                    }
-
-                else
-                    { offset = state.offset + 6
-                    , vertices =
-                        state.vertices
-                            ++ Sprite.spriteMesh
-                                (Coord.addTuple_ ( state.offset, 0 ) position_ |> Coord.toTuple)
-                                charSize
-                                ( 1019, 5 )
-                                ( 5, 5 )
-                    }
-            )
-            { offset = 0, vertices = [] }
-        |> .vertices
-
-
-charWidth : Char -> number
-charWidth char =
-    case char of
-        'T' ->
-            4
-
-        'J' ->
-            4
-
-        'I' ->
-            4
-
-        'M' ->
-            6
-
-        'W' ->
-            6
-
-        '@' ->
-            6
-
-        'Y' ->
-            4
-
-        _ ->
-            5
 
 
 imageMesh : { position : Coord MailPixelUnit, image : Image } -> List Vertex
