@@ -1015,20 +1015,25 @@ hoverAt model mousePosition =
                         Nothing
 
             trainHovers =
-                AssocList.toList model.trains
-                    |> List.filterMap
-                        (\( trainId, train ) ->
-                            let
-                                distance =
-                                    Train.actualPosition train |> Point2d.distanceFrom mouseWorldPosition_
-                            in
-                            if distance |> Quantity.lessThan (Quantity 0.9) then
-                                Just ( { trainId = trainId, train = train }, distance )
+                case model.currentTile of
+                    Just _ ->
+                        Nothing
 
-                            else
-                                Nothing
-                        )
-                    |> Quantity.minimumBy Tuple.second
+                    Nothing ->
+                        AssocList.toList model.trains
+                            |> List.filterMap
+                                (\( trainId, train ) ->
+                                    let
+                                        distance =
+                                            Train.actualPosition train |> Point2d.distanceFrom mouseWorldPosition_
+                                    in
+                                    if distance |> Quantity.lessThan (Quantity 0.9) then
+                                        Just ( { trainId = trainId, train = train }, distance )
+
+                                    else
+                                        Nothing
+                                )
+                            |> Quantity.minimumBy Tuple.second
         in
         case ( trainHovers, postOfficeHover ) of
             ( Just ( train, _ ), _ ) ->
