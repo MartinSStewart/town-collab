@@ -583,7 +583,7 @@ updateLoaded audioData msg model =
                                     { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
                         }
                             |> (\model2 ->
-                                    case ( model2.currentTile, model2.previousTileHover ) of
+                                    case ( model2.currentTile, tileHover model2 mousePosition ) of
                                         ( Just { tile }, Nothing ) ->
                                             placeTile False tile model2
 
@@ -679,34 +679,13 @@ updateLoaded audioData msg model =
 
         MouseMove mousePosition ->
             let
-                mousePosition2 : Coord Pixels
-                mousePosition2 =
-                    mousePosition
-                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
-                        |> Coord.roundPoint
+                tileHover_ =
+                    case tileHover model mousePosition of
+                        Just (TileHover tile) ->
+                            Just tile
 
-                tileHover =
-                    List.indexedMap
-                        (\index tile ->
-                            let
-                                topLeft =
-                                    toolbarToPixel
-                                        model.devicePixelRatio
-                                        model.windowSize
-                                        (toolbarTileButtonPosition index)
-                            in
-                            if
-                                Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
-                                    |> Bounds.contains mousePosition2
-                            then
-                                Just tile
-
-                            else
-                                Nothing
-                        )
-                        buttonTiles
-                        |> List.filterMap identity
-                        |> List.head
+                        _ ->
+                            Nothing
             in
             ( { model
                 | mouseLeft =
@@ -724,12 +703,12 @@ updateLoaded audioData msg model =
                         MouseButtonUp _ ->
                             MouseButtonUp { current = mousePosition }
                 , toolbarMesh =
-                    if model.previousTileHover == tileHover then
+                    if model.previousTileHover == tileHover_ then
                         model.toolbarMesh
 
                     else
-                        toolbarMesh model.tileHotkeys tileHover
-                , previousTileHover = tileHover
+                        toolbarMesh model.tileHotkeys tileHover_
+                , previousTileHover = tileHover_
               }
                 |> (\model2 ->
                         case ( model2.currentTile, model2.mouseLeft ) of
@@ -918,6 +897,66 @@ updateLoaded audioData msg model =
                     ( model, Cmd.none )
 
 
+type Hover
+    = TileHover Tile
+    | ToolbarHover
+
+
+tileHover : FrontendLoaded -> Point2d Pixels Pixels -> Maybe Hover
+tileHover model mousePosition =
+    let
+        mousePosition2 : Coord Pixels
+        mousePosition2 =
+            mousePosition
+                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                |> Coord.roundPoint
+
+        toolbarTopLeft =
+            toolbarToPixel
+                model.devicePixelRatio
+                model.windowSize
+                Coord.origin
+
+        containsToolbar =
+            Bounds.bounds toolbarTopLeft (Coord.plus toolbarSize toolbarTopLeft) |> Bounds.contains mousePosition2
+    in
+    if containsToolbar then
+        let
+            containsTileButton : Maybe Tile
+            containsTileButton =
+                List.indexedMap
+                    (\index tile ->
+                        let
+                            topLeft =
+                                toolbarToPixel
+                                    model.devicePixelRatio
+                                    model.windowSize
+                                    (toolbarTileButtonPosition index)
+                        in
+                        if
+                            Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
+                                |> Bounds.contains mousePosition2
+                        then
+                            Just tile
+
+                        else
+                            Nothing
+                    )
+                    buttonTiles
+                    |> List.filterMap identity
+                    |> List.head
+        in
+        case containsTileButton of
+            Just tile ->
+                TileHover tile |> Just
+
+            Nothing ->
+                Just ToolbarHover
+
+    else
+        Nothing
+
+
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 replaceUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.replaceUrl model.key url )
@@ -1031,6 +1070,7 @@ mainMouseButtonUp mousePosition mouseState model =
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
 
+        canOpenMailEditor : Bool
         canOpenMailEditor =
             case ( model.mailEditor.showMailEditor, model.currentTile ) of
                 ( MailEditorClosed, Nothing ) ->
@@ -1042,36 +1082,23 @@ mainMouseButtonUp mousePosition mouseState model =
                 _ ->
                     False
     in
-    ( case ( model.previousTileHover, isSmallDistance, canOpenMailEditor ) of
-        ( Just tileHover, True, _ ) ->
-            setCurrentTile tileHover model2
+    ( case ( tileHover model mousePosition, isSmallDistance, canOpenMailEditor ) of
+        ( Just (TileHover tileHover_), True, _ ) ->
+            setCurrentTile tileHover_ model2
 
         ( Nothing, True, True ) ->
-            let
-                localModel : LocalGrid_
-                localModel =
-                    LocalGrid.localModel model2.localModel
-
-                maybeTile : Maybe { userId : Id UserId, value : Tile, position : Coord WorldUnit }
-                maybeTile =
-                    Grid.getTile (screenToWorld model2 mousePosition |> Coord.floorPoint) localModel.grid
-            in
-            case maybeTile of
-                Just tile ->
-                    if tile.userId == localModel.user && tile.value == PostOffice then
-                        { model2
-                            | mailEditor =
-                                MailEditor.open
-                                    model
-                                    (Coord.toPoint2d tile.position
-                                        |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                        |> worldToScreen model2
-                                    )
-                                    model.mailEditor
-                        }
-
-                    else
-                        model2
+            case postOfficeHover mousePosition model of
+                Just postOfficePosition ->
+                    { model2
+                        | mailEditor =
+                            MailEditor.open
+                                model
+                                (Coord.toPoint2d postOfficePosition
+                                    |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
+                                    |> worldToScreen model2
+                                )
+                                model.mailEditor
+                    }
 
                 Nothing ->
                     model2
@@ -1080,6 +1107,25 @@ mainMouseButtonUp mousePosition mouseState model =
             model2
     , Cmd.none
     )
+
+
+postOfficeHover : Point2d Pixels Pixels -> FrontendLoaded -> Maybe (Coord WorldUnit)
+postOfficeHover mousePosition model =
+    let
+        localModel : LocalGrid_
+        localModel =
+            LocalGrid.localModel model.localModel
+    in
+    case Grid.getTile (screenToWorld model mousePosition |> Coord.floorPoint) localModel.grid of
+        Just tile ->
+            if tile.userId == localModel.user && tile.value == PostOffice then
+                Just tile.position
+
+            else
+                Nothing
+
+        Nothing ->
+            Nothing
 
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
@@ -1139,14 +1185,17 @@ devicePixelRatioUpdate devicePixelRatio model =
 
 mouseWorldPosition : FrontendLoaded -> Point2d WorldUnit WorldUnit
 mouseWorldPosition model =
-    (case model.mouseLeft of
+    mouseScreenPosition model |> screenToWorld model
+
+
+mouseScreenPosition : FrontendLoaded -> Point2d Pixels Pixels
+mouseScreenPosition model =
+    case model.mouseLeft of
         MouseButtonDown { current } ->
             current
 
         MouseButtonUp { current } ->
             current
-    )
-        |> screenToWorld model
 
 
 cursorPosition : TileData -> FrontendLoaded -> Coord WorldUnit
@@ -1522,7 +1571,7 @@ offsetViewPoint :
     -> Point2d Pixels Pixels
     -> Point2d Pixels Pixels
     -> Point2d WorldUnit WorldUnit
-offsetViewPoint ({ windowSize, viewPoint, devicePixelRatio, zoomFactor } as model) mouseStart mouseCurrent =
+offsetViewPoint ({ windowSize, viewPoint, zoomFactor } as model) mouseStart mouseCurrent =
     let
         delta : Vector2d WorldUnit WorldUnit
         delta =
@@ -1705,6 +1754,9 @@ canvasView audioData model =
                     (negate <| toFloat <| round (x * Units.tileSize))
                     (negate <| toFloat <| round (y * Units.tileSize))
                     0
+
+        mouseScreenPosition_ =
+            mouseScreenPosition model
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False
@@ -1714,6 +1766,22 @@ canvasView audioData model =
         ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
+        , Html.Attributes.style "cursor"
+            (case tileHover model mouseScreenPosition_ of
+                Just (TileHover _) ->
+                    "pointer"
+
+                Just ToolbarHover ->
+                    "default"
+
+                Nothing ->
+                    case postOfficeHover mouseScreenPosition_ model of
+                        Just _ ->
+                            "pointer"
+
+                        Nothing ->
+                            "default"
+            )
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
@@ -1801,7 +1869,7 @@ canvasView audioData model =
                             , time = Duration.from model.startTime model.time |> Duration.inSeconds
                             }
                        ]
-                    ++ (case ( model.previousTileHover, model.currentTile ) of
+                    ++ (case ( tileHover model mouseScreenPosition_, model.currentTile ) of
                             ( Nothing, Just currentTile ) ->
                                 let
                                     mousePosition : Coord WorldUnit
