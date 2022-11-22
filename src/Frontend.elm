@@ -51,7 +51,8 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import Task
-import Tile exposing (RailPathType(..), Tile(..), TileData)
+import Terrain
+import Tile exposing (CollisionMask(..), RailPathType(..), Tile(..), TileData)
 import Time
 import Train exposing (Train)
 import Types exposing (..)
@@ -1014,6 +1015,7 @@ hoverAt model mousePosition =
                     _ ->
                         Nothing
 
+            trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
             trainHovers =
                 case model.currentTile of
                     Just _ ->
@@ -1331,12 +1333,17 @@ placeTile isDragPlacement tile model =
         change =
             { position = cursorPosition_
             , change = tile
+            , userId = currentUserId model
             }
+
+        grid : Grid
+        grid =
+            LocalGrid.localModel model.localModel |> .grid
     in
     if isDragPlacement && hasCollision then
         model
 
-    else if not (Grid.canAddChange change) then
+    else if not (canPlaceTile change model.trains grid) then
         if tile == EmptyTile then
             { model
                 | lastTilePlaced =
@@ -1386,7 +1393,13 @@ placeTile isDragPlacement tile model =
                     model
 
             ( model3, outMsg ) =
-                updateLocalModel (Change.LocalGridChange change) model2
+                updateLocalModel
+                    (Change.LocalGridChange
+                        { position = cursorPosition_
+                        , change = tile
+                        }
+                    )
+                    model2
 
             removedTiles : List { time : Time.Posix, tile : Tile, position : Coord WorldUnit }
             removedTiles =
@@ -1428,6 +1441,28 @@ placeTile isDragPlacement tile model =
             , removedTileParticles = removedTiles ++ model3.removedTileParticles
             , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
         }
+
+
+canPlaceTile : Grid.GridChange -> AssocList.Dict (Id TrainId) Train -> Grid -> Bool
+canPlaceTile change trains grid =
+    if Grid.canPlaceTile change then
+        let
+            trains_ =
+                AssocList.toList trains
+        in
+        Grid.addChange change grid
+            |> .removed
+            |> List.all
+                (\{ tile, position } ->
+                    if tile == TrainHouseLeft || tile == TrainHouseRight then
+                        List.any (\( _, train ) -> train.home == position && train.position == position) trains_
+
+                    else
+                        True
+                )
+
+    else
+        False
 
 
 createDebrisMesh : Time.Posix -> List RemovedTileParticle -> WebGL.Mesh DebrisVertex
@@ -1565,6 +1600,7 @@ updateMeshes oldModel newModel =
         oldCurrentTile =
             currentTile oldModel
 
+        newCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ) }
         newCurrentTile =
             currentTile newModel
 
@@ -1580,7 +1616,25 @@ updateMeshes oldModel newModel =
             in
             { foreground =
                 Grid.foregroundMesh
-                    newCurrentTile
+                    (case newCurrentTile of
+                        Just newCurrentTile_ ->
+                            if
+                                canPlaceTile
+                                    { userId = currentUserId newModel
+                                    , position = newCurrentTile_.position
+                                    , change = newCurrentTile_.tile
+                                    }
+                                    newModel.trains
+                                    localModel.grid
+                            then
+                                newCurrentTile
+
+                            else
+                                Nothing
+
+                        Nothing ->
+                            newCurrentTile
+                    )
                     coord
                     localModel.user
                     (GridCell.flatten newCell)
@@ -2109,11 +2163,13 @@ canvasView audioData model =
                                             Vec4.vec4 1 1 1 1
 
                                         else if
-                                            Grid.canAddChange
+                                            canPlaceTile
                                                 { position = mousePosition
                                                 , change = currentTile.tile
                                                 , userId = currentUserId model
                                                 }
+                                                model.trains
+                                                (LocalGrid.localModel model.localModel |> .grid)
                                         then
                                             Vec4.vec4 1 1 1 0.5
 

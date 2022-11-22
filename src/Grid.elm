@@ -7,7 +7,7 @@ module Grid exposing
     , allCells
     , allCellsDict
     , backgroundMesh
-    , canAddChange
+    , canPlaceTile
     , cellAndLocalCoordToWorld
     , cellAndLocalPointToWorld
     , changeCount
@@ -253,8 +253,8 @@ closeNeighborCells cellPosition localPosition =
         ]
 
 
-canAddChange : { a | position : Coord WorldUnit, change : Tile } -> Bool
-canAddChange change =
+canPlaceTile : { a | position : Coord WorldUnit, change : Tile } -> Bool
+canPlaceTile change =
     let
         ( cellPosition, ( Quantity x, Quantity y ) ) =
             worldToCellAndLocalCoord change.position
