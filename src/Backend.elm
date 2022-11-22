@@ -602,14 +602,10 @@ handleAddingTrain tile position =
         let
             ( path, speed ) =
                 if tile == TrainHouseLeft then
-                    ( Tile.trainHouseLeftRailPath
-                    , Quantity -0.1
-                    )
+                    ( Tile.trainHouseLeftRailPath, Quantity -0.1 )
 
                 else
-                    ( Tile.trainHouseRightRailPath
-                    , Quantity 0.1
-                    )
+                    ( Tile.trainHouseRightRailPath, Quantity 0.1 )
         in
         { position = position
         , path = path
@@ -617,6 +613,7 @@ handleAddingTrain tile position =
         , t = 0.5
         , speed = speed
         , stoppedAtPostOffice = Nothing
+        , home = position
         }
             |> Just
 

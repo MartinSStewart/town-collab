@@ -32,6 +32,7 @@ type alias Train =
     , t : Float
     , speed : Quantity Float (Rate TileLocalUnit Seconds)
     , stoppedAtPostOffice : Maybe { time : Time.Posix, userId : Id UserId }
+    , home : Coord WorldUnit
     }
 
 
@@ -222,6 +223,7 @@ moveTrainHelper trainId time distanceLeft state train =
                         , t = newTrain.t
                         , speed = newTrain.speed
                         , stoppedAtPostOffice = newTrain.stoppedAtPostOffice
+                        , home = train.home
                         }
 
                 Nothing ->
