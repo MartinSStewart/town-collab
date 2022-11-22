@@ -10,12 +10,14 @@ module Types exposing
     , FrontendModel_(..)
     , FrontendMsg
     , FrontendMsg_(..)
+    , Hover(..)
     , LoadingData_
     , MouseButtonState(..)
     , RemovedTileParticle
     , ToBackend(..)
     , ToFrontend(..)
     , ToolType(..)
+    , ViewPoint(..)
     )
 
 import AssocList
@@ -77,12 +79,17 @@ type alias FrontendLoading =
     }
 
 
+type ViewPoint
+    = NormalViewPoint (Point2d WorldUnit WorldUnit)
+    | TrainViewPoint { trainId : Id TrainId, startViewPoint : Point2d WorldUnit WorldUnit, startTime : Time.Posix }
+
+
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : AssocList.Dict (Id TrainId) Train
     , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
-    , viewPoint : Point2d WorldUnit WorldUnit
+    , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
     , texture : Maybe Texture
     , trainTexture : Maybe Texture
@@ -134,7 +141,15 @@ type MouseButtonState
         { start : Point2d Pixels Pixels
         , start_ : Point2d WorldUnit WorldUnit
         , current : Point2d Pixels Pixels
+        , hover : Maybe Hover
         }
+
+
+type Hover
+    = TileHover Tile
+    | ToolbarHover
+    | PostOfficeHover { postOfficePosition : Coord WorldUnit }
+    | TrainHover { trainId : Id TrainId, train : Train }
 
 
 type alias BackendModel =

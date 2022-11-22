@@ -305,7 +305,7 @@ loadedInit time loading loadingData =
             , localModel = LocalGrid.init loadingData
             , trains = loadingData.trains
             , meshes = Dict.empty
-            , viewPoint = Coord.toPoint2d loading.viewPoint
+            , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
             , viewPointLastInterval = Point2d.origin
             , texture = Nothing
             , trainTexture = Nothing
@@ -487,9 +487,7 @@ updateLoaded audioData msg model =
               else
                 case Url.Parser.parse UrlHelper.urlParser url of
                     Just (UrlHelper.InternalRoute { viewPoint }) ->
-                        { model
-                            | viewPoint = viewPoint |> Coord.toPoint2d
-                        }
+                        { model | viewPoint = Coord.toPoint2d viewPoint |> NormalViewPoint }
 
                     _ ->
                         model
@@ -540,6 +538,10 @@ updateLoaded audioData msg model =
             devicePixelRatioUpdate devicePixelRatio model
 
         MouseDown button mousePosition ->
+            let
+                hover =
+                    hoverAt model mousePosition
+            in
             case model.mailEditor.showMailEditor of
                 MailEditorOpening { startTime, startPosition } ->
                     if
@@ -566,7 +568,11 @@ updateLoaded audioData msg model =
                         ( { model
                             | mouseLeft =
                                 MouseButtonDown
-                                    { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                                    { start = mousePosition
+                                    , start_ = screenToWorld model mousePosition
+                                    , current = mousePosition
+                                    , hover = hover
+                                    }
                             , mailEditor = newMailEditor
                           }
                         , cmd
@@ -580,10 +586,14 @@ updateLoaded audioData msg model =
                         { model
                             | mouseLeft =
                                 MouseButtonDown
-                                    { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                                    { start = mousePosition
+                                    , start_ = screenToWorld model mousePosition
+                                    , current = mousePosition
+                                    , hover = hover
+                                    }
                         }
                             |> (\model2 ->
-                                    case ( model2.currentTile, tileHover model2 mousePosition ) of
+                                    case ( model2.currentTile, hover ) of
                                         ( Just { tile }, Nothing ) ->
                                             placeTile False tile model2
 
@@ -595,7 +605,11 @@ updateLoaded audioData msg model =
                         { model
                             | mouseMiddle =
                                 MouseButtonDown
-                                    { start = mousePosition, start_ = screenToWorld model mousePosition, current = mousePosition }
+                                    { start = mousePosition
+                                    , start_ = screenToWorld model mousePosition
+                                    , current = mousePosition
+                                    , hover = hover
+                                    }
                         }
 
                       else
@@ -605,8 +619,8 @@ updateLoaded audioData msg model =
 
         MouseUp button mousePosition ->
             case ( button, model.mouseLeft, model.mouseMiddle ) of
-                ( MainButton, MouseButtonDown mouseState, _ ) ->
-                    mainMouseButtonUp mousePosition mouseState model
+                ( MainButton, MouseButtonDown previousMouseState, _ ) ->
+                    mainMouseButtonUp mousePosition previousMouseState model
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
                     ( { model
@@ -616,7 +630,7 @@ updateLoaded audioData msg model =
                                 model.viewPoint
 
                             else
-                                offsetViewPoint model mouseState.start mousePosition
+                                offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
                       }
                     , Cmd.none
                     )
@@ -680,7 +694,7 @@ updateLoaded audioData msg model =
         MouseMove mousePosition ->
             let
                 tileHover_ =
-                    case tileHover model mousePosition of
+                    case hoverAt model mousePosition of
                         Just (TileHover tile) ->
                             Just tile
 
@@ -712,8 +726,22 @@ updateLoaded audioData msg model =
               }
                 |> (\model2 ->
                         case ( model2.currentTile, model2.mouseLeft ) of
-                            ( Just { tile }, MouseButtonDown _ ) ->
-                                placeTile True tile model2
+                            ( Just { tile }, MouseButtonDown { hover } ) ->
+                                case hover of
+                                    Just ToolbarHover ->
+                                        model2
+
+                                    Just (TileHover _) ->
+                                        model2
+
+                                    Just (PostOfficeHover _) ->
+                                        placeTile True tile model2
+
+                                    Just (TrainHover _) ->
+                                        placeTile True tile model2
+
+                                    Nothing ->
+                                        placeTile True tile model2
 
                             _ ->
                                 model2
@@ -843,12 +871,18 @@ updateLoaded audioData msg model =
                 localGrid =
                     LocalGrid.localModel model.localModel
 
+                oldViewPoint =
+                    actualViewPoint model
+
                 newViewPoint =
                     Point2d.translateBy
                         (Keyboard.Arrows.arrows model.pressedKeys
                             |> (\{ x, y } -> Vector2d.unsafe { x = toFloat x, y = toFloat -y })
                         )
-                        model.viewPoint
+                        oldViewPoint
+
+                movedViewWithArrowKeys =
+                    Keyboard.Arrows.arrows model.pressedKeys /= { x = 0, y = 0 }
 
                 model2 =
                     { model
@@ -870,11 +904,19 @@ updateLoaded audioData msg model =
                             List.filter
                                 (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
                                 model.removedTileParticles
-                        , viewPoint = newViewPoint
+                        , viewPoint =
+                            if movedViewWithArrowKeys then
+                                NormalViewPoint newViewPoint
+
+                            else
+                                model.viewPoint
                     }
             in
-            ( case ( newViewPoint == model.viewPoint, model2.mouseLeft, model2.currentTile ) of
-                ( False, MouseButtonDown _, Just currentTile ) ->
+            ( case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTile ) of
+                ( ( True, _ ), MouseButtonDown _, Just currentTile ) ->
+                    placeTile True currentTile.tile model2
+
+                ( ( _, TrainViewPoint _ ), MouseButtonDown _, Just currentTile ) ->
                     placeTile True currentTile.tile model2
 
                 _ ->
@@ -897,13 +939,8 @@ updateLoaded audioData msg model =
                     ( model, Cmd.none )
 
 
-type Hover
-    = TileHover Tile
-    | ToolbarHover
-
-
-tileHover : FrontendLoaded -> Point2d Pixels Pixels -> Maybe Hover
-tileHover model mousePosition =
+hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Maybe Hover
+hoverAt model mousePosition =
     let
         mousePosition2 : Coord Pixels
         mousePosition2 =
@@ -954,7 +991,54 @@ tileHover model mousePosition =
                 Just ToolbarHover
 
     else
-        Nothing
+        let
+            mouseWorldPosition_ : Point2d WorldUnit WorldUnit
+            mouseWorldPosition_ =
+                screenToWorld model mousePosition
+
+            postOfficeHover : Maybe (Coord WorldUnit)
+            postOfficeHover =
+                let
+                    localModel : LocalGrid_
+                    localModel =
+                        LocalGrid.localModel model.localModel
+                in
+                case ( model.currentTile, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
+                    ( Nothing, Just tile ) ->
+                        if tile.userId == localModel.user && tile.value == PostOffice then
+                            Just tile.position
+
+                        else
+                            Nothing
+
+                    _ ->
+                        Nothing
+
+            trainHovers =
+                AssocList.toList model.trains
+                    |> List.filterMap
+                        (\( trainId, train ) ->
+                            let
+                                distance =
+                                    Train.actualPosition train |> Point2d.distanceFrom mouseWorldPosition_
+                            in
+                            if distance |> Quantity.lessThan (Quantity 1) then
+                                Just ( { trainId = trainId, train = train }, distance )
+
+                            else
+                                Nothing
+                        )
+                    |> Quantity.minimumBy Tuple.second
+        in
+        case ( trainHovers, postOfficeHover ) of
+            ( Just ( train, _ ), _ ) ->
+                TrainHover train |> Just
+
+            ( Nothing, Just position ) ->
+                PostOfficeHover { postOfficePosition = position } |> Just
+
+            ( Nothing, Nothing ) ->
+                Nothing
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1036,13 +1120,13 @@ setCurrentTile tile model =
 
 mainMouseButtonUp :
     Point2d Pixels Pixels
-    -> { a | start : Point2d Pixels Pixels }
+    -> { a | start : Point2d Pixels Pixels, hover : Maybe Hover }
     -> FrontendLoaded
     -> ( FrontendLoaded, Cmd FrontendMsg_ )
-mainMouseButtonUp mousePosition mouseState model =
+mainMouseButtonUp mousePosition previousMouseState model =
     let
         isSmallDistance =
-            Vector2d.from mouseState.start mousePosition
+            Vector2d.from previousMouseState.start mousePosition
                 |> Vector2d.length
                 |> Quantity.lessThan (Pixels.pixels 5)
 
@@ -1057,7 +1141,12 @@ mainMouseButtonUp mousePosition mouseState model =
                                     model.viewPoint
 
                                 Nothing ->
-                                    offsetViewPoint model mouseState.start mousePosition
+                                    offsetViewPoint
+                                        model
+                                        previousMouseState.hover
+                                        previousMouseState.start
+                                        mousePosition
+                                        |> NormalViewPoint
 
                         _ ->
                             model.viewPoint
@@ -1069,63 +1158,61 @@ mainMouseButtonUp mousePosition mouseState model =
                         model.highlightContextMenu
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
-
-        canOpenMailEditor : Bool
-        canOpenMailEditor =
-            case ( model.mailEditor.showMailEditor, model.currentTile ) of
-                ( MailEditorClosed, Nothing ) ->
-                    True
-
-                ( MailEditorClosing { startTime }, Nothing ) ->
-                    Duration.from startTime model.time |> Quantity.greaterThan MailEditor.openAnimationLength
-
-                _ ->
-                    False
     in
-    ( case ( tileHover model mousePosition, isSmallDistance, canOpenMailEditor ) of
-        ( Just (TileHover tileHover_), True, _ ) ->
-            setCurrentTile tileHover_ model2
+    ( if isSmallDistance then
+        case hoverAt model mousePosition of
+            Just (TileHover tileHover_) ->
+                setCurrentTile tileHover_ model2
 
-        ( Nothing, True, True ) ->
-            case postOfficeHover mousePosition model of
-                Just postOfficePosition ->
+            Just (PostOfficeHover { postOfficePosition }) ->
+                if canOpenMailEditor model2 then
                     { model2
                         | mailEditor =
                             MailEditor.open
-                                model
+                                model2
                                 (Coord.toPoint2d postOfficePosition
                                     |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
                                     |> worldToScreen model2
                                 )
-                                model.mailEditor
+                                model2.mailEditor
                     }
 
-                Nothing ->
+                else
                     model2
 
-        _ ->
-            model2
+            Just (TrainHover { trainId, train }) ->
+                { model2
+                    | viewPoint =
+                        TrainViewPoint
+                            { trainId = trainId
+                            , startViewPoint = actualViewPoint model2
+                            , startTime = model2.time
+                            }
+                }
+
+            Just ToolbarHover ->
+                model2
+
+            Nothing ->
+                model2
+
+      else
+        model2
     , Cmd.none
     )
 
 
-postOfficeHover : Point2d Pixels Pixels -> FrontendLoaded -> Maybe (Coord WorldUnit)
-postOfficeHover mousePosition model =
-    let
-        localModel : LocalGrid_
-        localModel =
-            LocalGrid.localModel model.localModel
-    in
-    case Grid.getTile (screenToWorld model mousePosition |> Coord.floorPoint) localModel.grid of
-        Just tile ->
-            if tile.userId == localModel.user && tile.value == PostOffice then
-                Just tile.position
+canOpenMailEditor : FrontendLoaded -> Bool
+canOpenMailEditor model =
+    case ( model.mailEditor.showMailEditor, model.currentTile ) of
+        ( MailEditorClosed, Nothing ) ->
+            True
 
-            else
-                Nothing
+        ( MailEditorClosing { startTime }, Nothing ) ->
+            Duration.from startTime model.time |> Quantity.greaterThan MailEditor.openAnimationLength
 
-        Nothing ->
-            Nothing
+        _ ->
+            False
 
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
@@ -1568,36 +1655,77 @@ viewBoundsUpdate ( model, cmd ) =
 
 offsetViewPoint :
     FrontendLoaded
+    -> Maybe Hover
     -> Point2d Pixels Pixels
     -> Point2d Pixels Pixels
     -> Point2d WorldUnit WorldUnit
-offsetViewPoint ({ windowSize, viewPoint, zoomFactor } as model) mouseStart mouseCurrent =
+offsetViewPoint ({ windowSize, zoomFactor } as model) maybeHover mouseStart mouseCurrent =
     let
-        delta : Vector2d WorldUnit WorldUnit
-        delta =
-            Vector2d.from mouseCurrent mouseStart
-                |> Vector2d.at (scaleForScreenToWorld model)
-                |> Vector2d.placeIn (Units.screenFrame viewPoint)
+        canDragView =
+            case maybeHover of
+                Just (PostOfficeHover _) ->
+                    True
+
+                Just (TrainHover _) ->
+                    True
+
+                Just ToolbarHover ->
+                    False
+
+                Just (TileHover _) ->
+                    False
+
+                Nothing ->
+                    True
     in
-    Point2d.translateBy delta viewPoint
+    if canDragView then
+        let
+            delta : Vector2d WorldUnit WorldUnit
+            delta =
+                Vector2d.from mouseCurrent mouseStart
+                    |> Vector2d.at (scaleForScreenToWorld model)
+                    |> Vector2d.placeIn (Units.screenFrame viewPoint2)
+
+            viewPoint2 =
+                actualViewPointHelper model
+        in
+        Point2d.translateBy delta viewPoint2
+
+    else
+        actualViewPointHelper model
 
 
 actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
     case ( MailEditor.isOpen model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( False, _, MouseButtonDown { start, current } ) ->
-            offsetViewPoint model start current
+        ( False, _, MouseButtonDown { start, current, hover } ) ->
+            offsetViewPoint model hover start current
 
-        ( False, MouseButtonDown { start, current }, _ ) ->
+        ( False, MouseButtonDown { start, current, hover }, _ ) ->
             case model.currentTile of
                 Just _ ->
-                    model.viewPoint
+                    actualViewPointHelper model
 
                 Nothing ->
-                    offsetViewPoint model start current
+                    offsetViewPoint model hover start current
 
         _ ->
-            model.viewPoint
+            actualViewPointHelper model
+
+
+actualViewPointHelper : FrontendLoaded -> Point2d WorldUnit WorldUnit
+actualViewPointHelper model =
+    case model.viewPoint of
+        NormalViewPoint viewPoint ->
+            viewPoint
+
+        TrainViewPoint trainViewPoint ->
+            case AssocList.get trainViewPoint.trainId model.trains of
+                Just train ->
+                    Train.actualPosition train
+
+                Nothing ->
+                    trainViewPoint.startViewPoint
 
 
 updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Cmd FrontendMsg_ )
@@ -1761,26 +1889,31 @@ canvasView audioData model =
     WebGL.toHtmlWith
         [ WebGL.alpha False
         , WebGL.antialias
-        , WebGL.clearColor 1 1 1 1 --0.6 0.8 1 1
+        , WebGL.clearColor 1 1 1 1
         , WebGL.depth 1
         ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "cursor"
-            (case tileHover model mouseScreenPosition_ of
-                Just (TileHover _) ->
-                    "pointer"
+            (if MailEditor.isOpen model.mailEditor then
+                "default"
 
-                Just ToolbarHover ->
-                    "default"
+             else
+                case hoverAt model mouseScreenPosition_ of
+                    Just (TileHover _) ->
+                        "pointer"
 
-                Nothing ->
-                    case postOfficeHover mouseScreenPosition_ model of
-                        Just _ ->
-                            "pointer"
+                    Just ToolbarHover ->
+                        "default"
 
-                        Nothing ->
-                            "default"
+                    Just (PostOfficeHover _) ->
+                        "pointer"
+
+                    Just (TrainHover _) ->
+                        "pointer"
+
+                    Nothing ->
+                        "default"
             )
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
@@ -1869,7 +2002,7 @@ canvasView audioData model =
                             , time = Duration.from model.startTime model.time |> Duration.inSeconds
                             }
                        ]
-                    ++ (case ( tileHover model mouseScreenPosition_, model.currentTile ) of
+                    ++ (case ( hoverAt model mouseScreenPosition_, model.currentTile ) of
                             ( Nothing, Just currentTile ) ->
                                 let
                                     mousePosition : Coord WorldUnit
@@ -2012,6 +2145,7 @@ canvasView audioData model =
                         windowWidth
                         windowHeight
                         model
+                        (actualViewPoint model)
                         model.mailEditor
 
             _ ->

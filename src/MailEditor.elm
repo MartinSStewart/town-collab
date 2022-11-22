@@ -569,11 +569,11 @@ drawMail :
             , devicePixelRatio : Float
             , time : Time.Posix
             , zoomFactor : Int
-            , viewPoint : Point2d WorldUnit WorldUnit
         }
+    -> Point2d WorldUnit WorldUnit
     -> Model
     -> List WebGL.Entity
-drawMail texture mousePosition windowWidth windowHeight config model =
+drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
     let
         isOpen_ =
             case model.showMailEditor of
