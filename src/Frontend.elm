@@ -1022,7 +1022,7 @@ hoverAt model mousePosition =
                                 distance =
                                     Train.actualPosition train |> Point2d.distanceFrom mouseWorldPosition_
                             in
-                            if distance |> Quantity.lessThan (Quantity 1) then
+                            if distance |> Quantity.lessThan (Quantity 0.9) then
                                 Just ( { trainId = trainId, train = train }, distance )
 
                             else
@@ -1194,7 +1194,19 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 model2
 
             Nothing ->
-                model2
+                case previousMouseState.hover of
+                    Just (TrainHover { trainId, train }) ->
+                        { model2
+                            | viewPoint =
+                                TrainViewPoint
+                                    { trainId = trainId
+                                    , startViewPoint = actualViewPoint model2
+                                    , startTime = model2.time
+                                    }
+                        }
+
+                    _ ->
+                        model2
 
       else
         model2
@@ -1722,7 +1734,14 @@ actualViewPointHelper model =
         TrainViewPoint trainViewPoint ->
             case AssocList.get trainViewPoint.trainId model.trains of
                 Just train ->
-                    Train.actualPosition train
+                    let
+                        t =
+                            Quantity.ratio
+                                (Duration.from trainViewPoint.startTime model.time)
+                                (Duration.milliseconds 600)
+                                |> min 1
+                    in
+                    Point2d.interpolateFrom trainViewPoint.startViewPoint (Train.actualPosition train) t
 
                 Nothing ->
                     trainViewPoint.startViewPoint
