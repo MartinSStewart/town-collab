@@ -494,7 +494,7 @@ updateMailMesh model =
                 (List.range 0 (List.length model.current.content) |> List.concatMap Sprite.getIndices)
         , textInputMesh =
             WebGL.indexedTriangles
-                (Sprite.textMesh 1 model.current.to (Coord.xy 15 7))
+                (Sprite.text 1 model.current.to (Coord.xy 15 7))
                 (List.range 0 (String.length model.current.to) |> List.concatMap Sprite.getIndices)
     }
 
@@ -804,9 +804,9 @@ submitButtonMesh : WebGL.Mesh Vertex
 submitButtonMesh =
     let
         vertices =
-            Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
-                ++ Sprite.textMesh 1 "SUBMIT" (Coord.xy 12 7)
+            Sprite.sprite ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+                ++ Sprite.text 1 "SUBMIT" (Coord.xy 12 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -815,9 +815,9 @@ submittingButtonMesh : WebGL.Mesh Vertex
 submittingButtonMesh =
     let
         vertices =
-            Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ Sprite.textMesh 1 "SUBMITTING" (Coord.xy 2 7)
+            Sprite.sprite ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+                ++ Sprite.text 1 "SUBMITTING" (Coord.xy 2 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -826,9 +826,9 @@ submitButtonHoverMesh : WebGL.Mesh Vertex
 submitButtonHoverMesh =
     let
         vertices =
-            Sprite.spriteMesh ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.spriteMesh ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ Sprite.textMesh 1 "SUBMIT" (Coord.xy 12 7)
+            Sprite.sprite ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+                ++ Sprite.text 1 "SUBMIT" (Coord.xy 12 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -845,9 +845,9 @@ textInputMesh : WebGL.Mesh Vertex
 textInputMesh =
     let
         vertices =
-            Sprite.spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
-                ++ Sprite.textMesh 1 "TO:" (Coord.xy 3 7)
+            Sprite.sprite ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.sprite ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+                ++ Sprite.text 1 "TO:" (Coord.xy 3 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -856,9 +856,9 @@ textInputHoverMesh : WebGL.Mesh Vertex
 textInputHoverMesh =
     let
         vertices =
-            Sprite.spriteMesh ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.spriteMesh ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ Sprite.textMesh 1 "TO:" (Coord.xy 3 7)
+            Sprite.sprite ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
+                ++ Sprite.sprite ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+                ++ Sprite.text 1 "TO:" (Coord.xy 3 7)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 

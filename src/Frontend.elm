@@ -2185,6 +2185,57 @@ canvasView audioData model =
                             , time = Duration.from model.startTime model.time |> Duration.inSeconds
                             }
                        ]
+                    ++ List.filterMap
+                        (\{ position, isRadio } ->
+                            let
+                                point =
+                                    Point2d.unwrap position
+
+                                ( xOffset, yOffset ) =
+                                    if isRadio then
+                                        ( 6, -8 )
+
+                                    else
+                                        ( -8, -48 )
+
+                                meshArray =
+                                    if isRadio then
+                                        speechBubbleRadioMesh
+
+                                    else
+                                        speechBubbleMesh
+                            in
+                            case
+                                Array.get
+                                    (Time.posixToMillis model.time
+                                        |> toFloat
+                                        |> (*) 0.01
+                                        |> round
+                                        |> modBy speechBubbleFrames
+                                    )
+                                    meshArray
+                            of
+                                Just mesh ->
+                                    WebGL.entityWith
+                                        [ Shaders.blend ]
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        mesh
+                                        { view =
+                                            Mat4.makeTranslate3
+                                                (round (point.x * Units.tileSize) + xOffset |> toFloat)
+                                                (round (point.y * Units.tileSize) + yOffset |> toFloat)
+                                                0
+                                                |> Mat4.mul viewMatrix
+                                        , texture = texture
+                                        , textureSize = textureSize
+                                        }
+                                        |> Just
+
+                                Nothing ->
+                                    Nothing
+                        )
+                        (getSpeechBubbles model)
                     ++ (case ( hoverAt model mouseScreenPosition_, model.currentTile ) of
                             ( MapHover, Just currentTile ) ->
                                 let
@@ -2314,21 +2365,6 @@ canvasView audioData model =
                                     |> Coord.translateMat4
                                         (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                                     |> Coord.translateMat4 (toolbarPosition model.devicePixelRatio model.windowSize)
-                            , texture = texture
-                            , textureSize = textureSize
-                            }
-                       , WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.vertexShader
-                            Shaders.fragmentShader
-                            speechBubbleMesh
-                            { view =
-                                Mat4.makeScale3
-                                    (2 / toFloat windowWidth)
-                                    (-2 / toFloat windowHeight)
-                                    1
-                                    |> Coord.translateMat4
-                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                             , texture = texture
                             , textureSize = textureSize
                             }
@@ -2534,7 +2570,7 @@ createUserIdMesh userId =
             "USER ID: " ++ String.fromInt (Id.toInt userId)
 
         vertices =
-            Sprite.textMesh 2 id (Coord.xy 2 2)
+            Sprite.text 2 id (Coord.xy 2 2)
     in
     WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -2584,7 +2620,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
         charSize =
             Sprite.charSize |> Coord.multiplyTuple ( 2, 2 )
     in
-    Sprite.spriteMesh (Coord.toTuple offset)
+    Sprite.sprite (Coord.toTuple offset)
         toolbarButtonSize
         ( if highlight then
             379
@@ -2594,7 +2630,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
         , 153
         )
         ( 1, 1 )
-        ++ Sprite.spriteMesh
+        ++ Sprite.sprite
             (offset |> Coord.plus (Coord.xy 2 2) |> Coord.toTuple)
             (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
             ( if highlight then
@@ -2608,7 +2644,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
         ++ tileMesh offset tile
         ++ (case maybeHotkey of
                 Just hotkey ->
-                    Sprite.spriteMesh
+                    Sprite.sprite
                         (Coord.plus
                             (Coord.xy 0 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize + 4))
                             offset
@@ -2617,7 +2653,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
                         (Coord.plus (Coord.xy 2 -4) charSize)
                         ( 380, 153 )
                         ( 1, 1 )
-                        ++ Sprite.textMesh
+                        ++ Sprite.text
                             2
                             hotkey
                             (Coord.plus
@@ -2632,8 +2668,8 @@ toolbarTileButton maybeHotkey highlight offset tile =
 
 toolbarMesh : Dict String Tile -> Maybe Tile -> WebGL.Mesh Vertex
 toolbarMesh hotkeys currentTile =
-    Sprite.spriteMesh ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
-        ++ Sprite.spriteMesh ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
+    Sprite.sprite ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
+        ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
         ++ (List.indexedMap
                 (\index tile ->
                     toolbarTileButton
@@ -2713,28 +2749,73 @@ tileMesh position tile =
             Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.texturePosition)
     in
     if tile == EmptyTile then
-        Sprite.spriteMesh
+        Sprite.sprite
             (Coord.plus (Coord.xy 10 12) position |> Coord.toTuple)
             (Coord.tuple ( 30 * 2, 29 * 2 ))
             ( 324, 223 )
             ( 30, 29 )
 
     else
-        Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition) (Coord.toTuple size)
+        Sprite.sprite (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition) (Coord.toTuple size)
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
                         let
                             texturePosition2 =
                                 Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple topLayer.texturePosition)
                         in
-                        Sprite.spriteMesh (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
+                        Sprite.sprite (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
 
                     Nothing ->
                         []
                )
 
 
+getSpeechBubbles : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isRadio : Bool }
+getSpeechBubbles model =
+    AssocList.toList model.trains
+        |> List.concatMap
+            (\( _, train ) ->
+                case train.isStuck of
+                    Just time ->
+                        if Duration.from time model.time |> Quantity.lessThan (Duration.seconds 2) then
+                            []
+
+                        else
+                            [ { position = Train.actualPosition train, isRadio = False }
+                            , { position = Coord.toPoint2d train.home, isRadio = True }
+                            ]
+
+                    Nothing ->
+                        []
+            )
+
+
+speechBubbleMesh : Array (WebGL.Mesh Vertex)
 speechBubbleMesh =
+    List.range 0 (speechBubbleFrames - 1)
+        |> List.map (\frame -> speechBubbleMeshHelper frame ( 391, 154 ) ( 8, 12 ))
+        |> Array.fromList
+
+
+speechBubbleRadioMesh : Array (WebGL.Mesh Vertex)
+speechBubbleRadioMesh =
+    List.range 0 (speechBubbleFrames - 1)
+        |> List.map (\frame -> speechBubbleMeshHelper frame ( 399, 154 ) ( 8, 13 ))
+        |> Array.fromList
+
+
+speechBubbleFrames =
+    3
+
+
+speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
+    let
+        text =
+            "Help!"
+
+        padding =
+            Coord.xy 6 5
+    in
     Sprite.nineSlice
         { topLeft = Coord.xy 378 154
         , top = Coord.xy 384 154
@@ -2747,6 +2828,8 @@ speechBubbleMesh =
         , bottomRight = Coord.xy 385 161
         , cornerSize = Coord.xy 6 6
         , position = Coord.xy 0 0
-        , size = Coord.xy 100 50
+        , size = Sprite.textSize 1 text |> Coord.plus (Coord.multiplyTuple ( 2, 2 ) padding)
         }
+        ++ Sprite.shiverText frame 1 "Help!" padding
+        ++ Sprite.sprite ( 7, 27 ) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
         |> Sprite.toMesh

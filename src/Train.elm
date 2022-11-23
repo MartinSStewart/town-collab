@@ -1,4 +1,4 @@
-module Train exposing (Train, actualPosition, carryingMail, defaultMaxSpeed, draw, getCoach, handleAddingTrain, moveTrain)
+module Train exposing (Train, actualPosition, carryingMail, defaultMaxSpeed, draw, getCoach, handleAddingTrain, isStuck, moveTrain)
 
 import Angle
 import Array exposing (Array)
@@ -33,6 +33,7 @@ type alias Train =
     , speed : Quantity Float (Rate TileLocalUnit Seconds)
     , stoppedAtPostOffice : Maybe { time : Time.Posix, userId : Id UserId }
     , home : Coord WorldUnit
+    , isStuck : Maybe Time.Posix
     }
 
 
@@ -147,17 +148,19 @@ moveTrain trainId maxSpeed startTime endTime state train =
             )
                 |> Quantity
     in
-    moveTrainHelper trainId startTime distance state { train | speed = Quantity newSpeed }
+    moveTrainHelper trainId startTime endTime distance distance state { train | speed = Quantity newSpeed }
 
 
 moveTrainHelper :
     Id TrainId
     -> Time.Posix
+    -> Time.Posix
+    -> Quantity Float TileLocalUnit
     -> Quantity Float TileLocalUnit
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
-moveTrainHelper trainId time distanceLeft state train =
+moveTrainHelper trainId startTime endTime initialDistance distanceLeft state train =
     let
         { path, distanceToT, tToDistance, startExitDirection, endExitDirection } =
             Tile.railPathData train.path
@@ -191,11 +194,14 @@ moveTrainHelper trainId time distanceLeft state train =
 
                 ( cellPos, localPos ) =
                     Grid.worldToCellAndLocalPoint position
+
+                newDistanceLeft =
+                    distanceLeft |> Quantity.minus distanceTravelled
             in
             case
                 findNextTile
                     trainId
-                    time
+                    startTime
                     position
                     state
                     train.speed
@@ -212,8 +218,10 @@ moveTrainHelper trainId time distanceLeft state train =
                 Just newTrain ->
                     moveTrainHelper
                         trainId
-                        time
-                        (distanceLeft |> Quantity.minus distanceTravelled)
+                        startTime
+                        endTime
+                        initialDistance
+                        newDistanceLeft
                         state
                         { position = newTrain.position
                         , path = newTrain.path
@@ -224,23 +232,34 @@ moveTrainHelper trainId time distanceLeft state train =
                         , speed = newTrain.speed
                         , stoppedAtPostOffice = newTrain.stoppedAtPostOffice
                         , home = train.home
+                        , isStuck = Nothing
                         }
 
                 Nothing ->
                     { train
                         | t = newTClamped
+                        , isStuck =
+                            case train.isStuck of
+                                Just _ ->
+                                    train.isStuck
+
+                                Nothing ->
+                                    Duration.from startTime endTime
+                                        |> Quantity.multiplyBy (1 - Quantity.ratio distanceLeft initialDistance)
+                                        |> Duration.addTo startTime
+                                        |> Just
                         , speed =
                             if Quantity.lessThanZero train.speed then
-                                Quantity -0.1
+                                Quantity.negate stoppedSpeed
 
                             else
-                                Quantity 0.1
+                                stoppedSpeed
                     }
     in
     case train.stoppedAtPostOffice of
         Just stoppedAtPostOffice ->
             if newT < 0 || newT > 1 then
-                if Duration.from stoppedAtPostOffice.time time |> Quantity.greaterThan (Duration.seconds 3) then
+                if Duration.from stoppedAtPostOffice.time startTime |> Quantity.greaterThan (Duration.seconds 3) then
                     reachedTileEnd ()
 
                 else
@@ -252,6 +271,7 @@ moveTrainHelper trainId time distanceLeft state train =
 
                             else
                                 Quantity 0.1
+                        , isStuck = Nothing
                     }
 
             else
@@ -262,7 +282,25 @@ moveTrainHelper trainId time distanceLeft state train =
                 reachedTileEnd ()
 
             else
-                { train | t = newTClamped }
+                { train | t = newTClamped, isStuck = Nothing }
+
+
+stoppedSpeed =
+    Quantity 0.1
+
+
+isStuck : Train -> Bool
+isStuck train =
+    case train.stoppedAtPostOffice of
+        Just _ ->
+            False
+
+        Nothing ->
+            if train.t == 0 || train.t == 1 && Quantity.abs train.speed == stoppedSpeed then
+                True
+
+            else
+                False
 
 
 moveCoachHelper :
@@ -533,7 +571,12 @@ draw mail trains viewMatrix trainTexture =
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         trainMesh_
-                        { view = Mat4.makeTranslate3 (x * Units.tileSize) (y * Units.tileSize) (Grid.tileZ True y 0) |> Mat4.mul viewMatrix
+                        { view =
+                            Mat4.makeTranslate3
+                                (x * Units.tileSize |> round |> toFloat)
+                                (y * Units.tileSize |> round |> toFloat)
+                                (Grid.tileZ True y 0)
+                                |> Mat4.mul viewMatrix
                         , texture = trainTexture
                         , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
                         }
@@ -691,6 +734,7 @@ handleAddingTrain trains tile position =
           , speed = speed
           , stoppedAtPostOffice = Nothing
           , home = position
+          , isStuck = Nothing
           }
         )
             |> Just

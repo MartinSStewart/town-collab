@@ -485,7 +485,7 @@ backgroundMesh cellPosition =
 
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
-                                    Sprite.spriteMeshWithZ
+                                    Sprite.spriteWithZ
                                         ( (x2 * Terrain.terrainDivisionsPerCell + x) * Units.tileSize
                                         , (y2 * Terrain.terrainDivisionsPerCell + y) * Units.tileSize
                                         )
@@ -598,7 +598,7 @@ tileMesh position tile =
             Tile.getData tile
     in
     if tile == EmptyTile then
-        Sprite.spriteMesh (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 324, 223 ) ( 30, 29 )
+        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 324, 223 ) ( 30, 29 )
 
     else
         tileMeshHelper 1 False position data.texturePosition data.size

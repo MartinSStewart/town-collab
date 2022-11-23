@@ -1,9 +1,10 @@
-module Sprite exposing (charSize, getIndices, getQuadIndices, nineSlice, spriteMesh, spriteMeshWithZ, textMesh, toMesh)
+module Sprite exposing (charSize, getIndices, getQuadIndices, nineSlice, shiverText, sprite, spriteWithZ, text, textSize, toMesh)
 
 import Coord exposing (Coord)
 import List.Extra as List
 import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
+import Random
 import Shaders exposing (Vertex)
 import Tile
 import WebGL
@@ -38,56 +39,56 @@ nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bot
         innerHeight =
             sizeY - cornerH * 2
     in
-    spriteMesh (Coord.toTuple position) cornerSize (Coord.toTuple topLeft) (Coord.toTuple cornerSize)
-        ++ spriteMesh
+    sprite (Coord.toTuple position) cornerSize (Coord.toTuple topLeft) (Coord.toTuple cornerSize)
+        ++ sprite
             (Coord.plus (Coord.xy cornerW 0) position |> Coord.toTuple)
             (Coord.xy innerWidth cornerH)
             (Coord.toTuple top)
             ( 1, cornerH )
-        ++ spriteMesh
+        ++ sprite
             (Coord.plus (Coord.xy (cornerW + innerWidth) 0) position |> Coord.toTuple)
             cornerSize
             (Coord.toTuple topRight)
             (Coord.toTuple cornerSize)
-        ++ spriteMesh
+        ++ sprite
             (Coord.plus (Coord.xy 0 cornerH) position |> Coord.toTuple)
             (Coord.xy cornerW innerHeight)
             (Coord.toTuple left)
             ( cornerW, 1 )
-        ++ spriteMesh
+        ++ sprite
             (Coord.plus (Coord.xy cornerW cornerH) position |> Coord.toTuple)
             (Coord.xy innerWidth innerHeight)
             (Coord.toTuple center)
             ( 1, 1 )
-        ++ spriteMesh
+        ++ sprite
             (Coord.plus (Coord.xy (cornerW + innerWidth) cornerH) position |> Coord.toTuple)
             (Coord.xy cornerW innerHeight)
             (Coord.toTuple right)
             ( cornerW, 1 )
-        ++ spriteMesh
+        ++ sprite
             (Coord.plus (Coord.xy 0 (cornerH + innerHeight)) position |> Coord.toTuple)
             cornerSize
             (Coord.toTuple bottomLeft)
             (Coord.toTuple cornerSize)
-        ++ spriteMesh
+        ++ sprite
             (Coord.plus (Coord.xy cornerW (cornerH + innerHeight)) position |> Coord.toTuple)
             (Coord.xy innerWidth cornerH)
             (Coord.toTuple bottom)
             ( 1, cornerH )
-        ++ spriteMesh
+        ++ sprite
             (Coord.plus (Coord.xy (cornerW + innerWidth) (cornerH + innerHeight)) position |> Coord.toTuple)
             cornerSize
             (Coord.toTuple bottomRight)
             (Coord.toTuple cornerSize)
 
 
-spriteMesh : ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
-spriteMesh position size texturePosition textureSize =
-    spriteMeshWithZ position 0 size texturePosition textureSize
+sprite : ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
+sprite position size texturePosition textureSize =
+    spriteWithZ position 0 size texturePosition textureSize
 
 
-spriteMeshWithZ : ( Int, Int ) -> Float -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
-spriteMeshWithZ ( x, y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
+spriteWithZ : ( Int, Int ) -> Float -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
+spriteWithZ ( x, y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
     let
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels texturePosition textureSize
@@ -146,8 +147,8 @@ charTexturePosition char =
             Coord.xy 0 0
 
 
-textMesh : Int -> String -> Coord unit -> List Vertex
-textMesh charScale string position =
+text : Int -> String -> Coord unit -> List Vertex
+text charScale string position =
     let
         charSize_ =
             Coord.multiplyTuple ( charScale, charScale ) charSize
@@ -158,7 +159,7 @@ textMesh charScale string position =
                 { offset = state.offset + Coord.xRaw charSize_
                 , vertices =
                     state.vertices
-                        ++ spriteMesh
+                        ++ sprite
                             (Coord.addTuple_ ( state.offset, 0 ) position |> Coord.toTuple)
                             charSize_
                             (charTexturePosition char |> Coord.toTuple)
@@ -167,3 +168,42 @@ textMesh charScale string position =
             )
             { offset = 0, vertices = [] }
         |> .vertices
+
+
+shiverText : Int -> Int -> String -> Coord unit -> List Vertex
+shiverText frame charScale string position =
+    let
+        charSize_ =
+            Coord.multiplyTuple ( charScale, charScale ) charSize
+    in
+    String.toList string
+        |> List.foldl
+            (\char state ->
+                { offset = state.offset + Coord.xRaw charSize_
+                , vertices =
+                    state.vertices
+                        ++ sprite
+                            (Coord.addTuple_ ( state.offset, 0 ) position
+                                |> Coord.plus
+                                    (Random.step randomOffset (Random.initialSeed (state.offset + frame * 127))
+                                        |> Tuple.first
+                                    )
+                                |> Coord.toTuple
+                            )
+                            charSize_
+                            (charTexturePosition char |> Coord.toTuple)
+                            (Coord.toTuple charSize)
+                }
+            )
+            { offset = 0, vertices = [] }
+        |> .vertices
+
+
+randomOffset : Random.Generator (Coord units)
+randomOffset =
+    Random.map2 Coord.xy (Random.int 0 1) (Random.int 0 1)
+
+
+textSize : Int -> String -> Coord unit
+textSize charScale string =
+    Coord.xy (String.length string) 1 |> Coord.multiplyTuple (Coord.toTuple charSize)
