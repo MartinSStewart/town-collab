@@ -595,7 +595,7 @@ updateLoaded audioData msg model =
                         }
                             |> (\model2 ->
                                     case ( model2.currentTile, hover ) of
-                                        ( Just { tile }, Nothing ) ->
+                                        ( Just { tile }, MapHover ) ->
                                             placeTile False tile model2
 
                                         _ ->
@@ -696,7 +696,7 @@ updateLoaded audioData msg model =
             let
                 tileHover_ =
                     case hoverAt model mousePosition of
-                        Just (TileHover tile) ->
+                        TileHover tile ->
                             Just tile
 
                         _ ->
@@ -729,22 +729,25 @@ updateLoaded audioData msg model =
                         case ( model2.currentTile, model2.mouseLeft ) of
                             ( Just { tile }, MouseButtonDown { hover } ) ->
                                 case hover of
-                                    Just ToolbarHover ->
+                                    ToolbarHover ->
                                         model2
 
-                                    Just (TileHover _) ->
+                                    TileHover _ ->
                                         model2
 
-                                    Just (PostOfficeHover _) ->
+                                    PostOfficeHover _ ->
                                         placeTile True tile model2
 
-                                    Just (TrainHover _) ->
+                                    TrainHover _ ->
                                         placeTile True tile model2
 
-                                    Just (TrainHouseHover _) ->
+                                    TrainHouseHover _ ->
                                         placeTile True tile model2
 
-                                    Nothing ->
+                                    HouseHover _ ->
+                                        placeTile True tile model2
+
+                                    MapHover ->
                                         placeTile True tile model2
 
                             _ ->
@@ -943,7 +946,7 @@ updateLoaded audioData msg model =
                     ( model, Cmd.none )
 
 
-hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Maybe Hover
+hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
 hoverAt model mousePosition =
     let
         mousePosition2 : Coord Pixels
@@ -991,10 +994,10 @@ hoverAt model mousePosition =
         in
         case containsTileButton of
             Just tile ->
-                TileHover tile |> Just
+                TileHover tile
 
             Nothing ->
-                Just ToolbarHover
+                ToolbarHover
 
     else
         let
@@ -1024,6 +1027,18 @@ hoverAt model mousePosition =
 
                             TrainHouseRight ->
                                 TrainHouseHover { trainHousePosition = tile.position } |> Just
+
+                            HouseDown ->
+                                HouseHover { housePosition = tile.position } |> Just
+
+                            HouseLeft ->
+                                HouseHover { housePosition = tile.position } |> Just
+
+                            HouseUp ->
+                                HouseHover { housePosition = tile.position } |> Just
+
+                            HouseRight ->
+                                HouseHover { housePosition = tile.position } |> Just
 
                             _ ->
                                 Nothing
@@ -1055,13 +1070,13 @@ hoverAt model mousePosition =
         in
         case ( trainHovers, tileHover ) of
             ( Just ( train, _ ), _ ) ->
-                TrainHover train |> Just
+                TrainHover train
 
             ( Nothing, Just hover ) ->
-                Just hover
+                hover
 
             ( Nothing, Nothing ) ->
-                Nothing
+                MapHover
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1158,7 +1173,7 @@ setCurrentTile tile model =
 
 mainMouseButtonUp :
     Point2d Pixels Pixels
-    -> { a | start : Point2d Pixels Pixels, hover : Maybe Hover }
+    -> { a | start : Point2d Pixels Pixels, hover : Hover }
     -> FrontendLoaded
     -> ( FrontendLoaded, Cmd FrontendMsg_ )
 mainMouseButtonUp mousePosition previousMouseState model =
@@ -1199,10 +1214,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
     in
     ( if isSmallDistance then
         case hoverAt model mousePosition of
-            Just (TileHover tileHover_) ->
+            TileHover tileHover_ ->
                 setCurrentTile tileHover_ model2
 
-            Just (PostOfficeHover { postOfficePosition }) ->
+            PostOfficeHover { postOfficePosition } ->
                 if canOpenMailEditor model2 then
                     { model2
                         | mailEditor =
@@ -1218,7 +1233,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 else
                     model2
 
-            Just (TrainHover { trainId, train }) ->
+            TrainHover { trainId, train } ->
                 { model2
                     | viewPoint =
                         TrainViewPoint
@@ -1228,15 +1243,18 @@ mainMouseButtonUp mousePosition previousMouseState model =
                             }
                 }
 
-            Just ToolbarHover ->
+            ToolbarHover ->
                 model2
 
-            Just (TrainHouseHover _) ->
+            TrainHouseHover _ ->
                 model2
 
-            Nothing ->
+            HouseHover _ ->
+                model2
+
+            MapHover ->
                 case previousMouseState.hover of
-                    Just (TrainHover { trainId, train }) ->
+                    TrainHover { trainId, train } ->
                         { model2
                             | viewPoint =
                                 TrainViewPoint
@@ -1767,30 +1785,33 @@ viewBoundsUpdate ( model, cmd ) =
 
 offsetViewPoint :
     FrontendLoaded
-    -> Maybe Hover
+    -> Hover
     -> Point2d Pixels Pixels
     -> Point2d Pixels Pixels
     -> Point2d WorldUnit WorldUnit
-offsetViewPoint ({ windowSize, zoomFactor } as model) maybeHover mouseStart mouseCurrent =
+offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurrent =
     let
         canDragView =
-            case maybeHover of
-                Just (PostOfficeHover _) ->
+            case hover of
+                PostOfficeHover _ ->
                     True
 
-                Just (TrainHover _) ->
+                TrainHover _ ->
                     True
 
-                Just ToolbarHover ->
+                ToolbarHover ->
                     False
 
-                Just (TileHover _) ->
+                TileHover _ ->
                     False
 
-                Just (TrainHouseHover _) ->
+                TrainHouseHover _ ->
                     True
 
-                Nothing ->
+                HouseHover _ ->
+                    True
+
+                MapHover ->
                     True
     in
     if canDragView then
@@ -2014,22 +2035,25 @@ canvasView audioData model =
 
             else
                 case hoverAt model mouseScreenPosition_ of
-                    Just (TileHover _) ->
+                    TileHover _ ->
                         True
 
-                    Just ToolbarHover ->
+                    ToolbarHover ->
                         False
 
-                    Just (PostOfficeHover _) ->
+                    PostOfficeHover _ ->
                         True
 
-                    Just (TrainHover _) ->
+                    TrainHover _ ->
                         True
 
-                    Just (TrainHouseHover _) ->
+                    TrainHouseHover _ ->
                         True
 
-                    Nothing ->
+                    HouseHover _ ->
+                        True
+
+                    MapHover ->
                         False
     in
     WebGL.toHtmlWith
@@ -2135,7 +2159,7 @@ canvasView audioData model =
                             }
                        ]
                     ++ (case ( hoverAt model mouseScreenPosition_, model.currentTile ) of
-                            ( Nothing, Just currentTile ) ->
+                            ( MapHover, Just currentTile ) ->
                                 let
                                     mousePosition : Coord WorldUnit
                                     mousePosition =

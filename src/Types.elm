@@ -141,7 +141,7 @@ type MouseButtonState
         { start : Point2d Pixels Pixels
         , start_ : Point2d WorldUnit WorldUnit
         , current : Point2d Pixels Pixels
-        , hover : Maybe Hover
+        , hover : Hover
         }
 
 
@@ -151,6 +151,8 @@ type Hover
     | PostOfficeHover { postOfficePosition : Coord WorldUnit }
     | TrainHover { trainId : Id TrainId, train : Train }
     | TrainHouseHover { trainHousePosition : Coord WorldUnit }
+    | HouseHover { housePosition : Coord WorldUnit }
+    | MapHover
 
 
 type alias BackendModel =

@@ -16,6 +16,7 @@ type Sound
     | PageTurnSound
     | WhooshSound
     | ErrorSound
+    | KnockKnockSound
 
 
 allSounds =
@@ -27,6 +28,7 @@ allSounds =
     , PageTurnSound
     , WhooshSound
     , ErrorSound
+    , KnockKnockSound
     ]
 
 
@@ -84,6 +86,9 @@ load onLoad =
 
                 ErrorSound ->
                     "/error.mp3"
+
+                KnockKnockSound ->
+                    "/knock-knock.mp3"
             )
                 |> Audio.loadAudio (onLoad sound)
         )
