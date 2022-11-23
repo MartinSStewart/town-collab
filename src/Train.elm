@@ -1,4 +1,4 @@
-module Train exposing (Train, actualPosition, carryingMail, defaultMaxSpeed, draw, getCoach, moveTrain)
+module Train exposing (Train, actualPosition, carryingMail, defaultMaxSpeed, draw, getCoach, handleAddingTrain, moveTrain)
 
 import Angle
 import Array exposing (Array)
@@ -665,3 +665,35 @@ trainCoachMesh frame =
         , { position = Vec3.vec3 Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomRight, opacity = 1 }
         , { position = Vec3.vec3 -Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomLeft, opacity = 1 }
         ]
+
+
+handleAddingTrain : AssocList.Dict (Id TrainId) Train -> Tile -> Coord WorldUnit -> Maybe ( Id TrainId, Train )
+handleAddingTrain trains tile position =
+    if tile == TrainHouseLeft || tile == TrainHouseRight then
+        let
+            ( path, speed ) =
+                if tile == TrainHouseLeft then
+                    ( Tile.trainHouseLeftRailPath, Quantity -0.1 )
+
+                else
+                    ( Tile.trainHouseRightRailPath, Quantity 0.1 )
+        in
+        ( AssocList.toList trains
+            |> List.map (Tuple.first >> Id.toInt)
+            |> List.maximum
+            |> Maybe.withDefault 0
+            |> (+) 1
+            |> Id.fromInt
+        , { position = position
+          , path = path
+          , previousPaths = []
+          , t = 0.5
+          , speed = speed
+          , stoppedAtPostOffice = Nothing
+          , home = position
+          }
+        )
+            |> Just
+
+    else
+        Nothing

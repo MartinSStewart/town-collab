@@ -150,6 +150,7 @@ type Hover
     | ToolbarHover
     | PostOfficeHover { postOfficePosition : Coord WorldUnit }
     | TrainHover { trainId : Id TrainId, train : Train }
+    | TrainHouseHover { trainHousePosition : Coord WorldUnit }
 
 
 type alias BackendModel =

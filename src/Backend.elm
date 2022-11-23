@@ -491,7 +491,7 @@ updateLocalChange ( userId, _ ) change model =
 
                         maybeTrain =
                             if AssocList.size model.trains < 50 then
-                                handleAddingTrain localChange.change localChange.position
+                                Train.handleAddingTrain model.trains localChange.change localChange.position
 
                             else
                                 Nothing
@@ -500,8 +500,8 @@ updateLocalChange ( userId, _ ) change model =
                         | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid |> .grid
                         , trains =
                             case maybeTrain of
-                                Just train ->
-                                    AssocList.insert (AssocList.size model.trains |> Id.fromInt) train model.trains
+                                Just ( trainId, train ) ->
+                                    AssocList.insert trainId train model.trains
 
                                 Nothing ->
                                     model.trains
@@ -594,31 +594,6 @@ updateLocalChange ( userId, _ ) change model =
 
             else
                 ( model, Nothing )
-
-
-handleAddingTrain : Tile -> Coord WorldUnit -> Maybe Train
-handleAddingTrain tile position =
-    if tile == TrainHouseLeft || tile == TrainHouseRight then
-        let
-            ( path, speed ) =
-                if tile == TrainHouseLeft then
-                    ( Tile.trainHouseLeftRailPath, Quantity -0.1 )
-
-                else
-                    ( Tile.trainHouseRightRailPath, Quantity 0.1 )
-        in
-        { position = position
-        , path = path
-        , previousPaths = []
-        , t = 0.5
-        , speed = speed
-        , stoppedAtPostOffice = Nothing
-        , home = position
-        }
-            |> Just
-
-    else
-        Nothing
 
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel

@@ -741,6 +741,9 @@ updateLoaded audioData msg model =
                                     Just (TrainHover _) ->
                                         placeTile True tile model2
 
+                                    Just (TrainHouseHover _) ->
+                                        placeTile True tile model2
+
                                     Nothing ->
                                         placeTile True tile model2
 
@@ -949,12 +952,14 @@ hoverAt model mousePosition =
                 |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                 |> Coord.roundPoint
 
+        toolbarTopLeft : Coord Pixels
         toolbarTopLeft =
             toolbarToPixel
                 model.devicePixelRatio
                 model.windowSize
                 Coord.origin
 
+        containsToolbar : Bool
         containsToolbar =
             Bounds.bounds toolbarTopLeft (Coord.plus toolbarSize toolbarTopLeft) |> Bounds.contains mousePosition2
     in
@@ -997,8 +1002,8 @@ hoverAt model mousePosition =
             mouseWorldPosition_ =
                 screenToWorld model mousePosition
 
-            postOfficeHover : Maybe (Coord WorldUnit)
-            postOfficeHover =
+            tileHover : Maybe Hover
+            tileHover =
                 let
                     localModel : LocalGrid_
                     localModel =
@@ -1006,11 +1011,22 @@ hoverAt model mousePosition =
                 in
                 case ( model.currentTile, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
                     ( Nothing, Just tile ) ->
-                        if tile.userId == localModel.user && tile.value == PostOffice then
-                            Just tile.position
+                        case tile.value of
+                            PostOffice ->
+                                if tile.userId == localModel.user then
+                                    PostOfficeHover { postOfficePosition = tile.position } |> Just
 
-                        else
-                            Nothing
+                                else
+                                    Nothing
+
+                            TrainHouseLeft ->
+                                TrainHouseHover { trainHousePosition = tile.position } |> Just
+
+                            TrainHouseRight ->
+                                TrainHouseHover { trainHousePosition = tile.position } |> Just
+
+                            _ ->
+                                Nothing
 
                     _ ->
                         Nothing
@@ -1037,12 +1053,12 @@ hoverAt model mousePosition =
                                 )
                             |> Quantity.minimumBy Tuple.second
         in
-        case ( trainHovers, postOfficeHover ) of
+        case ( trainHovers, tileHover ) of
             ( Just ( train, _ ), _ ) ->
                 TrainHover train |> Just
 
-            ( Nothing, Just position ) ->
-                PostOfficeHover { postOfficePosition = position } |> Just
+            ( Nothing, Just hover ) ->
+                Just hover
 
             ( Nothing, Nothing ) ->
                 Nothing
@@ -1081,7 +1097,22 @@ keyMsgCanvasUpdate key model =
             handleRedo ()
 
         ( Keyboard.Escape, _ ) ->
-            ( { model | currentTile = Nothing }, Cmd.none )
+            ( case model.currentTile of
+                Just _ ->
+                    { model | currentTile = Nothing }
+
+                Nothing ->
+                    { model
+                        | viewPoint =
+                            case model.viewPoint of
+                                TrainViewPoint _ ->
+                                    actualViewPoint model |> NormalViewPoint
+
+                                NormalViewPoint _ ->
+                                    model.viewPoint
+                    }
+            , Cmd.none
+            )
 
         ( Keyboard.Spacebar, True ) ->
             ( { model | tileHotkeys = Dict.update " " (\_ -> Maybe.map .tile model.currentTile) model.tileHotkeys }
@@ -1198,6 +1229,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 }
 
             Just ToolbarHover ->
+                model2
+
+            Just (TrainHouseHover _) ->
                 model2
 
             Nothing ->
@@ -1440,6 +1474,13 @@ placeTile isDragPlacement tile model =
                     }
             , removedTileParticles = removedTiles ++ model3.removedTileParticles
             , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
+            , trains =
+                case Train.handleAddingTrain model3.trains tile cursorPosition_ of
+                    Just ( trainId, train ) ->
+                        AssocList.insert trainId train model.trains
+
+                    Nothing ->
+                        model.trains
         }
 
 
@@ -1746,6 +1787,9 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) maybeHover mouseStart mous
                 Just (TileHover _) ->
                     False
 
+                Just (TrainHouseHover _) ->
+                    True
+
                 Nothing ->
                     True
     in
@@ -1963,6 +2007,30 @@ canvasView audioData model =
 
         mouseScreenPosition_ =
             mouseScreenPosition model
+
+        showMousePointer =
+            if MailEditor.isOpen model.mailEditor then
+                False
+
+            else
+                case hoverAt model mouseScreenPosition_ of
+                    Just (TileHover _) ->
+                        True
+
+                    Just ToolbarHover ->
+                        False
+
+                    Just (PostOfficeHover _) ->
+                        True
+
+                    Just (TrainHover _) ->
+                        True
+
+                    Just (TrainHouseHover _) ->
+                        True
+
+                    Nothing ->
+                        False
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False
@@ -1973,25 +2041,11 @@ canvasView audioData model =
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
         , Html.Attributes.style "cursor"
-            (if MailEditor.isOpen model.mailEditor then
-                "default"
+            (if showMousePointer then
+                "pointer"
 
              else
-                case hoverAt model mouseScreenPosition_ of
-                    Just (TileHover _) ->
-                        "pointer"
-
-                    Just ToolbarHover ->
-                        "default"
-
-                    Just (PostOfficeHover _) ->
-                        "pointer"
-
-                    Just (TrainHover _) ->
-                        "pointer"
-
-                    Nothing ->
-                        "default"
+                "default"
             )
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
