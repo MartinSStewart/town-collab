@@ -124,6 +124,7 @@ type alias FrontendLoaded =
     , tileHotkeys : Dict String Tile
     , toolbarMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe Tile
+    , lastHouseClick : Maybe Time.Posix
     }
 
 

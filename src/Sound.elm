@@ -17,6 +17,11 @@ type Sound
     | WhooshSound
     | ErrorSound
     | KnockKnockSound
+    | OldManSound
+    | MmhmmSound
+    | NuhHuhSound
+    | HelloSound
+    | Hello2Sound
 
 
 allSounds =
@@ -29,6 +34,11 @@ allSounds =
     , WhooshSound
     , ErrorSound
     , KnockKnockSound
+    , OldManSound
+    , MmhmmSound
+    , NuhHuhSound
+    , HelloSound
+    , Hello2Sound
     ]
 
 
@@ -62,33 +72,50 @@ load : (Sound -> Result Audio.LoadError Audio.Source -> msg) -> AudioCmd msg
 load onLoad =
     List.map
         (\sound ->
-            (case sound of
-                PopSound ->
-                    "/pop.mp3"
+            ("/"
+                ++ (case sound of
+                        PopSound ->
+                            "pop.mp3"
 
-                CrackleSound ->
-                    "/crackle.mp3"
+                        CrackleSound ->
+                            "crackle.mp3"
 
-                TrainWhistleSound ->
-                    "/train-whistle.mp3"
+                        TrainWhistleSound ->
+                            "train-whistle.mp3"
 
-                ChugaChuga ->
-                    "/chuga-chuga.mp3"
+                        ChugaChuga ->
+                            "chuga-chuga.mp3"
 
-                EraseSound ->
-                    "/erase.mp3"
+                        EraseSound ->
+                            "erase.mp3"
 
-                PageTurnSound ->
-                    "/page-turn.mp3"
+                        PageTurnSound ->
+                            "page-turn.mp3"
 
-                WhooshSound ->
-                    "/whoosh.mp3"
+                        WhooshSound ->
+                            "whoosh.mp3"
 
-                ErrorSound ->
-                    "/error.mp3"
+                        ErrorSound ->
+                            "error.mp3"
 
-                KnockKnockSound ->
-                    "/knock-knock.mp3"
+                        KnockKnockSound ->
+                            "knock-knock.mp3"
+
+                        OldManSound ->
+                            "old-man.mp3"
+
+                        MmhmmSound ->
+                            "mmhmm.mp3"
+
+                        NuhHuhSound ->
+                            "nuh-huh.mp3"
+
+                        HelloSound ->
+                            "hello.mp3"
+
+                        Hello2Sound ->
+                            "hello2.mp3"
+                   )
             )
                 |> Audio.loadAudio (onLoad sound)
         )

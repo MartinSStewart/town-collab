@@ -210,6 +210,32 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , case model.lastHouseClick of
+        Just time ->
+            Audio.group
+                [ playSound KnockKnockSound time
+                , Random.step
+                    (Random.uniform
+                        OldManSound
+                        [ MmhmmSound
+                        , NuhHuhSound
+                        , HelloSound
+                        , Hello2Sound
+                        ]
+                    )
+                    (Time.posixToMillis time |> Random.initialSeed)
+                    |> Tuple.first
+                    |> (\sound ->
+                            Sound.length audioData model.sounds KnockKnockSound
+                                |> Quantity.plus (Duration.milliseconds 400)
+                                |> Duration.addTo time
+                                |> playSound sound
+                       )
+                ]
+                |> Audio.scaleVolume 0.5
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
 
@@ -341,6 +367,7 @@ loadedInit time loading loadingData =
             , tileHotkeys = defaultTileHotkeys
             , toolbarMesh = toolbarMesh defaultTileHotkeys currentTile
             , previousTileHover = Nothing
+            , lastHouseClick = Nothing
             }
     in
     ( updateMeshes model model
@@ -1250,7 +1277,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 model2
 
             HouseHover _ ->
-                model2
+                { model2 | lastHouseClick = Just model.time }
 
             MapHover ->
                 case previousMouseState.hover of
