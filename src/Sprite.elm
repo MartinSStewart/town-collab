@@ -1,4 +1,4 @@
-module Sprite exposing (charSize, getIndices, getQuadIndices, spriteMesh, spriteMeshWithZ, textMesh, toMesh)
+module Sprite exposing (charSize, getIndices, getQuadIndices, nineSlice, spriteMesh, spriteMeshWithZ, textMesh, toMesh)
 
 import Coord exposing (Coord)
 import List.Extra as List
@@ -7,6 +7,78 @@ import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Tile
 import WebGL
+
+
+nineSlice :
+    { topLeft : Coord a
+    , top : Coord a
+    , topRight : Coord a
+    , left : Coord a
+    , center : Coord a
+    , right : Coord a
+    , bottomLeft : Coord a
+    , bottom : Coord a
+    , bottomRight : Coord a
+    , cornerSize : Coord a
+    , position : Coord b
+    , size : Coord b
+    }
+    -> List Vertex
+nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bottomRight, cornerSize, position, size } =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple size
+
+        ( cornerW, cornerH ) =
+            Coord.toTuple cornerSize
+
+        innerWidth =
+            sizeX - cornerW * 2
+
+        innerHeight =
+            sizeY - cornerH * 2
+    in
+    spriteMesh (Coord.toTuple position) cornerSize (Coord.toTuple topLeft) (Coord.toTuple cornerSize)
+        ++ spriteMesh
+            (Coord.plus (Coord.xy cornerW 0) position |> Coord.toTuple)
+            (Coord.xy innerWidth cornerH)
+            (Coord.toTuple top)
+            ( 1, cornerH )
+        ++ spriteMesh
+            (Coord.plus (Coord.xy (cornerW + innerWidth) 0) position |> Coord.toTuple)
+            cornerSize
+            (Coord.toTuple topRight)
+            (Coord.toTuple cornerSize)
+        ++ spriteMesh
+            (Coord.plus (Coord.xy 0 cornerH) position |> Coord.toTuple)
+            (Coord.xy cornerW innerHeight)
+            (Coord.toTuple left)
+            ( cornerW, 1 )
+        ++ spriteMesh
+            (Coord.plus (Coord.xy cornerW cornerH) position |> Coord.toTuple)
+            (Coord.xy innerWidth innerHeight)
+            (Coord.toTuple center)
+            ( 1, 1 )
+        ++ spriteMesh
+            (Coord.plus (Coord.xy (cornerW + innerWidth) cornerH) position |> Coord.toTuple)
+            (Coord.xy cornerW innerHeight)
+            (Coord.toTuple right)
+            ( cornerW, 1 )
+        ++ spriteMesh
+            (Coord.plus (Coord.xy 0 (cornerH + innerHeight)) position |> Coord.toTuple)
+            cornerSize
+            (Coord.toTuple bottomLeft)
+            (Coord.toTuple cornerSize)
+        ++ spriteMesh
+            (Coord.plus (Coord.xy cornerW (cornerH + innerHeight)) position |> Coord.toTuple)
+            (Coord.xy innerWidth cornerH)
+            (Coord.toTuple bottom)
+            ( 1, cornerH )
+        ++ spriteMesh
+            (Coord.plus (Coord.xy (cornerW + innerWidth) (cornerH + innerHeight)) position |> Coord.toTuple)
+            cornerSize
+            (Coord.toTuple bottomRight)
+            (Coord.toTuple cornerSize)
 
 
 spriteMesh : ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex

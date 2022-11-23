@@ -2317,6 +2317,21 @@ canvasView audioData model =
                             , texture = texture
                             , textureSize = textureSize
                             }
+                       , WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            speechBubbleMesh
+                            { view =
+                                Mat4.makeScale3
+                                    (2 / toFloat windowWidth)
+                                    (-2 / toFloat windowHeight)
+                                    1
+                                    |> Coord.translateMat4
+                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                            , texture = texture
+                            , textureSize = textureSize
+                            }
                        ]
                     ++ MailEditor.drawMail
                         texture
@@ -2717,3 +2732,21 @@ tileMesh position tile =
                     Nothing ->
                         []
                )
+
+
+speechBubbleMesh =
+    Sprite.nineSlice
+        { topLeft = Coord.xy 378 154
+        , top = Coord.xy 384 154
+        , topRight = Coord.xy 385 154
+        , left = Coord.xy 378 160
+        , center = Coord.xy 384 160
+        , right = Coord.xy 385 160
+        , bottomLeft = Coord.xy 378 161
+        , bottom = Coord.xy 384 161
+        , bottomRight = Coord.xy 385 161
+        , cornerSize = Coord.xy 6 6
+        , position = Coord.xy 0 0
+        , size = Coord.xy 100 50
+        }
+        |> Sprite.toMesh
