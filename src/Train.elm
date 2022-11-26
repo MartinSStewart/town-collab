@@ -8,10 +8,14 @@ module Train exposing
     , draw
     , getCoach
     , handleAddingTrain
+    , home
+    , isStuck
     , leaveHome
     , moveTrain
+    , speed
     , startTeleportingHome
     , status
+    , stoppedSpeed
     , trainPosition
     )
 
@@ -45,20 +49,21 @@ type Status
     = WaitingAtHome
     | TeleportingHome Time.Posix
     | Travelling
+    | StoppedAtPostOffice { time : Time.Posix, userId : Id UserId }
 
 
-type alias Train =
-    { position : Coord WorldUnit
-    , path : RailPath
-    , previousPaths : List PreviousPath
-    , t : Float
-    , speed : Quantity Float (Rate TileLocalUnit Seconds)
-    , stoppedAtPostOffice : Maybe { time : Time.Posix, userId : Id UserId }
-    , home : Coord WorldUnit
-    , homePath : RailPath
-    , isStuck : Maybe Time.Posix
-    , status : Status
-    }
+type Train
+    = Train
+        { position : Coord WorldUnit
+        , path : RailPath
+        , previousPaths : List PreviousPath
+        , t : Float
+        , speed : Quantity Float (Rate TileLocalUnit Seconds)
+        , home : Coord WorldUnit
+        , homePath : RailPath
+        , isStuck : Maybe Time.Posix
+        , status : Status
+        }
 
 
 type alias PreviousPath =
@@ -91,7 +96,7 @@ type alias Coach =
 
 
 getCoach : Train -> Coach
-getCoach train =
+getCoach (Train train) =
     let
         coach : CoachData
         coach =
@@ -115,14 +120,10 @@ getCoach train =
 
 
 trainPosition : Time.Posix -> Train -> Point2d WorldUnit WorldUnit
-trainPosition time train =
+trainPosition time (Train train) =
     case train.status of
         Travelling ->
-            let
-                { path } =
-                    Tile.railPathData train.path
-            in
-            Grid.localTilePointPlusWorld train.position (path train.t)
+            travellingPosition train
 
         WaitingAtHome ->
             let
@@ -133,11 +134,7 @@ trainPosition time train =
 
         TeleportingHome teleportTime ->
             if Duration.from teleportTime time |> Quantity.lessThan teleportLength then
-                let
-                    { path } =
-                        Tile.railPathData train.path
-                in
-                Grid.localTilePointPlusWorld train.position (path train.t)
+                travellingPosition train
 
             else
                 let
@@ -145,6 +142,17 @@ trainPosition time train =
                         Tile.railPathData train.homePath
                 in
                 Grid.localTilePointPlusWorld train.home (path 0.5)
+
+        StoppedAtPostOffice _ ->
+            travellingPosition train
+
+
+travellingPosition train =
+    let
+        { path } =
+            Tile.railPathData train.path
+    in
+    Grid.localTilePointPlusWorld train.position (path train.t)
 
 
 coachPosition : Coach -> Point2d WorldUnit WorldUnit
@@ -157,7 +165,7 @@ coachPosition coach =
 
 
 status : Time.Posix -> Train -> Status
-status time train =
+status time (Train train) =
     case train.status of
         WaitingAtHome ->
             WaitingAtHome
@@ -171,6 +179,25 @@ status time train =
 
         Travelling ->
             Travelling
+
+        StoppedAtPostOffice stoppedAtPostOffice ->
+            StoppedAtPostOffice stoppedAtPostOffice
+
+
+speed : Time.Posix -> Train -> Quantity Float (Rate TileLocalUnit Seconds)
+speed time (Train train) =
+    case status time (Train train) of
+        WaitingAtHome ->
+            stoppedSpeed
+
+        TeleportingHome _ ->
+            train.speed
+
+        Travelling ->
+            train.speed
+
+        StoppedAtPostOffice _ ->
+            train.speed
 
 
 acceleration =
@@ -190,7 +217,7 @@ moveTrain :
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
-moveTrain trainId maxSpeed startTime endTime state train =
+moveTrain trainId maxSpeed startTime endTime state (Train train) =
     let
         timeElapsed_ =
             Duration.inSeconds (Duration.from startTime endTime) |> min 10
@@ -222,15 +249,18 @@ moveTrain trainId maxSpeed startTime endTime state train =
             )
                 |> Quantity
     in
-    case train.status of
+    case status startTime (Train train) of
         WaitingAtHome ->
-            train
+            Train train
 
         TeleportingHome _ ->
-            moveTrainHelper trainId startTime endTime distance distance state { train | speed = Quantity newSpeed }
+            moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
 
         Travelling ->
-            moveTrainHelper trainId startTime endTime distance distance state { train | speed = Quantity newSpeed }
+            moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
+
+        StoppedAtPostOffice _ ->
+            moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
 
 
 moveTrainHelper :
@@ -242,7 +272,7 @@ moveTrainHelper :
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
-moveTrainHelper trainId startTime endTime initialDistance distanceLeft state train =
+moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Train train) =
     let
         { path, distanceToT, tToDistance, startExitDirection, endExitDirection } =
             Tile.railPathData train.path
@@ -305,73 +335,103 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state tra
                         initialDistance
                         newDistanceLeft
                         state
-                        { position = newTrain.position
-                        , path = newTrain.path
-                        , previousPaths =
+                        ({ position = newTrain.position
+                         , path = newTrain.path
+                         , previousPaths =
                             { position = train.position, path = train.path, reversed = newT > 0.5 }
                                 :: List.take 3 train.previousPaths
-                        , t = newTrain.t
-                        , speed = newTrain.speed
-                        , stoppedAtPostOffice = newTrain.stoppedAtPostOffice
-                        , home = train.home
-                        , homePath = train.homePath
-                        , isStuck = Nothing
-                        , status = train.status
-                        }
-
-                Nothing ->
-                    { train
-                        | t = newTClamped
-                        , isStuck =
-                            case train.isStuck of
-                                Just _ ->
-                                    train.isStuck
+                         , t = newTrain.t
+                         , speed = newTrain.speed
+                         , home = train.home
+                         , homePath = train.homePath
+                         , isStuck = Nothing
+                         , status =
+                            case newTrain.stoppedAtPostOffice of
+                                Just stoppedAtPostOffice ->
+                                    StoppedAtPostOffice stoppedAtPostOffice
 
                                 Nothing ->
-                                    Duration.from startTime endTime
-                                        |> Quantity.multiplyBy (1 - Quantity.ratio distanceLeft initialDistance)
-                                        |> Duration.addTo startTime
-                                        |> Just
-                        , speed =
-                            if Quantity.lessThanZero train.speed then
-                                Quantity.negate stoppedSpeed
+                                    train.status
+                         }
+                            |> Train
+                        )
 
-                            else
-                                stoppedSpeed
-                    }
+                Nothing ->
+                    Train
+                        { train
+                            | t = newTClamped
+                            , isStuck =
+                                case train.isStuck of
+                                    Just _ ->
+                                        train.isStuck
+
+                                    Nothing ->
+                                        Duration.from startTime endTime
+                                            |> Quantity.multiplyBy (1 - Quantity.ratio distanceLeft initialDistance)
+                                            |> Duration.addTo startTime
+                                            |> Just
+                            , speed =
+                                if Quantity.lessThanZero train.speed then
+                                    Quantity.negate stoppedSpeed
+
+                                else
+                                    stoppedSpeed
+                        }
     in
-    case train.stoppedAtPostOffice of
-        Just stoppedAtPostOffice ->
+    case train.status of
+        StoppedAtPostOffice stoppedAtPostOffice ->
             if newT < 0 || newT > 1 then
                 if Duration.from stoppedAtPostOffice.time startTime |> Quantity.greaterThan (Duration.seconds 3) then
                     reachedTileEnd ()
 
                 else
-                    { train
-                        | t = newTClamped
-                        , speed =
-                            if Quantity.lessThanZero train.speed then
-                                Quantity -0.1
+                    Train
+                        { train
+                            | t = newTClamped
+                            , speed =
+                                if Quantity.lessThanZero train.speed then
+                                    Quantity -0.1
 
-                            else
-                                Quantity 0.1
-                        , isStuck = Nothing
-                    }
+                                else
+                                    Quantity 0.1
+                            , isStuck = Nothing
+                        }
 
             else
-                { train | t = newTClamped }
+                Train { train | t = newTClamped }
 
-        Nothing ->
+        _ ->
             if newT < 0 || newT > 1 then
                 reachedTileEnd ()
 
             else
-                { train | t = newTClamped, isStuck = Nothing }
+                Train { train | t = newTClamped, isStuck = Nothing }
 
 
 stoppedSpeed : Quantity Float units
 stoppedSpeed =
     Quantity 0.1
+
+
+home : Train -> Coord WorldUnit
+home (Train train) =
+    train.home
+
+
+isStuck : Time.Posix -> Train -> Maybe Time.Posix
+isStuck time (Train train) =
+    case status time (Train train) of
+        Travelling ->
+            train.isStuck
+
+        WaitingAtHome ->
+            Nothing
+
+        TeleportingHome _ ->
+            train.isStuck
+
+        StoppedAtPostOffice _ ->
+            train.isStuck
 
 
 moveCoachHelper :
@@ -456,20 +516,20 @@ findNextTile :
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
     -> Maybe TrainData
-findNextTile trainId time position state speed direction list =
+findNextTile trainId time position state speed_ direction list =
     case list of
         ( neighborCellPos, _ ) :: rest ->
             case Grid.getCell neighborCellPos state.grid of
                 Just cell ->
-                    case findNextTileHelper trainId time neighborCellPos position speed direction state (GridCell.flatten cell) of
+                    case findNextTileHelper trainId time neighborCellPos position speed_ direction state (GridCell.flatten cell) of
                         Just newTrain ->
                             Just newTrain
 
                         Nothing ->
-                            findNextTile trainId time position state speed direction rest
+                            findNextTile trainId time position state speed_ direction rest
 
                 Nothing ->
-                    findNextTile trainId time position state speed direction rest
+                    findNextTile trainId time position state speed_ direction rest
 
         [] ->
             Nothing
@@ -485,7 +545,7 @@ findNextTileHelper :
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
     -> Maybe TrainData
-findNextTileHelper trainId time neighborCellPos position speed direction state tiles =
+findNextTileHelper trainId time neighborCellPos position speed_ direction state tiles =
     case tiles of
         tile :: rest ->
             let
@@ -493,7 +553,7 @@ findNextTileHelper trainId time neighborCellPos position speed direction state t
                 maybeNewTrain =
                     case
                         List.filterMap
-                            (checkPath trainId time tile state.mail neighborCellPos position speed direction)
+                            (checkPath trainId time tile state.mail neighborCellPos position speed_ direction)
                             (case Tile.getData tile.value |> .railPath of
                                 NoRailPath ->
                                     []
@@ -520,7 +580,7 @@ findNextTileHelper trainId time neighborCellPos position speed direction state t
                     Just newTrain
 
                 Nothing ->
-                    findNextTileHelper trainId time neighborCellPos position speed direction state rest
+                    findNextTileHelper trainId time neighborCellPos position speed_ direction state rest
 
         [] ->
             Nothing
@@ -537,7 +597,7 @@ checkPath :
     -> Direction
     -> RailPath
     -> Maybe TrainData
-checkPath trainId time tile mail neighborCellPos position speed direction railPath =
+checkPath trainId time tile mail neighborCellPos position speed_ direction railPath =
     let
         railData : RailData
         railData =
@@ -588,7 +648,7 @@ checkPath trainId time tile mail neighborCellPos position speed direction railPa
         { position =
             Grid.cellAndLocalCoordToWorld ( neighborCellPos, tile.position )
         , t = 0
-        , speed = Quantity.abs speed
+        , speed = Quantity.abs speed_
         , path = railPath
         , stoppedAtPostOffice = stoppedAtPostOffice ()
         }
@@ -598,7 +658,7 @@ checkPath trainId time tile mail neighborCellPos position speed direction railPa
         { position =
             Grid.cellAndLocalCoordToWorld ( neighborCellPos, tile.position )
         , t = 1
-        , speed = Quantity.abs speed |> Quantity.negate
+        , speed = Quantity.abs speed_ |> Quantity.negate
         , path = railPath
         , stoppedAtPostOffice = stoppedAtPostOffice ()
         }
@@ -616,13 +676,13 @@ teleportLength =
 draw : Time.Posix -> AssocList.Dict (Id MailId) FrontendMail -> AssocList.Dict (Id TrainId) Train -> Mat4 -> Texture -> List WebGL.Entity
 draw time mail trains viewMatrix trainTexture =
     List.concatMap
-        (\( trainId, train ) ->
+        (\( trainId, Train train ) ->
             let
                 railData =
                     Tile.railPathData train.path
 
                 { x, y } =
-                    trainPosition time train |> Point2d.unwrap
+                    trainPosition time (Train train) |> Point2d.unwrap
 
                 trainFrame : Int
                 trainFrame =
@@ -642,7 +702,7 @@ draw time mail trains viewMatrix trainTexture =
                         |> modBy trainFrames
 
                 trainMesh =
-                    case status time train of
+                    case status time (Train train) of
                         TeleportingHome teleportTime ->
                             let
                                 t =
@@ -678,7 +738,7 @@ draw time mail trains viewMatrix trainTexture =
                             let
                                 coach : Coach
                                 coach =
-                                    getCoach train
+                                    getCoach (Train train)
 
                                 railData_ : RailData
                                 railData_ =
@@ -734,55 +794,66 @@ draw time mail trains viewMatrix trainTexture =
 
 
 startTeleportingHome : Time.Posix -> Train -> Train
-startTeleportingHome time train =
-    { train
-        | status =
-            case train.status of
-                Travelling ->
-                    TeleportingHome time
+startTeleportingHome time (Train train) =
+    Train
+        { train
+            | status =
+                case train.status of
+                    Travelling ->
+                        TeleportingHome time
 
-                TeleportingHome _ ->
-                    train.status
+                    TeleportingHome _ ->
+                        train.status
 
-                WaitingAtHome ->
-                    train.status
-    }
+                    WaitingAtHome ->
+                        train.status
+
+                    StoppedAtPostOffice _ ->
+                        train.status
+        }
 
 
 cancelTeleportingHome : Train -> Train
-cancelTeleportingHome train =
-    { train
-        | status =
-            case train.status of
-                Travelling ->
-                    train.status
+cancelTeleportingHome (Train train) =
+    Train
+        { train
+            | status =
+                case train.status of
+                    Travelling ->
+                        train.status
 
-                TeleportingHome _ ->
-                    Travelling
+                    TeleportingHome _ ->
+                        Travelling
 
-                WaitingAtHome ->
-                    train.status
-    }
+                    WaitingAtHome ->
+                        train.status
+
+                    StoppedAtPostOffice _ ->
+                        train.status
+        }
 
 
 leaveHome : Time.Posix -> Train -> Train
-leaveHome time train =
-    case status time train of
+leaveHome time (Train train) =
+    case status time (Train train) of
         Travelling ->
-            train
+            Train train
 
         TeleportingHome _ ->
-            train
+            Train train
 
         WaitingAtHome ->
-            { train
-                | status = Travelling
-                , t = 0.5
-                , path = train.homePath
-                , isStuck = Nothing
-                , stoppedAtPostOffice = Nothing
-                , speed = stoppedSpeed
-            }
+            Train
+                { train
+                    | status = Travelling
+                    , t = 0.5
+                    , path = train.homePath
+                    , isStuck = Nothing
+                    , speed = stoppedSpeed
+                }
+
+        StoppedAtPostOffice _ ->
+            Train train
 
 
 trainEntity : Texture -> WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> WebGL.Entity
@@ -913,17 +984,17 @@ handleAddingTrain trains tile position =
             |> Maybe.withDefault 0
             |> (+) 1
             |> Id.fromInt
-        , { position = position
-          , path = path
-          , previousPaths = []
-          , t = 0.5
-          , speed = stoppedSpeed
-          , stoppedAtPostOffice = Nothing
-          , home = position
-          , homePath = homePath
-          , isStuck = Nothing
-          , status = WaitingAtHome
-          }
+        , Train
+            { position = position
+            , path = path
+            , previousPaths = []
+            , t = 0.5
+            , speed = stoppedSpeed
+            , home = position
+            , homePath = homePath
+            , isStuck = Nothing
+            , status = WaitingAtHome
+            }
         )
             |> Just
 

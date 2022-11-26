@@ -115,18 +115,22 @@ audioLoaded audioData model =
         movingTrains =
             List.filterMap
                 (\( _, train ) ->
-                    if abs (Quantity.unwrap train.speed) > 0.1 then
+                    let
+                        trainSpeed =
+                            Train.speed model.time train
+                    in
+                    if Quantity.abs trainSpeed |> Quantity.lessThan Train.stoppedSpeed then
+                        Nothing
+
+                    else
                         let
                             position =
                                 Train.trainPosition model.time train
                         in
                         Just
-                            { playbackRate = 0.9 * (abs (Quantity.unwrap train.speed) / Train.defaultMaxSpeed) + 0.1
-                            , volume = volume model position * Quantity.unwrap train.speed / Train.defaultMaxSpeed |> abs
+                            { playbackRate = 0.9 * (abs (Quantity.unwrap trainSpeed) / Train.defaultMaxSpeed) + 0.1
+                            , volume = volume model position * Quantity.unwrap trainSpeed / Train.defaultMaxSpeed |> abs
                             }
-
-                    else
-                        Nothing
                 )
                 (AssocList.toList model.trains)
 
@@ -185,7 +189,7 @@ audioLoaded audioData model =
     , trainSounds
     , List.map
         (\( _, train ) ->
-            case train.status of
+            case Train.status model.time train of
                 TeleportingHome time ->
                     playSound TeleportSound time |> Audio.scaleVolume 0.8
 
@@ -1275,7 +1279,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 )
 
             TrainHover { trainId, train } ->
-                case train.status of
+                case Train.status model.time train of
                     WaitingAtHome ->
                         ( { model2
                             | viewPoint = actualViewPoint model2 |> NormalViewPoint
@@ -1301,7 +1305,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         )
 
                     _ ->
-                        case train.isStuck of
+                        case Train.isStuck model.time train of
                             Just stuckTime ->
                                 if Duration.from stuckTime model2.time |> Quantity.lessThan stuckMessageDelay then
                                     ( setTrainViewPoint trainId model2, Cmd.none )
@@ -1478,7 +1482,7 @@ placeTile isDragPlacement tile model =
     if isDragPlacement && hasCollision then
         model
 
-    else if not (canPlaceTile change model.trains grid) then
+    else if not (canPlaceTile model.time change model.trains grid) then
         if tile == EmptyTile then
             { model
                 | lastTilePlaced =
@@ -1585,8 +1589,8 @@ placeTile isDragPlacement tile model =
         }
 
 
-canPlaceTile : Grid.GridChange -> AssocList.Dict (Id TrainId) Train -> Grid -> Bool
-canPlaceTile change trains grid =
+canPlaceTile : Time.Posix -> Grid.GridChange -> AssocList.Dict (Id TrainId) Train -> Grid -> Bool
+canPlaceTile time change trains grid =
     if Grid.canPlaceTile change then
         let
             trains_ =
@@ -1597,7 +1601,9 @@ canPlaceTile change trains grid =
             |> List.all
                 (\{ tile, position } ->
                     if tile == TrainHouseLeft || tile == TrainHouseRight then
-                        List.any (\( _, train ) -> train.home == position && train.position == position) trains_
+                        List.any
+                            (\( _, train ) -> Train.home train == position && Train.status time train == WaitingAtHome)
+                            trains_
 
                     else
                         True
@@ -1762,6 +1768,7 @@ updateMeshes oldModel newModel =
                         Just newCurrentTile_ ->
                             if
                                 canPlaceTile
+                                    newModel.time
                                     { userId = currentUserId newModel
                                     , position = newCurrentTile_.position
                                     , change = newCurrentTile_.tile
@@ -2376,6 +2383,7 @@ canvasView audioData model =
 
                                         else if
                                             canPlaceTile
+                                                model.time
                                                 { position = mousePosition
                                                 , change = currentTile.tile
                                                 , userId = currentUserId model
@@ -2831,7 +2839,7 @@ getSpeechBubbles model =
     AssocList.toList model.trains
         |> List.concatMap
             (\( _, train ) ->
-                case ( train.status, train.isStuck ) of
+                case ( Train.status model.time train, Train.isStuck model.time train ) of
                     ( TeleportingHome _, _ ) ->
                         []
 
@@ -2841,7 +2849,7 @@ getSpeechBubbles model =
 
                         else
                             [ { position = Train.trainPosition model.time train, isRadio = False }
-                            , { position = Coord.toPoint2d train.home, isRadio = True }
+                            , { position = Coord.toPoint2d (Train.home train), isRadio = True }
                             ]
 
                     ( _, Nothing ) ->

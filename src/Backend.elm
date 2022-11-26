@@ -155,8 +155,11 @@ update msg model =
                     AssocList.merge
                         (\_ _ a -> a)
                         (\trainId oldTrain newTrain state ->
-                            case ( oldTrain.stoppedAtPostOffice, newTrain.stoppedAtPostOffice ) of
-                                ( Nothing, Just { userId } ) ->
+                            case ( Train.status time oldTrain, Train.status time newTrain ) of
+                                ( StoppedAtPostOffice _, _ ) ->
+                                    state
+
+                                ( _, StoppedAtPostOffice { userId } ) ->
                                     case Train.carryingMail state.mail trainId of
                                         Just ( mailId, mail ) ->
                                             { mail =
