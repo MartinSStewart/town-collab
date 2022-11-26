@@ -1286,7 +1286,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                             , trains =
                                 AssocList.update
                                     trainId
-                                    (\_ -> Train.cancelTeleportingHome train |> Just)
+                                    (\_ -> Train.cancelTeleportingHome model.time train |> Just)
                                     model2.trains
                           }
                         , LeaveHomeTrainRequest trainId |> Lamdera.sendToBackend

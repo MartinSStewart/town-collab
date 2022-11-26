@@ -448,7 +448,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
             )
 
         CancelTeleportHomeTrainRequest trainId ->
-            ( { model | trains = AssocList.update trainId (Maybe.map Train.cancelTeleportingHome) model.trains }
+            ( { model | trains = AssocList.update trainId (Maybe.map (Train.cancelTeleportingHome currentTime)) model.trains }
             , Cmd.none
             )
 
