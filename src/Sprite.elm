@@ -1,4 +1,15 @@
-module Sprite exposing (charSize, getIndices, getQuadIndices, nineSlice, shiverText, sprite, spriteWithZ, text, textSize, toMesh)
+module Sprite exposing
+    ( charSize
+    , getIndices
+    , getQuadIndices
+    , nineSlice
+    , shiverText
+    , sprite
+    , spriteWithZ
+    , text
+    , textSize
+    , toMesh
+    )
 
 import Coord exposing (Coord)
 import List.Extra as List
@@ -114,7 +125,7 @@ getIndices indexOffset =
 
 toMesh : List a -> WebGL.Mesh a
 toMesh vertices =
-    WebGL.indexedTriangles vertices (getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (getQuadIndices vertices)
 
 
 asciiChars : List Char

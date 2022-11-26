@@ -31,7 +31,7 @@ import String.Nonempty exposing (NonemptyString(..))
 import Task
 import Tile exposing (Tile(..))
 import Time
-import Train exposing (Train)
+import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
@@ -435,6 +435,24 @@ updateFromFrontend currentTime sessionId clientId msg model =
 
                         Nothing ->
                             ( model, Cmd.none )
+
+        TeleportHomeTrainRequest trainId ->
+            ( { model
+                | trains =
+                    AssocList.update trainId (Maybe.map (Train.startTeleportingHome currentTime)) model.trains
+              }
+            , Cmd.none
+            )
+
+        CancelTeleportHomeTrainRequest trainId ->
+            ( { model | trains = AssocList.update trainId (Maybe.map Train.cancelTeleportingHome) model.trains }
+            , Cmd.none
+            )
+
+        LeaveHomeTrainRequest trainId ->
+            ( { model | trains = AssocList.update trainId (Maybe.map (Train.leaveHome currentTime)) model.trains }
+            , Cmd.none
+            )
 
 
 sendConfirmationEmailRateLimit : Duration

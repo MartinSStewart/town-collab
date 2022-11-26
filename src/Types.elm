@@ -226,6 +226,9 @@ type ToBackend
     | GridChange (Nonempty Change.LocalChange)
     | ChangeViewBounds (Bounds CellUnit)
     | MailEditorToBackend MailEditor.ToBackend
+    | TeleportHomeTrainRequest (Id TrainId)
+    | CancelTeleportHomeTrainRequest (Id TrainId)
+    | LeaveHomeTrainRequest (Id TrainId)
 
 
 type BackendMsg

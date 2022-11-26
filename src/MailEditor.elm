@@ -174,8 +174,8 @@ initEditor data =
     { current = { content = data.content, to = data.to }
     , undo = []
     , redo = []
-    , mesh = WebGL.triangleFan []
-    , textInputMesh = WebGL.triangleFan []
+    , mesh = Shaders.triangleFan []
+    , textInputMesh = Shaders.triangleFan []
     , currentImage = BlueStamp
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
@@ -489,11 +489,11 @@ updateMailMesh : Model -> Model
 updateMailMesh model =
     { model
         | mesh =
-            WebGL.indexedTriangles
+            Shaders.indexedTriangles
                 (mailMesh ++ List.concatMap imageMesh model.current.content)
                 (List.range 0 (List.length model.current.content) |> List.concatMap Sprite.getIndices)
         , textInputMesh =
-            WebGL.indexedTriangles
+            Shaders.indexedTriangles
                 (Sprite.text 1 model.current.to (Coord.xy 15 7))
                 (List.range 0 (String.length model.current.to) |> List.concatMap Sprite.getIndices)
     }
@@ -808,7 +808,7 @@ submitButtonMesh =
                 ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
                 ++ Sprite.text 1 "SUBMIT" (Coord.xy 12 7)
     in
-    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 submittingButtonMesh : WebGL.Mesh Vertex
@@ -819,7 +819,7 @@ submittingButtonMesh =
                 ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ Sprite.text 1 "SUBMITTING" (Coord.xy 2 7)
     in
-    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 submitButtonHoverMesh : WebGL.Mesh Vertex
@@ -830,7 +830,7 @@ submitButtonHoverMesh =
                 ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ Sprite.text 1 "SUBMIT" (Coord.xy 12 7)
     in
-    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 textInputPosition =
@@ -849,7 +849,7 @@ textInputMesh =
                 ++ Sprite.sprite ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
                 ++ Sprite.text 1 "TO:" (Coord.xy 3 7)
     in
-    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 textInputHoverMesh : WebGL.Mesh Vertex
@@ -860,7 +860,7 @@ textInputHoverMesh =
                 ++ Sprite.sprite ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
                 ++ Sprite.text 1 "TO:" (Coord.xy 3 7)
     in
-    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 charSize : Coord UiPixelUnit
@@ -892,7 +892,7 @@ imageMesh { position, image } =
 
 square : WebGL.Mesh SimpleVertex
 square =
-    WebGL.triangleFan
+    Shaders.triangleFan
         [ { position = Vec2.vec2 0 0 }
         , { position = Vec2.vec2 1 0 }
         , { position = Vec2.vec2 1 1 }

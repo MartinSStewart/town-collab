@@ -360,19 +360,27 @@ railPathData : RailPath -> RailData
 railPathData railPath =
     case railPath of
         RailPathHorizontal { offsetX, offsetY, length } ->
-            { path = \t -> Point2d.unsafe { x = t * toFloat length + toFloat offsetX, y = toFloat offsetY + 0.5 }
-            , distanceToT = \(Quantity distance) -> distance / toFloat length
-            , tToDistance = \t -> toFloat length * t |> Quantity
-            , startExitDirection = Left
-            , endExitDirection = Right
+            let
+                path =
+                    \t -> Point2d.unsafe { x = t * toFloat length + toFloat offsetX, y = toFloat offsetY + 0.5 }
+            in
+            { path = path
+            , distanceToT = \(Quantity distance) -> distance / toFloat (abs length)
+            , tToDistance = \t -> toFloat (abs length) * t |> Quantity
+            , startExitDirection = pathStartDirection path
+            , endExitDirection = pathExitDirection path
             }
 
         RailPathVertical { offsetX, offsetY, length } ->
-            { path = \t -> Point2d.unsafe { x = toFloat offsetX + 0.5, y = t * toFloat length + toFloat offsetY }
-            , distanceToT = \(Quantity distance) -> distance / (toFloat length * 1.3)
-            , tToDistance = \t -> toFloat length * 1.3 * t |> Quantity
-            , startExitDirection = Up
-            , endExitDirection = Down
+            let
+                path =
+                    \t -> Point2d.unsafe { x = toFloat offsetX + 0.5, y = t * toFloat length + toFloat offsetY }
+            in
+            { path = path
+            , distanceToT = \(Quantity distance) -> distance / (toFloat (abs length) * 1.3)
+            , tToDistance = \t -> toFloat (abs length) * 1.3 * t |> Quantity
+            , startExitDirection = pathStartDirection path
+            , endExitDirection = pathExitDirection path
             }
 
         RailPathBottomToRight ->
@@ -1574,7 +1582,7 @@ bottomToRightPathLarge t =
 
 trainHouseLeftRailPath : RailPath
 trainHouseLeftRailPath =
-    RailPathHorizontal { offsetX = 0, offsetY = 2, length = 3 }
+    RailPathHorizontal { offsetX = 3, offsetY = 2, length = -3 }
 
 
 trainHouseRightRailPath : RailPath

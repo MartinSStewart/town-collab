@@ -22,6 +22,7 @@ type Sound
     | NuhHuhSound
     | HelloSound
     | Hello2Sound
+    | TeleportSound
 
 
 allSounds =
@@ -39,6 +40,7 @@ allSounds =
     , NuhHuhSound
     , HelloSound
     , Hello2Sound
+    , TeleportSound
     ]
 
 
@@ -115,6 +117,9 @@ load onLoad =
 
                         Hello2Sound ->
                             "hello2.mp3"
+
+                        TeleportSound ->
+                            "teleport.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)

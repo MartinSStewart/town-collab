@@ -1,4 +1,19 @@
-module Train exposing (Train, actualPosition, carryingMail, defaultMaxSpeed, draw, getCoach, handleAddingTrain, isStuck, moveTrain)
+module Train exposing
+    ( Status(..)
+    , Train
+    , cancelTeleportingHome
+    , carryingMail
+    , coachPosition
+    , defaultMaxSpeed
+    , draw
+    , getCoach
+    , handleAddingTrain
+    , leaveHome
+    , moveTrain
+    , startTeleportingHome
+    , status
+    , trainPosition
+    )
 
 import Angle
 import Array exposing (Array)
@@ -12,6 +27,7 @@ import Id exposing (Id, MailId, TrainId, UserId)
 import List.Extra as List
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -25,6 +41,12 @@ import WebGL.Settings.DepthTest
 import WebGL.Texture exposing (Texture)
 
 
+type Status
+    = WaitingAtHome
+    | TeleportingHome Time.Posix
+    | Travelling
+
+
 type alias Train =
     { position : Coord WorldUnit
     , path : RailPath
@@ -33,7 +55,9 @@ type alias Train =
     , speed : Quantity Float (Rate TileLocalUnit Seconds)
     , stoppedAtPostOffice : Maybe { time : Time.Posix, userId : Id UserId }
     , home : Coord WorldUnit
+    , homePath : RailPath
     , isStuck : Maybe Time.Posix
+    , status : Status
     }
 
 
@@ -90,13 +114,63 @@ getCoach train =
     }
 
 
-actualPosition : { a | position : Coord WorldUnit, path : RailPath, t : Float } -> Point2d WorldUnit WorldUnit
-actualPosition train =
+trainPosition : Time.Posix -> Train -> Point2d WorldUnit WorldUnit
+trainPosition time train =
+    case train.status of
+        Travelling ->
+            let
+                { path } =
+                    Tile.railPathData train.path
+            in
+            Grid.localTilePointPlusWorld train.position (path train.t)
+
+        WaitingAtHome ->
+            let
+                { path } =
+                    Tile.railPathData train.homePath
+            in
+            Grid.localTilePointPlusWorld train.home (path 0.5)
+
+        TeleportingHome teleportTime ->
+            if Duration.from teleportTime time |> Quantity.lessThan teleportLength then
+                let
+                    { path } =
+                        Tile.railPathData train.path
+                in
+                Grid.localTilePointPlusWorld train.position (path train.t)
+
+            else
+                let
+                    { path } =
+                        Tile.railPathData train.homePath
+                in
+                Grid.localTilePointPlusWorld train.home (path 0.5)
+
+
+coachPosition : Coach -> Point2d WorldUnit WorldUnit
+coachPosition coach =
     let
         { path } =
-            Tile.railPathData train.path
+            Tile.railPathData coach.path
     in
-    Grid.localTilePointPlusWorld train.position (path train.t)
+    Grid.localTilePointPlusWorld coach.position (path coach.t)
+
+
+status : Time.Posix -> Train -> Status
+status time train =
+    case train.status of
+        WaitingAtHome ->
+            WaitingAtHome
+
+        TeleportingHome teleportTime ->
+            if Duration.from teleportTime time |> Quantity.lessThan teleportLength then
+                TeleportingHome teleportTime
+
+            else
+                WaitingAtHome
+
+        Travelling ->
+            Travelling
 
 
 acceleration =
@@ -148,7 +222,15 @@ moveTrain trainId maxSpeed startTime endTime state train =
             )
                 |> Quantity
     in
-    moveTrainHelper trainId startTime endTime distance distance state { train | speed = Quantity newSpeed }
+    case train.status of
+        WaitingAtHome ->
+            train
+
+        TeleportingHome _ ->
+            moveTrainHelper trainId startTime endTime distance distance state { train | speed = Quantity newSpeed }
+
+        Travelling ->
+            moveTrainHelper trainId startTime endTime distance distance state { train | speed = Quantity newSpeed }
 
 
 moveTrainHelper :
@@ -232,7 +314,9 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state tra
                         , speed = newTrain.speed
                         , stoppedAtPostOffice = newTrain.stoppedAtPostOffice
                         , home = train.home
+                        , homePath = train.homePath
                         , isStuck = Nothing
+                        , status = train.status
                         }
 
                 Nothing ->
@@ -285,22 +369,9 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state tra
                 { train | t = newTClamped, isStuck = Nothing }
 
 
+stoppedSpeed : Quantity Float units
 stoppedSpeed =
     Quantity 0.1
-
-
-isStuck : Train -> Bool
-isStuck train =
-    case train.stoppedAtPostOffice of
-        Just _ ->
-            False
-
-        Nothing ->
-            if train.t == 0 || train.t == 1 && Quantity.abs train.speed == stoppedSpeed then
-                True
-
-            else
-                False
 
 
 moveCoachHelper :
@@ -537,8 +608,13 @@ checkPath trainId time tile mail neighborCellPos position speed direction railPa
         Nothing
 
 
-draw : AssocList.Dict (Id MailId) FrontendMail -> AssocList.Dict (Id TrainId) Train -> Mat4 -> Texture -> List WebGL.Entity
-draw mail trains viewMatrix trainTexture =
+teleportLength : Duration
+teleportLength =
+    Duration.seconds 1
+
+
+draw : Time.Posix -> AssocList.Dict (Id MailId) FrontendMail -> AssocList.Dict (Id TrainId) Train -> Mat4 -> Texture -> List WebGL.Entity
+draw time mail trains viewMatrix trainTexture =
     List.concatMap
         (\( trainId, train ) ->
             let
@@ -546,8 +622,9 @@ draw mail trains viewMatrix trainTexture =
                     Tile.railPathData train.path
 
                 { x, y } =
-                    actualPosition train |> Point2d.unwrap
+                    trainPosition time train |> Point2d.unwrap
 
+                trainFrame : Int
                 trainFrame =
                     Direction2d.angleFrom
                         Direction2d.x
@@ -563,40 +640,55 @@ draw mail trains viewMatrix trainTexture =
                         |> (*) trainFrames
                         |> round
                         |> modBy trainFrames
-            in
-            (case Array.get trainFrame trainEngineMeshes of
-                Just trainMesh_ ->
-                    [ WebGL.entityWith
-                        [ WebGL.Settings.DepthTest.default, Shaders.blend ]
-                        Shaders.vertexShader
-                        Shaders.fragmentShader
-                        trainMesh_
-                        { view =
-                            Mat4.makeTranslate3
-                                (x * Units.tileSize |> round |> toFloat)
-                                (y * Units.tileSize |> round |> toFloat)
-                                (Grid.tileZ True y 0)
-                                |> Mat4.mul viewMatrix
-                        , texture = trainTexture
-                        , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
-                        }
-                    ]
 
-                Nothing ->
-                    []
-            )
+                trainMesh =
+                    case status time train of
+                        TeleportingHome teleportTime ->
+                            let
+                                t =
+                                    Quantity.ratio (Duration.from teleportTime time) teleportLength
+
+                                ( homeX, homeY ) =
+                                    Coord.toTuple train.home
+                            in
+                            if t >= 1 then
+                                []
+
+                            else
+                                [ trainEntity trainTexture (trainEngineMesh t trainFrame) viewMatrix x y
+                                , trainEntity
+                                    trainTexture
+                                    (trainEngineMesh (1 - t) trainFrame)
+                                    viewMatrix
+                                    (toFloat homeX + 2.5)
+                                    (toFloat homeY + 2.5)
+                                ]
+
+                        _ ->
+                            case Array.get trainFrame trainEngineMeshes of
+                                Just mesh ->
+                                    [ trainEntity trainTexture mesh viewMatrix x y ]
+
+                                Nothing ->
+                                    []
+            in
+            trainMesh
                 ++ (case carryingMail mail trainId of
                         Just _ ->
                             let
+                                coach : Coach
                                 coach =
                                     getCoach train
 
+                                railData_ : RailData
                                 railData_ =
                                     Tile.railPathData coach.path
 
-                                coachPosition =
-                                    actualPosition coach |> Point2d.unwrap
+                                coachPosition_ : { x : Float, y : Float }
+                                coachPosition_ =
+                                    coachPosition coach |> Point2d.unwrap
 
+                                coachFrame : Int
                                 coachFrame =
                                     Direction2d.angleFrom
                                         Direction2d.x
@@ -622,9 +714,9 @@ draw mail trains viewMatrix trainTexture =
                                         trainMesh_
                                         { view =
                                             Mat4.makeTranslate3
-                                                (coachPosition.x * Units.tileSize)
-                                                (coachPosition.y * Units.tileSize)
-                                                (Grid.tileZ True coachPosition.y 0)
+                                                (coachPosition_.x * Units.tileSize)
+                                                (coachPosition_.y * Units.tileSize)
+                                                (Grid.tileZ True coachPosition_.y 0)
                                                 |> Mat4.mul viewMatrix
                                         , texture = trainTexture
                                         , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
@@ -639,6 +731,76 @@ draw mail trains viewMatrix trainTexture =
                    )
         )
         (AssocList.toList trains)
+
+
+startTeleportingHome : Time.Posix -> Train -> Train
+startTeleportingHome time train =
+    { train
+        | status =
+            case train.status of
+                Travelling ->
+                    TeleportingHome time
+
+                TeleportingHome _ ->
+                    train.status
+
+                WaitingAtHome ->
+                    train.status
+    }
+
+
+cancelTeleportingHome : Train -> Train
+cancelTeleportingHome train =
+    { train
+        | status =
+            case train.status of
+                Travelling ->
+                    train.status
+
+                TeleportingHome _ ->
+                    Travelling
+
+                WaitingAtHome ->
+                    train.status
+    }
+
+
+leaveHome : Time.Posix -> Train -> Train
+leaveHome time train =
+    case status time train of
+        Travelling ->
+            train
+
+        TeleportingHome _ ->
+            train
+
+        WaitingAtHome ->
+            { train
+                | status = Travelling
+                , t = 0.5
+                , path = train.homePath
+                , isStuck = Nothing
+                , stoppedAtPostOffice = Nothing
+                , speed = stoppedSpeed
+            }
+
+
+trainEntity : Texture -> WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> WebGL.Entity
+trainEntity trainTexture trainMesh viewMatrix x y =
+    WebGL.entityWith
+        [ WebGL.Settings.DepthTest.default, Shaders.blend ]
+        Shaders.vertexShader
+        Shaders.fragmentShader
+        trainMesh
+        { view =
+            Mat4.makeTranslate3
+                (x * Units.tileSize |> round |> toFloat)
+                (y * Units.tileSize |> round |> toFloat)
+                (Grid.tileZ True y 0)
+                |> Mat4.mul viewMatrix
+        , texture = trainTexture
+        , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
+        }
 
 
 carryingMail :
@@ -665,7 +827,7 @@ trainFrames =
 trainEngineMeshes : Array (WebGL.Mesh Vertex)
 trainEngineMeshes =
     List.range 0 (trainFrames - 1)
-        |> List.map trainEngineMesh
+        |> List.map (trainEngineMesh 0)
         |> Array.fromList
 
 
@@ -676,20 +838,44 @@ trainCoachMeshes =
         |> Array.fromList
 
 
-trainEngineMesh : Int -> WebGL.Mesh Vertex
-trainEngineMesh frame =
+trainEngineMesh : Float -> Int -> WebGL.Mesh Vertex
+trainEngineMesh teleportAmount frame =
     let
+        offsetX =
+            sin (100 * teleportAmount) * min 1 (teleportAmount * 3)
+
         offsetY =
             -5
 
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePosition_ ( 0, frame * 2 ) ( 2, 2 )
+        y =
+            toFloat frame * 2
+
+        y2 =
+            y + h - (teleportAmount * h)
+
+        w =
+            36
+
+        h =
+            36
     in
-    WebGL.triangleFan
-        [ { position = Vec3.vec3 -Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topLeft, opacity = 1 }
-        , { position = Vec3.vec3 Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topRight, opacity = 1 }
-        , { position = Vec3.vec3 Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomRight, opacity = 1 }
-        , { position = Vec3.vec3 -Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomLeft, opacity = 1 }
+    Shaders.triangleFan
+        [ { position = Vec3.vec3 (-Units.tileSize + offsetX) (-Units.tileSize + offsetY) 0
+          , texturePosition = Vec2.vec2 0 y
+          , opacity = 1
+          }
+        , { position = Vec3.vec3 (Units.tileSize + offsetX) (-Units.tileSize + offsetY) 0
+          , texturePosition = Vec2.vec2 w y
+          , opacity = 1
+          }
+        , { position = Vec3.vec3 (Units.tileSize + offsetX) (Units.tileSize + offsetY - (teleportAmount * h)) 0
+          , texturePosition = Vec2.vec2 w y2
+          , opacity = 1
+          }
+        , { position = Vec3.vec3 (-Units.tileSize + offsetX) (Units.tileSize + offsetY - (teleportAmount * h)) 0
+          , texturePosition = Vec2.vec2 0 y2
+          , opacity = 1
+          }
         ]
 
 
@@ -702,7 +888,7 @@ trainCoachMesh frame =
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePosition_ ( 2, frame * 2 ) ( 2, 2 )
     in
-    WebGL.triangleFan
+    Shaders.triangleFan
         [ { position = Vec3.vec3 -Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topLeft, opacity = 1 }
         , { position = Vec3.vec3 Units.tileSize (-Units.tileSize + offsetY) 0, texturePosition = topRight, opacity = 1 }
         , { position = Vec3.vec3 Units.tileSize (Units.tileSize + offsetY) 0, texturePosition = bottomRight, opacity = 1 }
@@ -714,12 +900,12 @@ handleAddingTrain : AssocList.Dict (Id TrainId) Train -> Tile -> Coord WorldUnit
 handleAddingTrain trains tile position =
     if tile == TrainHouseLeft || tile == TrainHouseRight then
         let
-            ( path, speed ) =
+            ( path, homePath ) =
                 if tile == TrainHouseLeft then
-                    ( Tile.trainHouseLeftRailPath, Quantity -0.1 )
+                    ( Tile.trainHouseLeftRailPath, Tile.trainHouseLeftRailPath )
 
                 else
-                    ( Tile.trainHouseRightRailPath, Quantity 0.1 )
+                    ( Tile.trainHouseRightRailPath, Tile.trainHouseRightRailPath )
         in
         ( AssocList.toList trains
             |> List.map (Tuple.first >> Id.toInt)
@@ -731,10 +917,12 @@ handleAddingTrain trains tile position =
           , path = path
           , previousPaths = []
           , t = 0.5
-          , speed = speed
+          , speed = stoppedSpeed
           , stoppedAtPostOffice = Nothing
           , home = position
+          , homePath = homePath
           , isStuck = Nothing
+          , status = WaitingAtHome
           }
         )
             |> Just

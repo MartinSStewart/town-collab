@@ -51,10 +51,9 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import Task
-import Terrain
 import Tile exposing (CollisionMask(..), RailPathType(..), Tile(..), TileData)
 import Time
-import Train exposing (Train)
+import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
 import Url exposing (Url)
@@ -112,13 +111,14 @@ audioLoaded audioData model =
         playWithConfig =
             Sound.playWithConfig audioData model.sounds
 
+        movingTrains : List { playbackRate : Float, volume : Float }
         movingTrains =
             List.filterMap
                 (\( _, train ) ->
                     if abs (Quantity.unwrap train.speed) > 0.1 then
                         let
                             position =
-                                Train.actualPosition train
+                                Train.trainPosition model.time train
                         in
                         Just
                             { playbackRate = 0.9 * (abs (Quantity.unwrap train.speed) / Train.defaultMaxSpeed) + 0.1
@@ -130,6 +130,7 @@ audioLoaded audioData model =
                 )
                 (AssocList.toList model.trains)
 
+        mailEditorVolumeScale : Float
         mailEditorVolumeScale =
             clamp
                 0
@@ -182,6 +183,17 @@ audioLoaded audioData model =
         _ ->
             Audio.silence
     , trainSounds
+    , List.map
+        (\( _, train ) ->
+            case train.status of
+                TeleportingHome time ->
+                    playSound TeleportSound time |> Audio.scaleVolume 0.8
+
+                _ ->
+                    Audio.silence
+        )
+        (AssocList.toList model.trains)
+        |> Audio.group
     , case model.lastTrainWhistle of
         Just time ->
             playSound TrainWhistleSound time |> Audio.scaleVolume (0.2 * mailEditorVolumeScale)
@@ -356,7 +368,7 @@ loadedInit time loading loadingData =
             , lastTilePlaced = Nothing
             , sounds = loading.sounds
             , removedTileParticles = []
-            , debrisMesh = WebGL.triangleFan []
+            , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
             , mailEditor = MailEditor.initEditor loadingData.mailEditor
@@ -814,7 +826,7 @@ updateLoaded audioData msg model =
                             True
                     )
                         && List.any
-                            (\( _, train ) -> BoundingBox2d.contains (Train.actualPosition train) viewBounds)
+                            (\( _, train ) -> BoundingBox2d.contains (Train.trainPosition model.time train) viewBounds)
                             (AssocList.toList model.trains)
 
                 model4 =
@@ -1085,7 +1097,7 @@ hoverAt model mousePosition =
                                 (\( trainId, train ) ->
                                     let
                                         distance =
-                                            Train.actualPosition train |> Point2d.distanceFrom mouseWorldPosition_
+                                            Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
                                     in
                                     if distance |> Quantity.lessThan (Quantity 0.9) then
                                         Just ( { trainId = trainId, train = train }, distance )
@@ -1239,13 +1251,13 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
     in
-    ( if isSmallDistance then
+    if isSmallDistance then
         case hoverAt model mousePosition of
             TileHover tileHover_ ->
-                setCurrentTile tileHover_ model2
+                ( setCurrentTile tileHover_ model2, Cmd.none )
 
             PostOfficeHover { postOfficePosition } ->
-                if canOpenMailEditor model2 then
+                ( if canOpenMailEditor model2 then
                     { model2
                         | mailEditor =
                             MailEditor.open
@@ -1257,47 +1269,91 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 model2.mailEditor
                     }
 
-                else
+                  else
                     model2
+                , Cmd.none
+                )
 
             TrainHover { trainId, train } ->
-                { model2
-                    | viewPoint =
-                        TrainViewPoint
-                            { trainId = trainId
-                            , startViewPoint = actualViewPoint model2
-                            , startTime = model2.time
-                            }
-                }
+                case train.status of
+                    WaitingAtHome ->
+                        ( { model2
+                            | viewPoint = actualViewPoint model2 |> NormalViewPoint
+                            , trains =
+                                AssocList.update
+                                    trainId
+                                    (\_ -> Train.cancelTeleportingHome train |> Just)
+                                    model2.trains
+                          }
+                        , LeaveHomeTrainRequest trainId |> Lamdera.sendToBackend
+                        )
+
+                    TeleportingHome _ ->
+                        ( { model2
+                            | viewPoint = actualViewPoint model2 |> NormalViewPoint
+                            , trains =
+                                AssocList.update
+                                    trainId
+                                    (\_ -> Train.leaveHome model.time train |> Just)
+                                    model2.trains
+                          }
+                        , CancelTeleportHomeTrainRequest trainId |> Lamdera.sendToBackend
+                        )
+
+                    _ ->
+                        case train.isStuck of
+                            Just stuckTime ->
+                                if Duration.from stuckTime model2.time |> Quantity.lessThan stuckMessageDelay then
+                                    ( setTrainViewPoint trainId model2, Cmd.none )
+
+                                else
+                                    ( { model2
+                                        | viewPoint = actualViewPoint model2 |> NormalViewPoint
+                                        , trains =
+                                            AssocList.update
+                                                trainId
+                                                (\_ -> Train.startTeleportingHome model2.time train |> Just)
+                                                model2.trains
+                                      }
+                                    , TeleportHomeTrainRequest trainId |> Lamdera.sendToBackend
+                                    )
+
+                            Nothing ->
+                                ( setTrainViewPoint trainId model2, Cmd.none )
 
             ToolbarHover ->
-                model2
+                ( model2, Cmd.none )
 
             TrainHouseHover _ ->
-                model2
+                ( model2, Cmd.none )
 
             HouseHover _ ->
-                { model2 | lastHouseClick = Just model.time }
+                ( { model2 | lastHouseClick = Just model.time }, Cmd.none )
 
             MapHover ->
-                case previousMouseState.hover of
+                ( case previousMouseState.hover of
                     TrainHover { trainId, train } ->
-                        { model2
-                            | viewPoint =
-                                TrainViewPoint
-                                    { trainId = trainId
-                                    , startViewPoint = actualViewPoint model2
-                                    , startTime = model2.time
-                                    }
-                        }
+                        setTrainViewPoint trainId model2
 
                     _ ->
                         model2
+                , Cmd.none
+                )
 
-      else
-        model2
-    , Cmd.none
-    )
+    else
+        ( model2, Cmd.none )
+
+
+setTrainViewPoint : Id TrainId -> FrontendLoaded -> FrontendLoaded
+setTrainViewPoint trainId model =
+    { model
+        | viewPoint =
+            TrainViewPoint
+                { trainId = trainId
+                , startViewPoint = actualViewPoint model
+                , startTime = model.time
+                }
+    }
 
 
 canOpenMailEditor : FrontendLoaded -> Bool
@@ -1892,7 +1948,7 @@ actualViewPointHelper model =
                                 (Duration.milliseconds 600)
                                 |> min 1
                     in
-                    Point2d.interpolateFrom trainViewPoint.startViewPoint (Train.actualPosition train) t
+                    Point2d.interpolateFrom trainViewPoint.startViewPoint (Train.trainPosition model.time train) t
 
                 Nothing ->
                     trainViewPoint.startViewPoint
@@ -2133,7 +2189,7 @@ canvasView audioData model =
                 in
                 drawBackground meshes viewMatrix texture
                     ++ drawForeground meshes viewMatrix texture
-                    ++ Train.draw model.mail model.trains viewMatrix trainTexture
+                    ++ Train.draw model.time model.mail model.trains viewMatrix trainTexture
                     ++ List.filterMap
                         (\flag ->
                             let
@@ -2528,7 +2584,7 @@ sendingMailFlagMesh frame =
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels ( 72, 594 + frame * 6 ) ( width, 6 )
     in
-    WebGL.triangleFan
+    Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
         , { position = Vec3.vec3 width 0 0, texturePosition = topRight, opacity = 1 }
         , { position = Vec3.vec3 width height 0, texturePosition = bottomRight, opacity = 1 }
@@ -2555,7 +2611,7 @@ receivingMailFlagMesh frame =
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels ( 90, 594 + frame * 6 ) ( width, 6 )
     in
-    WebGL.triangleFan
+    Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
         , { position = Vec3.vec3 width 0 0, texturePosition = topRight, opacity = 1 }
         , { position = Vec3.vec3 width height 0, texturePosition = bottomRight, opacity = 1 }
@@ -2572,7 +2628,7 @@ createUserIdMesh userId =
         vertices =
             Sprite.text 2 id (Coord.xy 2 2)
     in
-    WebGL.indexedTriangles vertices (Sprite.getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 subscriptions : AudioData -> FrontendModel_ -> Sub FrontendMsg_
@@ -2775,19 +2831,27 @@ getSpeechBubbles model =
     AssocList.toList model.trains
         |> List.concatMap
             (\( _, train ) ->
-                case train.isStuck of
-                    Just time ->
-                        if Duration.from time model.time |> Quantity.lessThan (Duration.seconds 2) then
+                case ( train.status, train.isStuck ) of
+                    ( TeleportingHome _, _ ) ->
+                        []
+
+                    ( _, Just time ) ->
+                        if Duration.from time model.time |> Quantity.lessThan stuckMessageDelay then
                             []
 
                         else
-                            [ { position = Train.actualPosition train, isRadio = False }
+                            [ { position = Train.trainPosition model.time train, isRadio = False }
                             , { position = Coord.toPoint2d train.home, isRadio = True }
                             ]
 
-                    Nothing ->
+                    ( _, Nothing ) ->
                         []
             )
+
+
+stuckMessageDelay : Duration
+stuckMessageDelay =
+    Duration.seconds 2
 
 
 speechBubbleMesh : Array (WebGL.Mesh Vertex)
