@@ -136,81 +136,105 @@ update msg model =
                     ( addError time (SendGridError email error) model, Cmd.none )
 
         WorldUpdateTimeElapsed time ->
-            let
-                newTrains : AssocList.Dict (Id TrainId) Train
-                newTrains =
-                    case model.lastWorldUpdate of
-                        Just lastWorldUpdate ->
-                            AssocList.map
-                                (\trainId train ->
-                                    Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
-                                )
-                                model.trains
+            case model.lastWorldUpdate of
+                Just oldTime ->
+                    let
+                        newTrains : AssocList.Dict (Id TrainId) Train
+                        newTrains =
+                            case model.lastWorldUpdate of
+                                Just lastWorldUpdate ->
+                                    AssocList.map
+                                        (\trainId train ->
+                                            Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
+                                        )
+                                        model.trains
 
-                        Nothing ->
-                            model.trains
+                                Nothing ->
+                                    model.trains
 
-                updateMail : { mail : AssocList.Dict (Id MailId) BackendMail, mailChanged : Bool }
-                updateMail =
-                    AssocList.merge
-                        (\_ _ a -> a)
-                        (\trainId oldTrain newTrain state ->
-                            case ( Train.status time oldTrain, Train.status time newTrain ) of
-                                ( StoppedAtPostOffice _, _ ) ->
-                                    state
-
-                                ( _, StoppedAtPostOffice { userId } ) ->
-                                    case Train.carryingMail state.mail trainId of
-                                        Just ( mailId, mail ) ->
+                        updateMail : { mail : AssocList.Dict (Id MailId) BackendMail, mailChanged : Bool }
+                        updateMail =
+                            AssocList.merge
+                                (\_ _ a -> a)
+                                (\trainId oldTrain newTrain state ->
+                                    case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
+                                        ( TeleportingHome _, WaitingAtHome ) ->
                                             { mail =
-                                                AssocList.update
-                                                    mailId
-                                                    (\_ -> Just { mail | status = MailReceived })
+                                                AssocList.map
+                                                    (\_ mail ->
+                                                        case mail.status of
+                                                            MailInTransit mailTrainId ->
+                                                                if trainId == mailTrainId then
+                                                                    { mail | status = MailWaitingPickup }
+
+                                                                else
+                                                                    mail
+
+                                                            _ ->
+                                                                mail
+                                                    )
                                                     state.mail
                                             , mailChanged = True
                                             }
 
-                                        Nothing ->
-                                            case
-                                                MailEditor.getMailFrom userId state.mail
-                                                    |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
-                                            of
-                                                ( mailId, mail ) :: _ ->
+                                        ( StoppedAtPostOffice _, _ ) ->
+                                            state
+
+                                        ( _, StoppedAtPostOffice { userId } ) ->
+                                            case Train.carryingMail state.mail trainId of
+                                                Just ( mailId, mail ) ->
                                                     { mail =
                                                         AssocList.update
                                                             mailId
-                                                            (\_ -> Just { mail | status = MailInTransit trainId })
+                                                            (\_ -> Just { mail | status = MailReceived })
                                                             state.mail
                                                     , mailChanged = True
                                                     }
 
-                                                [] ->
-                                                    state
+                                                Nothing ->
+                                                    case
+                                                        MailEditor.getMailFrom userId state.mail
+                                                            |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
+                                                    of
+                                                        ( mailId, mail ) :: _ ->
+                                                            { mail =
+                                                                AssocList.update
+                                                                    mailId
+                                                                    (\_ -> Just { mail | status = MailInTransit trainId })
+                                                                    state.mail
+                                                            , mailChanged = True
+                                                            }
 
-                                _ ->
-                                    state
-                        )
-                        (\_ _ a -> a)
-                        model.trains
-                        newTrains
-                        { mailChanged = False, mail = model.mail }
-            in
-            ( { model
-                | lastWorldUpdate = Just time
-                , trains = newTrains
-                , mail = updateMail.mail
-              }
-            , Cmd.batch
-                [ Lamdera.broadcast (TrainBroadcast newTrains)
-                , if updateMail.mailChanged then
-                    AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) updateMail.mail
-                        |> MailBroadcast
-                        |> Lamdera.broadcast
+                                                        [] ->
+                                                            state
 
-                  else
-                    Cmd.none
-                ]
-            )
+                                        _ ->
+                                            state
+                                )
+                                (\_ _ a -> a)
+                                model.trains
+                                newTrains
+                                { mailChanged = False, mail = model.mail }
+                    in
+                    ( { model
+                        | lastWorldUpdate = Just time
+                        , trains = newTrains
+                        , mail = updateMail.mail
+                      }
+                    , Cmd.batch
+                        [ Lamdera.broadcast (TrainBroadcast newTrains)
+                        , if updateMail.mailChanged then
+                            AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) updateMail.mail
+                                |> MailBroadcast
+                                |> Lamdera.broadcast
+
+                          else
+                            Cmd.none
+                        ]
+                    )
+
+                Nothing ->
+                    ( { model | lastWorldUpdate = Just time }, Cmd.none )
 
 
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
