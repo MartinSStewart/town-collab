@@ -9,7 +9,7 @@ module Backend exposing
 
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (ClientChange(..), ServerChange(..))
+import Change exposing (ClientChange(..), LocalChange(..), ServerChange(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Dict
@@ -20,7 +20,7 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Id exposing (Id, MailId, TrainId, UserId)
+import Id exposing (EventId, Id, MailId, TrainId, UserId)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
@@ -307,40 +307,51 @@ getUserFromSessionId sessionId model =
 
 broadcastLocalChange :
     ( Id UserId, BackendUserData )
-    -> Nonempty Change.LocalChange
+    -> Nonempty ( Id EventId, Change.LocalChange )
     -> BackendModel
     -> ( BackendModel, Cmd BackendMsg )
 broadcastLocalChange userIdAndUser changes model =
     let
-        ( newModel, serverChanges ) =
-            Nonempty.foldl
-                (\change ( model_, serverChanges_ ) ->
-                    updateLocalChange userIdAndUser change model_
-                        |> Tuple.mapSecond (\serverChange -> serverChange :: serverChanges_)
-                )
-                ( model, [] )
-                changes
-                |> Tuple.mapSecond (List.filterMap identity >> List.reverse)
+        ( model2, ( eventId, originalChange ), firstMsg ) =
+            updateLocalChange userIdAndUser (Nonempty.head changes) model
+
+        ( model3, originalChanges2, serverChanges ) =
+            Nonempty.tail changes
+                |> List.foldl
+                    (\change ( model_, originalChanges, serverChanges_ ) ->
+                        let
+                            ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
+                                updateLocalChange userIdAndUser change model_
+                        in
+                        ( newModel
+                        , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
+                        , Nonempty.cons serverChange_ serverChanges_
+                        )
+                    )
+                    ( model2
+                    , Nonempty.singleton (Change.LocalChange eventId originalChange)
+                    , Nonempty.singleton firstMsg
+                    )
+                |> (\( a, b, c ) -> ( a, Nonempty.reverse b, Nonempty.reverse c ))
     in
-    ( newModel
+    ( model3
     , broadcast
         (\sessionId_ _ ->
-            case getUserFromSessionId sessionId_ model of
+            case getUserFromSessionId sessionId_ model3 of
                 Just ( userId_, _ ) ->
                     if Tuple.first userIdAndUser == userId_ then
-                        Nonempty.map Change.LocalChange changes |> ChangeBroadcast |> Just
+                        ChangeBroadcast originalChanges2 |> Just
 
                     else
-                        List.filterMap
-                            (\serverChange -> Change.ServerChange serverChange |> Just)
-                            serverChanges
+                        Nonempty.toList serverChanges
+                            |> List.filterMap (Maybe.map Change.ServerChange)
                             |> Nonempty.fromList
                             |> Maybe.map ChangeBroadcast
 
                 Nothing ->
                     Nothing
         )
-        model
+        model3
     )
 
 
@@ -487,10 +498,14 @@ generateKey keyType model =
 
 updateLocalChange :
     ( Id UserId, BackendUserData )
-    -> Change.LocalChange
+    -> ( Id EventId, Change.LocalChange )
     -> BackendModel
-    -> ( BackendModel, Maybe ServerChange )
-updateLocalChange ( userId, _ ) change model =
+    -> ( BackendModel, ( Id EventId, Change.LocalChange ), Maybe ServerChange )
+updateLocalChange ( userId, _ ) (( eventId, change ) as originalChange) model =
+    let
+        invalidChange =
+            ( eventId, Change.InvalidChange )
+    in
     case change of
         Change.LocalUndo ->
             case Dict.get (Id.toInt userId) model.users of
@@ -506,14 +521,15 @@ updateLocalChange ( userId, _ ) change model =
                                 | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
                               }
                                 |> updateUser userId (always newUser)
+                            , originalChange
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
                             )
 
                         Nothing ->
-                            ( model, Nothing )
+                            ( model, invalidChange, Nothing )
 
                 Nothing ->
-                    ( model, Nothing )
+                    ( model, invalidChange, Nothing )
 
         Change.LocalGridChange localChange ->
             case Dict.get (Id.toInt userId) model.users of
@@ -547,11 +563,12 @@ updateLocalChange ( userId, _ ) change model =
                                         LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
                                 }
                             )
+                    , originalChange
                     , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
                     )
 
                 Nothing ->
-                    ( model, Nothing )
+                    ( model, invalidChange, Nothing )
 
         Change.LocalRedo ->
             case Dict.get (Id.toInt userId) model.users of
@@ -566,17 +583,18 @@ updateLocalChange ( userId, _ ) change model =
                                 | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
                               }
                                 |> updateUser userId (always newUser)
+                            , originalChange
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
                             )
 
                         Nothing ->
-                            ( model, Nothing )
+                            ( model, invalidChange, Nothing )
 
                 Nothing ->
-                    ( model, Nothing )
+                    ( model, invalidChange, Nothing )
 
         Change.LocalAddUndo ->
-            ( updateUser userId Undo.add model, Nothing )
+            ( updateUser userId Undo.add model, originalChange, Nothing )
 
         Change.LocalHideUser hideUserId hidePoint ->
             ( if userId == hideUserId then
@@ -597,6 +615,7 @@ updateLocalChange ( userId, _ ) change model =
 
               else
                 model
+            , originalChange
             , Nothing
             )
 
@@ -616,8 +635,12 @@ updateLocalChange ( userId, _ ) change model =
                             )
                             model.usersHiddenRecently
                 }
+            , originalChange
             , Nothing
             )
+
+        Change.InvalidChange ->
+            ( model, originalChange, Nothing )
 
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel

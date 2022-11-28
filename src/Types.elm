@@ -35,7 +35,7 @@ import EverySet exposing (EverySet)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (Id, MailId, TrainId, UserId)
+import Id exposing (EventId, Id, MailId, TrainId, UserId)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
@@ -100,7 +100,7 @@ type alias FrontendLoaded =
     , mouseLeft : MouseButtonState
     , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels Pixels )
     , mouseMiddle : MouseButtonState
-    , pendingChanges : List Change.LocalChange
+    , pendingChanges : List ( Id EventId, Change.LocalChange )
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
@@ -125,6 +125,7 @@ type alias FrontendLoaded =
     , toolbarMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe Tile
     , lastHouseClick : Maybe Time.Posix
+    , eventIdCounter : Id EventId
     }
 
 
@@ -222,7 +223,7 @@ type FrontendMsg_
 
 type ToBackend
     = ConnectToBackend (Bounds CellUnit)
-    | GridChange (Nonempty Change.LocalChange)
+    | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
     | MailEditorToBackend MailEditor.ToBackend
     | TeleportHomeTrainRequest (Id TrainId)

@@ -384,6 +384,7 @@ loadedInit time loading loadingData =
             , toolbarMesh = toolbarMesh defaultTileHotkeys currentTile
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
+            , eventIdCounter = Id.fromInt 0
             }
     in
     ( updateMeshes model model
@@ -1374,11 +1375,12 @@ updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, Loc
 updateLocalModel msg model =
     let
         ( newLocalModel, outMsg ) =
-            LocalGrid.update (LocalChange msg) model.localModel
+            LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
     in
     ( { model
-        | pendingChanges = model.pendingChanges ++ [ msg ]
+        | pendingChanges = model.pendingChanges ++ [ ( model.eventIdCounter, msg ) ]
         , localModel = newLocalModel
+        , eventIdCounter = Id.increment model.eventIdCounter
       }
     , outMsg
     )

@@ -94,7 +94,7 @@ type OutMsg
 update_ : Change -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 update_ msg model =
     case msg of
-        LocalChange (LocalGridChange gridChange) ->
+        LocalChange _ (LocalGridChange gridChange) ->
             let
                 ( cellPosition, localPosition ) =
                     Grid.worldToCellAndLocalCoord gridChange.position
@@ -115,7 +115,7 @@ update_ msg model =
             , TilesRemoved change.removed
             )
 
-        LocalChange LocalRedo ->
+        LocalChange _ LocalRedo ->
             ( case Undo.redo model of
                 Just newModel ->
                     { newModel | grid = Grid.moveUndoPoint model.user newModel.undoCurrent model.grid }
@@ -125,7 +125,7 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange LocalUndo ->
+        LocalChange _ LocalUndo ->
             ( case Undo.undo model of
                 Just newModel ->
                     { newModel | grid = Grid.moveUndoPoint model.user (Dict.map (\_ a -> -a) model.undoCurrent) model.grid }
@@ -135,10 +135,10 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange LocalAddUndo ->
+        LocalChange _ LocalAddUndo ->
             ( Undo.add model, NoOutMsg )
 
-        LocalChange (LocalHideUser userId_ _) ->
+        LocalChange _ (LocalHideUser userId_ _) ->
             ( { model
                 | hiddenUsers =
                     if userId_ == model.user then
@@ -150,7 +150,7 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange (LocalUnhideUser userId_) ->
+        LocalChange _ (LocalUnhideUser userId_) ->
             ( { model
                 | hiddenUsers =
                     if userId_ == model.user then
@@ -161,6 +161,9 @@ update_ msg model =
               }
             , NoOutMsg
             )
+
+        LocalChange _ InvalidChange ->
+            ( model, NoOutMsg )
 
         ServerChange (ServerGridChange gridChange) ->
             ( if
@@ -179,9 +182,6 @@ update_ msg model =
             ( { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
             , NoOutMsg
             )
-
-        ServerChange NoOpChange ->
-            ( model, NoOutMsg )
 
         ClientChange (ViewBoundsChange bounds newCells) ->
             let
@@ -208,6 +208,9 @@ config =
             case ( msg0, msg1 ) of
                 ( ClientChange (ViewBoundsChange bounds0 _), ClientChange (ViewBoundsChange bounds1 _) ) ->
                     bounds0 == bounds1
+
+                ( LocalChange eventId0 _, LocalChange eventId1 _ ) ->
+                    eventId0 == eventId1
 
                 _ ->
                     msg0 == msg1
