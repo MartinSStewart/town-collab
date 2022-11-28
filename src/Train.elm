@@ -100,26 +100,27 @@ diff (Train trainOld) (Train trainNew) =
         }
 
 
-applyDiff : TrainDiff -> Maybe Train -> Train
+applyDiff : TrainDiff -> Maybe Train -> Maybe Train
 applyDiff trainDiff maybeTrain =
     case ( trainDiff, maybeTrain ) of
         ( NewTrain newTrain, _ ) ->
-            newTrain
+            Just newTrain
 
         ( TrainChanged diff_, Just (Train train) ) ->
-            Train
-                { train
-                    | position = applyDiffField diff_.position train.position
-                    , path = applyDiffField diff_.path train.path
-                    , previousPaths = applyDiffField diff_.previousPaths train.previousPaths
-                    , t = applyDiffField diff_.t train.t
-                    , speed = applyDiffField diff_.speed train.speed
-                    , isStuck = applyDiffField diff_.isStuck train.isStuck
-                    , status = applyDiffField diff_.status train.status
-                }
+            { train
+                | position = applyDiffField diff_.position train.position
+                , path = applyDiffField diff_.path train.path
+                , previousPaths = applyDiffField diff_.previousPaths train.previousPaths
+                , t = applyDiffField diff_.t train.t
+                , speed = applyDiffField diff_.speed train.speed
+                , isStuck = applyDiffField diff_.isStuck train.isStuck
+                , status = applyDiffField diff_.status train.status
+            }
+                |> Train
+                |> Just
 
         ( TrainChanged _, Nothing ) ->
-            Debug.todo ""
+            Nothing
 
 
 diffField : a -> a -> FieldChanged a

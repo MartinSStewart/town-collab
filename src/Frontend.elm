@@ -2008,11 +2008,17 @@ updateLoadedFromBackend msg model =
         TrainBroadcast diff ->
             ( { model
                 | trains =
-                    AssocList.map
-                        (\trainId diff_ ->
-                            AssocList.get trainId model.trains |> Train.applyDiff diff_
-                        )
-                        diff
+                    AssocList.toList diff
+                        |> List.filterMap
+                            (\( trainId, diff_ ) ->
+                                case AssocList.get trainId model.trains |> Train.applyDiff diff_ of
+                                    Just newTrain ->
+                                        Just ( trainId, newTrain )
+
+                                    Nothing ->
+                                        Nothing
+                            )
+                        |> AssocList.fromList
               }
             , Cmd.none
             )
