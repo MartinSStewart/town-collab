@@ -1,11 +1,15 @@
 module Train exposing
-    ( Status(..)
+    ( FieldChanged(..)
+    , Status(..)
     , Train
+    , TrainDiff(..)
+    , applyDiff
     , canRemoveTiles
     , cancelTeleportingHome
     , carryingMail
     , coachPosition
     , defaultMaxSpeed
+    , diff
     , draw
     , getCoach
     , handleAddingTrain
@@ -68,6 +72,78 @@ type Train
         , status : Status
         , owner : Id UserId
         }
+
+
+type TrainDiff
+    = NewTrain Train
+    | TrainChanged
+        { position : FieldChanged (Coord WorldUnit)
+        , path : FieldChanged RailPath
+        , previousPaths : FieldChanged (List PreviousPath)
+        , t : FieldChanged Float
+        , speed : FieldChanged (Quantity Float (Rate TileLocalUnit Seconds))
+        , isStuck : FieldChanged (Maybe Time.Posix)
+        , status : FieldChanged Status
+        }
+
+
+diff : Train -> Train -> TrainDiff
+diff (Train trainOld) (Train trainNew) =
+    TrainChanged
+        { position = diffField trainOld.position trainNew.position
+        , path = diffField trainOld.path trainNew.path
+        , previousPaths = diffField trainOld.previousPaths trainNew.previousPaths
+        , t = diffField trainOld.t trainNew.t
+        , speed = diffField trainOld.speed trainNew.speed
+        , isStuck = diffField trainOld.isStuck trainNew.isStuck
+        , status = diffField trainOld.status trainNew.status
+        }
+
+
+applyDiff : TrainDiff -> Maybe Train -> Train
+applyDiff trainDiff maybeTrain =
+    case ( trainDiff, maybeTrain ) of
+        ( NewTrain newTrain, _ ) ->
+            newTrain
+
+        ( TrainChanged diff_, Just (Train train) ) ->
+            Train
+                { train
+                    | position = applyDiffField diff_.position train.position
+                    , path = applyDiffField diff_.path train.path
+                    , previousPaths = applyDiffField diff_.previousPaths train.previousPaths
+                    , t = applyDiffField diff_.t train.t
+                    , speed = applyDiffField diff_.speed train.speed
+                    , isStuck = applyDiffField diff_.isStuck train.isStuck
+                    , status = applyDiffField diff_.status train.status
+                }
+
+        ( TrainChanged _, Nothing ) ->
+            Debug.todo ""
+
+
+diffField : a -> a -> FieldChanged a
+diffField old new =
+    if old == new then
+        Unchanged
+
+    else
+        FieldChanged new
+
+
+applyDiffField : FieldChanged a -> a -> a
+applyDiffField fieldChanged old =
+    case fieldChanged of
+        Unchanged ->
+            old
+
+        FieldChanged new ->
+            new
+
+
+type FieldChanged a
+    = FieldChanged a
+    | Unchanged
 
 
 type alias PreviousPath =

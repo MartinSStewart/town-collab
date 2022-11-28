@@ -49,7 +49,7 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import Tile exposing (Tile)
 import Time
-import Train exposing (Train)
+import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
@@ -167,6 +167,7 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
     , trains : AssocList.Dict (Id TrainId) Train
+    , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
     }
@@ -244,7 +245,7 @@ type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | TrainBroadcast (AssocList.Dict (Id TrainId) Train)
+    | TrainBroadcast (AssocList.Dict (Id TrainId) TrainDiff)
     | MailEditorToFrontend MailEditor.ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
 

@@ -30,7 +30,7 @@ import String.Nonempty exposing (NonemptyString(..))
 import Task
 import Tile exposing (RailPathType(..), Tile(..))
 import Time
-import Train exposing (Status(..), Train)
+import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
@@ -66,6 +66,7 @@ init =
     , secretLinkCounter = 0
     , errors = []
     , trains = AssocList.empty
+    , lastWorldUpdateTrains = AssocList.empty
     , lastWorldUpdate = Nothing
     , mail = AssocList.empty
     }
@@ -151,11 +152,19 @@ update msg model =
                                 Nothing ->
                                     model.trains
 
-                        updateMail : { mail : AssocList.Dict (Id MailId) BackendMail, mailChanged : Bool }
-                        updateMail =
+                        mergeTrains :
+                            { mail : AssocList.Dict (Id MailId) BackendMail
+                            , mailChanged : Bool
+                            , diff : AssocList.Dict (Id TrainId) TrainDiff
+                            }
+                        mergeTrains =
                             AssocList.merge
                                 (\_ _ a -> a)
                                 (\trainId oldTrain newTrain state ->
+                                    let
+                                        diff =
+                                            AssocList.insert trainId (Train.diff oldTrain newTrain) state.diff
+                                    in
                                     case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
                                         ( TeleportingHome _, WaitingAtHome ) ->
                                             { mail =
@@ -174,10 +183,11 @@ update msg model =
                                                     )
                                                     state.mail
                                             , mailChanged = True
+                                            , diff = diff
                                             }
 
                                         ( StoppedAtPostOffice _, _ ) ->
-                                            state
+                                            { state | diff = diff }
 
                                         ( _, StoppedAtPostOffice { userId } ) ->
                                             case Train.carryingMail state.mail trainId of
@@ -188,6 +198,7 @@ update msg model =
                                                             (\_ -> Just { mail | status = MailReceived })
                                                             state.mail
                                                     , mailChanged = True
+                                                    , diff = diff
                                                     }
 
                                                 Nothing ->
@@ -202,28 +213,34 @@ update msg model =
                                                                     (\_ -> Just { mail | status = MailInTransit trainId })
                                                                     state.mail
                                                             , mailChanged = True
+                                                            , diff = diff
                                                             }
 
                                                         [] ->
-                                                            state
+                                                            { state | diff = diff }
 
                                         _ ->
-                                            state
+                                            { state | diff = diff }
                                 )
-                                (\_ _ a -> a)
-                                model.trains
+                                (\trainId train state ->
+                                    { state
+                                        | diff = AssocList.insert trainId (Train.NewTrain train) state.diff
+                                    }
+                                )
+                                model.lastWorldUpdateTrains
                                 newTrains
-                                { mailChanged = False, mail = model.mail }
+                                { mailChanged = False, mail = model.mail, diff = AssocList.empty }
                     in
                     ( { model
                         | lastWorldUpdate = Just time
                         , trains = newTrains
-                        , mail = updateMail.mail
+                        , lastWorldUpdateTrains = model.trains
+                        , mail = mergeTrains.mail
                       }
                     , Cmd.batch
-                        [ Lamdera.broadcast (TrainBroadcast newTrains)
-                        , if updateMail.mailChanged then
-                            AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) updateMail.mail
+                        [ TrainBroadcast mergeTrains.diff |> Lamdera.broadcast
+                        , if mergeTrains.mailChanged then
+                            AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) mergeTrains.mail
                                 |> MailBroadcast
                                 |> Lamdera.broadcast
 
@@ -527,13 +544,12 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                                     AssocList.toList model.trains
                                         |> List.filterMap
                                             (\( trainId, train ) ->
-                                                if Train.owner train == userId |> Debug.log "a" then
+                                                if Train.owner train == userId then
                                                     case
                                                         Grid.getTile
                                                             -- Add an offset since the top of the train home isn't collidable
                                                             (Train.home train |> Coord.plus (Coord.xy 1 1))
                                                             newGrid
-                                                            |> Debug.log "b"
                                                     of
                                                         Just tile ->
                                                             case

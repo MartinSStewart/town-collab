@@ -1279,16 +1279,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
             TrainHover { trainId, train } ->
                 case Train.status model.time train of
                     WaitingAtHome ->
-                        ( { model2
-                            | viewPoint = actualViewPoint model2 |> NormalViewPoint
-                            , trains =
-                                AssocList.update
-                                    trainId
-                                    (\_ -> Train.cancelTeleportingHome model.time train |> Just)
-                                    model2.trains
-                          }
-                        , LeaveHomeTrainRequest trainId |> Lamdera.sendToBackend
-                        )
+                        clickLeaveHomeTrain trainId train model2
 
                     TeleportingHome _ ->
                         ( { model2
@@ -1309,16 +1300,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                     ( setTrainViewPoint trainId model2, Cmd.none )
 
                                 else
-                                    ( { model2
-                                        | viewPoint = actualViewPoint model2 |> NormalViewPoint
-                                        , trains =
-                                            AssocList.update
-                                                trainId
-                                                (\_ -> Train.startTeleportingHome model2.time train |> Just)
-                                                model2.trains
-                                      }
-                                    , TeleportHomeTrainRequest trainId |> Lamdera.sendToBackend
-                                    )
+                                    clickTeleportHomeTrain trainId train model2
 
                             Nothing ->
                                 ( setTrainViewPoint trainId model2, Cmd.none )
@@ -1326,8 +1308,21 @@ mainMouseButtonUp mousePosition previousMouseState model =
             ToolbarHover ->
                 ( model2, Cmd.none )
 
-            TrainHouseHover _ ->
-                ( model2, Cmd.none )
+            TrainHouseHover { trainHousePosition } ->
+                case
+                    AssocList.toList model.trains
+                        |> List.find (\( _, train ) -> Train.home train == trainHousePosition)
+                of
+                    Just ( trainId, train ) ->
+                        case Train.status model2.time train of
+                            WaitingAtHome ->
+                                clickLeaveHomeTrain trainId train model2
+
+                            _ ->
+                                clickTeleportHomeTrain trainId train model2
+
+                    Nothing ->
+                        ( model2, Cmd.none )
 
             HouseHover _ ->
                 ( { model2 | lastHouseClick = Just model.time }, Cmd.none )
@@ -1344,6 +1339,34 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
     else
         ( model2, Cmd.none )
+
+
+clickLeaveHomeTrain : Id TrainId -> Train -> FrontendLoaded -> ( FrontendLoaded, Cmd frontendMsg )
+clickLeaveHomeTrain trainId train model =
+    ( { model
+        | viewPoint = actualViewPoint model |> NormalViewPoint
+        , trains =
+            AssocList.update
+                trainId
+                (\_ -> Train.cancelTeleportingHome model.time train |> Just)
+                model.trains
+      }
+    , LeaveHomeTrainRequest trainId |> Lamdera.sendToBackend
+    )
+
+
+clickTeleportHomeTrain : Id TrainId -> Train -> FrontendLoaded -> ( FrontendLoaded, Cmd frontendMsg )
+clickTeleportHomeTrain trainId train model =
+    ( { model
+        | viewPoint = actualViewPoint model |> NormalViewPoint
+        , trains =
+            AssocList.update
+                trainId
+                (\_ -> Train.startTeleportingHome model.time train |> Just)
+                model.trains
+      }
+    , TeleportHomeTrainRequest trainId |> Lamdera.sendToBackend
+    )
 
 
 setTrainViewPoint : Id TrainId -> FrontendLoaded -> FrontendLoaded
@@ -1982,8 +2005,17 @@ updateLoadedFromBackend msg model =
         UnsubscribeEmailConfirmed ->
             ( model, Cmd.none )
 
-        TrainBroadcast trains ->
-            ( { model | trains = trains }, Cmd.none )
+        TrainBroadcast diff ->
+            ( { model
+                | trains =
+                    AssocList.map
+                        (\trainId diff_ ->
+                            AssocList.get trainId model.trains |> Train.applyDiff diff_
+                        )
+                        diff
+              }
+            , Cmd.none
+            )
 
         MailEditorToFrontend mailEditorToFrontend ->
             ( { model | mailEditor = MailEditor.updateFromBackend model mailEditorToFrontend model.mailEditor }
