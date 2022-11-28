@@ -1,11 +1,10 @@
 module LocalModel exposing (Config, LocalModel, init, localModel, update, updateFromBackend)
 
 import List.Nonempty exposing (Nonempty)
-import Time
 
 
 type LocalModel msg model
-    = LocalModel { localMsgs : List ( Time.Posix, msg ), localModel : model, model : model }
+    = LocalModel { localMsgs : List msg, localModel : model, model : model }
 
 
 type alias Config msg model outMsg =
@@ -19,14 +18,14 @@ init model =
     LocalModel { localMsgs = [], localModel = model, model = model }
 
 
-update : Config msg model outMsg -> Time.Posix -> msg -> LocalModel msg model -> ( LocalModel msg model, outMsg )
-update config time msg (LocalModel localModel_) =
+update : Config msg model outMsg -> msg -> LocalModel msg model -> ( LocalModel msg model, outMsg )
+update config msg (LocalModel localModel_) =
     let
         ( newModel, outMsg ) =
             config.update msg localModel_.localModel
     in
     ( LocalModel
-        { localMsgs = localModel_.localMsgs ++ [ ( time, msg ) ]
+        { localMsgs = localModel_.localMsgs ++ [ msg ]
         , localModel = newModel
         , model = localModel_.model
         }
@@ -53,7 +52,7 @@ updateFromBackend config msgs (LocalModel localModel_) =
                             if isDone then
                                 ( localMsg :: newList, True )
 
-                            else if config.msgEqual (Tuple.second localMsg) serverMsg then
+                            else if config.msgEqual localMsg serverMsg then
                                 ( newList, True )
 
                             else
@@ -73,6 +72,6 @@ updateFromBackend config msgs (LocalModel localModel_) =
             List.foldl
                 (\msg model -> config.update msg model |> Tuple.first)
                 newModel
-                (List.map Tuple.second newLocalMsgs)
+                newLocalMsgs
         , model = newModel
         }

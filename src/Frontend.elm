@@ -1374,7 +1374,7 @@ updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, Loc
 updateLocalModel msg model =
     let
         ( newLocalModel, outMsg ) =
-            LocalGrid.update model.time (LocalChange msg) model.localModel
+            LocalGrid.update (LocalChange msg) model.localModel
     in
     ( { model
         | pendingChanges = model.pendingChanges ++ [ msg ]
@@ -1861,7 +1861,6 @@ viewBoundsUpdate ( model, cmd ) =
         ( { model
             | localModel =
                 LocalGrid.update
-                    model.time
                     (ClientChange (Change.ViewBoundsChange newBounds []))
                     model.localModel
                     |> Tuple.first

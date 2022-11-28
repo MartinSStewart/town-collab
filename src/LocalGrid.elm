@@ -11,8 +11,6 @@ import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Tile exposing (Tile)
-import Time
-import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 
@@ -64,9 +62,9 @@ init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHidd
         |> LocalModel.init
 
 
-update : Time.Posix -> Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, OutMsg )
-update time change localModel_ =
-    LocalModel.update config time change localModel_
+update : Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, OutMsg )
+update change localModel_ =
+    LocalModel.update config change localModel_
 
 
 updateFromBackend : Nonempty Change -> LocalModel Change LocalGrid -> LocalModel Change LocalGrid
