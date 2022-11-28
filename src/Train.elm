@@ -683,24 +683,34 @@ path time (Train train) =
             train.path
 
 
+trainT : Time.Posix -> Train -> Float
+trainT time (Train train) =
+    case status time (Train train) of
+        WaitingAtHome ->
+            0.5
+
+        _ ->
+            train.t
+
+
 draw : Time.Posix -> AssocList.Dict (Id MailId) FrontendMail -> AssocList.Dict (Id TrainId) Train -> Mat4 -> Texture -> List WebGL.Entity
 draw time mail trains viewMatrix trainTexture =
     List.concatMap
-        (\( trainId, Train train ) ->
+        (\( trainId, train ) ->
             let
                 railData : RailData
                 railData =
-                    Tile.railPathData (path time (Train train))
+                    Tile.railPathData (path time train)
 
                 { x, y } =
-                    trainPosition time (Train train) |> Point2d.unwrap
+                    trainPosition time train |> Point2d.unwrap
 
                 trainFrame : Int
                 trainFrame =
                     Direction2d.angleFrom
                         Direction2d.x
-                        (Tile.pathDirection railData.path train.t
-                            |> (if Quantity.lessThanZero (speed time (Train train)) then
+                        (Tile.pathDirection railData.path (trainT time train)
+                            |> (if Quantity.lessThanZero (speed time train) then
                                     Direction2d.reverse
 
                                 else
@@ -714,14 +724,14 @@ draw time mail trains viewMatrix trainTexture =
 
                 trainMesh : List WebGL.Entity
                 trainMesh =
-                    case status time (Train train) of
+                    case status time train of
                         TeleportingHome teleportTime ->
                             let
                                 t =
                                     Quantity.ratio (Duration.from teleportTime time) teleportLength
 
                                 homePosition =
-                                    trainPosition time2 (Train train) |> Point2d.unwrap
+                                    trainPosition time2 train |> Point2d.unwrap
 
                                 time2 =
                                     Duration.addTo time teleportLength
@@ -731,9 +741,9 @@ draw time mail trains viewMatrix trainTexture =
                                     Direction2d.angleFrom
                                         Direction2d.x
                                         (Tile.pathDirection
-                                            (Tile.railPathData (path time2 (Train train))).path
+                                            (Tile.railPathData (path time2 train)).path
                                             0.5
-                                            |> (if Quantity.lessThanZero (speed time2 (Train train)) then
+                                            |> (if Quantity.lessThanZero (speed time2 train) then
                                                     Direction2d.reverse
 
                                                 else
@@ -772,7 +782,7 @@ draw time mail trains viewMatrix trainTexture =
                             let
                                 coach : Coach
                                 coach =
-                                    getCoach (Train train)
+                                    getCoach train
 
                                 railData_ : RailData
                                 railData_ =
@@ -787,7 +797,7 @@ draw time mail trains viewMatrix trainTexture =
                                     Direction2d.angleFrom
                                         Direction2d.x
                                         (Tile.pathDirection railData_.path coach.t
-                                            |> (if Quantity.lessThanZero train.speed then
+                                            |> (if Quantity.lessThanZero (speed time train) then
                                                     Direction2d.reverse
 
                                                 else
@@ -799,7 +809,7 @@ draw time mail trains viewMatrix trainTexture =
                                         |> round
                                         |> modBy trainFrames
                             in
-                            case status time (Train train) of
+                            case status time train of
                                 WaitingAtHome ->
                                     []
 

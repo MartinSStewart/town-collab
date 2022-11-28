@@ -22,7 +22,6 @@ type LocalChange
     | LocalAddUndo
     | LocalHideUser (Id UserId) (Coord WorldUnit)
     | LocalUnhideUser (Id UserId)
-    | LocalToggleUserVisibilityForAll (Id UserId)
 
 
 type ClientChange
@@ -32,4 +31,4 @@ type ClientChange
 type ServerChange
     = ServerGridChange Grid.GridChange
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerToggleUserVisibilityForAll (Id UserId)
+    | NoOpChange

@@ -1,4 +1,4 @@
-module Id exposing (Id, MailId, TrainId, UserId, fromInt, toInt)
+module Id exposing (EventId, Id, MailId, TrainId, UserId, fromInt, increment, toInt)
 
 
 type Id a
@@ -17,6 +17,10 @@ type TrainId
     = TrainId Never
 
 
+type EventId
+    = EventId Never
+
+
 fromInt : Int -> Id a
 fromInt =
     Id
@@ -25,3 +29,8 @@ fromInt =
 toInt : Id a -> Int
 toInt (Id int) =
     int
+
+
+increment : Id a -> Id a
+increment (Id id) =
+    Id (id + 1)

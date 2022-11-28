@@ -332,19 +332,7 @@ broadcastLocalChange userIdAndUser changes model =
 
                     else
                         List.filterMap
-                            (\serverChange ->
-                                case serverChange of
-                                    Change.ServerToggleUserVisibilityForAll toggleUserId ->
-                                        -- Don't let the user who got hidden know that they are hidden.
-                                        if toggleUserId == userId_ then
-                                            Nothing
-
-                                        else
-                                            Change.ServerChange serverChange |> Just
-
-                                    _ ->
-                                        Change.ServerChange serverChange |> Just
-                            )
+                            (\serverChange -> Change.ServerChange serverChange |> Just)
                             serverChanges
                             |> Nonempty.fromList
                             |> Maybe.map ChangeBroadcast
@@ -630,15 +618,6 @@ updateLocalChange ( userId, _ ) change model =
                 }
             , Nothing
             )
-
-        Change.LocalToggleUserVisibilityForAll hideUserId ->
-            if Just userId == Env.adminUserId && userId /= hideUserId then
-                ( updateUser hideUserId (\user -> { user | hiddenForAll = not user.hiddenForAll }) model
-                , ServerToggleUserVisibilityForAll hideUserId |> Just
-                )
-
-            else
-                ( model, Nothing )
 
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel

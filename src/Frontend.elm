@@ -896,9 +896,6 @@ updateLoaded audioData msg model =
         UserTagMouseExited _ ->
             ( { model | userHoverHighlighted = Nothing }, Cmd.none )
 
-        HideForAllTogglePressed userToHide ->
-            ( updateLocalModel (Change.LocalToggleUserVisibilityForAll userToHide) model |> Tuple.first, Cmd.none )
-
         ToggleAdminEnabledPressed ->
             ( if Just (currentUserId model) == Env.adminUserId then
                 { model | adminEnabled = not model.adminEnabled }
@@ -2002,29 +1999,9 @@ updateLoadedFromBackend msg model =
             ( { model | mail = mail }, Cmd.none )
 
 
-lostConnection : FrontendLoaded -> Bool
-lostConnection model =
-    case LocalModel.localMsgs model.localModel of
-        ( time, _ ) :: _ ->
-            Duration.from time model.time |> Quantity.greaterThan (Duration.seconds 10)
-
-        [] ->
-            False
-
-
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
 view audioData model =
-    { title =
-        case model of
-            Loading _ ->
-                "Town Collab"
-
-            Loaded loadedModel ->
-                if lostConnection loadedModel then
-                    "Town Collab (offline)"
-
-                else
-                    "Town Collab"
+    { title = "Town Collab"
     , body =
         [ case model of
             Loading _ ->

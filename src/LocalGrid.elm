@@ -164,9 +164,6 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange (LocalToggleUserVisibilityForAll hideUserId) ->
-            ( { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }, NoOutMsg )
-
         ServerChange (ServerGridChange gridChange) ->
             ( if
                 Bounds.contains
@@ -185,10 +182,8 @@ update_ msg model =
             , NoOutMsg
             )
 
-        ServerChange (ServerToggleUserVisibilityForAll hideUserId) ->
-            ( { model | adminHiddenUsers = Coord.toggleSet hideUserId model.adminHiddenUsers }
-            , NoOutMsg
-            )
+        ServerChange NoOpChange ->
+            ( model, NoOutMsg )
 
         ClientChange (ViewBoundsChange bounds newCells) ->
             let

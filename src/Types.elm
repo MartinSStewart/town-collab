@@ -213,7 +213,6 @@ type FrontendMsg_
     | UnhideUserPressed (Id UserId)
     | UserTagMouseEntered (Id UserId)
     | UserTagMouseExited (Id UserId)
-    | HideForAllTogglePressed (Id UserId)
     | ToggleAdminEnabledPressed
     | HideUserPressed { userId : Id UserId, hidePoint : Coord WorldUnit }
     | AnimationFrame Time.Posix

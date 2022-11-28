@@ -1,4 +1,4 @@
-module LocalModel exposing (Config, LocalModel, init, localModel, localMsgs, update, updateFromBackend)
+module LocalModel exposing (Config, LocalModel, init, localModel, update, updateFromBackend)
 
 import List.Nonempty exposing (Nonempty)
 import Time
@@ -37,11 +37,6 @@ update config time msg (LocalModel localModel_) =
 localModel : LocalModel msg model -> model
 localModel (LocalModel localModel_) =
     localModel_.localModel
-
-
-localMsgs : LocalModel msg model -> List ( Time.Posix, msg )
-localMsgs (LocalModel localModel_) =
-    localModel_.localMsgs
 
 
 updateFromBackend : Config msg model outMsg -> Nonempty msg -> LocalModel msg model -> LocalModel msg model
