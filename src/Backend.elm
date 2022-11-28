@@ -25,7 +25,6 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
-import Quantity exposing (Quantity(..))
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
@@ -306,14 +305,15 @@ getUserFromSessionId sessionId model =
 
 
 broadcastLocalChange :
-    ( Id UserId, BackendUserData )
+    Time.Posix
+    -> ( Id UserId, BackendUserData )
     -> Nonempty ( Id EventId, Change.LocalChange )
     -> BackendModel
     -> ( BackendModel, Cmd BackendMsg )
-broadcastLocalChange userIdAndUser changes model =
+broadcastLocalChange time userIdAndUser changes model =
     let
         ( model2, ( eventId, originalChange ), firstMsg ) =
-            updateLocalChange userIdAndUser (Nonempty.head changes) model
+            updateLocalChange time userIdAndUser (Nonempty.head changes) model
 
         ( model3, originalChanges2, serverChanges ) =
             Nonempty.tail changes
@@ -321,7 +321,7 @@ broadcastLocalChange userIdAndUser changes model =
                     (\change ( model_, originalChanges, serverChanges_ ) ->
                         let
                             ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
-                                updateLocalChange userIdAndUser change model_
+                                updateLocalChange time userIdAndUser change model_
                         in
                         ( newModel
                         , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
@@ -370,7 +370,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
         GridChange changes ->
             case getUserFromSessionId sessionId model of
                 Just userIdAndUser ->
-                    broadcastLocalChange userIdAndUser changes model
+                    broadcastLocalChange currentTime userIdAndUser changes model
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -497,11 +497,12 @@ generateKey keyType model =
 
 
 updateLocalChange :
-    ( Id UserId, BackendUserData )
+    Time.Posix
+    -> ( Id UserId, BackendUserData )
     -> ( Id EventId, Change.LocalChange )
     -> BackendModel
     -> ( BackendModel, ( Id EventId, Change.LocalChange ), Maybe ServerChange )
-updateLocalChange ( userId, _ ) (( eventId, change ) as originalChange) model =
+updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) model =
     let
         invalidChange =
             ( eventId, Change.InvalidChange )
@@ -544,28 +545,71 @@ updateLocalChange ( userId, _ ) (( eventId, change ) as originalChange) model =
 
                             else
                                 Nothing
-                    in
-                    ( { model
-                        | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid |> .grid
-                        , trains =
-                            case maybeTrain of
-                                Just ( trainId, train ) ->
-                                    AssocList.insert trainId train model.trains
 
-                                Nothing ->
-                                    model.trains
-                      }
-                        |> updateUser
-                            userId
-                            (always
-                                { user
-                                    | undoCurrent =
-                                        LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
-                                }
-                            )
-                    , originalChange
-                    , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
-                    )
+                        { grid, removed } =
+                            Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+
+                        trainsToRemove : List ( Id TrainId, Train )
+                        trainsToRemove =
+                            List.concatMap
+                                (\remove ->
+                                    if remove.tile == TrainHouseLeft || remove.tile == TrainHouseRight then
+                                        AssocList.toList model.trains
+                                            |> List.filterMap
+                                                (\( trainId, train ) ->
+                                                    if Train.home train == remove.position then
+                                                        Just ( trainId, train )
+
+                                                    else
+                                                        Nothing
+                                                )
+
+                                    else
+                                        []
+                                )
+                                removed
+
+                        canRemoveAllTrains : Bool
+                        canRemoveAllTrains =
+                            List.all
+                                (\( _, train ) ->
+                                    case Train.status time train of
+                                        WaitingAtHome ->
+                                            True
+
+                                        _ ->
+                                            False
+                                )
+                                trainsToRemove
+                    in
+                    if canRemoveAllTrains then
+                        ( { model
+                            | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid |> .grid
+                            , trains =
+                                AssocList.diff model.trains (AssocList.fromList trainsToRemove)
+                                    |> (\newTrains ->
+                                            case maybeTrain of
+                                                Just ( trainId, train ) ->
+                                                    AssocList.insert trainId train newTrains
+
+                                                Nothing ->
+                                                    newTrains
+                                       )
+                          }
+                            |> updateUser
+                                userId
+                                (always
+                                    { user
+                                        | undoCurrent =
+                                            LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
+                                    }
+                                )
+                        , originalChange
+                        , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
+                        )
+
+                    else
+                        ( model, invalidChange, Nothing )
 
                 Nothing ->
                     ( model, invalidChange, Nothing )
