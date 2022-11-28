@@ -1468,11 +1468,11 @@ placeTile isDragPlacement tile model =
                 Nothing ->
                     False
 
+        userId =
+            currentUserId model
+
         change =
-            { position = cursorPosition_
-            , change = tile
-            , userId = currentUserId model
-            }
+            { position = cursorPosition_, change = tile, userId = userId }
 
         grid : Grid
         grid =
@@ -1579,7 +1579,7 @@ placeTile isDragPlacement tile model =
             , removedTileParticles = removedTiles ++ model3.removedTileParticles
             , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
             , trains =
-                case Train.handleAddingTrain model3.trains tile cursorPosition_ of
+                case Train.handleAddingTrain model3.trains userId tile cursorPosition_ of
                     Just ( trainId, train ) ->
                         AssocList.insert trainId train model.trains
 
@@ -1592,21 +1592,15 @@ canPlaceTile : Time.Posix -> Grid.GridChange -> AssocList.Dict (Id TrainId) Trai
 canPlaceTile time change trains grid =
     if Grid.canPlaceTile change then
         let
-            trains_ =
-                AssocList.toList trains
+            { removed } =
+                Grid.addChange change grid
         in
-        Grid.addChange change grid
-            |> .removed
-            |> List.all
-                (\{ tile, position } ->
-                    if tile == TrainHouseLeft || tile == TrainHouseRight then
-                        List.any
-                            (\( _, train ) -> Train.home train == position && Train.status time train == WaitingAtHome)
-                            trains_
+        case Train.canRemoveTiles time removed trains of
+            Ok _ ->
+                True
 
-                    else
-                        True
-                )
+            Err _ ->
+                False
 
     else
         False

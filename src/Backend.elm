@@ -28,7 +28,7 @@ import MailEditor exposing (BackendMail, MailStatus(..))
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
-import Tile exposing (Tile(..))
+import Tile exposing (RailPathType(..), Tile(..))
 import Time
 import Train exposing (Status(..), Train)
 import Types exposing (..)
@@ -517,10 +517,52 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                                 undoMoveAmount : Dict.Dict RawCellCoord Int
                                 undoMoveAmount =
                                     Dict.map (\_ a -> -a) user.undoCurrent
+
+                                newGrid : Grid
+                                newGrid =
+                                    Grid.moveUndoPoint userId undoMoveAmount model.grid
+
+                                trainsToRemove : List (Id TrainId)
+                                trainsToRemove =
+                                    AssocList.toList model.trains
+                                        |> List.filterMap
+                                            (\( trainId, train ) ->
+                                                if Train.owner train == userId |> Debug.log "a" then
+                                                    case
+                                                        Grid.getTile
+                                                            -- Add an offset since the top of the train home isn't collidable
+                                                            (Train.home train |> Coord.plus (Coord.xy 1 1))
+                                                            newGrid
+                                                            |> Debug.log "b"
+                                                    of
+                                                        Just tile ->
+                                                            case
+                                                                ( Tile.getData tile.value |> .railPath
+                                                                , tile.position == Train.home train
+                                                                , tile.userId == userId
+                                                                )
+                                                            of
+                                                                ( SingleRailPath path, True, True ) ->
+                                                                    if Train.homePath train == path then
+                                                                        Nothing
+
+                                                                    else
+                                                                        Just trainId
+
+                                                                _ ->
+                                                                    Just trainId
+
+                                                        Nothing ->
+                                                            Just trainId
+
+                                                else
+                                                    Nothing
+                                            )
                             in
-                            ( { model
-                                | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
-                              }
+                            ( List.foldl
+                                removeTrain
+                                { model | grid = newGrid }
+                                trainsToRemove
                                 |> updateUser userId (always newUser)
                             , originalChange
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
@@ -539,77 +581,46 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                         ( cellPosition, localPosition ) =
                             Grid.worldToCellAndLocalCoord localChange.position
 
+                        maybeTrain : Maybe ( Id TrainId, Train )
                         maybeTrain =
                             if AssocList.size model.trains < 50 then
-                                Train.handleAddingTrain model.trains localChange.change localChange.position
+                                Train.handleAddingTrain model.trains userId localChange.change localChange.position
 
                             else
                                 Nothing
 
                         { grid, removed } =
                             Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
-
-                        trainsToRemove : List ( Id TrainId, Train )
-                        trainsToRemove =
-                            List.concatMap
-                                (\remove ->
-                                    if remove.tile == TrainHouseLeft || remove.tile == TrainHouseRight then
-                                        AssocList.toList model.trains
-                                            |> List.filterMap
-                                                (\( trainId, train ) ->
-                                                    if Train.home train == remove.position then
-                                                        Just ( trainId, train )
-
-                                                    else
-                                                        Nothing
-                                                )
-
-                                    else
-                                        []
-                                )
-                                removed
-
-                        canRemoveAllTrains : Bool
-                        canRemoveAllTrains =
-                            List.all
-                                (\( _, train ) ->
-                                    case Train.status time train of
-                                        WaitingAtHome ->
-                                            True
-
-                                        _ ->
-                                            False
-                                )
-                                trainsToRemove
                     in
-                    if canRemoveAllTrains then
-                        ( { model
-                            | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid |> .grid
-                            , trains =
-                                AssocList.diff model.trains (AssocList.fromList trainsToRemove)
-                                    |> (\newTrains ->
+                    case Train.canRemoveTiles time removed model.trains of
+                        Ok trainsToRemove ->
+                            ( List.map Tuple.first trainsToRemove
+                                |> List.foldl
+                                    removeTrain
+                                    { model
+                                        | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid |> .grid
+                                        , trains =
                                             case maybeTrain of
                                                 Just ( trainId, train ) ->
-                                                    AssocList.insert trainId train newTrains
+                                                    AssocList.insert trainId train model.trains
 
                                                 Nothing ->
-                                                    newTrains
-                                       )
-                          }
-                            |> updateUser
-                                userId
-                                (always
-                                    { user
-                                        | undoCurrent =
-                                            LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
+                                                    model.trains
                                     }
-                                )
-                        , originalChange
-                        , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
-                        )
+                                |> updateUser
+                                    userId
+                                    (always
+                                        { user
+                                            | undoCurrent =
+                                                LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
+                                        }
+                                    )
+                            , originalChange
+                            , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
+                            )
 
-                    else
-                        ( model, invalidChange, Nothing )
+                        Err _ ->
+                            ( model, invalidChange, Nothing )
 
                 Nothing ->
                     ( model, invalidChange, Nothing )
@@ -685,6 +696,34 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 
         Change.InvalidChange ->
             ( model, originalChange, Nothing )
+
+
+removeTrain : Id TrainId -> BackendModel -> BackendModel
+removeTrain trainId model =
+    { model
+        | trains = AssocList.remove trainId model.trains
+        , mail =
+            AssocList.map
+                (\_ mail ->
+                    case mail.status of
+                        MailInTransit trainId2 ->
+                            if trainId == trainId2 then
+                                { mail | status = MailWaitingPickup }
+
+                            else
+                                mail
+
+                        MailWaitingPickup ->
+                            mail
+
+                        MailReceived ->
+                            mail
+
+                        MailReceivedAndViewed ->
+                            mail
+                )
+                model.mail
+    }
 
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel

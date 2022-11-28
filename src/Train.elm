@@ -1,6 +1,7 @@
 module Train exposing
     ( Status(..)
     , Train
+    , canRemoveTiles
     , cancelTeleportingHome
     , carryingMail
     , coachPosition
@@ -9,9 +10,11 @@ module Train exposing
     , getCoach
     , handleAddingTrain
     , home
+    , homePath
     , isStuck
     , leaveHome
     , moveTrain
+    , owner
     , speed
     , startTeleportingHome
     , status
@@ -63,6 +66,7 @@ type Train
         , homePath : RailPath
         , isStuck : Maybe Time.Posix
         , status : Status
+        , owner : Id UserId
         }
 
 
@@ -346,6 +350,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
 
                                         _ ->
                                             train.status
+                         , owner = train.owner
                          }
                             |> Train
                         )
@@ -410,6 +415,16 @@ stoppedSpeed =
 home : Train -> Coord WorldUnit
 home (Train train) =
     train.home
+
+
+homePath : Train -> RailPath
+homePath (Train train) =
+    train.homePath
+
+
+owner : Train -> Id UserId
+owner (Train train) =
+    train.owner
 
 
 isStuck : Time.Posix -> Train -> Maybe Time.Posix
@@ -1050,11 +1065,11 @@ trainCoachMesh teleportAmount frame =
         ]
 
 
-handleAddingTrain : AssocList.Dict (Id TrainId) Train -> Tile -> Coord WorldUnit -> Maybe ( Id TrainId, Train )
-handleAddingTrain trains tile position =
+handleAddingTrain : AssocList.Dict (Id TrainId) Train -> Id UserId -> Tile -> Coord WorldUnit -> Maybe ( Id TrainId, Train )
+handleAddingTrain trains owner_ tile position =
     if tile == TrainHouseLeft || tile == TrainHouseRight then
         let
-            ( railPath, homePath ) =
+            ( railPath, homePath_ ) =
                 if tile == TrainHouseLeft then
                     ( Tile.trainHouseLeftRailPath, Tile.trainHouseLeftRailPath )
 
@@ -1074,12 +1089,56 @@ handleAddingTrain trains tile position =
             , t = 0.5
             , speed = stoppedSpeed
             , home = position
-            , homePath = homePath
+            , homePath = homePath_
             , isStuck = Nothing
             , status = WaitingAtHome
+            , owner = owner_
             }
         )
             |> Just
 
     else
         Nothing
+
+
+canRemoveTiles : Time.Posix -> List { a | tile : Tile, position : Coord WorldUnit } -> AssocList.Dict (Id TrainId) Train -> Result (List ( Id TrainId, Train )) (List ( Id TrainId, Train ))
+canRemoveTiles time removed trains =
+    let
+        trainsToRemove : List ( Id TrainId, Train )
+        trainsToRemove =
+            List.concatMap
+                (\remove ->
+                    if remove.tile == TrainHouseLeft || remove.tile == TrainHouseRight then
+                        AssocList.toList trains
+                            |> List.filterMap
+                                (\( trainId, train ) ->
+                                    if home train == remove.position then
+                                        Just ( trainId, train )
+
+                                    else
+                                        Nothing
+                                )
+
+                    else
+                        []
+                )
+                removed
+
+        canRemoveAllTrains : Bool
+        canRemoveAllTrains =
+            List.all
+                (\( _, train ) ->
+                    case status time train of
+                        WaitingAtHome ->
+                            True
+
+                        _ ->
+                            False
+                )
+                trainsToRemove
+    in
+    if canRemoveAllTrains then
+        Ok trainsToRemove
+
+    else
+        Err trainsToRemove
