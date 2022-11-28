@@ -42,6 +42,7 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
+import PingData exposing (ClientTime(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -476,7 +477,7 @@ init url key =
                     )
             )
             Browser.Dom.getViewport
-        , Task.perform ShortIntervalElapsed Time.now
+        , Task.perform (ClientTime >> ShortIntervalElapsed) Time.now
         , cmd
         ]
     , Sound.load SoundLoaded
@@ -2030,6 +2031,71 @@ updateLoadedFromBackend msg model =
 
         MailBroadcast mail ->
             ( { model | mail = mail }, Cmd.none )
+
+        PingResponse serverTime ->
+            case model.pingStartTime of
+                Just pingStartTime ->
+                    let
+                        keepPinging =
+                            (pingCount < 5)
+                                || (newHighEstimate
+                                        |> Quantity.minus newLowEstimate
+                                        |> Quantity.greaterThan (Duration.milliseconds 200)
+                                   )
+
+                        {- The time stored in the model is potentially out of date by an animation frame. We want to make sure our high estimate overestimates rather than underestimates the true time so we add an extra animation frame here. -}
+                        localTimeHighEstimate =
+                            Duration.addTo (MatchPage.actualTime model) Match.frameDuration
+
+                        serverTime2 =
+                            Match.unwrapServerTime serverTime
+
+                        ( newLowEstimate, newHighEstimate, pingCount ) =
+                            case model.pingData of
+                                Just oldPingData ->
+                                    ( Duration.from serverTime2 pingStartTime |> Quantity.max oldPingData.lowEstimate
+                                    , Duration.from serverTime2 localTimeHighEstimate |> Quantity.min oldPingData.highEstimate
+                                    , oldPingData.pingCount + 1
+                                    )
+
+                                Nothing ->
+                                    ( Duration.from serverTime2 pingStartTime
+                                    , Duration.from serverTime2 localTimeHighEstimate
+                                    , 1
+                                    )
+                    in
+                    ( { model
+                        | pingData =
+                            -- This seems to happen if the user tabs away. I'm not sure how to prevent it so here we just start over if we end up in this state.
+                            if newHighEstimate |> Quantity.lessThan newLowEstimate then
+                                Nothing
+
+                            else
+                                Just
+                                    { roundTripTime = Duration.from pingStartTime (MatchPage.actualTime model)
+                                    , lowEstimate = newLowEstimate
+                                    , highEstimate = newHighEstimate
+                                    , serverTime = serverTime2
+                                    , sendTime = pingStartTime
+                                    , receiveTime = MatchPage.actualTime model
+                                    , pingCount = pingCount
+                                    }
+                        , pingStartTime =
+                            if keepPinging then
+                                Just (MatchPage.actualTime model)
+
+                            else
+                                Nothing
+                      }
+                    , if keepPinging then
+                        Effect.Lamdera.sendToBackend PingRequest
+
+                      else
+                        Command.none
+                    )
+
+                Nothing ->
+                    ( model, Command.none )
 
 
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_

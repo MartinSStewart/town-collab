@@ -497,6 +497,9 @@ updateFromFrontend currentTime sessionId clientId msg model =
             , Cmd.none
             )
 
+        PingRequest ->
+            ( model, PingResponse currentTime |> Lamdera.sendToFrontend clientId )
+
 
 sendConfirmationEmailRateLimit : Duration
 sendConfirmationEmailRateLimit =

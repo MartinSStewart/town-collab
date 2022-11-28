@@ -24,7 +24,6 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
-import Browser.Events exposing (Visibility)
 import Browser.Navigation
 import Change exposing (Change, ServerChange)
 import Coord exposing (Coord, RawCellCoord)
@@ -42,6 +41,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
+import PingData exposing (ClientTime)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import SendGrid
@@ -71,7 +71,7 @@ type alias FrontendLoading =
     , windowSize : Coord Pixels
     , devicePixelRatio : Float
     , zoomFactor : Int
-    , time : Maybe Time.Posix
+    , time : Maybe ClientTime
     , viewPoint : Coord WorldUnit
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
@@ -98,39 +98,39 @@ type alias FrontendLoaded =
     , devicePixelRatio : Float
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
-    , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels Pixels )
+    , lastMouseLeftUp : Maybe ( ClientTime, Point2d Pixels Pixels )
     , mouseMiddle : MouseButtonState
     , pendingChanges : List ( Id EventId, Change.LocalChange )
     , tool : ToolType
-    , undoAddLast : Time.Posix
-    , time : Time.Posix
-    , startTime : Time.Posix
+    , undoAddLast : ClientTime
+    , time : ClientTime
+    , startTime : ClientTime
     , userHoverHighlighted : Maybe (Id UserId)
     , highlightContextMenu : Maybe { userId : Id UserId, hidePoint : Coord WorldUnit }
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
-    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
+    , lastTilePlaced : Maybe { time : ClientTime, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
-    , lastTrainWhistle : Maybe Time.Posix
+    , lastTrainWhistle : Maybe ClientTime
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : Model
     , currentTile : Maybe { tile : Tile, mesh : WebGL.Mesh Vertex }
-    , lastTileRotation : List Time.Posix
+    , lastTileRotation : List ClientTime
     , userIdMesh : WebGL.Mesh Vertex
-    , lastPlacementError : Maybe Time.Posix
+    , lastPlacementError : Maybe ClientTime
     , tileHotkeys : Dict String Tile
     , toolbarMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe Tile
-    , lastHouseClick : Maybe Time.Posix
+    , lastHouseClick : Maybe ClientTime
     , eventIdCounter : Id EventId
     }
 
 
 type alias RemovedTileParticle =
-    { time : Time.Posix, position : Coord WorldUnit, tile : Tile }
+    { time : ClientTime, position : Coord WorldUnit, tile : Tile }
 
 
 type ToolType
@@ -205,7 +205,7 @@ type FrontendMsg_
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
     | MouseWheel Html.Events.Extra.Wheel.Event
-    | ShortIntervalElapsed Time.Posix
+    | ShortIntervalElapsed ClientTime
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType
     | UndoPressed
@@ -217,7 +217,7 @@ type FrontendMsg_
     | UserTagMouseExited (Id UserId)
     | ToggleAdminEnabledPressed
     | HideUserPressed { userId : Id UserId, hidePoint : Coord WorldUnit }
-    | AnimationFrame Time.Posix
+    | AnimationFrame ClientTime
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
 
@@ -230,6 +230,7 @@ type ToBackend
     | TeleportHomeTrainRequest (Id TrainId)
     | CancelTeleportHomeTrainRequest (Id TrainId)
     | LeaveHomeTrainRequest (Id TrainId)
+    | PingRequest
 
 
 type BackendMsg
@@ -248,6 +249,7 @@ type ToFrontend
     | TrainBroadcast (AssocList.Dict (Id TrainId) TrainDiff)
     | MailEditorToFrontend MailEditor.ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
+    | PingResponse Time.Posix
 
 
 type EmailEvent
