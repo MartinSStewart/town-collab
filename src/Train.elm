@@ -820,7 +820,7 @@ draw time mail trains viewMatrix trainTexture =
                         TeleportingHome teleportTime ->
                             let
                                 t =
-                                    Quantity.ratio (Duration.from teleportTime time) teleportLength
+                                    Quantity.ratio (Duration.from teleportTime time) teleportLength |> max 0
 
                                 homePosition =
                                     trainPosition time2 train |> Point2d.unwrap
@@ -908,7 +908,7 @@ draw time mail trains viewMatrix trainTexture =
                                 TeleportingHome teleportTime ->
                                     let
                                         t =
-                                            Quantity.ratio (Duration.from teleportTime time) teleportLength
+                                            Quantity.ratio (Duration.from teleportTime time) teleportLength |> max 0
                                     in
                                     if t >= 1 then
                                         []
