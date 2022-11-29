@@ -41,7 +41,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
-import PingData exposing (ClientTime)
+import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import SendGrid
@@ -71,7 +71,7 @@ type alias FrontendLoading =
     , windowSize : Coord Pixels
     , devicePixelRatio : Float
     , zoomFactor : Int
-    , time : Maybe ClientTime
+    , time : Maybe Time.Posix
     , viewPoint : Coord WorldUnit
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
@@ -98,39 +98,42 @@ type alias FrontendLoaded =
     , devicePixelRatio : Float
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
-    , lastMouseLeftUp : Maybe ( ClientTime, Point2d Pixels Pixels )
+    , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels Pixels )
     , mouseMiddle : MouseButtonState
     , pendingChanges : List ( Id EventId, Change.LocalChange )
     , tool : ToolType
-    , undoAddLast : ClientTime
-    , time : ClientTime
-    , startTime : ClientTime
+    , undoAddLast : Time.Posix
+    , time : Time.Posix
+    , startTime : Time.Posix
     , userHoverHighlighted : Maybe (Id UserId)
     , highlightContextMenu : Maybe { userId : Id UserId, hidePoint : Coord WorldUnit }
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
-    , lastTilePlaced : Maybe { time : ClientTime, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
+    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
-    , lastTrainWhistle : Maybe ClientTime
+    , lastTrainWhistle : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : Model
     , currentTile : Maybe { tile : Tile, mesh : WebGL.Mesh Vertex }
-    , lastTileRotation : List ClientTime
+    , lastTileRotation : List Time.Posix
     , userIdMesh : WebGL.Mesh Vertex
-    , lastPlacementError : Maybe ClientTime
+    , lastPlacementError : Maybe Time.Posix
     , tileHotkeys : Dict String Tile
     , toolbarMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe Tile
-    , lastHouseClick : Maybe ClientTime
+    , lastHouseClick : Maybe Time.Posix
     , eventIdCounter : Id EventId
+    , pingData : Maybe PingData
+    , pingStartTime : Maybe Time.Posix
+    , localTime : Time.Posix
     }
 
 
 type alias RemovedTileParticle =
-    { time : ClientTime, position : Coord WorldUnit, tile : Tile }
+    { time : Time.Posix, position : Coord WorldUnit, tile : Tile }
 
 
 type ToolType
@@ -205,7 +208,7 @@ type FrontendMsg_
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
     | MouseWheel Html.Events.Extra.Wheel.Event
-    | ShortIntervalElapsed ClientTime
+    | ShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
     | SelectToolPressed ToolType
     | UndoPressed
@@ -217,7 +220,7 @@ type FrontendMsg_
     | UserTagMouseExited (Id UserId)
     | ToggleAdminEnabledPressed
     | HideUserPressed { userId : Id UserId, hidePoint : Coord WorldUnit }
-    | AnimationFrame ClientTime
+    | AnimationFrame Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
 

@@ -42,7 +42,7 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
-import PingData exposing (ClientTime(..))
+import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -379,13 +379,16 @@ loadedInit time loading loadingData =
             , mailEditor = MailEditor.initEditor loadingData.mailEditor
             , currentTile = currentTile
             , lastTileRotation = []
-            , userIdMesh = createUserIdMesh loadingData.user
+            , userIdMesh = createInfoMesh Nothing loadingData.user
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
             , toolbarMesh = toolbarMesh defaultTileHotkeys currentTile
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
+            , pingData = Nothing
+            , pingStartTime = Nothing
+            , localTime = time
             }
     in
     ( updateMeshes model model
@@ -477,7 +480,7 @@ init url key =
                     )
             )
             Browser.Dom.getViewport
-        , Task.perform (ClientTime >> ShortIntervalElapsed) Time.now
+        , Task.perform (\time -> Duration.addTo time (PingData.pingOffset { pingData = Nothing }) |> ShortIntervalElapsed) Time.now
         , cmd
         ]
     , Sound.load SoundLoaded
@@ -914,8 +917,11 @@ updateLoaded audioData msg model =
             , Cmd.none
             )
 
-        AnimationFrame time ->
+        AnimationFrame localTime ->
             let
+                time =
+                    Duration.addTo localTime (PingData.pingOffset model)
+
                 localGrid : LocalGrid_
                 localGrid =
                     LocalGrid.localModel model.localModel
@@ -936,6 +942,7 @@ updateLoaded audioData msg model =
                 model2 =
                     { model
                         | time = time
+                        , localTime = localTime
                         , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                         , trains =
                             AssocList.map
@@ -2045,10 +2052,10 @@ updateLoadedFromBackend msg model =
 
                         {- The time stored in the model is potentially out of date by an animation frame. We want to make sure our high estimate overestimates rather than underestimates the true time so we add an extra animation frame here. -}
                         localTimeHighEstimate =
-                            Duration.addTo (MatchPage.actualTime model) Match.frameDuration
+                            Duration.addTo (actualTime model) (Duration.milliseconds (1000 / 60))
 
                         serverTime2 =
-                            Match.unwrapServerTime serverTime
+                            serverTime
 
                         ( newLowEstimate, newHighEstimate, pingCount ) =
                             case model.pingData of
@@ -2072,30 +2079,35 @@ updateLoadedFromBackend msg model =
 
                             else
                                 Just
-                                    { roundTripTime = Duration.from pingStartTime (MatchPage.actualTime model)
+                                    { roundTripTime = Duration.from pingStartTime (actualTime model)
                                     , lowEstimate = newLowEstimate
                                     , highEstimate = newHighEstimate
                                     , serverTime = serverTime2
                                     , sendTime = pingStartTime
-                                    , receiveTime = MatchPage.actualTime model
+                                    , receiveTime = actualTime model
                                     , pingCount = pingCount
                                     }
                         , pingStartTime =
                             if keepPinging then
-                                Just (MatchPage.actualTime model)
+                                Just (actualTime model)
 
                             else
                                 Nothing
                       }
                     , if keepPinging then
-                        Effect.Lamdera.sendToBackend PingRequest
+                        Lamdera.sendToBackend PingRequest
 
                       else
-                        Command.none
+                        Cmd.none
                     )
 
                 Nothing ->
-                    ( model, Command.none )
+                    ( model, Cmd.none )
+
+
+actualTime : FrontendLoaded -> Time.Posix
+actualTime model =
+    Duration.addTo model.localTime (Duration.seconds 0)
 
 
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
@@ -2703,14 +2715,14 @@ receivingMailFlagMesh frame =
         ]
 
 
-createUserIdMesh : Id UserId -> WebGL.Mesh Vertex
-createUserIdMesh userId =
+createInfoMesh : Maybe PingData -> Id UserId -> WebGL.Mesh Vertex
+createInfoMesh pingData userId =
     let
-        id =
-            "USER ID: " ++ String.fromInt (Id.toInt userId)
-
         vertices =
-            Sprite.text 2 id (Coord.xy 2 2)
+            Sprite.text
+                2
+                ("USER ID: " ++ String.fromInt (Id.toInt userId))
+                (Coord.xy 2 2)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -2724,11 +2736,11 @@ subscriptions _ model =
             Loading _ ->
                 Sub.none
 
-            Loaded _ ->
+            Loaded loaded ->
                 Sub.batch
                     [ Sub.map KeyMsg Keyboard.subscriptions
                     , Keyboard.downs KeyDown
-                    , Time.every 1000 ShortIntervalElapsed
+                    , Time.every 1000 (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Browser.Events.onAnimationFrame AnimationFrame
                     , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
