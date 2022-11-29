@@ -1378,7 +1378,7 @@ clickTeleportHomeTrain trainId train model =
                 (\_ -> Train.startTeleportingHome model.time train |> Just)
                 model.trains
       }
-    , TeleportHomeTrainRequest trainId |> Lamdera.sendToBackend
+    , TeleportHomeTrainRequest trainId model.time |> Lamdera.sendToBackend
     )
 
 
