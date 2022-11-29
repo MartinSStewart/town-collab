@@ -1430,7 +1430,7 @@ screenToWorld model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at (scaleForScreenToWorld model)
+        >> point2dAt2 (scaleForScreenToWorld model)
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
@@ -1442,13 +1442,65 @@ worldToScreen model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << Point2d.at_ (scaleForScreenToWorld model)
+        << point2dAt2_ (scaleForScreenToWorld model)
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
+vector2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Vector2d sourceUnits coordinates
+    -> Vector2d destinationUnits coordinates
+vector2dAt2 ( Quantity rateX, Quantity rateY ) vector =
+    let
+        { x, y } =
+            Vector2d.unwrap vector
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Vector2d.unsafe
+
+
+point2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2 ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Point2d.unsafe
+
+
+point2dAt2_ :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x / rateX
+    , y = y / rateY
+    }
+        |> Point2d.unsafe
+
+
 scaleForScreenToWorld model =
-    -- TODO
-    model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
+    ( model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
+    , model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.yRaw Units.tileSize)) |> Quantity
+    )
 
 
 windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
@@ -1944,7 +1996,7 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurr
             delta : Vector2d WorldUnit WorldUnit
             delta =
                 Vector2d.from mouseCurrent mouseStart
-                    |> Vector2d.at (scaleForScreenToWorld model)
+                    |> vector2dAt2 (scaleForScreenToWorld model)
                     |> Vector2d.placeIn (Units.screenFrame viewPoint2)
 
             viewPoint2 =
@@ -2694,7 +2746,7 @@ sendingMailFlagMesh frame =
             6
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels ( 72, 594 + frame * 6 ) ( width, 6 )
+            Tile.texturePositionPixels ( 80, 594 + frame * 6 ) ( width, 6 )
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }

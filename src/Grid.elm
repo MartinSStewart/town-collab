@@ -490,9 +490,9 @@ backgroundMesh cellPosition =
                                         , (y2 * Terrain.terrainDivisionsPerCell + y) * Coord.yRaw Units.tileSize
                                         )
                                         0.9
-                                        (Coord.tuple ( 72, 72 ))
+                                        (Coord.tuple ( 80, 80 ))
                                         ( textureX, textureY )
-                                        ( 72, 72 )
+                                        ( 80, 80 )
 
                                 corners =
                                     [ { side1 = getValue 0 -1
