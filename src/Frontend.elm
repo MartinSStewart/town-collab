@@ -107,11 +107,14 @@ audio audioData model =
 audioLoaded : AudioData -> FrontendLoaded -> Audio
 audioLoaded audioData model =
     let
-        playSound =
-            Sound.play model.sounds
+        timeOffset =
+            PingData.pingOffset model
 
-        playWithConfig =
-            Sound.playWithConfig audioData model.sounds
+        playSound sound time =
+            Sound.play model.sounds sound (Duration.subtractFrom time timeOffset)
+
+        playWithConfig config sound time =
+            Sound.playWithConfig audioData model.sounds config sound (Duration.subtractFrom time timeOffset)
 
         movingTrains : List { playbackRate : Float, volume : Float }
         movingTrains =
@@ -2115,7 +2118,11 @@ updateLoadedFromBackend msg model =
 
 actualTime : FrontendLoaded -> Time.Posix
 actualTime model =
-    Duration.addTo model.localTime (Duration.seconds 0)
+    Duration.addTo model.localTime debugTimeOffset
+
+
+debugTimeOffset =
+    Duration.seconds 0
 
 
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
