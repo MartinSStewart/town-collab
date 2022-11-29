@@ -175,10 +175,6 @@ update msg model =
                                                         case mail.status of
                                                             MailInTransit mailTrainId ->
                                                                 if trainId == mailTrainId then
-                                                                    let
-                                                                        _ =
-                                                                            Debug.log "mail dropped by teleport" ""
-                                                                    in
                                                                     { mail | status = MailWaitingPickup }
 
                                                                 else
@@ -199,10 +195,6 @@ update msg model =
                                             case Train.carryingMail state.mail trainId of
                                                 Just ( mailId, mail ) ->
                                                     if mail.to == userId then
-                                                        let
-                                                            _ =
-                                                                Debug.log "mail received" ""
-                                                        in
                                                         { mail =
                                                             AssocList.update
                                                                 mailId
@@ -221,10 +213,6 @@ update msg model =
                                                             |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
                                                     of
                                                         ( mailId, mail ) :: _ ->
-                                                            let
-                                                                _ =
-                                                                    Debug.log "mail in transit" ""
-                                                            in
                                                             { mail =
                                                                 AssocList.update
                                                                     mailId
@@ -528,7 +516,7 @@ adjustEventTime currentTime eventTime =
         eventTime
 
     else
-        Debug.log "adjusted" currentTime
+        currentTime
 
 
 sendConfirmationEmailRateLimit : Duration
@@ -757,10 +745,6 @@ removeTrain trainId model =
                     case mail.status of
                         MailInTransit trainId2 ->
                             if trainId == trainId2 then
-                                let
-                                    _ =
-                                        Debug.log "mail dropped" ""
-                                in
                                 { mail | status = MailWaitingPickup }
 
                             else
