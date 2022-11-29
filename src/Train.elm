@@ -77,11 +77,14 @@ type Train
 type TrainDiff
     = NewTrain Train
     | TrainChanged
-        { position : FieldChanged (Coord WorldUnit)
-        , path : FieldChanged RailPath
-        , previousPaths : FieldChanged (List PreviousPath)
-        , t : FieldChanged Float
-        , speed : FieldChanged (Quantity Float (Rate TileLocalUnit Seconds))
+        { position :
+            FieldChanged
+                { position : Coord WorldUnit
+                , path : RailPath
+                , previousPaths : List PreviousPath
+                , t : Float
+                , speed : Quantity Float (Rate TileLocalUnit Seconds)
+                }
         , isStuck : FieldChanged (Maybe Time.Posix)
         , status : FieldChanged Status
         }
@@ -90,11 +93,20 @@ type TrainDiff
 diff : Train -> Train -> TrainDiff
 diff (Train trainOld) (Train trainNew) =
     TrainChanged
-        { position = diffField trainOld.position trainNew.position
-        , path = diffField trainOld.path trainNew.path
-        , previousPaths = diffField trainOld.previousPaths trainNew.previousPaths
-        , t = diffField trainOld.t trainNew.t
-        , speed = diffField trainOld.speed trainNew.speed
+        { position =
+            diffField
+                { position = trainOld.position
+                , path = trainOld.path
+                , previousPaths = trainOld.previousPaths
+                , t = trainOld.t
+                , speed = trainOld.speed
+                }
+                { position = trainNew.position
+                , path = trainNew.path
+                , previousPaths = trainNew.previousPaths
+                , t = trainNew.t
+                , speed = trainNew.speed
+                }
         , isStuck = diffField trainOld.isStuck trainNew.isStuck
         , status = diffField trainOld.status trainNew.status
         }
@@ -107,12 +119,23 @@ applyDiff trainDiff maybeTrain =
             Just newTrain
 
         ( TrainChanged diff_, Just (Train train) ) ->
+            let
+                position =
+                    applyDiffField
+                        diff_.position
+                        { position = train.position
+                        , path = train.path
+                        , previousPaths = train.previousPaths
+                        , t = train.t
+                        , speed = train.speed
+                        }
+            in
             { train
-                | position = applyDiffField diff_.position train.position
-                , path = applyDiffField diff_.path train.path
-                , previousPaths = applyDiffField diff_.previousPaths train.previousPaths
-                , t = applyDiffField diff_.t train.t
-                , speed = applyDiffField diff_.speed train.speed
+                | position = position.position
+                , path = position.path
+                , previousPaths = position.previousPaths
+                , t = position.t
+                , speed = position.speed
                 , isStuck = applyDiffField diff_.isStuck train.isStuck
                 , status = applyDiffField diff_.status train.status
             }
