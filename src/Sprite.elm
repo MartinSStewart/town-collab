@@ -167,17 +167,25 @@ text charScale string position =
     String.toList string
         |> List.foldl
             (\char state ->
-                { offset = state.offset + Coord.xRaw charSize_
-                , vertices =
-                    state.vertices
-                        ++ sprite
-                            (Coord.addTuple_ ( state.offset, 0 ) position |> Coord.toTuple)
-                            charSize_
-                            (charTexturePosition char |> Coord.toTuple)
-                            (Coord.toTuple charSize)
-                }
+                if char == '\n' then
+                    { offsetX = 0
+                    , offsetY = state.offsetY + Coord.yRaw charSize_
+                    , vertices = state.vertices
+                    }
+
+                else
+                    { offsetX = state.offsetX + Coord.xRaw charSize_
+                    , offsetY = state.offsetY
+                    , vertices =
+                        state.vertices
+                            ++ sprite
+                                (Coord.addTuple_ ( state.offsetX, state.offsetY ) position |> Coord.toTuple)
+                                charSize_
+                                (charTexturePosition char |> Coord.toTuple)
+                                (Coord.toTuple charSize)
+                    }
             )
-            { offset = 0, vertices = [] }
+            { offsetX = 0, offsetY = 0, vertices = [] }
         |> .vertices
 
 

@@ -46,6 +46,7 @@
             "mdgriffith/elm-ui": "1.1.8",
             "mgold/elm-nonempty-list": "4.2.0",
             "mpizenberg/elm-pointer-events": "4.0.2",
+            "myrho/elm-round": "1.0.5",
             "ohanhi/keyboard": "2.0.1",
             "pzp1997/assoc-list": "1.0.0",
             "tortus/elm-array-2d": "3.0.0"
@@ -58,14 +59,15 @@
             "elm/virtual-dom": "1.0.3",
             "elm-community/random-extra": "3.2.0",
             "folkertdev/elm-flate": "2.0.5",
-            "folkertdev/elm-sha2": "1.0.0",
             "ianmackenzie/elm-geometry": "3.9.1",
-            "ktonon/elm-word": "2.1.2",
-            "rtfeldman/elm-hex": "1.0.0"
+            "ktonon/elm-word": "2.1.2"
         }
     },
     "test-dependencies": {
         "direct": {},
-        "indirect": {}
+        "indirect": {
+            "folkertdev/elm-sha2": "1.0.0",
+            "rtfeldman/elm-hex": "1.0.0"
+        }
     }
 }

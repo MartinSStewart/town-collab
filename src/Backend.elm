@@ -498,6 +498,10 @@ updateFromFrontend currentTime sessionId clientId msg model =
             )
 
         PingRequest ->
+            let
+                _ =
+                    Debug.log "pingrequest" ""
+            in
             ( model, PingResponse currentTime |> Lamdera.sendToFrontend clientId )
 
 

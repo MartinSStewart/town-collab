@@ -38,19 +38,19 @@ type alias Vertex =
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> WebGL.Mesh attributes
 indexedTriangles vertices indices =
-    --let
-    --    _ =
-    --        Debug.log "new indexedTriangles" ""
-    --in
+    let
+        _ =
+            Debug.log "new indexedTriangles" ""
+    in
     WebGL.indexedTriangles vertices indices
 
 
 triangleFan : List attributes -> WebGL.Mesh attributes
 triangleFan vertices =
-    --let
-    --    _ =
-    --        Debug.log "new triangleFan" ""
-    --in
+    let
+        _ =
+            Debug.log "new triangleFan" ""
+    in
     WebGL.triangleFan vertices
 
 

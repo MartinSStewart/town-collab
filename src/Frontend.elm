@@ -47,6 +47,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
+import Round
 import Set exposing (Set)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
@@ -387,7 +388,7 @@ loadedInit time loading loadingData =
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
             , pingData = Nothing
-            , pingStartTime = Nothing
+            , pingStartTime = Just time
             , localTime = time
             }
     in
@@ -412,6 +413,7 @@ loadedInit time loading loadingData =
             "/trains.png"
             |> Task.attempt TrainTextureLoaded
         , Browser.Dom.focus "textareaId" |> Task.attempt (\_ -> NoOpFrontendMsg)
+        , Lamdera.sendToBackend PingRequest
         ]
     )
         |> viewBoundsUpdate
@@ -1856,6 +1858,12 @@ updateMeshes oldModel newModel =
                             newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
                 )
                 newCells
+        , userIdMesh =
+            if oldModel.pingData == newModel.pingData then
+                newModel.userIdMesh
+
+            else
+                createInfoMesh newModel.pingData (currentUserId newModel)
     }
 
 
@@ -2716,12 +2724,26 @@ receivingMailFlagMesh frame =
 
 
 createInfoMesh : Maybe PingData -> Id UserId -> WebGL.Mesh Vertex
-createInfoMesh pingData userId =
+createInfoMesh maybePingData userId =
     let
+        durationToString duration =
+            Duration.inMilliseconds duration |> round |> String.fromInt
+
         vertices =
             Sprite.text
                 2
-                ("USER ID: " ++ String.fromInt (Id.toInt userId))
+                ("USER ID: "
+                    ++ String.fromInt (Id.toInt userId)
+                    ++ "\n"
+                    ++ (case maybePingData of
+                            Just pingData ->
+                                ("RTT: " ++ durationToString pingData.roundTripTime ++ "ms\n")
+                                    ++ ("Server offset: " ++ durationToString (PingData.pingOffset { pingData = maybePingData }) ++ "ms")
+
+                            Nothing ->
+                                ""
+                       )
+                )
                 (Coord.xy 2 2)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
