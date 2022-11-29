@@ -125,11 +125,11 @@ applyDiff trainDiff maybeTrain =
 
 diffField : a -> a -> FieldChanged a
 diffField old new =
-    if old == new then
-        Unchanged
-
-    else
-        FieldChanged new
+    --if old == new then
+    --    Unchanged
+    --
+    --else
+    FieldChanged new
 
 
 applyDiffField : FieldChanged a -> a -> a

@@ -163,6 +163,7 @@ update msg model =
                                 (\_ _ a -> a)
                                 (\trainId oldTrain newTrain state ->
                                     let
+                                        diff : AssocList.Dict (Id TrainId) TrainDiff
                                         diff =
                                             AssocList.insert trainId (Train.diff oldTrain newTrain) state.diff
                                     in
@@ -174,6 +175,10 @@ update msg model =
                                                         case mail.status of
                                                             MailInTransit mailTrainId ->
                                                                 if trainId == mailTrainId then
+                                                                    let
+                                                                        _ =
+                                                                            Debug.log "mail dropped by teleport" ""
+                                                                    in
                                                                     { mail | status = MailWaitingPickup }
 
                                                                 else
@@ -193,14 +198,22 @@ update msg model =
                                         ( _, StoppedAtPostOffice { userId } ) ->
                                             case Train.carryingMail state.mail trainId of
                                                 Just ( mailId, mail ) ->
-                                                    { mail =
-                                                        AssocList.update
-                                                            mailId
-                                                            (\_ -> Just { mail | status = MailReceived })
-                                                            state.mail
-                                                    , mailChanged = True
-                                                    , diff = diff
-                                                    }
+                                                    if mail.to == userId then
+                                                        let
+                                                            _ =
+                                                                Debug.log "mail received" ""
+                                                        in
+                                                        { mail =
+                                                            AssocList.update
+                                                                mailId
+                                                                (\_ -> Just { mail | status = MailReceived })
+                                                                state.mail
+                                                        , mailChanged = True
+                                                        , diff = diff
+                                                        }
+
+                                                    else
+                                                        { state | diff = diff }
 
                                                 Nothing ->
                                                     case
@@ -208,6 +221,10 @@ update msg model =
                                                             |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
                                                     of
                                                         ( mailId, mail ) :: _ ->
+                                                            let
+                                                                _ =
+                                                                    Debug.log "mail in transit" ""
+                                                            in
                                                             { mail =
                                                                 AssocList.update
                                                                     mailId
@@ -224,9 +241,7 @@ update msg model =
                                             { state | diff = diff }
                                 )
                                 (\trainId train state ->
-                                    { state
-                                        | diff = AssocList.insert trainId (Train.NewTrain train) state.diff
-                                    }
+                                    { state | diff = AssocList.insert trainId (Train.NewTrain train) state.diff }
                                 )
                                 model.lastWorldUpdateTrains
                                 newTrains
@@ -513,7 +528,7 @@ adjustEventTime currentTime eventTime =
         eventTime
 
     else
-        currentTime
+        Debug.log "adjusted" currentTime
 
 
 sendConfirmationEmailRateLimit : Duration
@@ -742,6 +757,10 @@ removeTrain trainId model =
                     case mail.status of
                         MailInTransit trainId2 ->
                             if trainId == trainId2 then
+                                let
+                                    _ =
+                                        Debug.log "mail dropped" ""
+                                in
                                 { mail | status = MailWaitingPickup }
 
                             else

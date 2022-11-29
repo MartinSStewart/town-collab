@@ -2025,6 +2025,10 @@ updateLoadedFromBackend msg model =
             ( model, Cmd.none )
 
         TrainBroadcast diff ->
+            let
+                _ =
+                    Debug.log "diff" diff
+            in
             ( { model
                 | trains =
                     AssocList.toList diff
@@ -2739,7 +2743,7 @@ createInfoMesh maybePingData userId =
         vertices =
             Sprite.text
                 2
-                ("USER ID: "
+                ("User ID: "
                     ++ String.fromInt (Id.toInt userId)
                     ++ "\n"
                     ++ (case maybePingData of
