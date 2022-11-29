@@ -1447,7 +1447,8 @@ worldToScreen model =
 
 
 scaleForScreenToWorld model =
-    model.devicePixelRatio / (toFloat model.zoomFactor * Units.tileSize) |> Quantity
+    -- TODO
+    model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
 
 
 windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
@@ -1706,8 +1707,8 @@ createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textu
                             let
                                 offset =
                                     Vec2.vec2
-                                        ((x + x2) * Units.tileSize |> toFloat)
-                                        ((y + y2) * Units.tileSize |> toFloat)
+                                        ((x + x2) * Coord.xRaw Units.tileSize |> toFloat)
+                                        ((y + y2) * Coord.yRaw Units.tileSize |> toFloat)
                             in
                             { position = Vec2.sub (Vec2.add offset uv) topLeft
                             , initialSpeed =
@@ -2215,8 +2216,8 @@ canvasView audioData model =
         viewMatrix =
             Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                 |> Mat4.translate3
-                    (negate <| toFloat <| round (x * Units.tileSize))
-                    (negate <| toFloat <| round (y * Units.tileSize))
+                    (negate <| toFloat <| round (x * toFloat (Coord.xRaw Units.tileSize)))
+                    (negate <| toFloat <| round (y * toFloat (Coord.yRaw Units.tileSize)))
                     0
 
         mouseScreenPosition_ =
@@ -2327,8 +2328,8 @@ canvasView audioData model =
                                         flagMesh_
                                         { view =
                                             Mat4.makeTranslate3
-                                                (flagPosition.x * Units.tileSize)
-                                                (flagPosition.y * Units.tileSize)
+                                                (flagPosition.x * toFloat (Coord.xRaw Units.tileSize))
+                                                (flagPosition.y * toFloat (Coord.yRaw Units.tileSize))
                                                 0
                                                 |> Mat4.mul viewMatrix
                                         , texture = texture
@@ -2389,8 +2390,8 @@ canvasView audioData model =
                                         mesh
                                         { view =
                                             Mat4.makeTranslate3
-                                                (round (point.x * Units.tileSize) + xOffset |> toFloat)
-                                                (round (point.y * Units.tileSize) + yOffset |> toFloat)
+                                                (round (point.x * toFloat (Coord.xRaw Units.tileSize)) + xOffset |> toFloat)
+                                                (round (point.y * toFloat (Coord.yRaw Units.tileSize)) + yOffset |> toFloat)
                                                 0
                                                 |> Mat4.mul viewMatrix
                                         , texture = texture
@@ -2475,8 +2476,8 @@ canvasView audioData model =
                                     { view =
                                         viewMatrix
                                             |> Mat4.translate3
-                                                (toFloat mouseX * Units.tileSize + offsetX)
-                                                (toFloat mouseY * Units.tileSize)
+                                                (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
+                                                (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
                                                 0
                                     , texture = texture
                                     , textureSize = textureSize
@@ -2912,7 +2913,7 @@ tileMesh position tile =
 
         size : Coord units
         size =
-            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.size)
+            Coord.multiply Units.tileSize (Coord.tuple data.size)
                 |> Coord.minimum toolbarButtonSize
 
         spriteSize =
@@ -2927,7 +2928,7 @@ tileMesh position tile =
 
         texturePosition : Coord units
         texturePosition =
-            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.texturePosition)
+            Coord.multiply Units.tileSize (Coord.tuple data.texturePosition)
     in
     if tile == EmptyTile then
         Sprite.sprite
@@ -2942,7 +2943,7 @@ tileMesh position tile =
                     Just topLayer ->
                         let
                             texturePosition2 =
-                                Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple topLayer.texturePosition)
+                                Coord.multiply Units.tileSize (Coord.tuple topLayer.texturePosition)
                         in
                         Sprite.sprite (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
 

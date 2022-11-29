@@ -1039,8 +1039,8 @@ trainEntity trainTexture trainMesh viewMatrix x y =
         trainMesh
         { view =
             Mat4.makeTranslate3
-                (x * Units.tileSize |> round |> toFloat)
-                (y * Units.tileSize |> round |> toFloat)
+                (x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
+                (y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
                 (Grid.tileZ True y 0)
                 |> Mat4.mul viewMatrix
         , texture = trainTexture
@@ -1103,21 +1103,24 @@ trainEngineMesh teleportAmount frame =
 
         h =
             36
+
+        ( tileSizeW, tileSizeH ) =
+            Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
     in
     Shaders.triangleFan
-        [ { position = Vec3.vec3 (-Units.tileSize + offsetX) (-Units.tileSize + offsetY) 0
+        [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 0 y
           , opacity = 1
           }
-        , { position = Vec3.vec3 (Units.tileSize + offsetX) (-Units.tileSize + offsetY) 0
+        , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 w y
           , opacity = 1
           }
-        , { position = Vec3.vec3 (Units.tileSize + offsetX) (Units.tileSize + offsetY - (teleportAmount * h)) 0
+        , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 w y2
           , opacity = 1
           }
-        , { position = Vec3.vec3 (-Units.tileSize + offsetX) (Units.tileSize + offsetY - (teleportAmount * h)) 0
+        , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 0 y2
           , opacity = 1
           }
@@ -1144,21 +1147,24 @@ trainCoachMesh teleportAmount frame =
 
         h =
             36
+
+        ( tileSizeW, tileSizeH ) =
+            Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
     in
     Shaders.triangleFan
-        [ { position = Vec3.vec3 (-Units.tileSize + offsetX) (-Units.tileSize + offsetY) 0
+        [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 w y
           , opacity = 1
           }
-        , { position = Vec3.vec3 (Units.tileSize + offsetX) (-Units.tileSize + offsetY) 0
+        , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 (w * 2) y
           , opacity = 1
           }
-        , { position = Vec3.vec3 (Units.tileSize + offsetX) (Units.tileSize + offsetY - (teleportAmount * h)) 0
+        , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 (w * 2) y2
           , opacity = 1
           }
-        , { position = Vec3.vec3 (-Units.tileSize + offsetX) (Units.tileSize + offsetY - (teleportAmount * h)) 0
+        , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 w y2
           , opacity = 1
           }

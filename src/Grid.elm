@@ -486,8 +486,8 @@ backgroundMesh cellPosition =
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.spriteWithZ
-                                        ( (x2 * Terrain.terrainDivisionsPerCell + x) * Units.tileSize
-                                        , (y2 * Terrain.terrainDivisionsPerCell + y) * Units.tileSize
+                                        ( (x2 * Terrain.terrainDivisionsPerCell + x) * Coord.xRaw Units.tileSize
+                                        , (y2 * Terrain.terrainDivisionsPerCell + y) * Coord.yRaw Units.tileSize
                                         )
                                         0.9
                                         (Coord.tuple ( 72, 72 ))
@@ -498,22 +498,22 @@ backgroundMesh cellPosition =
                                     [ { side1 = getValue 0 -1
                                       , corner = getValue -1 -1
                                       , side2 = getValue -1 0
-                                      , texturePos = ( 432, 504 )
+                                      , texturePos = ( 480, 504 )
                                       }
                                     , { side1 = getValue 0 -1
                                       , corner = getValue 1 -1
                                       , side2 = getValue 1 0
-                                      , texturePos = ( 360, 504 )
+                                      , texturePos = ( 400, 504 )
                                       }
                                     , { side1 = getValue 0 1
                                       , corner = getValue 1 1
                                       , side2 = getValue 1 0
-                                      , texturePos = ( 360, 432 )
+                                      , texturePos = ( 400, 432 )
                                       }
                                     , { side1 = getValue 0 1
                                       , corner = getValue -1 1
                                       , side2 = getValue -1 0
-                                      , texturePos = ( 432, 432 )
+                                      , texturePos = ( 480, 432 )
                                       }
                                     ]
                                         |> List.concatMap
@@ -527,7 +527,7 @@ backgroundMesh cellPosition =
 
                                 tile =
                                     if getValue 0 0 then
-                                        draw 198 216
+                                        draw 220 216
 
                                     else
                                         case
@@ -537,53 +537,53 @@ backgroundMesh cellPosition =
                                             )
                                         of
                                             ( False, ( False, False ), False ) ->
-                                                draw 432 288
+                                                draw 480 288
 
                                             ( True, ( False, False ), False ) ->
-                                                draw 432 216
+                                                draw 480 216
 
                                             ( False, ( True, False ), False ) ->
-                                                draw 360 288
+                                                draw 400 288
 
                                             ( True, ( True, False ), False ) ->
-                                                draw 360 216
+                                                draw 400 216
 
                                             ( False, ( False, True ), False ) ->
-                                                draw 504 288
+                                                draw 560 288
 
                                             ( True, ( False, True ), False ) ->
-                                                draw 504 216
+                                                draw 560 216
 
                                             ( False, ( True, True ), False ) ->
-                                                draw 504 504
+                                                draw 560 504
 
                                             ( True, ( True, True ), False ) ->
-                                                draw 504 432
+                                                draw 560 432
 
                                             ( False, ( False, False ), True ) ->
-                                                draw 432 360
+                                                draw 480 360
 
                                             ( True, ( False, False ), True ) ->
-                                                draw 432 648
+                                                draw 480 648
 
                                             ( False, ( True, False ), True ) ->
-                                                draw 360 360
+                                                draw 400 360
 
                                             ( True, ( True, False ), True ) ->
-                                                draw 360 648
+                                                draw 400 648
 
                                             ( False, ( False, True ), True ) ->
-                                                draw 504 360
+                                                draw 560 360
 
                                             ( True, ( False, True ), True ) ->
-                                                draw 504 648
+                                                draw 560 648
 
                                             ( False, ( True, True ), True ) ->
-                                                draw 504 576
+                                                draw 560 576
 
                                             ( True, ( True, True ), True ) ->
                                                 --draw 198 216
-                                                draw 432 288
+                                                draw 480 288
                             in
                             corners ++ tile
                         )
@@ -640,8 +640,8 @@ tileMeshHelper opacity isTopLayer position texturePosition size =
             in
             { position =
                 Vec3.vec3
-                    (uvRecord.x - topLeftRecord.x + toFloat x * Units.tileSize)
-                    (uvRecord.y - topLeftRecord.y + toFloat y * Units.tileSize)
+                    (uvRecord.x - topLeftRecord.x + toFloat x * toFloat (Coord.xRaw Units.tileSize))
+                    (uvRecord.y - topLeftRecord.y + toFloat y * toFloat (Coord.yRaw Units.tileSize))
                     (tileZ isTopLayer (toFloat y) height)
             , texturePosition = uv
             , opacity = opacity
