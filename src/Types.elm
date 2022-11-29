@@ -230,7 +230,7 @@ type ToBackend
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
     | MailEditorToBackend MailEditor.ToBackend
-    | TeleportHomeTrainRequest (Id TrainId)
+    | TeleportHomeTrainRequest (Id TrainId) Time.Posix
     | CancelTeleportHomeTrainRequest (Id TrainId)
     | LeaveHomeTrainRequest (Id TrainId)
     | PingRequest

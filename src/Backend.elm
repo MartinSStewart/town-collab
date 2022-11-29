@@ -25,6 +25,7 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
+import Quantity
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
@@ -479,10 +480,13 @@ updateFromFrontend currentTime sessionId clientId msg model =
                         Nothing ->
                             ( model, Cmd.none )
 
-        TeleportHomeTrainRequest trainId ->
+        TeleportHomeTrainRequest trainId teleportTime ->
             ( { model
                 | trains =
-                    AssocList.update trainId (Maybe.map (Train.startTeleportingHome currentTime)) model.trains
+                    AssocList.update
+                        trainId
+                        (Maybe.map (Train.startTeleportingHome (adjustEventTime currentTime teleportTime)))
+                        model.trains
               }
             , Cmd.none
             )
@@ -499,6 +503,17 @@ updateFromFrontend currentTime sessionId clientId msg model =
 
         PingRequest ->
             ( model, PingResponse currentTime |> Lamdera.sendToFrontend clientId )
+
+
+{-| Allow a client to say when something happened but restrict how far it can be away from the current time.
+-}
+adjustEventTime : Time.Posix -> Time.Posix -> Time.Posix
+adjustEventTime currentTime eventTime =
+    if Duration.from currentTime eventTime |> Quantity.abs |> Quantity.lessThan (Duration.seconds 1) then
+        eventTime
+
+    else
+        currentTime
 
 
 sendConfirmationEmailRateLimit : Duration
