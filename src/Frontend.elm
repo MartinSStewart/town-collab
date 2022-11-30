@@ -2857,22 +2857,22 @@ toolbarTileButton maybeHotkey highlight offset tile =
     Sprite.sprite (Coord.toTuple offset)
         toolbarButtonSize
         ( if highlight then
-            379
+            505
 
           else
-            380
-        , 153
+            506
+        , 28
         )
         ( 1, 1 )
         ++ Sprite.sprite
             (offset |> Coord.plus (Coord.xy 2 2) |> Coord.toTuple)
             (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
             ( if highlight then
-                379
+                505
 
               else
-                381
-            , 153
+                507
+            , 28
             )
             ( 1, 1 )
         ++ tileMesh offset tile
@@ -2885,7 +2885,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
                             |> Coord.toTuple
                         )
                         (Coord.plus (Coord.xy 2 -4) charSize)
-                        ( 380, 153 )
+                        ( 506, 28 )
                         ( 1, 1 )
                         ++ Sprite.text
                             2
@@ -2902,8 +2902,8 @@ toolbarTileButton maybeHotkey highlight offset tile =
 
 toolbarMesh : Dict String Tile -> Maybe Tile -> WebGL.Mesh Vertex
 toolbarMesh hotkeys currentTile =
-    Sprite.sprite ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
-        ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
+    Sprite.sprite ( 0, 0 ) toolbarSize ( 506, 28 ) ( 1, 1 )
+        ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
         ++ (List.indexedMap
                 (\index tile ->
                     toolbarTileButton
@@ -2986,7 +2986,7 @@ tileMesh position tile =
         Sprite.sprite
             (Coord.plus (Coord.xy 10 12) position |> Coord.toTuple)
             (Coord.tuple ( 30 * 2, 29 * 2 ))
-            ( 324, 223 )
+            ( 504, 42 )
             ( 30, 29 )
 
     else
@@ -3035,14 +3035,14 @@ stuckMessageDelay =
 speechBubbleMesh : Array (WebGL.Mesh Vertex)
 speechBubbleMesh =
     List.range 0 (speechBubbleFrames - 1)
-        |> List.map (\frame -> speechBubbleMeshHelper frame ( 391, 154 ) ( 8, 12 ))
+        |> List.map (\frame -> speechBubbleMeshHelper frame ( 517, 29 ) ( 8, 12 ))
         |> Array.fromList
 
 
 speechBubbleRadioMesh : Array (WebGL.Mesh Vertex)
 speechBubbleRadioMesh =
     List.range 0 (speechBubbleFrames - 1)
-        |> List.map (\frame -> speechBubbleMeshHelper frame ( 399, 154 ) ( 8, 13 ))
+        |> List.map (\frame -> speechBubbleMeshHelper frame ( 525, 29 ) ( 8, 13 ))
         |> Array.fromList
 
 
@@ -3059,15 +3059,15 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
             Coord.xy 6 5
     in
     Sprite.nineSlice
-        { topLeft = Coord.xy 378 154
-        , top = Coord.xy 384 154
-        , topRight = Coord.xy 385 154
-        , left = Coord.xy 378 160
-        , center = Coord.xy 384 160
-        , right = Coord.xy 385 160
-        , bottomLeft = Coord.xy 378 161
-        , bottom = Coord.xy 384 161
-        , bottomRight = Coord.xy 385 161
+        { topLeft = Coord.xy 504 29
+        , top = Coord.xy 510 29
+        , topRight = Coord.xy 511 29
+        , left = Coord.xy 504 35
+        , center = Coord.xy 510 35
+        , right = Coord.xy 511 35
+        , bottomLeft = Coord.xy 504 36
+        , bottom = Coord.xy 510 36
+        , bottomRight = Coord.xy 511 36
         , cornerSize = Coord.xy 6 6
         , position = Coord.xy 0 0
         , size = Sprite.textSize 1 text |> Coord.plus (Coord.multiplyTuple ( 2, 2 ) padding)
