@@ -393,6 +393,7 @@ loadedInit time loading loadingData =
             , pingData = Nothing
             , pingStartTime = Just time
             , localTime = time
+            , scrollThreshold = 0
             }
     in
     ( updateMeshes model model
@@ -718,30 +719,40 @@ updateLoaded audioData msg model =
                                                 |> Quantity.lessThan (Sound.length audioData model.sounds WhooshSound)
                                         )
                                         model.lastTileRotation
+                            , scrollThreshold = 0
                         }
-            in
-            ( if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                { model
-                    | zoomFactor =
-                        (if event.deltaY > 0 then
-                            model.zoomFactor - 1
 
-                         else
-                            model.zoomFactor + 1
-                        )
-                            |> clamp 1 3
-                }
+                scrollThreshold : Float
+                scrollThreshold =
+                    model.scrollThreshold + event.deltaY
+            in
+            ( if abs scrollThreshold > 50 then
+                if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                    { model
+                        | zoomFactor =
+                            (if scrollThreshold > 0 then
+                                model.zoomFactor - 1
+
+                             else
+                                model.zoomFactor + 1
+                            )
+                                |> clamp 1 3
+                        , scrollThreshold = 0
+                    }
+
+                else
+                    case ( scrollThreshold > 0, model.currentTile ) of
+                        ( True, Just currentTile ) ->
+                            rotationHelper Tile.rotateClockwise currentTile.tile
+
+                        ( False, Just currentTile ) ->
+                            rotationHelper Tile.rotateAntiClockwise currentTile.tile
+
+                        ( _, Nothing ) ->
+                            { model | scrollThreshold = 0 }
 
               else
-                case ( event.deltaY > 0, model.currentTile ) of
-                    ( True, Just currentTile ) ->
-                        rotationHelper Tile.rotateClockwise currentTile.tile
-
-                    ( False, Just currentTile ) ->
-                        rotationHelper Tile.rotateAntiClockwise currentTile.tile
-
-                    ( _, Nothing ) ->
-                        model
+                { model | scrollThreshold = scrollThreshold }
             , Cmd.none
             )
 
@@ -971,6 +982,15 @@ updateLoaded audioData msg model =
 
                             else
                                 model.viewPoint
+                        , scrollThreshold =
+                            if abs model.scrollThreshold < 1 then
+                                0
+
+                            else if model.scrollThreshold >= 1 then
+                                model.scrollThreshold - 1
+
+                            else
+                                model.scrollThreshold + 1
                     }
             in
             ( case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTile ) of
