@@ -11,6 +11,7 @@ module Coord exposing
     , minimum
     , minus
     , minusTuple_
+    , multiply
     , multiplyTuple
     , multiplyTuple_
     , origin
@@ -98,6 +99,11 @@ multiplyTuple_ ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.toFloatQuantity x1 |> Quantity.multiplyBy x0 |> Quantity.round
     , Quantity.toFloatQuantity y1 |> Quantity.multiplyBy y0 |> Quantity.round
     )
+
+
+multiply : Coord unit -> Coord unit -> Coord unit
+multiply ( Quantity x0, Quantity y0 ) ( x1, y1 ) =
+    ( Quantity.multiplyBy x0 x1, Quantity.multiplyBy y0 y1 )
 
 
 divide : Coord unit -> Coord unit -> Coord unit

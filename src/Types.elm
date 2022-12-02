@@ -129,6 +129,7 @@ type alias FrontendLoaded =
     , pingData : Maybe PingData
     , pingStartTime : Maybe Time.Posix
     , localTime : Time.Posix
+    , scrollThreshold : Float
     }
 
 

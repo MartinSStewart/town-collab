@@ -436,15 +436,15 @@ texturePosition_ : ( Int, Int ) -> ( Int, Int ) -> { topLeft : Vec2, topRight : 
 texturePosition_ position textureSize =
     let
         ( x, y ) =
-            position
+            Coord.multiply Units.tileSize (Coord.tuple position) |> Coord.toTuple
 
         ( w, h ) =
-            textureSize
+            Coord.multiply Units.tileSize (Coord.tuple textureSize) |> Coord.toTuple
     in
-    { topLeft = Math.Vector2.vec2 (toFloat x * Units.tileSize) (toFloat y * Units.tileSize)
-    , topRight = Math.Vector2.vec2 (toFloat (x + w) * Units.tileSize) (toFloat y * Units.tileSize)
-    , bottomRight = Math.Vector2.vec2 (toFloat (x + w) * Units.tileSize) (toFloat (y + h) * Units.tileSize)
-    , bottomLeft = Math.Vector2.vec2 (toFloat x * Units.tileSize) (toFloat (y + h) * Units.tileSize)
+    { topLeft = Math.Vector2.vec2 (toFloat x) (toFloat y)
+    , topRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat y)
+    , bottomRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat (y + h))
+    , bottomLeft = Math.Vector2.vec2 (toFloat x) (toFloat (y + h))
     }
 
 

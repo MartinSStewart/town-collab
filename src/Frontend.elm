@@ -393,6 +393,7 @@ loadedInit time loading loadingData =
             , pingData = Nothing
             , pingStartTime = Just time
             , localTime = time
+            , scrollThreshold = 0
             }
     in
     ( updateMeshes model model
@@ -718,30 +719,40 @@ updateLoaded audioData msg model =
                                                 |> Quantity.lessThan (Sound.length audioData model.sounds WhooshSound)
                                         )
                                         model.lastTileRotation
+                            , scrollThreshold = 0
                         }
-            in
-            ( if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
-                { model
-                    | zoomFactor =
-                        (if event.deltaY > 0 then
-                            model.zoomFactor - 1
 
-                         else
-                            model.zoomFactor + 1
-                        )
-                            |> clamp 1 3
-                }
+                scrollThreshold : Float
+                scrollThreshold =
+                    model.scrollThreshold + event.deltaY
+            in
+            ( if abs scrollThreshold > 50 then
+                if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                    { model
+                        | zoomFactor =
+                            (if scrollThreshold > 0 then
+                                model.zoomFactor - 1
+
+                             else
+                                model.zoomFactor + 1
+                            )
+                                |> clamp 1 3
+                        , scrollThreshold = 0
+                    }
+
+                else
+                    case ( scrollThreshold > 0, model.currentTile ) of
+                        ( True, Just currentTile ) ->
+                            rotationHelper Tile.rotateClockwise currentTile.tile
+
+                        ( False, Just currentTile ) ->
+                            rotationHelper Tile.rotateAntiClockwise currentTile.tile
+
+                        ( _, Nothing ) ->
+                            { model | scrollThreshold = 0 }
 
               else
-                case ( event.deltaY > 0, model.currentTile ) of
-                    ( True, Just currentTile ) ->
-                        rotationHelper Tile.rotateClockwise currentTile.tile
-
-                    ( False, Just currentTile ) ->
-                        rotationHelper Tile.rotateAntiClockwise currentTile.tile
-
-                    ( _, Nothing ) ->
-                        model
+                { model | scrollThreshold = scrollThreshold }
             , Cmd.none
             )
 
@@ -971,6 +982,15 @@ updateLoaded audioData msg model =
 
                             else
                                 model.viewPoint
+                        , scrollThreshold =
+                            if abs model.scrollThreshold < 1 then
+                                0
+
+                            else if model.scrollThreshold >= 1 then
+                                model.scrollThreshold - 1
+
+                            else
+                                model.scrollThreshold + 1
                     }
             in
             ( case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTile ) of
@@ -1430,7 +1450,7 @@ screenToWorld model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at (scaleForScreenToWorld model)
+        >> point2dAt2 (scaleForScreenToWorld model)
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
@@ -1442,12 +1462,65 @@ worldToScreen model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << Point2d.at_ (scaleForScreenToWorld model)
+        << point2dAt2_ (scaleForScreenToWorld model)
         << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
 
 
+vector2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Vector2d sourceUnits coordinates
+    -> Vector2d destinationUnits coordinates
+vector2dAt2 ( Quantity rateX, Quantity rateY ) vector =
+    let
+        { x, y } =
+            Vector2d.unwrap vector
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Vector2d.unsafe
+
+
+point2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2 ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Point2d.unsafe
+
+
+point2dAt2_ :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x / rateX
+    , y = y / rateY
+    }
+        |> Point2d.unsafe
+
+
 scaleForScreenToWorld model =
-    model.devicePixelRatio / (toFloat model.zoomFactor * Units.tileSize) |> Quantity
+    ( model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
+    , model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.yRaw Units.tileSize)) |> Quantity
+    )
 
 
 windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Cmd msg )
@@ -1706,8 +1779,8 @@ createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textu
                             let
                                 offset =
                                     Vec2.vec2
-                                        ((x + x2) * Units.tileSize |> toFloat)
-                                        ((y + y2) * Units.tileSize |> toFloat)
+                                        ((x + x2) * Coord.xRaw Units.tileSize |> toFloat)
+                                        ((y + y2) * Coord.yRaw Units.tileSize |> toFloat)
                             in
                             { position = Vec2.sub (Vec2.add offset uv) topLeft
                             , initialSpeed =
@@ -1943,7 +2016,7 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurr
             delta : Vector2d WorldUnit WorldUnit
             delta =
                 Vector2d.from mouseCurrent mouseStart
-                    |> Vector2d.at (scaleForScreenToWorld model)
+                    |> vector2dAt2 (scaleForScreenToWorld model)
                     |> Vector2d.placeIn (Units.screenFrame viewPoint2)
 
             viewPoint2 =
@@ -2215,8 +2288,8 @@ canvasView audioData model =
         viewMatrix =
             Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                 |> Mat4.translate3
-                    (negate <| toFloat <| round (x * Units.tileSize))
-                    (negate <| toFloat <| round (y * Units.tileSize))
+                    (negate <| toFloat <| round (x * toFloat (Coord.xRaw Units.tileSize)))
+                    (negate <| toFloat <| round (y * toFloat (Coord.yRaw Units.tileSize)))
                     0
 
         mouseScreenPosition_ =
@@ -2327,8 +2400,8 @@ canvasView audioData model =
                                         flagMesh_
                                         { view =
                                             Mat4.makeTranslate3
-                                                (flagPosition.x * Units.tileSize)
-                                                (flagPosition.y * Units.tileSize)
+                                                (flagPosition.x * toFloat (Coord.xRaw Units.tileSize))
+                                                (flagPosition.y * toFloat (Coord.yRaw Units.tileSize))
                                                 0
                                                 |> Mat4.mul viewMatrix
                                         , texture = texture
@@ -2389,8 +2462,8 @@ canvasView audioData model =
                                         mesh
                                         { view =
                                             Mat4.makeTranslate3
-                                                (round (point.x * Units.tileSize) + xOffset |> toFloat)
-                                                (round (point.y * Units.tileSize) + yOffset |> toFloat)
+                                                (round (point.x * toFloat (Coord.xRaw Units.tileSize)) + xOffset |> toFloat)
+                                                (round (point.y * toFloat (Coord.yRaw Units.tileSize)) + yOffset |> toFloat)
                                                 0
                                                 |> Mat4.mul viewMatrix
                                         , texture = texture
@@ -2475,8 +2548,8 @@ canvasView audioData model =
                                     { view =
                                         viewMatrix
                                             |> Mat4.translate3
-                                                (toFloat mouseX * Units.tileSize + offsetX)
-                                                (toFloat mouseY * Units.tileSize)
+                                                (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
+                                                (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
                                                 0
                                     , texture = texture
                                     , textureSize = textureSize
@@ -2693,7 +2766,7 @@ sendingMailFlagMesh frame =
             6
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels ( 72, 594 + frame * 6 ) ( width, 6 )
+            Tile.texturePositionPixels ( 80, 594 + frame * 6 ) ( width, 6 )
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
@@ -2804,22 +2877,22 @@ toolbarTileButton maybeHotkey highlight offset tile =
     Sprite.sprite (Coord.toTuple offset)
         toolbarButtonSize
         ( if highlight then
-            379
+            505
 
           else
-            380
-        , 153
+            506
+        , 28
         )
         ( 1, 1 )
         ++ Sprite.sprite
             (offset |> Coord.plus (Coord.xy 2 2) |> Coord.toTuple)
             (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
             ( if highlight then
-                379
+                505
 
               else
-                381
-            , 153
+                507
+            , 28
             )
             ( 1, 1 )
         ++ tileMesh offset tile
@@ -2832,7 +2905,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
                             |> Coord.toTuple
                         )
                         (Coord.plus (Coord.xy 2 -4) charSize)
-                        ( 380, 153 )
+                        ( 506, 28 )
                         ( 1, 1 )
                         ++ Sprite.text
                             2
@@ -2849,8 +2922,8 @@ toolbarTileButton maybeHotkey highlight offset tile =
 
 toolbarMesh : Dict String Tile -> Maybe Tile -> WebGL.Mesh Vertex
 toolbarMesh hotkeys currentTile =
-    Sprite.sprite ( 0, 0 ) toolbarSize ( 380, 153 ) ( 1, 1 )
-        ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 381, 153 ) ( 1, 1 )
+    Sprite.sprite ( 0, 0 ) toolbarSize ( 506, 28 ) ( 1, 1 )
+        ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
         ++ (List.indexedMap
                 (\index tile ->
                     toolbarTileButton
@@ -2912,7 +2985,7 @@ tileMesh position tile =
 
         size : Coord units
         size =
-            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.size)
+            Coord.multiply Units.tileSize (Coord.tuple data.size)
                 |> Coord.minimum toolbarButtonSize
 
         spriteSize =
@@ -2927,13 +3000,13 @@ tileMesh position tile =
 
         texturePosition : Coord units
         texturePosition =
-            Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple data.texturePosition)
+            Coord.multiply Units.tileSize (Coord.tuple data.texturePosition)
     in
     if tile == EmptyTile then
         Sprite.sprite
             (Coord.plus (Coord.xy 10 12) position |> Coord.toTuple)
             (Coord.tuple ( 30 * 2, 29 * 2 ))
-            ( 324, 223 )
+            ( 504, 42 )
             ( 30, 29 )
 
     else
@@ -2942,7 +3015,7 @@ tileMesh position tile =
                     Just topLayer ->
                         let
                             texturePosition2 =
-                                Coord.multiplyTuple ( Units.tileSize, Units.tileSize ) (Coord.tuple topLayer.texturePosition)
+                                Coord.multiply Units.tileSize (Coord.tuple topLayer.texturePosition)
                         in
                         Sprite.sprite (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
 
@@ -2982,14 +3055,14 @@ stuckMessageDelay =
 speechBubbleMesh : Array (WebGL.Mesh Vertex)
 speechBubbleMesh =
     List.range 0 (speechBubbleFrames - 1)
-        |> List.map (\frame -> speechBubbleMeshHelper frame ( 391, 154 ) ( 8, 12 ))
+        |> List.map (\frame -> speechBubbleMeshHelper frame ( 517, 29 ) ( 8, 12 ))
         |> Array.fromList
 
 
 speechBubbleRadioMesh : Array (WebGL.Mesh Vertex)
 speechBubbleRadioMesh =
     List.range 0 (speechBubbleFrames - 1)
-        |> List.map (\frame -> speechBubbleMeshHelper frame ( 399, 154 ) ( 8, 13 ))
+        |> List.map (\frame -> speechBubbleMeshHelper frame ( 525, 29 ) ( 8, 13 ))
         |> Array.fromList
 
 
@@ -3006,15 +3079,15 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
             Coord.xy 6 5
     in
     Sprite.nineSlice
-        { topLeft = Coord.xy 378 154
-        , top = Coord.xy 384 154
-        , topRight = Coord.xy 385 154
-        , left = Coord.xy 378 160
-        , center = Coord.xy 384 160
-        , right = Coord.xy 385 160
-        , bottomLeft = Coord.xy 378 161
-        , bottom = Coord.xy 384 161
-        , bottomRight = Coord.xy 385 161
+        { topLeft = Coord.xy 504 29
+        , top = Coord.xy 510 29
+        , topRight = Coord.xy 511 29
+        , left = Coord.xy 504 35
+        , center = Coord.xy 510 35
+        , right = Coord.xy 511 35
+        , bottomLeft = Coord.xy 504 36
+        , bottom = Coord.xy 510 36
+        , bottomRight = Coord.xy 511 36
         , cornerSize = Coord.xy 6 6
         , position = Coord.xy 0 0
         , size = Sprite.textSize 1 text |> Coord.plus (Coord.multiplyTuple ( 2, 2 ) padding)
