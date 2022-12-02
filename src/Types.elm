@@ -159,6 +159,7 @@ type Hover
     | TrainHouseHover { trainHousePosition : Coord WorldUnit }
     | HouseHover { housePosition : Coord WorldUnit }
     | MapHover
+    | MailEditorHover MailEditor.Hover
 
 
 type alias BackendModel =

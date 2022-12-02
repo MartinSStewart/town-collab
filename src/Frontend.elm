@@ -814,6 +814,9 @@ updateLoaded audioData msg model =
                                     MapHover ->
                                         placeTile True tile model2
 
+                                    MailEditorHover _ ->
+                                        model2
+
                             _ ->
                                 model2
                    )
@@ -1040,7 +1043,10 @@ hoverAt model mousePosition =
         containsToolbar =
             Bounds.bounds toolbarTopLeft (Coord.plus toolbarSize toolbarTopLeft) |> Bounds.contains mousePosition2
     in
-    if containsToolbar then
+    if MailEditor.isOpen model.mailEditor then
+        MailEditor.hoverAt model.mailEditor |> MailEditorHover
+
+    else if containsToolbar then
         let
             containsTileButton : Maybe Tile
             containsTileButton =
@@ -1369,6 +1375,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         model2
                 , Cmd.none
                 )
+
+            MailEditorHover _ ->
+                ( model2, Cmd.none )
 
     else
         ( model2, Cmd.none )
@@ -2010,6 +2019,9 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurr
 
                 MapHover ->
                     True
+
+                MailEditorHover _ ->
+                    False
     in
     if canDragView then
         let
@@ -2320,6 +2332,9 @@ canvasView audioData model =
                         True
 
                     MapHover ->
+                        False
+
+                    MailEditorHover _ ->
                         False
     in
     WebGL.toHtmlWith

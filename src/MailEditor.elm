@@ -1,6 +1,7 @@
 module MailEditor exposing
     ( BackendMail
     , FrontendMail
+    , Hover(..)
     , Image(..)
     , MailEditorData
     , MailStatus(..)
@@ -16,6 +17,7 @@ module MailEditor exposing
     , getMailTo
     , handleKeyDown
     , handleMouseDown
+    , hoverAt
     , init
     , initEditor
     , isOpen
@@ -63,6 +65,13 @@ type alias FrontendMail =
     , from : Id UserId
     , to : Id UserId
     }
+
+
+type Hover
+    = BackgroundHover
+    | MailHover
+    | UserIdInputHover
+    | SubmitButtonHover
 
 
 backendMailToFrontend : BackendMail -> FrontendMail
@@ -898,3 +907,8 @@ square =
         , { position = Vec2.vec2 1 1 }
         , { position = Vec2.vec2 0 1 }
         ]
+
+
+hoverAt : Model -> Hover
+hoverAt model =
+    BackgroundHover
