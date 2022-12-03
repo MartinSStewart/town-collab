@@ -17,6 +17,7 @@ module Shaders exposing
     , vertexShader
     )
 
+import Color exposing (Color)
 import Element
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
@@ -33,7 +34,7 @@ type alias SimpleVertex =
 
 
 type alias Vertex =
-    { position : Vec3, texturePosition : Vec2, opacity : Float }
+    { position : Vec3, texturePosition : Vec2, opacity : Float, primaryColor : Float, secondaryColor : Float }
 
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> WebGL.Mesh attributes
@@ -68,21 +69,35 @@ colorToVec3 color =
     Math.Vector3.vec3 red green blue
 
 
-vertexShader : Shader Vertex { u | view : Mat4, textureSize : Vec2 } { vcoord : Vec2, opacity2 : Float }
+vertexShader :
+    Shader
+        Vertex
+        { u | view : Mat4, textureSize : Vec2 }
+        { vcoord : Vec2
+        , opacity2 : Float
+        , primaryColor2 : Vec3
+        , secondaryColor2 : Vec3
+        }
 vertexShader =
     [glsl|
 attribute vec3 position;
 attribute vec2 texturePosition;
 attribute float opacity;
+attribute float primaryColor;
+attribute float secondaryColor;
 uniform mat4 view;
 uniform vec2 textureSize;
 varying vec2 vcoord;
 varying float opacity2; 
+varying vec3 primaryColor2;
+varying vec3 secondaryColor2;
 
 void main () {
     gl_Position = view * vec4(position, 1.0);
     vcoord = texturePosition / textureSize;
     opacity2 = opacity;
+    primaryColor2 = vec3(0.0, 0.0, 0.0);
+    secondaryColor2 = vec3(0.0, 0.0, 0.0);
 }|]
 
 
@@ -152,20 +167,45 @@ void main () {
 }|]
 
 
-fragmentShader : Shader {} { u | texture : Texture } { vcoord : Vec2, opacity2 : Float }
+fragmentShader :
+    Shader
+        {}
+        { u | texture : Texture }
+        { vcoord : Vec2
+        , opacity2 : Float
+        , primaryColor2 : Vec3
+        , secondaryColor2 : Vec3
+        }
 fragmentShader =
     [glsl|
 precision mediump float;
 uniform sampler2D texture;
 varying vec2 vcoord;
 varying float opacity2;
+varying vec3 primaryColor2;
+varying vec3 secondaryColor2;
+
+vec3 primaryColor = vec3(1.0, 0.0, 1.0);
+vec3 primaryColorShade = vec3(209.0 / 255.0, 64.0 / 255.0, 206.0 / 255.0);
+vec3 secondaryColor = vec3(0.0, 1.0, 1.0);
+vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 
 void main () {
     vec4 color = texture2D(texture, vcoord);
     if (color.a == 0.0) {
         discard;
     }
-    gl_FragColor = vec4(color.xyz, opacity2);
+
+    gl_FragColor =
+        color.xyz == primaryColor
+            ? vec4(primaryColor2, opacity2)
+            : color.xyz == primaryColorShade
+                ? vec4(primaryColor2 * 0.8, opacity2)
+                : color.xyz == secondaryColor
+                    ? vec4(secondaryColor2, opacity2)
+                    : color.xyz == secondaryColorShade
+                        ? vec4(secondaryColor2 * 0.8, opacity2)
+                        : vec4(color.xyz, opacity2);
 }|]
 
 
@@ -182,25 +222,45 @@ void main () {
 
 
 type alias DebrisVertex =
-    { position : Vec2, texturePosition : Vec2, initialSpeed : Vec2, startTime : Float }
+    { position : Vec2
+    , texturePosition : Vec2
+    , initialSpeed : Vec2
+    , startTime : Float
+    , primaryColor : Float
+    , secondaryColor : Float
+    }
 
 
-debrisVertexShader : Shader DebrisVertex { u | view : Mat4, time : Float, textureSize : Vec2 } { vcoord : Vec2, opacity2 : Float }
+debrisVertexShader :
+    Shader
+        DebrisVertex
+        { u | view : Mat4, time : Float, textureSize : Vec2 }
+        { vcoord : Vec2
+        , opacity2 : Float
+        , primaryColor2 : Vec3
+        , secondaryColor2 : Vec3
+        }
 debrisVertexShader =
     [glsl|
 attribute vec2 position;
 attribute vec2 initialSpeed;
 attribute vec2 texturePosition;
 attribute float startTime;
+attribute float primaryColor;
+attribute float secondaryColor;
 uniform mat4 view;
 uniform float time;
 uniform vec2 textureSize;
 varying vec2 vcoord;
 varying float opacity2;
+varying vec3 primaryColor2;
+varying vec3 secondaryColor2;
 
 void main () {
     float seconds = time - startTime;
     gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
     vcoord = texturePosition / textureSize;
     opacity2 = 1.0;
+    primaryColor2 = vec3(0.0, 0.0, 0.0);
+    secondaryColor2 = vec3(0.0, 0.0, 0.0);
 }|]

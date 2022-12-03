@@ -16,6 +16,7 @@ import Browser.Dom
 import Browser.Events exposing (Visibility(..))
 import Browser.Navigation
 import Change exposing (Change(..))
+import Color
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
@@ -36,7 +37,6 @@ import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
-import LocalModel
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
@@ -47,7 +47,6 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
-import Round
 import Set exposing (Set)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
@@ -394,6 +393,7 @@ loadedInit time loading loadingData =
             , pingStartTime = Just time
             , localTime = time
             , scrollThreshold = 0
+            , tileColors = AssocList.empty
             }
     in
     ( updateMeshes model model
@@ -709,7 +709,7 @@ updateLoaded audioData msg model =
                             | currentTile =
                                 Just
                                     { tile = nextTile
-                                    , mesh = Grid.tileMesh Coord.origin nextTile |> Sprite.toMesh
+                                    , mesh = Grid.tileMesh Coord.origin nextTile Color.black Color.black |> Sprite.toMesh
                                     }
                             , lastTileRotation =
                                 model.time
@@ -1247,7 +1247,7 @@ setCurrentTile : Tile -> FrontendLoaded -> FrontendLoaded
 setCurrentTile tile model =
     { model
         | currentTile =
-            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile |> Sprite.toMesh }
+            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile Color.black Color.black |> Sprite.toMesh }
     }
 
 
@@ -1589,8 +1589,19 @@ placeTile isDragPlacement tile model =
         userId =
             currentUserId model
 
+        primaryColor =
+            Color.rgb 0 0 0
+
+        secondaryColor =
+            Color.rgb 255 255 255
+
         change =
-            { position = cursorPosition_, change = tile, userId = userId }
+            { position = cursorPosition_
+            , change = tile
+            , userId = userId
+            , primaryColor = primaryColor
+            , secondaryColor = secondaryColor
+            }
 
         grid : Grid
         grid =
@@ -1653,6 +1664,8 @@ placeTile isDragPlacement tile model =
                     (Change.LocalGridChange
                         { position = cursorPosition_
                         , change = tile
+                        , primaryColor = primaryColor
+                        , secondaryColor = secondaryColor
                         }
                     )
                     model2
@@ -1798,6 +1811,8 @@ createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textu
                                     (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
                             , texturePosition = uv
                             , startTime = Duration.from appStartTime time |> Duration.inSeconds
+                            , primaryColor = 0
+                            , secondaryColor = 0
                             }
                         )
                         [ topLeft
@@ -1831,7 +1846,6 @@ updateMeshes oldModel newModel =
         newCells =
             localModel.grid |> Grid.allCellsDict
 
-        currentTile : FrontendLoaded -> Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ) }
         currentTile model =
             case model.currentTile of
                 Just { tile } ->
@@ -1850,6 +1864,8 @@ updateMeshes oldModel newModel =
                             |> (::) cellPosition
                             |> List.map Coord.toTuple
                             |> Set.fromList
+                    , primaryColor = Color.rgb 0 0 0
+                    , secondaryColor = Color.rgb 255 255 255
                     }
                         |> Just
 
@@ -1859,7 +1875,6 @@ updateMeshes oldModel newModel =
         oldCurrentTile =
             currentTile oldModel
 
-        newCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ) }
         newCurrentTile =
             currentTile newModel
 
@@ -1883,6 +1898,8 @@ updateMeshes oldModel newModel =
                                     { userId = currentUserId newModel
                                     , position = newCurrentTile_.position
                                     , change = newCurrentTile_.tile
+                                    , primaryColor = newCurrentTile_.primaryColor
+                                    , secondaryColor = newCurrentTile_.secondaryColor
                                     }
                                     newModel.trains
                                     localModel.grid
@@ -2578,6 +2595,8 @@ canvasView audioData model =
                                                 { position = mousePosition
                                                 , change = currentTile.tile
                                                 , userId = currentUserId model
+                                                , primaryColor = Color.rgb 0 0 0
+                                                , secondaryColor = Color.rgb 255 255 255
                                                 }
                                                 model.trains
                                                 (LocalGrid.localModel model.localModel |> .grid)
@@ -2784,10 +2803,30 @@ sendingMailFlagMesh frame =
             Tile.texturePositionPixels ( 80, 594 + frame * 6 ) ( width, 6 )
     in
     Shaders.triangleFan
-        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
-        , { position = Vec3.vec3 width 0 0, texturePosition = topRight, opacity = 1 }
-        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight, opacity = 1 }
-        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft, opacity = 1 }
+        [ { position = Vec3.vec3 0 0 0
+          , texturePosition = topLeft
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
+        , { position = Vec3.vec3 width 0 0
+          , texturePosition = topRight
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
+        , { position = Vec3.vec3 width height 0
+          , texturePosition = bottomRight
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
+        , { position = Vec3.vec3 0 height 0
+          , texturePosition = bottomLeft
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
         ]
 
 
@@ -2811,10 +2850,30 @@ receivingMailFlagMesh frame =
             Tile.texturePositionPixels ( 90, 594 + frame * 6 ) ( width, 6 )
     in
     Shaders.triangleFan
-        [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
-        , { position = Vec3.vec3 width 0 0, texturePosition = topRight, opacity = 1 }
-        , { position = Vec3.vec3 width height 0, texturePosition = bottomRight, opacity = 1 }
-        , { position = Vec3.vec3 0 height 0, texturePosition = bottomLeft, opacity = 1 }
+        [ { position = Vec3.vec3 0 0 0
+          , texturePosition = topLeft
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
+        , { position = Vec3.vec3 width 0 0
+          , texturePosition = topRight
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
+        , { position = Vec3.vec3 width height 0
+          , texturePosition = bottomRight
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
+        , { position = Vec3.vec3 0 height 0
+          , texturePosition = bottomLeft
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          }
         ]
 
 

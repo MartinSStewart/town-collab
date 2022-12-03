@@ -2,6 +2,7 @@ module LocalGrid exposing (LocalGrid, LocalGrid_, OutMsg(..), incrementUndoCurre
 
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
+import Color exposing (Color)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
@@ -87,7 +88,15 @@ incrementUndoCurrent cellPosition localPosition undoCurrent =
 
 
 type OutMsg
-    = TilesRemoved (List { tile : Tile, position : Coord WorldUnit, userId : Id UserId })
+    = TilesRemoved
+        (List
+            { tile : Tile
+            , position : Coord WorldUnit
+            , userId : Id UserId
+            , primaryColor : Color
+            , secondaryColor : Color
+            }
+        )
     | NoOutMsg
 
 

@@ -35,6 +35,7 @@ module Grid exposing
 import Array2D exposing (Array2D)
 import Basics.Extra
 import Bounds exposing (Bounds)
+import Color exposing (Color)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import GridCell exposing (Cell, CellData)
@@ -158,11 +159,11 @@ cellAndLocalPointToWorld cell local =
 
 
 type alias GridChange =
-    { position : Coord WorldUnit, change : Tile, userId : Id UserId }
+    { position : Coord WorldUnit, change : Tile, userId : Id UserId, primaryColor : Color, secondaryColor : Color }
 
 
 type alias LocalGridChange =
-    { position : Coord WorldUnit, change : Tile }
+    { position : Coord WorldUnit, change : Tile, primaryColor : Color, secondaryColor : Color }
 
 
 localChangeToChange : Id UserId -> LocalGridChange -> GridChange
@@ -170,6 +171,8 @@ localChangeToChange userId change_ =
     { position = change_.position
     , change = change_.change
     , userId = userId
+    , primaryColor = change_.primaryColor
+    , secondaryColor = change_.secondaryColor
     }
 
 
@@ -306,12 +309,28 @@ addChange :
     -> Grid
     ->
         { grid : Grid
-        , removed : List { tile : Tile, position : Coord WorldUnit, userId : Id UserId }
+        , removed :
+            List
+                { tile : Tile
+                , position : Coord WorldUnit
+                , userId : Id UserId
+                , primaryColor : Color
+                , secondaryColor : Color
+                }
         }
 addChange change grid =
     let
         ( cellPosition, localPosition ) =
             worldToCellAndLocalCoord change.position
+
+        value : GridCell.Value
+        value =
+            { userId = change.userId
+            , position = localPosition
+            , value = change.change
+            , primaryColor = change.primaryColor
+            , secondaryColor = change.secondaryColor
+            }
 
         neighborCells_ : List ( Coord CellUnit, { cell : Cell, removed : List GridCell.Value } )
         neighborCells_ =
@@ -325,7 +344,7 @@ addChange change grid =
                             Nothing ->
                                 GridCell.empty newCellPos
                         )
-                            |> GridCell.addValue change.userId newLocalPos change.change
+                            |> GridCell.addValue { value | position = newLocalPos }
                             |> Tuple.pair newCellPos
                     )
     in
@@ -336,7 +355,7 @@ addChange change grid =
         Nothing ->
             GridCell.empty cellPosition
     )
-        |> GridCell.addValue change.userId localPosition change.change
+        |> GridCell.addValue value
         |> (\cell_ ->
                 { grid =
                     List.foldl
@@ -355,6 +374,8 @@ addChange change grid =
                                         { tile = removed.value
                                         , position = cellAndLocalCoordToWorld ( neighborPos, removed.position )
                                         , userId = removed.userId
+                                        , primaryColor = removed.primaryColor
+                                        , secondaryColor = removed.secondaryColor
                                         }
                                     )
                                     neighbor.removed
@@ -399,23 +420,32 @@ foregroundMesh :
     Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
     -> Id UserId
-    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    -> List GridCell.Value
     -> WebGL.Mesh Vertex
 foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
     let
-        list : List { position : Coord WorldUnit, userId : Id UserId, value : Tile }
+        list :
+            List
+                { position : Coord WorldUnit
+                , userId : Id UserId
+                , value : Tile
+                , primaryColor : Color
+                , secondaryColor : Color
+                }
         list =
             List.map
-                (\{ userId, position, value } ->
+                (\{ userId, position, value, primaryColor, secondaryColor } ->
                     { position = cellAndLocalCoordToWorld ( cellPosition, position )
                     , userId = userId
                     , value = value
+                    , primaryColor = primaryColor
+                    , secondaryColor = secondaryColor
                     }
                 )
                 tiles
     in
     List.map
-        (\{ position, userId, value } ->
+        (\{ position, userId, value, primaryColor, secondaryColor } ->
             let
                 data : TileData
                 data =
@@ -439,14 +469,21 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
                         Nothing ->
                             1
             in
-            tileMeshHelper opacity False position data.texturePosition data.size
+            tileMeshHelper opacity primaryColor secondaryColor False position data.texturePosition data.size
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             if value == PostOffice && userId /= currentUserId then
-                                tileMeshHelper opacity True position ( 4, 35 ) data.size
+                                tileMeshHelper opacity primaryColor secondaryColor True position ( 4, 35 ) data.size
 
                             else
-                                tileMeshHelper opacity True position topLayer.texturePosition data.size
+                                tileMeshHelper
+                                    opacity
+                                    primaryColor
+                                    secondaryColor
+                                    True
+                                    position
+                                    topLayer.texturePosition
+                                    data.size
 
                         Nothing ->
                             []
@@ -591,8 +628,8 @@ backgroundMesh cellPosition =
         |> Sprite.toMesh
 
 
-tileMesh : Coord WorldUnit -> Tile -> List Vertex
-tileMesh position tile =
+tileMesh : Coord WorldUnit -> Tile -> Color -> Color -> List Vertex
+tileMesh position tile primaryColor secondaryColor =
     let
         data =
             Tile.getData tile
@@ -601,10 +638,10 @@ tileMesh position tile =
         Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 324, 223 ) ( 30, 29 )
 
     else
-        tileMeshHelper 1 False position data.texturePosition data.size
+        tileMeshHelper 1 primaryColor secondaryColor False position data.texturePosition data.size
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
-                        tileMeshHelper 1 True position topLayer.texturePosition data.size
+                        tileMeshHelper 1 primaryColor secondaryColor True position topLayer.texturePosition data.size
 
                     Nothing ->
                         []
@@ -613,12 +650,14 @@ tileMesh position tile =
 
 tileMeshHelper :
     Float
+    -> Color
+    -> Color
     -> Bool
     -> Coord WorldUnit
     -> ( Int, Int )
     -> ( Int, Int )
     -> List Vertex
-tileMeshHelper opacity isTopLayer position texturePosition size =
+tileMeshHelper opacity primaryColor secondaryColor isTopLayer position texturePosition size =
     let
         { topLeft, topRight, bottomLeft, bottomRight } =
             Tile.texturePosition_ texturePosition size
@@ -645,6 +684,8 @@ tileMeshHelper opacity isTopLayer position texturePosition size =
                     (tileZ isTopLayer (toFloat y) height)
             , texturePosition = uv
             , opacity = opacity
+            , primaryColor = Color.toInt primaryColor |> toFloat
+            , secondaryColor = Color.toInt secondaryColor |> toFloat
             }
         )
         [ topLeft

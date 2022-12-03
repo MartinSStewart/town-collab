@@ -26,6 +26,7 @@ import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Change exposing (Change, ServerChange)
+import Color exposing (Color)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
@@ -130,6 +131,7 @@ type alias FrontendLoaded =
     , pingStartTime : Maybe Time.Posix
     , localTime : Time.Posix
     , scrollThreshold : Float
+    , tileColors : AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
     }
 
 

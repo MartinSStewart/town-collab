@@ -15,6 +15,7 @@ module GridCell exposing
     )
 
 import Bounds exposing (Bounds)
+import Color exposing (Color)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Id exposing (Id, UserId)
@@ -45,7 +46,7 @@ type Cell
 
 
 type alias Value =
-    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, primaryColor : Color, secondaryColor : Color }
 
 
 getPostOffices : Cell -> List { position : Coord CellLocalUnit, userId : Id UserId }
@@ -65,14 +66,11 @@ getPostOffices (Cell cell) =
         []
 
 
-addValue : Id UserId -> Coord CellLocalUnit -> Tile -> Cell -> { cell : Cell, removed : List Value }
-addValue userId position line (Cell cell) =
+addValue : Value -> Cell -> { cell : Cell, removed : List Value }
+addValue value (Cell cell) =
     let
         userUndoPoint =
-            Dict.get (Id.toInt userId) cell.undoPoint |> Maybe.withDefault 0
-
-        value =
-            { userId = userId, position = position, value = line }
+            Dict.get (Id.toInt value.userId) cell.undoPoint |> Maybe.withDefault 0
 
         { remaining, removed } =
             stepCacheHelperWithRemoved value cell.cache
@@ -82,7 +80,7 @@ addValue userId position line (Cell cell) =
             { history =
                 List.foldr
                     (\change ( newHistory, counter ) ->
-                        if change.userId == userId then
+                        if change.userId == value.userId then
                             if counter > 0 then
                                 ( change :: newHistory, counter - 1 )
 
@@ -98,7 +96,7 @@ addValue userId position line (Cell cell) =
                     |> (\list -> value :: list)
             , undoPoint =
                 Dict.insert
-                    (Id.toInt userId)
+                    (Id.toInt value.userId)
                     (userUndoPoint + 1)
                     cell.undoPoint
             , cache = remaining
@@ -224,7 +222,7 @@ changeCount (Cell { history }) =
     List.length history
 
 
-flatten : Cell -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+flatten : Cell -> List Value
 flatten (Cell cell) =
     cell.cache
 
@@ -261,7 +259,13 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                         |> Tuple.first
                         |> List.foldl
                             (\treePosition cell2 ->
-                                { userId = Id.fromInt -1, position = treePosition, value = PineTree } :: cell2
+                                { userId = Id.fromInt -1
+                                , position = treePosition
+                                , value = PineTree
+                                , primaryColor = Color.rgb 0 0 0
+                                , secondaryColor = Color.rgb 1 1 1
+                                }
+                                    :: cell2
                             )
                             cell
 

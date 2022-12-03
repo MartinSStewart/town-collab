@@ -630,7 +630,17 @@ findNextTile trainId time position state speed_ direction list =
         ( neighborCellPos, _ ) :: rest ->
             case Grid.getCell neighborCellPos state.grid of
                 Just cell ->
-                    case findNextTileHelper trainId time neighborCellPos position speed_ direction state (GridCell.flatten cell) of
+                    case
+                        findNextTileHelper
+                            trainId
+                            time
+                            neighborCellPos
+                            position
+                            speed_
+                            direction
+                            state
+                            (GridCell.flatten cell)
+                    of
                         Just newTrain ->
                             Just newTrain
 
@@ -652,7 +662,7 @@ findNextTileHelper :
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
-    -> List { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    -> List GridCell.Value
     -> Maybe TrainData
 findNextTileHelper trainId time neighborCellPos position speed_ direction state tiles =
     case tiles of
@@ -698,7 +708,7 @@ findNextTileHelper trainId time neighborCellPos position speed_ direction state 
 checkPath :
     Id TrainId
     -> Time.Posix
-    -> { userId : Id UserId, position : Coord CellLocalUnit, value : Tile }
+    -> GridCell.Value
     -> AssocList.Dict (Id MailId) { a | status : MailStatus, from : Id UserId, to : Id UserId }
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
@@ -1111,18 +1121,26 @@ trainEngineMesh teleportAmount frame =
         [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 0 y
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 w y
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 w y2
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 0 y2
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         ]
 
@@ -1155,18 +1173,26 @@ trainCoachMesh teleportAmount frame =
         [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 w y
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = Vec2.vec2 (w * 2) y
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 (w * 2) y2
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = Vec2.vec2 w y2
           , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
           }
         ]
 

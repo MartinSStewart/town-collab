@@ -11,6 +11,7 @@ module Sprite exposing
     , toMesh
     )
 
+import Color
 import Coord exposing (Coord)
 import List.Extra as List
 import Math.Vector3 as Vec3
@@ -104,10 +105,30 @@ spriteWithZ ( x, y ) z ( Quantity width, Quantity height ) texturePosition textu
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels texturePosition textureSize
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z, texturePosition = topLeft, opacity = 1 }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z, texturePosition = topRight, opacity = 1 }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z, texturePosition = bottomRight, opacity = 1 }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z, texturePosition = bottomLeft, opacity = 1 }
+    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
+      , texturePosition = topLeft
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
+      , texturePosition = topRight
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
+      , texturePosition = bottomRight
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
+      , texturePosition = bottomLeft
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
     ]
 
 

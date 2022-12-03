@@ -514,10 +514,30 @@ mailMesh =
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels ( 234, 0 ) ( mailWidth, mailHeight )
     in
-    [ { position = Vec3.vec3 0 0 0, texturePosition = topLeft, opacity = 1 }
-    , { position = Vec3.vec3 mailWidth 0 0, texturePosition = topRight, opacity = 1 }
-    , { position = Vec3.vec3 mailWidth mailHeight 0, texturePosition = bottomRight, opacity = 1 }
-    , { position = Vec3.vec3 0 mailHeight 0, texturePosition = bottomLeft, opacity = 1 }
+    [ { position = Vec3.vec3 0 0 0
+      , texturePosition = topLeft
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 mailWidth 0 0
+      , texturePosition = topRight
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 mailWidth mailHeight 0
+      , texturePosition = bottomRight
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 0 mailHeight 0
+      , texturePosition = bottomLeft
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
     ]
 
 
@@ -892,10 +912,30 @@ imageMesh { position, image } =
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels imageData.texturePosition ( width, height )
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0, texturePosition = topLeft, opacity = 1 }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0, texturePosition = topRight, opacity = 1 }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) 0, texturePosition = bottomRight, opacity = 1 }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) 0, texturePosition = bottomLeft, opacity = 1 }
+    [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0
+      , texturePosition = topLeft
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0
+      , texturePosition = topRight
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) 0
+      , texturePosition = bottomRight
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
+    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) 0
+      , texturePosition = bottomLeft
+      , opacity = 1
+      , primaryColor = 0
+      , secondaryColor = 0
+      }
     ]
 
 
