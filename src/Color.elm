@@ -1,6 +1,7 @@
-module Color exposing (Color, black, blue, green, red, rgb, toInt)
+module Color exposing (Color, black, blue, green, red, rgb, toInt, toVec3, white)
 
 import Bitwise
+import Math.Vector3 as Vec3 exposing (Vec3)
 
 
 type Color
@@ -32,9 +33,22 @@ blue (Color color) =
 
 black : Color
 black =
-    Color 0
+    rgb 0 0 0
+
+
+white : Color
+white =
+    rgb 255 255 255
 
 
 toInt : Color -> Int
 toInt (Color color) =
     color
+
+
+toVec3 : Color -> Vec3
+toVec3 color =
+    Vec3.vec3
+        (red color |> toFloat |> (*) (1 / 255))
+        (green color |> toFloat |> (*) (1 / 255))
+        (blue color |> toFloat |> (*) (1 / 255))

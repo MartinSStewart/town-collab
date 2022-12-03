@@ -30,6 +30,7 @@ module MailEditor exposing
 
 import AssocList
 import Bounds
+import Color
 import Coord exposing (Coord)
 import Duration exposing (Duration)
 import Frame2d
@@ -503,7 +504,7 @@ updateMailMesh model =
                 (List.range 0 (List.length model.current.content) |> List.concatMap Sprite.getIndices)
         , textInputMesh =
             Shaders.indexedTriangles
-                (Sprite.text 1 model.current.to (Coord.xy 15 7))
+                (Sprite.text Color.black 1 model.current.to (Coord.xy 15 7))
                 (List.range 0 (String.length model.current.to) |> List.concatMap Sprite.getIndices)
     }
 
@@ -517,26 +518,26 @@ mailMesh =
     [ { position = Vec3.vec3 0 0 0
       , texturePosition = topLeft
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     , { position = Vec3.vec3 mailWidth 0 0
       , texturePosition = topRight
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     , { position = Vec3.vec3 mailWidth mailHeight 0
       , texturePosition = bottomRight
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     , { position = Vec3.vec3 0 mailHeight 0
       , texturePosition = bottomLeft
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     ]
 
@@ -844,7 +845,7 @@ submitButtonMesh =
         vertices =
             Sprite.sprite ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
-                ++ Sprite.text 1 "SUBMIT" (Coord.xy 12 7)
+                ++ Sprite.text Color.black 1 "SUBMIT" (Coord.xy 12 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -855,7 +856,7 @@ submittingButtonMesh =
         vertices =
             Sprite.sprite ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ Sprite.text 1 "SUBMITTING" (Coord.xy 2 7)
+                ++ Sprite.text Color.black 1 "SUBMITTING" (Coord.xy 2 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -866,7 +867,7 @@ submitButtonHoverMesh =
         vertices =
             Sprite.sprite ( 0, 0 ) submitButtonSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.sprite ( 1, 1 ) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ Sprite.text 1 "SUBMIT" (Coord.xy 12 7)
+                ++ Sprite.text Color.black 1 "SUBMIT" (Coord.xy 12 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -885,7 +886,7 @@ textInputMesh =
         vertices =
             Sprite.sprite ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.sprite ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
-                ++ Sprite.text 1 "TO:" (Coord.xy 3 7)
+                ++ Sprite.text Color.black 1 "TO:" (Coord.xy 3 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -896,7 +897,7 @@ textInputHoverMesh =
         vertices =
             Sprite.sprite ( 0, 0 ) textInputSize ( 380, 153 ) ( 1, 1 )
                 ++ Sprite.sprite ( 1, 1 ) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
-                ++ Sprite.text 1 "TO:" (Coord.xy 3 7)
+                ++ Sprite.text Color.black 1 "TO:" (Coord.xy 3 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
@@ -924,26 +925,26 @@ imageMesh { position, image } =
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0
       , texturePosition = topLeft
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0
       , texturePosition = topRight
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) 0
       , texturePosition = bottomRight
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) 0
       , texturePosition = bottomLeft
       , opacity = 1
-      , primaryColor = 0
-      , secondaryColor = 0
+      , primaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = Vec3.vec3 0 0 0
       }
     ]
 
@@ -953,26 +954,26 @@ square =
     Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 0 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           , texturePosition = Vec2.vec2 512 28
           }
         , { position = Vec3.vec3 1 0 0
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 0 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           , texturePosition = Vec2.vec2 512 28
           }
         , { position = Vec3.vec3 1 1 0
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 0 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           , texturePosition = Vec2.vec2 512 28
           }
         , { position = Vec3.vec3 0 1 0
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 0 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           , texturePosition = Vec2.vec2 512 28
           }
         ]

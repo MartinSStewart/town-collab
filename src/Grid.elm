@@ -451,6 +451,9 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
                 data =
                     Tile.getData value
 
+                colors =
+                    { primaryColor = primaryColor, secondaryColor = secondaryColor }
+
                 opacity =
                     case maybeCurrentTile of
                         Just currentTile ->
@@ -469,17 +472,16 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
                         Nothing ->
                             1
             in
-            tileMeshHelper opacity primaryColor secondaryColor False position data.texturePosition data.size
+            tileMeshHelper opacity colors False position data.texturePosition data.size
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             if value == PostOffice && userId /= currentUserId then
-                                tileMeshHelper opacity primaryColor secondaryColor True position ( 4, 35 ) data.size
+                                tileMeshHelper opacity colors True position ( 4, 35 ) data.size
 
                             else
                                 tileMeshHelper
                                     opacity
-                                    primaryColor
-                                    secondaryColor
+                                    colors
                                     True
                                     position
                                     topLayer.texturePosition
@@ -523,6 +525,8 @@ backgroundMesh cellPosition =
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.spriteWithZ
+                                        Color.black
+                                        Color.black
                                         ( (x2 * Terrain.terrainDivisionsPerCell + x) * Coord.xRaw Units.tileSize
                                         , (y2 * Terrain.terrainDivisionsPerCell + y) * Coord.yRaw Units.tileSize
                                         )
@@ -628,20 +632,20 @@ backgroundMesh cellPosition =
         |> Sprite.toMesh
 
 
-tileMesh : Coord WorldUnit -> Tile -> Color -> Color -> List Vertex
-tileMesh position tile primaryColor secondaryColor =
+tileMesh : Coord WorldUnit -> Tile -> { primaryColor : Color, secondaryColor : Color } -> List Vertex
+tileMesh position tile colors =
     let
         data =
             Tile.getData tile
     in
     if tile == EmptyTile then
-        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 324, 223 ) ( 30, 29 )
+        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 504, 42 ) ( 30, 29 )
 
     else
-        tileMeshHelper 1 primaryColor secondaryColor False position data.texturePosition data.size
+        tileMeshHelper 1 colors False position data.texturePosition data.size
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
-                        tileMeshHelper 1 primaryColor secondaryColor True position topLayer.texturePosition data.size
+                        tileMeshHelper 1 colors True position topLayer.texturePosition data.size
 
                     Nothing ->
                         []
@@ -650,14 +654,13 @@ tileMesh position tile primaryColor secondaryColor =
 
 tileMeshHelper :
     Float
-    -> Color
-    -> Color
+    -> { primaryColor : Color, secondaryColor : Color }
     -> Bool
     -> Coord WorldUnit
     -> ( Int, Int )
     -> ( Int, Int )
     -> List Vertex
-tileMeshHelper opacity primaryColor secondaryColor isTopLayer position texturePosition size =
+tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer position texturePosition size =
     let
         { topLeft, topRight, bottomLeft, bottomRight } =
             Tile.texturePosition_ texturePosition size
@@ -684,8 +687,8 @@ tileMeshHelper opacity primaryColor secondaryColor isTopLayer position texturePo
                     (tileZ isTopLayer (toFloat y) height)
             , texturePosition = uv
             , opacity = opacity
-            , primaryColor = Color.toInt primaryColor |> toFloat
-            , secondaryColor = Color.toInt secondaryColor |> toFloat
+            , primaryColor = Color.toVec3 primaryColor
+            , secondaryColor = Color.toVec3 secondaryColor
             }
         )
         [ topLeft

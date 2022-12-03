@@ -234,6 +234,10 @@ empty cellPosition =
 
 addTrees : ( Quantity Int CellUnit, Quantity Int CellUnit ) -> List Value
 addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
+    let
+        { primaryColor, secondaryColor } =
+            Tile.defaultToPrimaryAndSecondary Tile.defaultTreeColor
+    in
     List.range 0 (Terrain.terrainDivisionsPerCell - 1)
         |> List.concatMap
             (\x ->
@@ -262,8 +266,8 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                                 { userId = Id.fromInt -1
                                 , position = treePosition
                                 , value = PineTree
-                                , primaryColor = Color.rgb 0 0 0
-                                , secondaryColor = Color.rgb 1 1 1
+                                , primaryColor = primaryColor
+                                , secondaryColor = secondaryColor
                                 }
                                     :: cell2
                             )

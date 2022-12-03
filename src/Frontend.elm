@@ -346,6 +346,9 @@ loadedInit time loading loadingData =
         currentTile =
             Nothing
 
+        defaultTileColors =
+            AssocList.empty
+
         model : FrontendLoaded
         model =
             { key = loading.key
@@ -385,7 +388,7 @@ loadedInit time loading loadingData =
             , userIdMesh = createInfoMesh Nothing loadingData.user
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
-            , toolbarMesh = toolbarMesh defaultTileHotkeys currentTile
+            , toolbarMesh = toolbarMesh defaultTileColors defaultTileHotkeys currentTile
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
@@ -393,7 +396,7 @@ loadedInit time loading loadingData =
             , pingStartTime = Just time
             , localTime = time
             , scrollThreshold = 0
-            , tileColors = AssocList.empty
+            , tileColors = defaultTileColors
             }
     in
     ( updateMeshes model model
@@ -707,10 +710,10 @@ updateLoaded audioData msg model =
                     else
                         { model
                             | currentTile =
-                                Just
-                                    { tile = nextTile
-                                    , mesh = Grid.tileMesh Coord.origin nextTile Color.black Color.black |> Sprite.toMesh
-                                    }
+                                { tile = nextTile
+                                , mesh = Grid.tileMesh Coord.origin nextTile (getTileColor tile model) |> Sprite.toMesh
+                                }
+                                    |> Just
                             , lastTileRotation =
                                 model.time
                                     :: List.filter
@@ -786,7 +789,7 @@ updateLoaded audioData msg model =
                         model.toolbarMesh
 
                     else
-                        toolbarMesh model.tileHotkeys tileHover_
+                        toolbarMesh model.tileColors model.tileHotkeys tileHover_
                 , previousTileHover = tileHover_
               }
                 |> (\model2 ->
@@ -1243,11 +1246,24 @@ keyMsgCanvasUpdate key model =
             ( model, Cmd.none )
 
 
+getTileColor :
+    Tile
+    -> { a | tileColors : AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color } }
+    -> { primaryColor : Color, secondaryColor : Color }
+getTileColor tile model =
+    case AssocList.get tile model.tileColors of
+        Just a ->
+            a
+
+        Nothing ->
+            Tile.getData tile |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
+
+
 setCurrentTile : Tile -> FrontendLoaded -> FrontendLoaded
 setCurrentTile tile model =
     { model
         | currentTile =
-            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile Color.black Color.black |> Sprite.toMesh }
+            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile (getTileColor tile model) |> Sprite.toMesh }
     }
 
 
@@ -1567,19 +1583,6 @@ cursorPosition tileData model =
         |> Coord.minus (Coord.tuple tileData.size |> Coord.divide (Coord.tuple ( 2, 2 )))
 
 
-defaultToPrimaryAndSecondary : DefaultColor -> { primaryColor : Color, secondaryColor : Color }
-defaultToPrimaryAndSecondary defaultColors =
-    case defaultColors of
-        ZeroDefaultColors ->
-            { primaryColor = Color.black, secondaryColor = Color.black }
-
-        OneDefaultColor primary ->
-            { primaryColor = primary, secondaryColor = Color.black }
-
-        TwoDefaultColors primary secondary ->
-            { primaryColor = primary, secondaryColor = secondary }
-
-
 placeTile : Bool -> Tile -> FrontendLoaded -> FrontendLoaded
 placeTile isDragPlacement tile model =
     let
@@ -1603,7 +1606,7 @@ placeTile isDragPlacement tile model =
             currentUserId model
 
         { primaryColor, secondaryColor } =
-            defaultToPrimaryAndSecondary tileData.defaultColors
+            Tile.defaultToPrimaryAndSecondary tileData.defaultColors
 
         change =
             { position = cursorPosition_
@@ -1772,7 +1775,7 @@ createDebrisMesh appStartTime removedTiles =
                     Tile.getData tile
 
                 { primaryColor, secondaryColor } =
-                    defaultToPrimaryAndSecondary data.defaultColors
+                    Tile.defaultToPrimaryAndSecondary data.defaultColors
             in
             createDebrisMeshHelper position data.texturePosition data.size primaryColor secondaryColor appStartTime time
                 ++ (case data.texturePositionTopLayer of
@@ -1833,8 +1836,8 @@ createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textu
                                     (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
                             , texturePosition = uv
                             , startTime = Duration.from appStartTime time |> Duration.inSeconds
-                            , primaryColor = Color.toInt primaryColor |> toFloat
-                            , secondaryColor = Color.toInt secondaryColor |> toFloat
+                            , primaryColor = Color.toVec3 primaryColor
+                            , secondaryColor = Color.toVec3 secondaryColor
                             }
                         )
                         [ topLeft
@@ -2835,26 +2838,26 @@ sendingMailFlagMesh frame =
         [ { position = Vec3.vec3 0 0 0
           , texturePosition = topLeft
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 1 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 width 0 0
           , texturePosition = topRight
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 1 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 width height 0
           , texturePosition = bottomRight
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 1 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 0 height 0
           , texturePosition = bottomLeft
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Vec3.vec3 1 0 0
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         ]
 
@@ -2882,26 +2885,26 @@ receivingMailFlagMesh frame =
         [ { position = Vec3.vec3 0 0 0
           , texturePosition = topLeft
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 width 0 0
           , texturePosition = topRight
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 width height 0
           , texturePosition = bottomRight
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 0 height 0
           , texturePosition = bottomLeft
           , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
+          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
           }
         ]
 
@@ -2914,6 +2917,7 @@ createInfoMesh maybePingData userId =
 
         vertices =
             Sprite.text
+                Color.black
                 2
                 ("User ID: "
                     ++ String.fromInt (Id.toInt userId)
@@ -2971,11 +2975,19 @@ toolbarButtonSize =
     Coord.xy 80 80
 
 
-toolbarTileButton : Maybe String -> Bool -> Coord ToolbarUnit -> Tile -> List Vertex
-toolbarTileButton maybeHotkey highlight offset tile =
+toolbarTileButton : AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color } -> Maybe String -> Bool -> Coord ToolbarUnit -> Tile -> List Vertex
+toolbarTileButton colors maybeHotkey highlight offset tile =
     let
         charSize =
             Sprite.charSize |> Coord.multiplyTuple ( 2, 2 )
+
+        primaryAndSecondaryColors =
+            case AssocList.get tile colors of
+                Just a ->
+                    a
+
+                Nothing ->
+                    Tile.getData tile |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
     in
     Sprite.sprite (Coord.toTuple offset)
         toolbarButtonSize
@@ -2998,7 +3010,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
             , 28
             )
             ( 1, 1 )
-        ++ tileMesh offset tile
+        ++ tileMesh primaryAndSecondaryColors offset tile
         ++ (case maybeHotkey of
                 Just hotkey ->
                     Sprite.sprite
@@ -3011,6 +3023,7 @@ toolbarTileButton maybeHotkey highlight offset tile =
                         ( 506, 28 )
                         ( 1, 1 )
                         ++ Sprite.text
+                            Color.white
                             2
                             hotkey
                             (Coord.plus
@@ -3023,13 +3036,18 @@ toolbarTileButton maybeHotkey highlight offset tile =
            )
 
 
-toolbarMesh : Dict String Tile -> Maybe Tile -> WebGL.Mesh Vertex
-toolbarMesh hotkeys currentTile =
+toolbarMesh :
+    AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
+    -> Dict String Tile
+    -> Maybe Tile
+    -> WebGL.Mesh Vertex
+toolbarMesh colors hotkeys currentTile =
     Sprite.sprite ( 0, 0 ) toolbarSize ( 506, 28 ) ( 1, 1 )
         ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
         ++ (List.indexedMap
                 (\index tile ->
                     toolbarTileButton
+                        colors
                         (Dict.toList hotkeys |> List.find (Tuple.second >> (==) tile) |> Maybe.map Tuple.first)
                         (Just tile == currentTile)
                         (toolbarTileButtonPosition index)
@@ -3079,8 +3097,8 @@ toolbarToPixel devicePixelRatio windowSize coord =
     toolbarPosition devicePixelRatio windowSize |> Coord.changeUnit |> Coord.plus coord |> Coord.changeUnit
 
 
-tileMesh : Coord unit -> Tile -> List Vertex
-tileMesh position tile =
+tileMesh : { primaryColor : Color, secondaryColor : Color } -> Coord unit -> Tile -> List Vertex
+tileMesh colors position tile =
     let
         data : TileData
         data =
@@ -3113,14 +3131,24 @@ tileMesh position tile =
             ( 30, 29 )
 
     else
-        Sprite.sprite (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition) (Coord.toTuple size)
+        Sprite.spriteWithTwoColors
+            colors
+            (Coord.toTuple position2)
+            spriteSize
+            (Coord.toTuple texturePosition)
+            (Coord.toTuple size)
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
                         let
                             texturePosition2 =
                                 Coord.multiply Units.tileSize (Coord.tuple topLayer.texturePosition)
                         in
-                        Sprite.sprite (Coord.toTuple position2) spriteSize (Coord.toTuple texturePosition2) (Coord.toTuple size)
+                        Sprite.spriteWithTwoColors
+                            colors
+                            (Coord.toTuple position2)
+                            spriteSize
+                            (Coord.toTuple texturePosition2)
+                            (Coord.toTuple size)
 
                     Nothing ->
                         []
@@ -3173,6 +3201,7 @@ speechBubbleFrames =
     3
 
 
+speechBubbleMeshHelper : Int -> ( Int, Int ) -> ( Int, Int ) -> WebGL.Mesh Vertex
 speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
     let
         text =
@@ -3180,6 +3209,11 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
 
         padding =
             Coord.xy 6 5
+
+        colors =
+            { primaryColor = Color.white
+            , secondaryColor = Color.black
+            }
     in
     Sprite.nineSlice
         { topLeft = Coord.xy 504 29
@@ -3195,6 +3229,7 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         , position = Coord.xy 0 0
         , size = Sprite.textSize 1 text |> Coord.plus (Coord.multiplyTuple ( 2, 2 ) padding)
         }
+        colors
         ++ Sprite.shiverText frame 1 "Help!" padding
-        ++ Sprite.sprite ( 7, 27 ) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
+        ++ Sprite.spriteWithTwoColors colors ( 7, 27 ) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
         |> Sprite.toMesh

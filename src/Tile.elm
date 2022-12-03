@@ -8,6 +8,9 @@ module Tile exposing
     , Tile(..)
     , TileData
     , allTiles
+    , defaultPostOfficeColor
+    , defaultToPrimaryAndSecondary
+    , defaultTreeColor
     , getData
     , hasCollision
     , hasCollisionWithCoord
@@ -482,6 +485,19 @@ type DefaultColor
     | TwoDefaultColors Color Color
 
 
+defaultToPrimaryAndSecondary : DefaultColor -> { primaryColor : Color, secondaryColor : Color }
+defaultToPrimaryAndSecondary defaultColors =
+    case defaultColors of
+        ZeroDefaultColors ->
+            { primaryColor = Color.black, secondaryColor = Color.black }
+
+        OneDefaultColor primary ->
+            { primaryColor = primary, secondaryColor = Color.black }
+
+        TwoDefaultColors primary secondary ->
+            { primaryColor = primary, secondaryColor = secondary }
+
+
 type RailPathType
     = NoRailPath
     | SingleRailPath RailPath
@@ -621,12 +637,17 @@ defaultHouseColors =
 
 defaultSidewalkColor : DefaultColor
 defaultSidewalkColor =
-    TwoDefaultColors (Color.rgb 193 182 162) (Color.rgb 136 127 107)
+    TwoDefaultColors (Color.rgb 193 182 162) (Color.rgb 170 160 140)
 
 
 defaultTreeColor : DefaultColor
 defaultTreeColor =
     TwoDefaultColors (Color.rgb 24 150 65) (Color.rgb 141 96 65)
+
+
+defaultPostOfficeColor : DefaultColor
+defaultPostOfficeColor =
+    OneDefaultColor (Color.rgb 209 209 209)
 
 
 getData : Tile -> TileData
@@ -1416,7 +1437,7 @@ getData tile =
                 SingleRailPath
                     (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
             , nextClockwise = PostOffice
-            , defaultColors = ZeroDefaultColors
+            , defaultColors = defaultPostOfficeColor
             }
 
         MowedGrass1 ->
