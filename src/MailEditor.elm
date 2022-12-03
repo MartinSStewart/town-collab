@@ -42,7 +42,7 @@ import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
-import Shaders exposing (SimpleVertex, Vertex)
+import Shaders exposing (Vertex)
 import Sprite
 import Tile
 import Time
@@ -693,14 +693,19 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
 
                 mailScale =
                     (1 - scaleStart) * t * t + scaleStart
+
+                textureSize =
+                    WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
             in
             WebGL.entityWith
                 [ Shaders.blend ]
-                Shaders.colorVertexShader
-                Shaders.colorFragmentShader
+                Shaders.vertexShader
+                Shaders.fragmentShader
                 square
                 { color = Vec4.vec4 0.2 0.2 0.2 (t * t * 0.75)
                 , view = Mat4.makeTranslate3 -1 -1 0 |> Mat4.scale3 2 2 1
+                , texture = texture
+                , textureSize = textureSize
                 }
                 :: WebGL.entityWith
                     [ Shaders.blend ]
@@ -708,7 +713,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                     Shaders.fragmentShader
                     model.mesh
                     { texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , textureSize = textureSize
                     , view =
                         Mat4.makeScale3
                             (zoomFactor * 2 / toFloat windowWidth)
@@ -719,6 +724,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                                 (mailY |> round |> toFloat)
                                 0
                             |> Mat4.scale3 mailScale mailScale 0
+                    , color = Vec4.vec4 1 1 1 1
                     }
                 :: WebGL.entityWith
                     [ Shaders.blend ]
@@ -741,6 +747,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                             (zoomFactor * -2 / toFloat windowHeight)
                             1
                             |> Coord.translateMat4 textInputPosition
+                    , color = Vec4.vec4 1 1 1 1
                     }
                 :: WebGL.entityWith
                     [ Shaders.blend ]
@@ -748,13 +755,14 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                     Shaders.fragmentShader
                     model.textInputMesh
                     { texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , textureSize = textureSize
                     , view =
                         Mat4.makeScale3
                             (zoomFactor * 2 / toFloat windowWidth)
                             (zoomFactor * -2 / toFloat windowHeight)
                             1
                             |> Coord.translateMat4 textInputPosition
+                    , color = Vec4.vec4 1 1 1 1
                     }
                 :: (case validateUserId model.current.to of
                         Just _ ->
@@ -772,45 +780,46 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                                     submitButtonMesh
                                 )
                                 { texture = texture
-                                , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                                , textureSize = textureSize
                                 , view =
                                     Mat4.makeScale3
                                         (zoomFactor * 2 / toFloat windowWidth)
                                         (zoomFactor * -2 / toFloat windowHeight)
                                         1
                                         |> Coord.translateMat4 submitButtonPosition
+                                , color = Vec4.vec4 1 1 1 1
                                 }
                             ]
 
                         Nothing ->
                             []
                    )
-                ++ (if showHoverImage then
-                        [ WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.simpleVertexShader
-                            Shaders.simpleFragmentShader
-                            square
-                            { texture = texture
-                            , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-                            , texturePosition = Coord.tuple imageData.texturePosition |> Coord.toVec2
-                            , textureScale = Coord.tuple imageData.textureSize |> Coord.toVec2
-                            , view =
-                                Mat4.makeScale3
-                                    (zoomFactor * 2 / toFloat windowWidth)
-                                    (zoomFactor * -2 / toFloat windowHeight)
-                                    1
-                                    |> Mat4.translate3
-                                        (toFloat tileX |> round |> toFloat)
-                                        (toFloat tileY |> round |> toFloat)
-                                        0
-                            }
-                        ]
 
-                    else
-                        []
-                   )
-
+        --++ (if showHoverImage then
+        --        [ WebGL.entityWith
+        --            [ Shaders.blend ]
+        --            Shaders.vertexShader
+        --            Shaders.fragmentShader
+        --            square
+        --            { texture = texture
+        --            , textureSize = textureSize
+        --            , texturePosition = Coord.tuple imageData.texturePosition |> Coord.toVec2
+        --            , textureScale = Coord.tuple imageData.textureSize |> Coord.toVec2
+        --            , view =
+        --                Mat4.makeScale3
+        --                    (zoomFactor * 2 / toFloat windowWidth)
+        --                    (zoomFactor * -2 / toFloat windowHeight)
+        --                    1
+        --                    |> Mat4.translate3
+        --                        (toFloat tileX |> round |> toFloat)
+        --                        (toFloat tileY |> round |> toFloat)
+        --                        0
+        --            }
+        --        ]
+        --
+        --    else
+        --        []
+        --   )
         Nothing ->
             []
 
@@ -939,13 +948,33 @@ imageMesh { position, image } =
     ]
 
 
-square : WebGL.Mesh SimpleVertex
+square : WebGL.Mesh Vertex
 square =
     Shaders.triangleFan
-        [ { position = Vec2.vec2 0 0 }
-        , { position = Vec2.vec2 1 0 }
-        , { position = Vec2.vec2 1 1 }
-        , { position = Vec2.vec2 0 1 }
+        [ { position = Vec3.vec3 0 0 0
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          , texturePosition = Vec2.vec2 512 28
+          }
+        , { position = Vec3.vec3 1 0 0
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          , texturePosition = Vec2.vec2 512 28
+          }
+        , { position = Vec3.vec3 1 1 0
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          , texturePosition = Vec2.vec2 512 28
+          }
+        , { position = Vec3.vec3 0 1 0
+          , opacity = 1
+          , primaryColor = 0
+          , secondaryColor = 0
+          , texturePosition = Vec2.vec2 512 28
+          }
         ]
 
 

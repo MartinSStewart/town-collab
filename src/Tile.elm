@@ -1,5 +1,6 @@
 module Tile exposing
     ( CollisionMask(..)
+    , DefaultColor(..)
     , Direction(..)
     , RailData
     , RailPath(..)

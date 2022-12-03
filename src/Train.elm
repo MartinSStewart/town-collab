@@ -40,6 +40,7 @@ import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
+import Math.Vector4 as Vec4
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
@@ -1055,6 +1056,7 @@ trainEntity trainTexture trainMesh viewMatrix x y =
                 |> Mat4.mul viewMatrix
         , texture = trainTexture
         , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
+        , color = Vec4.vec4 1 1 1 1
         }
 
 

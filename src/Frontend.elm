@@ -16,7 +16,7 @@ import Browser.Dom
 import Browser.Events exposing (Visibility(..))
 import Browser.Navigation
 import Change exposing (Change(..))
-import Color
+import Color exposing (Color)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
@@ -52,7 +52,7 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import Task
-import Tile exposing (CollisionMask(..), RailPathType(..), Tile(..), TileData)
+import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData)
 import Time
 import Train exposing (Status(..), Train)
 import Types exposing (..)
@@ -1567,6 +1567,19 @@ cursorPosition tileData model =
         |> Coord.minus (Coord.tuple tileData.size |> Coord.divide (Coord.tuple ( 2, 2 )))
 
 
+defaultToPrimaryAndSecondary : DefaultColor -> { primaryColor : Color, secondaryColor : Color }
+defaultToPrimaryAndSecondary defaultColors =
+    case defaultColors of
+        ZeroDefaultColors ->
+            { primaryColor = Color.black, secondaryColor = Color.black }
+
+        OneDefaultColor primary ->
+            { primaryColor = primary, secondaryColor = Color.black }
+
+        TwoDefaultColors primary secondary ->
+            { primaryColor = primary, secondaryColor = secondary }
+
+
 placeTile : Bool -> Tile -> FrontendLoaded -> FrontendLoaded
 placeTile isDragPlacement tile model =
     let
@@ -1589,11 +1602,8 @@ placeTile isDragPlacement tile model =
         userId =
             currentUserId model
 
-        primaryColor =
-            Color.rgb 0 0 0
-
-        secondaryColor =
-            Color.rgb 255 255 255
+        { primaryColor, secondaryColor } =
+            defaultToPrimaryAndSecondary tileData.defaultColors
 
         change =
             { position = cursorPosition_
@@ -1760,11 +1770,21 @@ createDebrisMesh appStartTime removedTiles =
             let
                 data =
                     Tile.getData tile
+
+                { primaryColor, secondaryColor } =
+                    defaultToPrimaryAndSecondary data.defaultColors
             in
-            createDebrisMeshHelper position data.texturePosition data.size appStartTime time
+            createDebrisMeshHelper position data.texturePosition data.size primaryColor secondaryColor appStartTime time
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
-                            createDebrisMeshHelper position topLayer.texturePosition data.size appStartTime time
+                            createDebrisMeshHelper
+                                position
+                                topLayer.texturePosition
+                                data.size
+                                primaryColor
+                                secondaryColor
+                                appStartTime
+                                time
 
                         Nothing ->
                             []
@@ -1779,10 +1799,12 @@ createDebrisMeshHelper :
     ( Quantity Int WorldUnit, Quantity Int WorldUnit )
     -> ( Int, Int )
     -> ( Int, Int )
+    -> Color
+    -> Color
     -> Time.Posix
     -> Time.Posix
     -> List DebrisVertex
-createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textureW, textureH ) appStartTime time =
+createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textureW, textureH ) primaryColor secondaryColor appStartTime time =
     List.concatMap
         (\x2 ->
             List.concatMap
@@ -1811,8 +1833,8 @@ createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textu
                                     (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
                             , texturePosition = uv
                             , startTime = Duration.from appStartTime time |> Duration.inSeconds
-                            , primaryColor = 0
-                            , secondaryColor = 0
+                            , primaryColor = Color.toInt primaryColor |> toFloat
+                            , secondaryColor = Color.toInt secondaryColor |> toFloat
                             }
                         )
                         [ topLeft
@@ -2438,6 +2460,7 @@ canvasView audioData model =
                                                 |> Mat4.mul viewMatrix
                                         , texture = texture
                                         , textureSize = textureSize
+                                        , color = Vec4.vec4 1 1 1 1
                                         }
                                         |> Just
 
@@ -2454,6 +2477,7 @@ canvasView audioData model =
                             , texture = texture
                             , textureSize = textureSize
                             , time = Duration.from model.startTime model.time |> Duration.inSeconds
+                            , color = Vec4.vec4 1 1 1 1
                             }
                        ]
                     ++ List.filterMap
@@ -2500,6 +2524,7 @@ canvasView audioData model =
                                                 |> Mat4.mul viewMatrix
                                         , texture = texture
                                         , textureSize = textureSize
+                                        , color = Vec4.vec4 1 1 1 1
                                         }
                                         |> Just
 
@@ -2574,8 +2599,8 @@ canvasView audioData model =
                                 in
                                 [ WebGL.entityWith
                                     [ Shaders.blend ]
-                                    Shaders.colorAndTextureVertexShader
-                                    Shaders.colorAndTextureFragmentShader
+                                    Shaders.vertexShader
+                                    Shaders.fragmentShader
                                     currentTile.mesh
                                     { view =
                                         viewMatrix
@@ -2625,6 +2650,7 @@ canvasView audioData model =
                                         (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                             , texture = texture
                             , textureSize = textureSize
+                            , color = Vec4.vec4 1 1 1 1
                             }
                        , WebGL.entityWith
                             [ Shaders.blend ]
@@ -2641,6 +2667,7 @@ canvasView audioData model =
                                     |> Coord.translateMat4 (toolbarPosition model.devicePixelRatio model.windowSize)
                             , texture = texture
                             , textureSize = textureSize
+                            , color = Vec4.vec4 1 1 1 1
                             }
                        ]
                     ++ MailEditor.drawMail
@@ -2755,6 +2782,7 @@ drawForeground meshes viewMatrix texture =
                     { view = viewMatrix
                     , texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , color = Vec4.vec4 1 1 1 1
                     }
             )
 
@@ -2779,6 +2807,7 @@ drawBackground meshes viewMatrix texture =
                     { view = viewMatrix
                     , texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , color = Vec4.vec4 1 1 1 1
                     }
             )
 
