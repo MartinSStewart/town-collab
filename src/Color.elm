@@ -1,6 +1,7 @@
-module Color exposing (Color, black, blue, green, red, rgb, toInt, toVec3, white)
+module Color exposing (Color, black, blue, fromHexCode, green, red, rgb255, toHexCode, toInt, toVec3, white)
 
 import Bitwise
+import Hex
 import Math.Vector3 as Vec3 exposing (Vec3)
 
 
@@ -8,8 +9,8 @@ type Color
     = Color Int
 
 
-rgb : Int -> Int -> Int -> Color
-rgb red2 green2 blue2 =
+rgb255 : Int -> Int -> Int -> Color
+rgb255 red2 green2 blue2 =
     Bitwise.shiftLeftBy 16 (clamp 0 255 red2)
         + Bitwise.shiftLeftBy 8 (clamp 0 255 green2)
         + clamp 0 255 blue2
@@ -33,12 +34,12 @@ blue (Color color) =
 
 black : Color
 black =
-    rgb 0 0 0
+    rgb255 0 0 0
 
 
 white : Color
 white =
-    rgb 255 255 255
+    rgb255 255 255 255
 
 
 toInt : Color -> Int
@@ -52,3 +53,18 @@ toVec3 color =
         (red color |> toFloat |> (*) (1 / 255))
         (green color |> toFloat |> (*) (1 / 255))
         (blue color |> toFloat |> (*) (1 / 255))
+
+
+fromHexCode : String -> Maybe Color
+fromHexCode text =
+    case ( String.length text, Hex.fromString (String.toLower text) ) of
+        ( 6, Ok value ) ->
+            Color value |> Just
+
+        _ ->
+            Nothing
+
+
+toHexCode : Color -> String
+toHexCode (Color color) =
+    Hex.toString color |> String.padLeft 6 '0'

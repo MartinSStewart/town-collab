@@ -48,6 +48,7 @@ import Point2d exposing (Point2d)
 import SendGrid
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
+import TextInput
 import Tile exposing (Tile)
 import Time
 import Train exposing (Train, TrainDiff)
@@ -132,11 +133,13 @@ type alias FrontendLoaded =
     , localTime : Time.Posix
     , scrollThreshold : Float
     , tileColors : AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
+    , primaryColorTextInput : TextInput.Model
+    , focus : Hover
     }
 
 
 type alias RemovedTileParticle =
-    { time : Time.Posix, position : Coord WorldUnit, tile : Tile }
+    { time : Time.Posix, position : Coord WorldUnit, tile : Tile, primaryColor : Color, secondaryColor : Color }
 
 
 type ToolType
@@ -162,6 +165,7 @@ type Hover
     | HouseHover { housePosition : Coord WorldUnit }
     | MapHover
     | MailEditorHover MailEditor.Hover
+    | PrimaryColorInput
 
 
 type alias BackendModel =

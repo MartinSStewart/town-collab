@@ -632,22 +632,22 @@ hasCollisionWithCoord positionA positionB tileB =
 
 defaultHouseColors : DefaultColor
 defaultHouseColors =
-    TwoDefaultColors (Color.rgb 234 66 36) (Color.rgb 234 168 36)
+    TwoDefaultColors (Color.rgb255 234 66 36) (Color.rgb255 234 168 36)
 
 
 defaultSidewalkColor : DefaultColor
 defaultSidewalkColor =
-    TwoDefaultColors (Color.rgb 193 182 162) (Color.rgb 170 160 140)
+    TwoDefaultColors (Color.rgb255 193 182 162) (Color.rgb255 170 160 140)
 
 
 defaultTreeColor : DefaultColor
 defaultTreeColor =
-    TwoDefaultColors (Color.rgb 24 150 65) (Color.rgb 141 96 65)
+    TwoDefaultColors (Color.rgb255 24 150 65) (Color.rgb255 141 96 65)
 
 
 defaultPostOfficeColor : DefaultColor
 defaultPostOfficeColor =
-    OneDefaultColor (Color.rgb 209 209 209)
+    OneDefaultColor (Color.rgb255 209 209 209)
 
 
 getData : Tile -> TileData

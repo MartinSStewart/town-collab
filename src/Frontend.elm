@@ -39,7 +39,7 @@ import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
-import Math.Vector2 as Vec2
+import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
 import PingData exposing (PingData)
@@ -52,6 +52,7 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import Task
+import TextInput
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData)
 import Time
 import Train exposing (Status(..), Train)
@@ -349,6 +350,9 @@ loadedInit time loading loadingData =
         defaultTileColors =
             AssocList.empty
 
+        focus =
+            MapHover
+
         model : FrontendLoaded
         model =
             { key = loading.key
@@ -388,7 +392,7 @@ loadedInit time loading loadingData =
             , userIdMesh = createInfoMesh Nothing loadingData.user
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
-            , toolbarMesh = toolbarMesh defaultTileColors defaultTileHotkeys currentTile
+            , toolbarMesh = toolbarMesh TextInput.init defaultTileColors defaultTileHotkeys focus currentTile
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
@@ -397,6 +401,8 @@ loadedInit time loading loadingData =
             , localTime = time
             , scrollThreshold = 0
             , tileColors = defaultTileColors
+            , primaryColorTextInput = TextInput.init
+            , focus = focus
             }
     in
     ( updateMeshes model model
@@ -564,9 +570,7 @@ updateLoaded audioData msg model =
                     ( model, Cmd.none )
 
         KeyMsg keyMsg ->
-            ( { model | pressedKeys = Keyboard.update keyMsg model.pressedKeys }
-            , Cmd.none
-            )
+            ( { model | pressedKeys = Keyboard.update keyMsg model.pressedKeys }, Cmd.none )
 
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
@@ -584,7 +588,73 @@ updateLoaded audioData msg model =
                         )
 
                     else
-                        keyMsgCanvasUpdate key model
+                        case ( model.focus, model.currentTile, key ) of
+                            ( PrimaryColorInput, _, Keyboard.Escape ) ->
+                                ( setFocus MapHover model, Cmd.none )
+
+                            ( PrimaryColorInput, Just { tile }, _ ) ->
+                                let
+                                    newTextInput : TextInput.Model
+                                    newTextInput =
+                                        TextInput.keyMsg key model.primaryColorTextInput
+                                            |> (\a ->
+                                                    { text = String.left 6 a.text
+                                                    , cursorPosition = min 6 a.cursorPosition
+                                                    }
+                                               )
+
+                                    maybeNewColor : Maybe Color
+                                    maybeNewColor =
+                                        Color.fromHexCode newTextInput.text
+                                in
+                                ( { model
+                                    | primaryColorTextInput = newTextInput
+                                    , tileColors =
+                                        case maybeNewColor of
+                                            Just color ->
+                                                AssocList.update
+                                                    tile
+                                                    (\maybeColor ->
+                                                        (case maybeColor of
+                                                            Just colors ->
+                                                                { colors | primaryColor = color }
+
+                                                            Nothing ->
+                                                                Tile.getData tile
+                                                                    |> .defaultColors
+                                                                    |> Tile.defaultToPrimaryAndSecondary
+                                                                    |> (\colors ->
+                                                                            { colors | primaryColor = color }
+                                                                       )
+                                                        )
+                                                            |> Just
+                                                    )
+                                                    model.tileColors
+
+                                            Nothing ->
+                                                model.tileColors
+                                  }
+                                    |> (\m ->
+                                            case maybeNewColor of
+                                                Just _ ->
+                                                    { m
+                                                        | currentTile =
+                                                            { tile = tile
+                                                            , mesh =
+                                                                Grid.tileMesh Coord.origin tile (getTileColor tile model)
+                                                                    |> Sprite.toMesh
+                                                            }
+                                                                |> Just
+                                                    }
+
+                                                Nothing ->
+                                                    m
+                                       )
+                                , Cmd.none
+                                )
+
+                            _ ->
+                                keyMsgCanvasUpdate key model
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -784,12 +854,6 @@ updateLoaded audioData msg model =
 
                         MouseButtonUp _ ->
                             MouseButtonUp { current = mousePosition }
-                , toolbarMesh =
-                    if model.previousTileHover == tileHover_ then
-                        model.toolbarMesh
-
-                    else
-                        toolbarMesh model.tileColors model.tileHotkeys tileHover_
                 , previousTileHover = tileHover_
               }
                 |> (\model2 ->
@@ -818,6 +882,9 @@ updateLoaded audioData msg model =
                                         placeTile True tile model2
 
                                     MailEditorHover _ ->
+                                        model2
+
+                                    PrimaryColorInput ->
                                         model2
 
                             _ ->
@@ -959,7 +1026,12 @@ updateLoaded audioData msg model =
                         oldViewPoint
 
                 movedViewWithArrowKeys =
-                    Keyboard.Arrows.arrows model.pressedKeys /= { x = 0, y = 0 }
+                    case model.focus of
+                        PrimaryColorInput ->
+                            False
+
+                        _ ->
+                            Keyboard.Arrows.arrows model.pressedKeys /= { x = 0, y = 0 }
 
                 model2 =
                     { model
@@ -1050,37 +1122,50 @@ hoverAt model mousePosition =
         MailEditor.hoverAt model.mailEditor |> MailEditorHover
 
     else if containsToolbar then
-        let
-            containsTileButton : Maybe Tile
-            containsTileButton =
-                List.indexedMap
-                    (\index tile ->
-                        let
-                            topLeft =
-                                toolbarToPixel
-                                    model.devicePixelRatio
-                                    model.windowSize
-                                    (toolbarTileButtonPosition index)
-                        in
-                        if
-                            Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
-                                |> Bounds.contains mousePosition2
-                        then
-                            Just tile
+        if
+            TextInput.bounds
+                (toolbarToPixel
+                    model.devicePixelRatio
+                    model.windowSize
+                    primaryColorInputPosition
+                )
+                primaryColorInputWidth
+                |> Bounds.contains mousePosition2
+        then
+            PrimaryColorInput
 
-                        else
-                            Nothing
-                    )
-                    buttonTiles
-                    |> List.filterMap identity
-                    |> List.head
-        in
-        case containsTileButton of
-            Just tile ->
-                TileHover tile
+        else
+            let
+                containsTileButton : Maybe Tile
+                containsTileButton =
+                    List.indexedMap
+                        (\index tile ->
+                            let
+                                topLeft =
+                                    toolbarToPixel
+                                        model.devicePixelRatio
+                                        model.windowSize
+                                        (toolbarTileButtonPosition index)
+                            in
+                            if
+                                Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
+                                    |> Bounds.contains mousePosition2
+                            then
+                                Just tile
 
-            Nothing ->
-                ToolbarHover
+                            else
+                                Nothing
+                        )
+                        buttonTiles
+                        |> List.filterMap identity
+                        |> List.head
+            in
+            case containsTileButton of
+                Just tile ->
+                    TileHover tile
+
+                Nothing ->
+                    ToolbarHover
 
     else
         let
@@ -1261,9 +1346,17 @@ getTileColor tile model =
 
 setCurrentTile : Tile -> FrontendLoaded -> FrontendLoaded
 setCurrentTile tile model =
+    let
+        colors =
+            getTileColor tile model
+
+        _ =
+            Debug.log "setTile" ""
+    in
     { model
         | currentTile =
-            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile (getTileColor tile model) |> Sprite.toMesh }
+            Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile colors |> Sprite.toMesh }
+        , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
     }
 
 
@@ -1307,9 +1400,20 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         model.highlightContextMenu
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
+                |> (\m ->
+                        if isSmallDistance then
+                            setFocus hoverAt2 m
+
+                        else
+                            m
+                   )
+
+        hoverAt2 : Hover
+        hoverAt2 =
+            hoverAt model mousePosition
     in
     if isSmallDistance then
-        case hoverAt model mousePosition of
+        case hoverAt2 of
             TileHover tileHover_ ->
                 ( setCurrentTile tileHover_ model2, Cmd.none )
 
@@ -1395,8 +1499,30 @@ mainMouseButtonUp mousePosition previousMouseState model =
             MailEditorHover _ ->
                 ( model2, Cmd.none )
 
+            PrimaryColorInput ->
+                ( model2, Cmd.none )
+
     else
         ( model2, Cmd.none )
+
+
+setFocus : Hover -> FrontendLoaded -> FrontendLoaded
+setFocus newFocus model =
+    { model
+        | focus = newFocus
+        , primaryColorTextInput =
+            if model.focus == PrimaryColorInput && newFocus /= PrimaryColorInput then
+                case model.currentTile of
+                    Just { tile } ->
+                        model.primaryColorTextInput
+                            |> TextInput.withText (Color.toHexCode (getTileColor tile model).primaryColor)
+
+                    Nothing ->
+                        model.primaryColorTextInput
+
+            else
+                model.primaryColorTextInput
+    }
 
 
 clickLeaveHomeTrain : Id TrainId -> Train -> FrontendLoaded -> ( FrontendLoaded, Cmd frontendMsg )
@@ -1602,11 +1728,12 @@ placeTile isDragPlacement tile model =
                 Nothing ->
                     False
 
+        userId : Id UserId
         userId =
             currentUserId model
 
         { primaryColor, secondaryColor } =
-            Tile.defaultToPrimaryAndSecondary tileData.defaultColors
+            getTileColor tile model
 
         change =
             { position = cursorPosition_
@@ -1683,7 +1810,7 @@ placeTile isDragPlacement tile model =
                     )
                     model2
 
-            removedTiles : List { time : Time.Posix, tile : Tile, position : Coord WorldUnit }
+            removedTiles : List RemovedTileParticle
             removedTiles =
                 case outMsg of
                     LocalGrid.NoOutMsg ->
@@ -1695,6 +1822,8 @@ placeTile isDragPlacement tile model =
                                 { tile = removedTile.tile
                                 , time = model.time
                                 , position = removedTile.position
+                                , primaryColor = removedTile.primaryColor
+                                , secondaryColor = removedTile.secondaryColor
                                 }
                             )
                             tiles
@@ -1769,13 +1898,10 @@ createDebrisMesh appStartTime removedTiles =
                     )
     in
     List.map
-        (\{ position, tile, time } ->
+        (\{ position, tile, time, primaryColor, secondaryColor } ->
             let
                 data =
                     Tile.getData tile
-
-                { primaryColor, secondaryColor } =
-                    Tile.defaultToPrimaryAndSecondary data.defaultColors
             in
             createDebrisMeshHelper position data.texturePosition data.size primaryColor secondaryColor appStartTime time
                 ++ (case data.texturePositionTopLayer of
@@ -1889,8 +2015,8 @@ updateMeshes oldModel newModel =
                             |> (::) cellPosition
                             |> List.map Coord.toTuple
                             |> Set.fromList
-                    , primaryColor = Color.rgb 0 0 0
-                    , secondaryColor = Color.rgb 255 255 255
+                    , primaryColor = Color.rgb255 0 0 0
+                    , secondaryColor = Color.rgb255 255 255 255
                     }
                         |> Just
 
@@ -1991,6 +2117,23 @@ updateMeshes oldModel newModel =
 
             else
                 createInfoMesh newModel.pingData (currentUserId newModel)
+        , toolbarMesh =
+            if
+                (newModel.primaryColorTextInput == oldModel.primaryColorTextInput)
+                    && (newModel.tileColors == oldModel.tileColors)
+                    && (newModel.tileHotkeys == oldModel.tileHotkeys)
+                    && (newModel.focus == oldModel.focus)
+                    && (Maybe.map .tile newModel.currentTile == Maybe.map .tile oldModel.currentTile)
+            then
+                newModel.toolbarMesh
+
+            else
+                toolbarMesh
+                    newModel.primaryColorTextInput
+                    newModel.tileColors
+                    newModel.tileHotkeys
+                    newModel.focus
+                    (Maybe.map .tile newModel.currentTile)
     }
 
 
@@ -2063,6 +2206,9 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurr
                     True
 
                 MailEditorHover _ ->
+                    False
+
+                PrimaryColorInput ->
                     False
     in
     if canDragView then
@@ -2378,6 +2524,9 @@ canvasView audioData model =
 
                     MailEditorHover _ ->
                         False
+
+                    PrimaryColorInput ->
+                        True
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False
@@ -2623,8 +2772,8 @@ canvasView audioData model =
                                                 { position = mousePosition
                                                 , change = currentTile.tile
                                                 , userId = currentUserId model
-                                                , primaryColor = Color.rgb 0 0 0
-                                                , secondaryColor = Color.rgb 255 255 255
+                                                , primaryColor = Color.rgb255 0 0 0
+                                                , secondaryColor = Color.rgb255 255 255 255
                                                 }
                                                 model.trains
                                                 (LocalGrid.localModel model.localModel |> .grid)
@@ -2672,6 +2821,21 @@ canvasView audioData model =
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1
                             }
+
+                       --, WebGL.entityWith
+                       --     [ Shaders.blend ]
+                       --     Shaders.colorPickerVertexShader
+                       --     Shaders.colorPickerFragmentShader
+                       --     colorPickerMesh
+                       --     { view =
+                       --         Mat4.makeScale3
+                       --             (2 / toFloat windowWidth)
+                       --             (-2 / toFloat windowHeight)
+                       --             1
+                       --             |> Coord.translateMat4
+                       --                 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                       --             |> Coord.translateMat4 (colorPickerPosition model.devicePixelRatio model.windowSize)
+                       --     }
                        ]
                     ++ MailEditor.drawMail
                         texture
@@ -2691,6 +2855,16 @@ canvasView audioData model =
             _ ->
                 []
         )
+
+
+colorPickerMesh : WebGL.Mesh { position : Vec2, vcoord : Vec2 }
+colorPickerMesh =
+    WebGL.triangleFan
+        [ { position = Vec2.vec2 0 0, vcoord = Vec2.vec2 0 0 }
+        , { position = Coord.xOnly colorPickerSize |> Coord.toVec2, vcoord = Vec2.vec2 1 0 }
+        , { position = Coord.toVec2 colorPickerSize, vcoord = Vec2.vec2 1 1 }
+        , { position = Coord.yOnly colorPickerSize |> Coord.toVec2, vcoord = Vec2.vec2 0 1 }
+        ]
 
 
 getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
@@ -2885,25 +3059,25 @@ receivingMailFlagMesh frame =
         [ { position = Vec3.vec3 0 0 0
           , texturePosition = topLeft
           , opacity = 1
-          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
           , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 width 0 0
           , texturePosition = topRight
           , opacity = 1
-          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
           , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 width height 0
           , texturePosition = bottomRight
           , opacity = 1
-          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
           , secondaryColor = Vec3.vec3 0 0 0
           }
         , { position = Vec3.vec3 0 height 0
           , texturePosition = bottomLeft
           , opacity = 1
-          , primaryColor = Color.rgb 255 161 0 |> Color.toVec3
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
           , secondaryColor = Vec3.vec3 0 0 0
           }
         ]
@@ -2958,7 +3132,7 @@ subscriptions _ model =
 
 toolbarSize : Coord Pixels
 toolbarSize =
-    Coord.xy 748 174
+    Coord.xy 1000 174
 
 
 toolbarPosition : Float -> Coord Pixels -> Coord Pixels
@@ -2966,8 +3140,28 @@ toolbarPosition devicePixelRatio windowSize =
     windowSize
         |> Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio )
         |> Coord.divide (Coord.xy 2 1)
-        |> Coord.plus (Coord.xy 0 -4)
         |> Coord.minus (Coord.divide (Coord.xy 2 1) toolbarSize)
+
+
+colorPickerSize : Coord units
+colorPickerSize =
+    Coord.xy 300 (Coord.yRaw toolbarSize)
+
+
+colorPickerPosition : Float -> Coord Pixels -> Coord Pixels
+colorPickerPosition devicePixelRatio windowSize =
+    toolbarPosition devicePixelRatio windowSize
+        |> Coord.minus (Coord.xOnly colorPickerSize |> Coord.plus (Coord.xy 8 0))
+
+
+primaryColorInputPosition : Coord ToolbarUnit
+primaryColorInputPosition =
+    Coord.xy 800 8
+
+
+primaryColorInputWidth : Quantity Int units
+primaryColorInputWidth =
+    6 * Coord.xRaw Sprite.charSize * TextInput.charScale + Coord.xRaw TextInput.padding * 2 + 2 |> Quantity
 
 
 toolbarButtonSize : Coord units
@@ -3037,11 +3231,13 @@ toolbarTileButton colors maybeHotkey highlight offset tile =
 
 
 toolbarMesh :
-    AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
+    TextInput.Model
+    -> AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
     -> Dict String Tile
+    -> Hover
     -> Maybe Tile
     -> WebGL.Mesh Vertex
-toolbarMesh colors hotkeys currentTile =
+toolbarMesh primaryColorTextInput colors hotkeys focus currentTile =
     Sprite.sprite ( 0, 0 ) toolbarSize ( 506, 28 ) ( 1, 1 )
         ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
         ++ (List.indexedMap
@@ -3055,6 +3251,29 @@ toolbarMesh colors hotkeys currentTile =
                 )
                 buttonTiles
                 |> List.concat
+           )
+        ++ (case Maybe.map (Tile.getData >> .defaultColors) currentTile of
+                Nothing ->
+                    []
+
+                Just ZeroDefaultColors ->
+                    []
+
+                Just (OneDefaultColor _) ->
+                    TextInput.view
+                        primaryColorInputPosition
+                        primaryColorInputWidth
+                        (focus == PrimaryColorInput)
+                        (Color.fromHexCode >> (/=) Nothing)
+                        primaryColorTextInput
+
+                Just (TwoDefaultColors _ _) ->
+                    TextInput.view
+                        primaryColorInputPosition
+                        primaryColorInputWidth
+                        (focus == PrimaryColorInput)
+                        (Color.fromHexCode >> (/=) Nothing)
+                        primaryColorTextInput
            )
         |> Sprite.toMesh
 

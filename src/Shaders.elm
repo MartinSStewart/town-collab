@@ -2,6 +2,8 @@ module Shaders exposing
     ( DebrisVertex
     , Vertex
     , blend
+    , colorPickerFragmentShader
+    , colorPickerVertexShader
     , debrisVertexShader
     , fragmentShader
     , indexedTriangles
@@ -25,19 +27,19 @@ type alias Vertex =
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> WebGL.Mesh attributes
 indexedTriangles vertices indices =
-    --let
-    --    _ =
-    --        Debug.log "new indexedTriangles" ""
-    --in
+    let
+        _ =
+            Debug.log "new indexedTriangles" ""
+    in
     WebGL.indexedTriangles vertices indices
 
 
 triangleFan : List attributes -> WebGL.Mesh attributes
 triangleFan vertices =
-    --let
-    --    _ =
-    --        Debug.log "new triangleFan" ""
-    --in
+    let
+        _ =
+            Debug.log "new triangleFan" ""
+    in
     WebGL.triangleFan vertices
 
 
@@ -166,4 +168,29 @@ void main () {
 
     primaryColor2 = primaryColor;
     secondaryColor2 = secondaryColor;
+}|]
+
+
+colorPickerVertexShader : Shader { position : Vec2, vcoord : Vec2 } { u | view : Mat4 } { vcoord2 : Vec2 }
+colorPickerVertexShader =
+    [glsl|
+attribute vec2 position;
+attribute vec2 vcoord;
+uniform mat4 view;
+varying vec2 vcoord2;
+
+void main () {
+    gl_Position = view * vec4(position, 0.0, 1.0);
+    vcoord2 = vcoord;
+}|]
+
+
+colorPickerFragmentShader : Shader {} a { vcoord2 : Vec2 }
+colorPickerFragmentShader =
+    [glsl|
+precision mediump float;
+varying vec2 vcoord2;
+
+void main () {
+    gl_FragColor = vec4(vcoord2.x, vcoord2.y, 0.0, 1.0);
 }|]
