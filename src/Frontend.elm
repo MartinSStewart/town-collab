@@ -392,7 +392,14 @@ loadedInit time loading loadingData =
             , userIdMesh = createInfoMesh Nothing loadingData.user
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
-            , toolbarMesh = toolbarMesh TextInput.init defaultTileColors defaultTileHotkeys focus currentTile
+            , toolbarMesh =
+                toolbarMesh
+                    TextInput.init
+                    TextInput.init
+                    defaultTileColors
+                    defaultTileHotkeys
+                    focus
+                    currentTile
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
@@ -402,6 +409,7 @@ loadedInit time loading loadingData =
             , scrollThreshold = 0
             , tileColors = defaultTileColors
             , primaryColorTextInput = TextInput.init
+            , secondaryColorTextInput = TextInput.init
             , focus = focus
             }
     in
@@ -592,64 +600,28 @@ updateLoaded audioData msg model =
                             ( PrimaryColorInput, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Cmd.none )
 
+                            ( SecondaryColorInput, _, Keyboard.Escape ) ->
+                                ( setFocus MapHover model, Cmd.none )
+
                             ( PrimaryColorInput, Just { tile }, _ ) ->
-                                let
-                                    newTextInput : TextInput.Model
-                                    newTextInput =
-                                        TextInput.keyMsg key model.primaryColorTextInput
-                                            |> (\a ->
-                                                    { text = String.left 6 a.text
-                                                    , cursorPosition = min 6 a.cursorPosition
-                                                    }
-                                               )
+                                ( handleKeyDownColorInput
+                                    .primaryColorTextInput
+                                    (\a b -> { b | primaryColorTextInput = a })
+                                    (\color a -> { a | primaryColor = color })
+                                    tile
+                                    key
+                                    model
+                                , Cmd.none
+                                )
 
-                                    maybeNewColor : Maybe Color
-                                    maybeNewColor =
-                                        Color.fromHexCode newTextInput.text
-                                in
-                                ( { model
-                                    | primaryColorTextInput = newTextInput
-                                    , tileColors =
-                                        case maybeNewColor of
-                                            Just color ->
-                                                AssocList.update
-                                                    tile
-                                                    (\maybeColor ->
-                                                        (case maybeColor of
-                                                            Just colors ->
-                                                                { colors | primaryColor = color }
-
-                                                            Nothing ->
-                                                                Tile.getData tile
-                                                                    |> .defaultColors
-                                                                    |> Tile.defaultToPrimaryAndSecondary
-                                                                    |> (\colors ->
-                                                                            { colors | primaryColor = color }
-                                                                       )
-                                                        )
-                                                            |> Just
-                                                    )
-                                                    model.tileColors
-
-                                            Nothing ->
-                                                model.tileColors
-                                  }
-                                    |> (\m ->
-                                            case maybeNewColor of
-                                                Just _ ->
-                                                    { m
-                                                        | currentTile =
-                                                            { tile = tile
-                                                            , mesh =
-                                                                Grid.tileMesh Coord.origin tile (getTileColor tile model)
-                                                                    |> Sprite.toMesh
-                                                            }
-                                                                |> Just
-                                                    }
-
-                                                Nothing ->
-                                                    m
-                                       )
+                            ( SecondaryColorInput, Just { tile }, _ ) ->
+                                ( handleKeyDownColorInput
+                                    .secondaryColorTextInput
+                                    (\a b -> { b | secondaryColorTextInput = a })
+                                    (\color a -> { a | secondaryColor = color })
+                                    tile
+                                    key
+                                    model
                                 , Cmd.none
                                 )
 
@@ -887,6 +859,9 @@ updateLoaded audioData msg model =
                                     PrimaryColorInput ->
                                         model2
 
+                                    SecondaryColorInput ->
+                                        model2
+
                             _ ->
                                 model2
                    )
@@ -1098,6 +1073,72 @@ updateLoaded audioData msg model =
                     ( model, Cmd.none )
 
 
+handleKeyDownColorInput :
+    (FrontendLoaded -> TextInput.Model)
+    -> (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
+    -> (Color -> { primaryColor : Color, secondaryColor : Color } -> { primaryColor : Color, secondaryColor : Color })
+    -> Tile
+    -> Keyboard.Key
+    -> FrontendLoaded
+    -> FrontendLoaded
+handleKeyDownColorInput getTextInputModel setTextInputModel updateColor tile key model =
+    let
+        newTextInput : TextInput.Model
+        newTextInput =
+            TextInput.keyMsg key (getTextInputModel model)
+                |> (\a ->
+                        { text = String.left 6 a.text
+                        , cursorPosition = min 6 a.cursorPosition
+                        }
+                   )
+
+        maybeNewColor : Maybe Color
+        maybeNewColor =
+            Color.fromHexCode newTextInput.text
+    in
+    { model
+        | tileColors =
+            case maybeNewColor of
+                Just color ->
+                    AssocList.update
+                        tile
+                        (\maybeColor ->
+                            (case maybeColor of
+                                Just colors ->
+                                    updateColor color colors
+
+                                Nothing ->
+                                    Tile.getData tile
+                                        |> .defaultColors
+                                        |> Tile.defaultToPrimaryAndSecondary
+                                        |> updateColor color
+                            )
+                                |> Just
+                        )
+                        model.tileColors
+
+                Nothing ->
+                    model.tileColors
+    }
+        |> setTextInputModel newTextInput
+        |> (\m ->
+                case maybeNewColor of
+                    Just _ ->
+                        { m
+                            | currentTile =
+                                { tile = tile
+                                , mesh =
+                                    Grid.tileMesh Coord.origin tile (getTileColor tile m)
+                                        |> Sprite.toMesh
+                                }
+                                    |> Just
+                        }
+
+                    Nothing ->
+                        m
+           )
+
+
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
 hoverAt model mousePosition =
     let
@@ -1133,6 +1174,18 @@ hoverAt model mousePosition =
                 |> Bounds.contains mousePosition2
         then
             PrimaryColorInput
+
+        else if
+            TextInput.bounds
+                (toolbarToPixel
+                    model.devicePixelRatio
+                    model.windowSize
+                    secondaryColorInputPosition
+                )
+                secondaryColorInputWidth
+                |> Bounds.contains mousePosition2
+        then
+            SecondaryColorInput
 
         else
             let
@@ -1349,14 +1402,12 @@ setCurrentTile tile model =
     let
         colors =
             getTileColor tile model
-
-        _ =
-            Debug.log "setTile" ""
     in
     { model
         | currentTile =
             Just { tile = tile, mesh = Grid.tileMesh Coord.origin tile colors |> Sprite.toMesh }
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
+        , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
     }
 
 
@@ -1500,6 +1551,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 ( model2, Cmd.none )
 
             PrimaryColorInput ->
+                ( model2, Cmd.none )
+
+            SecondaryColorInput ->
                 ( model2, Cmd.none )
 
     else
@@ -2120,6 +2174,7 @@ updateMeshes oldModel newModel =
         , toolbarMesh =
             if
                 (newModel.primaryColorTextInput == oldModel.primaryColorTextInput)
+                    && (newModel.secondaryColorTextInput == oldModel.secondaryColorTextInput)
                     && (newModel.tileColors == oldModel.tileColors)
                     && (newModel.tileHotkeys == oldModel.tileHotkeys)
                     && (newModel.focus == oldModel.focus)
@@ -2130,6 +2185,7 @@ updateMeshes oldModel newModel =
             else
                 toolbarMesh
                     newModel.primaryColorTextInput
+                    newModel.secondaryColorTextInput
                     newModel.tileColors
                     newModel.tileHotkeys
                     newModel.focus
@@ -2209,6 +2265,9 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurr
                     False
 
                 PrimaryColorInput ->
+                    False
+
+                SecondaryColorInput ->
                     False
     in
     if canDragView then
@@ -2526,6 +2585,9 @@ canvasView audioData model =
                         False
 
                     PrimaryColorInput ->
+                        True
+
+                    SecondaryColorInput ->
                         True
     in
     WebGL.toHtmlWith
@@ -3159,9 +3221,20 @@ primaryColorInputPosition =
     Coord.xy 800 8
 
 
+secondaryColorInputPosition : Coord ToolbarUnit
+secondaryColorInputPosition =
+    primaryColorInputPosition
+        |> Coord.plus (Coord.xy 0 (Coord.yRaw (TextInput.size primaryColorInputWidth) + 6))
+
+
 primaryColorInputWidth : Quantity Int units
 primaryColorInputWidth =
     6 * Coord.xRaw Sprite.charSize * TextInput.charScale + Coord.xRaw TextInput.padding * 2 + 2 |> Quantity
+
+
+secondaryColorInputWidth : Quantity Int units
+secondaryColorInputWidth =
+    primaryColorInputWidth
 
 
 toolbarButtonSize : Coord units
@@ -3232,12 +3305,13 @@ toolbarTileButton colors maybeHotkey highlight offset tile =
 
 toolbarMesh :
     TextInput.Model
+    -> TextInput.Model
     -> AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
     -> Dict String Tile
     -> Hover
     -> Maybe Tile
     -> WebGL.Mesh Vertex
-toolbarMesh primaryColorTextInput colors hotkeys focus currentTile =
+toolbarMesh primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
     Sprite.sprite ( 0, 0 ) toolbarSize ( 506, 28 ) ( 1, 1 )
         ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
         ++ (List.indexedMap
@@ -3274,6 +3348,12 @@ toolbarMesh primaryColorTextInput colors hotkeys focus currentTile =
                         (focus == PrimaryColorInput)
                         (Color.fromHexCode >> (/=) Nothing)
                         primaryColorTextInput
+                        ++ TextInput.view
+                            secondaryColorInputPosition
+                            secondaryColorInputWidth
+                            (focus == SecondaryColorInput)
+                            (Color.fromHexCode >> (/=) Nothing)
+                            secondaryColorTextInput
            )
         |> Sprite.toMesh
 

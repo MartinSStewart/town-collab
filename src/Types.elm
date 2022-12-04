@@ -134,6 +134,7 @@ type alias FrontendLoaded =
     , scrollThreshold : Float
     , tileColors : AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
     , primaryColorTextInput : TextInput.Model
+    , secondaryColorTextInput : TextInput.Model
     , focus : Hover
     }
 
@@ -166,6 +167,7 @@ type Hover
     | MapHover
     | MailEditorHover MailEditor.Hover
     | PrimaryColorInput
+    | SecondaryColorInput
 
 
 type alias BackendModel =
