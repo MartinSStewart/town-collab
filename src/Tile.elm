@@ -632,7 +632,7 @@ hasCollisionWithCoord positionA positionB tileB =
 
 defaultHouseColors : DefaultColor
 defaultHouseColors =
-    TwoDefaultColors (Color.rgb255 234 66 36) (Color.rgb255 234 168 36)
+    TwoDefaultColors (Color.rgb255 234 100 66) (Color.rgb255 234 168 36)
 
 
 defaultSidewalkColor : DefaultColor
