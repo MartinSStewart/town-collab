@@ -625,6 +625,12 @@ updateLoaded audioData msg model =
                                 , Cmd.none
                                 )
 
+                            ( PrimaryColorInput, Nothing, _ ) ->
+                                ( model, Cmd.none )
+
+                            ( SecondaryColorInput, Nothing, _ ) ->
+                                ( model, Cmd.none )
+
                             _ ->
                                 keyMsgCanvasUpdate key model
 
@@ -1001,12 +1007,39 @@ updateLoaded audioData msg model =
                         oldViewPoint
 
                 movedViewWithArrowKeys =
+                    canMoveWithArrowKeys && Keyboard.Arrows.arrows model.pressedKeys /= { x = 0, y = 0 }
+
+                canMoveWithArrowKeys =
                     case model.focus of
                         PrimaryColorInput ->
                             False
 
-                        _ ->
-                            Keyboard.Arrows.arrows model.pressedKeys /= { x = 0, y = 0 }
+                        SecondaryColorInput ->
+                            False
+
+                        TileHover tile ->
+                            True
+
+                        ToolbarHover ->
+                            True
+
+                        PostOfficeHover record ->
+                            True
+
+                        TrainHover record ->
+                            True
+
+                        TrainHouseHover record ->
+                            True
+
+                        HouseHover record ->
+                            True
+
+                        MapHover ->
+                            True
+
+                        MailEditorHover hover ->
+                            True
 
                 model2 =
                     { model
