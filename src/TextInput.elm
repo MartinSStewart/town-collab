@@ -121,12 +121,12 @@ view offset width hasFocus isValid model =
          else
             Color.rgb255 157 143 134
         )
-        (Coord.toTuple offset)
+        offset
         (size width)
         ( 508, 28 )
         ( 1, 1 )
         ++ Sprite.sprite
-            (offset |> Coord.plus padding |> Coord.toTuple)
+            (offset |> Coord.plus padding)
             (size width |> Coord.minus (Coord.multiplyTuple ( 2, 2 ) padding))
             ( if hasFocus then
                 505
@@ -142,7 +142,6 @@ view offset width hasFocus isValid model =
                     (offset
                         |> Coord.plus
                             (Coord.xy (model.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
-                        |> Coord.toTuple
                     )
                     (Coord.xy
                         charScale

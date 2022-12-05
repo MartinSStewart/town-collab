@@ -527,8 +527,9 @@ backgroundMesh cellPosition =
                                     Sprite.spriteWithZ
                                         Color.black
                                         Color.black
-                                        ( (x2 * Terrain.terrainDivisionsPerCell + x) * Coord.xRaw Units.tileSize
-                                        , (y2 * Terrain.terrainDivisionsPerCell + y) * Coord.yRaw Units.tileSize
+                                        (Coord.xy
+                                            ((x2 * Terrain.terrainDivisionsPerCell + x) * Coord.xRaw Units.tileSize)
+                                            ((y2 * Terrain.terrainDivisionsPerCell + y) * Coord.yRaw Units.tileSize)
                                         )
                                         0.9
                                         (Coord.tuple ( 80, 72 ))
@@ -639,7 +640,7 @@ tileMesh position tile colors =
             Tile.getData tile
     in
     if tile == EmptyTile then
-        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position |> Coord.toTuple) (Coord.tuple ( 30, 29 )) ( 504, 42 ) ( 30, 29 )
+        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position) (Coord.tuple ( 30, 29 )) ( 504, 42 ) ( 30, 29 )
 
     else
         tileMeshHelper 1 colors False position data.texturePosition data.size

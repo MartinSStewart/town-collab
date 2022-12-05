@@ -34,7 +34,7 @@ nineSlice :
     , bottomLeft : Coord a
     , bottom : Coord a
     , bottomRight : Coord a
-    , cornerSize : Coord a
+    , cornerSize : Coord b
     , position : Coord b
     , size : Coord b
     }
@@ -59,73 +59,73 @@ nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bot
     in
     spriteWithTwoColors
         colors
-        (Coord.toTuple position)
+        position
         cornerSize
         (Coord.toTuple topLeft)
         (Coord.toTuple cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW 0) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy cornerW 0) position)
             (Coord.xy innerWidth cornerH)
             (Coord.toTuple top)
             ( 1, cornerH )
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) 0) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy (cornerW + innerWidth) 0) position)
             cornerSize
             (Coord.toTuple topRight)
             (Coord.toTuple cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy 0 cornerH) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy 0 cornerH) position)
             (Coord.xy cornerW innerHeight)
             (Coord.toTuple left)
             ( cornerW, 1 )
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW cornerH) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy cornerW cornerH) position)
             (Coord.xy innerWidth innerHeight)
             (Coord.toTuple center)
             ( 1, 1 )
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) cornerH) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy (cornerW + innerWidth) cornerH) position)
             (Coord.xy cornerW innerHeight)
             (Coord.toTuple right)
             ( cornerW, 1 )
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy 0 (cornerH + innerHeight)) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy 0 (cornerH + innerHeight)) position)
             cornerSize
             (Coord.toTuple bottomLeft)
             (Coord.toTuple cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW (cornerH + innerHeight)) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy cornerW (cornerH + innerHeight)) position)
             (Coord.xy innerWidth cornerH)
             (Coord.toTuple bottom)
             ( 1, cornerH )
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) (cornerH + innerHeight)) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy (cornerW + innerWidth) (cornerH + innerHeight)) position)
             cornerSize
             (Coord.toTuple bottomRight)
             (Coord.toTuple cornerSize)
 
 
-sprite : ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
+sprite : Coord unit -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
 sprite position size texturePosition textureSize =
     spriteWithZ Color.black Color.black position 0 size texturePosition textureSize
 
 
-spriteWithColor : Color -> ( Int, Int ) -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
+spriteWithColor : Color -> Coord unit -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
 spriteWithColor color position size texturePosition textureSize =
     spriteWithZ color color position 0 size texturePosition textureSize
 
 
 spriteWithTwoColors :
     { primaryColor : Color, secondaryColor : Color }
-    -> ( Int, Int )
+    -> Coord unit
     -> Coord unit
     -> ( Int, Int )
     -> ( Int, Int )
@@ -134,8 +134,8 @@ spriteWithTwoColors { primaryColor, secondaryColor } position size texturePositi
     spriteWithZ primaryColor secondaryColor position 0 size texturePosition textureSize
 
 
-spriteWithZ : Color -> Color -> ( Int, Int ) -> Float -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
-spriteWithZ primaryColor secondaryColor ( x, y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
+spriteWithZ : Color -> Color -> Coord unit -> Float -> Coord unit -> ( Int, Int ) -> ( Int, Int ) -> List Vertex
+spriteWithZ primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
     let
         { topLeft, bottomRight, bottomLeft, topRight } =
             Tile.texturePositionPixels texturePosition textureSize
@@ -242,7 +242,7 @@ text color charScale string position =
                         state.vertices
                             ++ spriteWithColor
                                 color
-                                (Coord.addTuple_ ( state.offsetX, state.offsetY ) position |> Coord.toTuple)
+                                (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
                                 charSize_
                                 (charTexturePosition char |> Coord.toTuple)
                                 (Coord.toTuple charSize)
@@ -270,7 +270,6 @@ shiverText frame charScale string position =
                                     (Random.step randomOffset (Random.initialSeed (state.offset + frame * 127))
                                         |> Tuple.first
                                     )
-                                |> Coord.toTuple
                             )
                             charSize_
                             (charTexturePosition char |> Coord.toTuple)

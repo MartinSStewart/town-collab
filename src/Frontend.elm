@@ -2849,12 +2849,12 @@ startButtonMesh : WebGL.Mesh Vertex
 startButtonMesh =
     Sprite.spriteWithColor
         (Color.rgb255 157 143 134)
-        ( 0, 0 )
+        Coord.origin
         loadingTextSize
         ( 508, 28 )
         ( 1, 1 )
         ++ Sprite.sprite
-            (Coord.xy 2 2 |> Coord.toTuple)
+            (Coord.xy 2 2)
             (loadingTextSize |> Coord.minus (Coord.xy 4 4))
             ( 507, 28 )
             ( 1, 1 )
@@ -2866,12 +2866,12 @@ startButtonHighlightMesh : WebGL.Mesh Vertex
 startButtonHighlightMesh =
     Sprite.spriteWithColor
         (Color.rgb255 241 231 223)
-        ( 0, 0 )
+        Coord.origin
         loadingTextSize
         ( 508, 28 )
         ( 1, 1 )
         ++ Sprite.sprite
-            (Coord.xy 2 2 |> Coord.toTuple)
+            (Coord.xy 2 2)
             (loadingTextSize |> Coord.minus (Coord.xy 4 4))
             ( 505, 28 )
             ( 1, 1 )
@@ -3609,7 +3609,8 @@ toolbarTileButton colors maybeHotkey highlight offset tile =
                 Nothing ->
                     Tile.getData tile |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
     in
-    Sprite.sprite (Coord.toTuple offset)
+    Sprite.sprite
+        offset
         toolbarButtonSize
         ( if highlight then
             505
@@ -3620,7 +3621,7 @@ toolbarTileButton colors maybeHotkey highlight offset tile =
         )
         ( 1, 1 )
         ++ Sprite.sprite
-            (offset |> Coord.plus (Coord.xy 2 2) |> Coord.toTuple)
+            (offset |> Coord.plus (Coord.xy 2 2))
             (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
             ( if highlight then
                 505
@@ -3637,7 +3638,6 @@ toolbarTileButton colors maybeHotkey highlight offset tile =
                         (Coord.plus
                             (Coord.xy 0 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize + 4))
                             offset
-                            |> Coord.toTuple
                         )
                         (Coord.plus (Coord.xy 2 -4) charSize)
                         ( 506, 28 )
@@ -3669,8 +3669,8 @@ toolbarMesh primaryColorTextInput secondaryColorTextInput colors hotkeys focus c
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
             showColorTextInputs currentTile
     in
-    Sprite.sprite ( 0, 0 ) toolbarSize ( 506, 28 ) ( 1, 1 )
-        ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
+    Sprite.sprite Coord.origin toolbarSize ( 506, 28 ) ( 1, 1 )
+        ++ Sprite.sprite (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
         ++ (List.indexedMap
                 (\index tile ->
                     toolbarTileButton
@@ -3774,7 +3774,7 @@ tileMesh colors position tile =
     in
     if tile == EmptyTile then
         Sprite.sprite
-            (Coord.plus (Coord.xy 10 12) position |> Coord.toTuple)
+            (Coord.plus (Coord.xy 10 12) position)
             (Coord.tuple ( 30 * 2, 29 * 2 ))
             ( 504, 42 )
             ( 30, 29 )
@@ -3782,7 +3782,7 @@ tileMesh colors position tile =
     else
         Sprite.spriteWithTwoColors
             colors
-            (Coord.toTuple position2)
+            position2
             spriteSize
             (Coord.toTuple texturePosition)
             (Coord.toTuple size)
@@ -3794,7 +3794,7 @@ tileMesh colors position tile =
                         in
                         Sprite.spriteWithTwoColors
                             colors
-                            (Coord.toTuple position2)
+                            position2
                             spriteSize
                             (Coord.toTuple texturePosition2)
                             (Coord.toTuple size)
@@ -3880,5 +3880,5 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         }
         colors
         ++ Sprite.shiverText frame 1 "Help!" padding
-        ++ Sprite.spriteWithTwoColors colors ( 7, 27 ) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
+        ++ Sprite.spriteWithTwoColors colors (Coord.xy 7 27) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
         |> Sprite.toMesh
