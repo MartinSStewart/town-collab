@@ -161,6 +161,7 @@ audioLoaded audioData model =
         volumeOffset =
             mailEditorVolumeScale * 0.3 / ((List.map .volume movingTrains |> List.sum) + 1)
 
+        trainSounds : Audio
         trainSounds =
             List.map
                 (\train ->
@@ -2732,50 +2733,67 @@ loadingCanvasView model =
                     textureSize =
                         WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                 in
-                case tryLoading model of
-                    Just _ ->
-                        [ WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.vertexShader
-                            Shaders.fragmentShader
-                            (if isHovering then
-                                startButtonHighlightMesh
+                WebGL.entityWith
+                    [ Shaders.blend ]
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
+                    touchDevicesNotSupportedMesh
+                    { view =
+                        Mat4.makeScale3
+                            (2 / toFloat windowWidth)
+                            (-2 / toFloat windowHeight)
+                            1
+                            |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                            |> Coord.translateMat4 (touchDevicesNotSupportedPosition model.devicePixelRatio model.windowSize)
+                    , texture = texture
+                    , textureSize = textureSize
+                    , color = Vec4.vec4 1 1 1 1
+                    }
+                    :: (case tryLoading model of
+                            Just _ ->
+                                [ WebGL.entityWith
+                                    [ Shaders.blend ]
+                                    Shaders.vertexShader
+                                    Shaders.fragmentShader
+                                    (if isHovering then
+                                        startButtonHighlightMesh
 
-                             else
-                                startButtonMesh
-                            )
-                            { view =
-                                Mat4.makeScale3
-                                    (2 / toFloat windowWidth)
-                                    (-2 / toFloat windowHeight)
-                                    1
-                                    |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                    |> Coord.translateMat4 loadingTextPosition2
-                            , texture = texture
-                            , textureSize = textureSize
-                            , color = Vec4.vec4 1 1 1 1
-                            }
-                        ]
+                                     else
+                                        startButtonMesh
+                                    )
+                                    { view =
+                                        Mat4.makeScale3
+                                            (2 / toFloat windowWidth)
+                                            (-2 / toFloat windowHeight)
+                                            1
+                                            |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                                            |> Coord.translateMat4 loadingTextPosition2
+                                    , texture = texture
+                                    , textureSize = textureSize
+                                    , color = Vec4.vec4 1 1 1 1
+                                    }
+                                ]
 
-                    Nothing ->
-                        [ WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.vertexShader
-                            Shaders.fragmentShader
-                            loadingTextMesh
-                            { view =
-                                Mat4.makeScale3
-                                    (2 / toFloat windowWidth)
-                                    (-2 / toFloat windowHeight)
-                                    1
-                                    |> Coord.translateMat4
-                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                    |> Coord.translateMat4 (loadingTextPosition model.devicePixelRatio model.windowSize)
-                            , texture = texture
-                            , textureSize = textureSize
-                            , color = Vec4.vec4 1 1 1 1
-                            }
-                        ]
+                            Nothing ->
+                                [ WebGL.entityWith
+                                    [ Shaders.blend ]
+                                    Shaders.vertexShader
+                                    Shaders.fragmentShader
+                                    loadingTextMesh
+                                    { view =
+                                        Mat4.makeScale3
+                                            (2 / toFloat windowWidth)
+                                            (-2 / toFloat windowHeight)
+                                            1
+                                            |> Coord.translateMat4
+                                                (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                                            |> Coord.translateMat4 (loadingTextPosition model.devicePixelRatio model.windowSize)
+                                    , texture = texture
+                                    , textureSize = textureSize
+                                    , color = Vec4.vec4 1 1 1 1
+                                    }
+                                ]
+                       )
 
             Nothing ->
                 []
@@ -2813,6 +2831,17 @@ loadingTextSize =
 loadingTextMesh : WebGL.Mesh Vertex
 loadingTextMesh =
     Sprite.text Color.black 2 "Loading..." Coord.origin
+        |> Sprite.toMesh
+
+
+touchDevicesNotSupportedPosition : Float -> Coord units -> Coord units
+touchDevicesNotSupportedPosition devicePixelRatio windowSize =
+    loadingTextPosition devicePixelRatio windowSize |> Coord.plus (Coord.yOnly loadingTextSize |> Coord.multiply (Coord.xy 1 2))
+
+
+touchDevicesNotSupportedMesh : WebGL.Mesh Vertex
+touchDevicesNotSupportedMesh =
+    Sprite.text Color.black 2 "(Phones and tablets not supported)" (Coord.xy -170 0)
         |> Sprite.toMesh
 
 
