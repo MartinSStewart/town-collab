@@ -1,4 +1,4 @@
-module TextInput exposing (Model, bounds, charScale, init, keyMsg, padding, size, view, withText)
+module TextInput exposing (Model, bounds, charScale, init, keyMsg, mouseDown, padding, size, view, withText)
 
 import Bounds
 import Color
@@ -71,6 +71,27 @@ keyMsg key model =
 
         _ ->
             model
+
+
+mouseDown : Coord units -> Coord units -> Model -> Model
+mouseDown mousePosition position model =
+    let
+        mouseX : Int
+        mouseX =
+            Coord.xRaw mousePosition
+
+        paddingX : Int
+        paddingX =
+            Coord.xRaw padding
+
+        positionX : Int
+        positionX =
+            Coord.xRaw position
+    in
+    { model
+        | cursorPosition =
+            toFloat (mouseX - (positionX + paddingX + charScale)) / toFloat (Coord.xRaw Sprite.charSize * 2) |> round
+    }
 
 
 charScale : number

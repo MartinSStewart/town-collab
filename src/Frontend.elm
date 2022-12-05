@@ -647,6 +647,12 @@ updateLoaded audioData msg model =
             let
                 hover =
                     hoverAt model mousePosition
+
+                mousePosition2 : Coord Pixels
+                mousePosition2 =
+                    mousePosition
+                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                        |> Coord.roundPoint
             in
             case model.mailEditor.showMailEditor of
                 MailEditorOpening { startTime, startPosition } ->
@@ -702,6 +708,34 @@ updateLoaded audioData msg model =
                                     case ( model2.currentTile, hover ) of
                                         ( Just { tile }, MapHover ) ->
                                             placeTile False tile model2
+
+                                        ( _, PrimaryColorInput ) ->
+                                            { model2
+                                                | primaryColorTextInput =
+                                                    TextInput.mouseDown
+                                                        mousePosition2
+                                                        (toolbarToPixel
+                                                            model2.devicePixelRatio
+                                                            model2.windowSize
+                                                            primaryColorInputPosition
+                                                        )
+                                                        model2.primaryColorTextInput
+                                            }
+                                                |> setFocus PrimaryColorInput
+
+                                        ( _, SecondaryColorInput ) ->
+                                            { model2
+                                                | secondaryColorTextInput =
+                                                    TextInput.mouseDown
+                                                        mousePosition2
+                                                        (toolbarToPixel
+                                                            model2.devicePixelRatio
+                                                            model2.windowSize
+                                                            secondaryColorInputPosition
+                                                        )
+                                                        model2.secondaryColorTextInput
+                                            }
+                                                |> setFocus SecondaryColorInput
 
                                         _ ->
                                             model2
@@ -1172,6 +1206,24 @@ handleKeyDownColorInput getTextInputModel setTextInputModel updateColor tile key
            )
 
 
+showColorTextInputs : Maybe Tile -> { showPrimaryColorTextInput : Bool, showSecondaryColorTextInput : Bool }
+showColorTextInputs currentTile =
+    case currentTile of
+        Just tile ->
+            case Tile.getData tile |> .defaultColors of
+                ZeroDefaultColors ->
+                    { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
+
+                OneDefaultColor _ ->
+                    { showPrimaryColorTextInput = True, showSecondaryColorTextInput = False }
+
+                TwoDefaultColors _ _ ->
+                    { showPrimaryColorTextInput = True, showSecondaryColorTextInput = True }
+
+        Nothing ->
+            { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
+
+
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
 hoverAt model mousePosition =
     let
@@ -1196,27 +1248,35 @@ hoverAt model mousePosition =
         MailEditor.hoverAt model.mailEditor |> MailEditorHover
 
     else if containsToolbar then
+        let
+            { showPrimaryColorTextInput, showSecondaryColorTextInput } =
+                showColorTextInputs (Maybe.map .tile model.currentTile)
+        in
         if
-            TextInput.bounds
-                (toolbarToPixel
-                    model.devicePixelRatio
-                    model.windowSize
-                    primaryColorInputPosition
-                )
-                primaryColorInputWidth
-                |> Bounds.contains mousePosition2
+            showPrimaryColorTextInput
+                && (TextInput.bounds
+                        (toolbarToPixel
+                            model.devicePixelRatio
+                            model.windowSize
+                            primaryColorInputPosition
+                        )
+                        primaryColorInputWidth
+                        |> Bounds.contains mousePosition2
+                   )
         then
             PrimaryColorInput
 
         else if
-            TextInput.bounds
-                (toolbarToPixel
-                    model.devicePixelRatio
-                    model.windowSize
-                    secondaryColorInputPosition
-                )
-                secondaryColorInputWidth
-                |> Bounds.contains mousePosition2
+            showSecondaryColorTextInput
+                && (TextInput.bounds
+                        (toolbarToPixel
+                            model.devicePixelRatio
+                            model.windowSize
+                            secondaryColorInputPosition
+                        )
+                        secondaryColorInputWidth
+                        |> Bounds.contains mousePosition2
+                   )
         then
             SecondaryColorInput
 
@@ -1609,6 +1669,18 @@ setFocus newFocus model =
 
             else
                 model.primaryColorTextInput
+        , secondaryColorTextInput =
+            if model.focus == SecondaryColorInput && newFocus /= SecondaryColorInput then
+                case model.currentTile of
+                    Just { tile } ->
+                        model.secondaryColorTextInput
+                            |> TextInput.withText (Color.toHexCode (getTileColor tile model).secondaryColor)
+
+                    Nothing ->
+                        model.secondaryColorTextInput
+
+            else
+                model.secondaryColorTextInput
     }
 
 
@@ -3345,6 +3417,10 @@ toolbarMesh :
     -> Maybe Tile
     -> WebGL.Mesh Vertex
 toolbarMesh primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
+    let
+        { showPrimaryColorTextInput, showSecondaryColorTextInput } =
+            showColorTextInputs currentTile
+    in
     Sprite.sprite ( 0, 0 ) toolbarSize ( 506, 28 ) ( 1, 1 )
         ++ Sprite.sprite ( 2, 2 ) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
         ++ (List.indexedMap
@@ -3359,34 +3435,27 @@ toolbarMesh primaryColorTextInput secondaryColorTextInput colors hotkeys focus c
                 buttonTiles
                 |> List.concat
            )
-        ++ (case Maybe.map (Tile.getData >> .defaultColors) currentTile of
-                Nothing ->
-                    []
+        ++ (if showPrimaryColorTextInput then
+                TextInput.view
+                    primaryColorInputPosition
+                    primaryColorInputWidth
+                    (focus == PrimaryColorInput)
+                    (Color.fromHexCode >> (/=) Nothing)
+                    primaryColorTextInput
 
-                Just ZeroDefaultColors ->
-                    []
+            else
+                []
+           )
+        ++ (if showSecondaryColorTextInput then
+                TextInput.view
+                    secondaryColorInputPosition
+                    secondaryColorInputWidth
+                    (focus == SecondaryColorInput)
+                    (Color.fromHexCode >> (/=) Nothing)
+                    secondaryColorTextInput
 
-                Just (OneDefaultColor _) ->
-                    TextInput.view
-                        primaryColorInputPosition
-                        primaryColorInputWidth
-                        (focus == PrimaryColorInput)
-                        (Color.fromHexCode >> (/=) Nothing)
-                        primaryColorTextInput
-
-                Just (TwoDefaultColors _ _) ->
-                    TextInput.view
-                        primaryColorInputPosition
-                        primaryColorInputWidth
-                        (focus == PrimaryColorInput)
-                        (Color.fromHexCode >> (/=) Nothing)
-                        primaryColorTextInput
-                        ++ TextInput.view
-                            secondaryColorInputPosition
-                            secondaryColorInputWidth
-                            (focus == SecondaryColorInput)
-                            (Color.fromHexCode >> (/=) Nothing)
-                            secondaryColorTextInput
+            else
+                []
            )
         |> Sprite.toMesh
 
