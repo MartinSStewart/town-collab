@@ -258,6 +258,7 @@ audioLoaded audioData model =
         Nothing ->
             Audio.silence
     , playSound model.music.sound model.music.startTime |> Audio.scaleVolume 0.5
+    , playSound PopSound (Duration.addTo model.startTime (Duration.milliseconds 100)) |> Audio.scaleVolume 0.7
     ]
         |> Audio.group
 
@@ -310,13 +311,13 @@ maxVolumeDistance =
     10
 
 
-tryLoading : FrontendLoading -> ( FrontendModel_, Cmd FrontendMsg_ )
+tryLoading : FrontendLoading -> Maybe (() -> ( FrontendModel_, Cmd FrontendMsg_ ))
 tryLoading frontendLoading =
-    Maybe.map2
-        (\time loadingData -> loadedInit time frontendLoading loadingData)
+    Maybe.map3
+        (\time texture loadingData () -> loadedInit time frontendLoading texture loadingData)
         frontendLoading.time
+        frontendLoading.texture
         frontendLoading.loadingData
-        |> Maybe.withDefault ( Loading frontendLoading, Cmd.none )
 
 
 defaultTileHotkeys : Dict String Tile
@@ -342,8 +343,8 @@ defaultTileHotkeys =
         ]
 
 
-loadedInit : Time.Posix -> FrontendLoading -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
-loadedInit time loading loadingData =
+loadedInit : Time.Posix -> FrontendLoading -> Texture -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
+loadedInit time loading texture loadingData =
     let
         currentTile =
             Nothing
@@ -362,7 +363,7 @@ loadedInit time loading loadingData =
             , meshes = Dict.empty
             , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
             , viewPointLastInterval = Point2d.origin
-            , texture = Nothing
+            , texture = texture
             , trainTexture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
@@ -412,21 +413,12 @@ loadedInit time loading loadingData =
             , primaryColorTextInput = TextInput.init
             , secondaryColorTextInput = TextInput.init
             , focus = focus
-            , music = { startTime = time, sound = Music0 }
+            , music = { startTime = Duration.addTo time (Duration.seconds 10), sound = Music0 }
             }
     in
     ( updateMeshes model model
     , Cmd.batch
         [ WebGL.Texture.loadWith
-            { magnify = WebGL.Texture.nearest
-            , minify = WebGL.Texture.nearest
-            , horizontalWrap = WebGL.Texture.clampToEdge
-            , verticalWrap = WebGL.Texture.clampToEdge
-            , flipY = False
-            }
-            "/texture.png"
-            |> Task.attempt TextureLoaded
-        , WebGL.Texture.loadWith
             { magnify = WebGL.Texture.nearest
             , minify = WebGL.Texture.nearest
             , horizontalWrap = WebGL.Texture.clampToEdge
@@ -494,6 +486,7 @@ init url key =
         , mousePosition = Point2d.origin
         , sounds = AssocList.empty
         , loadingData = Nothing
+        , texture = Nothing
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (ConnectToBackend bounds)
@@ -507,6 +500,15 @@ init url key =
             Browser.Dom.getViewport
         , Task.perform (\time -> Duration.addTo time (PingData.pingOffset { pingData = Nothing }) |> ShortIntervalElapsed) Time.now
         , cmd
+        , WebGL.Texture.loadWith
+            { magnify = WebGL.Texture.nearest
+            , minify = WebGL.Texture.nearest
+            , horizontalWrap = WebGL.Texture.clampToEdge
+            , verticalWrap = WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/texture.png"
+            |> Task.attempt TextureLoaded
         ]
     , Sound.load SoundLoaded
     )
@@ -520,14 +522,37 @@ update audioData msg model =
                 WindowResized windowSize ->
                     windowResizedUpdate windowSize loadingModel |> Tuple.mapFirst Loading
 
-                ShortIntervalElapsed time ->
-                    tryLoading { loadingModel | time = Just time }
-
                 GotDevicePixelRatio devicePixelRatio ->
                     devicePixelRatioUpdate devicePixelRatio loadingModel |> Tuple.mapFirst Loading
 
                 SoundLoaded sound result ->
                     ( Loading { loadingModel | sounds = AssocList.insert sound result loadingModel.sounds }, Cmd.none )
+
+                TextureLoaded result ->
+                    case result of
+                        Ok texture ->
+                            ( Loading { loadingModel | texture = Just texture }, Cmd.none )
+
+                        Err _ ->
+                            ( model, Cmd.none )
+
+                MouseMove mousePosition ->
+                    ( Loading { loadingModel | mousePosition = mousePosition }, Cmd.none )
+
+                MouseUp MainButton mousePosition ->
+                    if insideStartButton mousePosition loadingModel then
+                        case tryLoading loadingModel of
+                            Just a ->
+                                a ()
+
+                            Nothing ->
+                                ( model, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+                AnimationFrame time ->
+                    ( Loading { loadingModel | time = Just time }, Cmd.none )
 
                 _ ->
                     ( model, Cmd.none )
@@ -572,12 +597,7 @@ updateLoaded audioData msg model =
             ( model, Cmd.none )
 
         TextureLoaded result ->
-            case result of
-                Ok texture ->
-                    ( { model | texture = Just texture }, Cmd.none )
-
-                Err _ ->
-                    ( model, Cmd.none )
+            ( model, Cmd.none )
 
         KeyMsg keyMsg ->
             ( { model | pressedKeys = Keyboard.update keyMsg model.pressedKeys }, Cmd.none )
@@ -1045,9 +1065,11 @@ updateLoaded audioData msg model =
                 localGrid =
                     LocalGrid.localModel model.localModel
 
+                oldViewPoint : Point2d WorldUnit WorldUnit
                 oldViewPoint =
                     actualViewPoint model
 
+                newViewPoint : Point2d WorldUnit WorldUnit
                 newViewPoint =
                     Point2d.translateBy
                         (Keyboard.Arrows.arrows model.pressedKeys
@@ -1055,9 +1077,11 @@ updateLoaded audioData msg model =
                         )
                         oldViewPoint
 
+                movedViewWithArrowKeys : Bool
                 movedViewWithArrowKeys =
                     canMoveWithArrowKeys && Keyboard.Arrows.arrows model.pressedKeys /= { x = 0, y = 0 }
 
+                canMoveWithArrowKeys : Bool
                 canMoveWithArrowKeys =
                     case model.focus of
                         PrimaryColorInput ->
@@ -1866,7 +1890,7 @@ mouseWorldPosition model =
     mouseScreenPosition model |> screenToWorld model
 
 
-mouseScreenPosition : FrontendLoaded -> Point2d Pixels Pixels
+mouseScreenPosition : { a | mouseLeft : MouseButtonState } -> Point2d Pixels Pixels
 mouseScreenPosition model =
     case model.mouseLeft of
         MouseButtonDown { current } ->
@@ -2451,7 +2475,7 @@ updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Cmd Fronte
 updateFromBackend msg model =
     case ( model, msg ) of
         ( Loading loading, LoadingData loadingData ) ->
-            tryLoading { loading | loadingData = Just loadingData }
+            ( Loading { loading | loadingData = Just loadingData }, Cmd.none )
 
         ( Loaded loaded, _ ) ->
             updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
@@ -2582,8 +2606,8 @@ view audioData model =
     { title = "Town Collab"
     , body =
         [ case model of
-            Loading _ ->
-                Html.text "Loading"
+            Loading loadingModel ->
+                loadingCanvasView loadingModel
 
             Loaded loadedModel ->
                 canvasView audioData loadedModel
@@ -2597,7 +2621,9 @@ currentUserId =
     .localModel >> LocalGrid.localModel >> .user
 
 
-findPixelPerfectSize : FrontendLoaded -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
+findPixelPerfectSize :
+    { a | devicePixelRatio : Float, windowSize : ( Quantity Int Pixels, Quantity Int Pixels ) }
+    -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
 findPixelPerfectSize frontendModel =
     let
         findValue : Quantity Int Pixels -> ( Int, Int )
@@ -2644,6 +2670,181 @@ viewBoundingBox model =
 viewBoundingBox_ : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewBoundingBox_ model =
     BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
+
+
+loadingCanvasView : FrontendLoading -> Html FrontendMsg_
+loadingCanvasView model =
+    let
+        ( windowWidth, windowHeight ) =
+            actualCanvasSize
+
+        ( cssWindowWidth, cssWindowHeight ) =
+            canvasSize
+
+        { canvasSize, actualCanvasSize } =
+            findPixelPerfectSize model
+
+        loadingTextPosition2 =
+            loadingTextPosition model.devicePixelRatio model.windowSize
+
+        isHovering =
+            insideStartButton model.mousePosition model
+
+        showMousePointer =
+            isHovering
+    in
+    WebGL.toHtmlWith
+        [ WebGL.alpha False
+        , WebGL.antialias
+        , WebGL.clearColor 1 1 1 1
+        , WebGL.depth 1
+        ]
+        [ Html.Attributes.width windowWidth
+        , Html.Attributes.height windowHeight
+        , Html.Attributes.style "cursor"
+            (if showMousePointer then
+                "pointer"
+
+             else
+                "default"
+            )
+        , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
+        , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
+        , Html.Events.Extra.Mouse.onDown
+            (\{ clientPos, button } ->
+                MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+            )
+        , Html.Events.Extra.Mouse.onMove
+            (\{ clientPos } ->
+                MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+            )
+        , Html.Events.Extra.Mouse.onUp
+            (\{ clientPos, button } ->
+                MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
+            )
+        ]
+        (case model.texture of
+            Just texture ->
+                let
+                    textureSize =
+                        WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                in
+                case tryLoading model of
+                    Just _ ->
+                        [ WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            (if isHovering then
+                                startButtonHighlightMesh
+
+                             else
+                                startButtonMesh
+                            )
+                            { view =
+                                Mat4.makeScale3
+                                    (2 / toFloat windowWidth)
+                                    (-2 / toFloat windowHeight)
+                                    1
+                                    |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                                    |> Coord.translateMat4 loadingTextPosition2
+                            , texture = texture
+                            , textureSize = textureSize
+                            , color = Vec4.vec4 1 1 1 1
+                            }
+                        ]
+
+                    Nothing ->
+                        [ WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            loadingTextMesh
+                            { view =
+                                Mat4.makeScale3
+                                    (2 / toFloat windowWidth)
+                                    (-2 / toFloat windowHeight)
+                                    1
+                                    |> Coord.translateMat4
+                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                                    |> Coord.translateMat4 (loadingTextPosition model.devicePixelRatio model.windowSize)
+                            , texture = texture
+                            , textureSize = textureSize
+                            , color = Vec4.vec4 1 1 1 1
+                            }
+                        ]
+
+            Nothing ->
+                []
+        )
+
+
+insideStartButton : Point2d Pixels Pixels -> { a | devicePixelRatio : Float, windowSize : Coord Pixels } -> Bool
+insideStartButton mousePosition model =
+    let
+        mousePosition2 : Coord Pixels
+        mousePosition2 =
+            mousePosition
+                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                |> Coord.roundPoint
+
+        loadingTextPosition2 =
+            loadingTextPosition model.devicePixelRatio model.windowSize
+    in
+    Bounds.fromCoordAndSize loadingTextPosition2 loadingTextSize |> Bounds.contains mousePosition2
+
+
+loadingTextPosition : Float -> Coord units -> Coord units
+loadingTextPosition devicePixelRatio windowSize =
+    windowSize
+        |> Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio )
+        |> Coord.divide (Coord.xy 2 2)
+        |> Coord.minus (Coord.divide (Coord.xy 2 2) loadingTextSize)
+
+
+loadingTextSize : Coord units
+loadingTextSize =
+    Coord.xy 336 54
+
+
+loadingTextMesh : WebGL.Mesh Vertex
+loadingTextMesh =
+    Sprite.text Color.black 2 "Loading..." Coord.origin
+        |> Sprite.toMesh
+
+
+startButtonMesh : WebGL.Mesh Vertex
+startButtonMesh =
+    Sprite.spriteWithColor
+        (Color.rgb255 157 143 134)
+        ( 0, 0 )
+        loadingTextSize
+        ( 508, 28 )
+        ( 1, 1 )
+        ++ Sprite.sprite
+            (Coord.xy 2 2 |> Coord.toTuple)
+            (loadingTextSize |> Coord.minus (Coord.xy 4 4))
+            ( 507, 28 )
+            ( 1, 1 )
+        ++ Sprite.text Color.black 2 "Press to start!" (Coord.xy 16 8)
+        |> Sprite.toMesh
+
+
+startButtonHighlightMesh : WebGL.Mesh Vertex
+startButtonHighlightMesh =
+    Sprite.spriteWithColor
+        (Color.rgb255 241 231 223)
+        ( 0, 0 )
+        loadingTextSize
+        ( 508, 28 )
+        ( 1, 1 )
+        ++ Sprite.sprite
+            (Coord.xy 2 2 |> Coord.toTuple)
+            (loadingTextSize |> Coord.minus (Coord.xy 4 4))
+            ( 505, 28 )
+            ( 1, 1 )
+        ++ Sprite.text Color.black 2 "Press to start!" (Coord.xy 16 8)
+        |> Sprite.toMesh
 
 
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
@@ -2742,11 +2943,11 @@ canvasView audioData model =
             )
         , Html.Events.Extra.Wheel.onWheel MouseWheel
         ]
-        (case ( model.texture, model.trainTexture ) of
-            ( Just texture, Just trainTexture ) ->
+        (case model.trainTexture of
+            Just trainTexture ->
                 let
                     textureSize =
-                        WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                        WebGL.Texture.size model.texture |> Coord.tuple |> Coord.toVec2
 
                     meshes =
                         Dict.filter
@@ -2758,8 +2959,8 @@ canvasView audioData model =
                             )
                             model.meshes
                 in
-                drawBackground meshes viewMatrix texture
-                    ++ drawForeground meshes viewMatrix texture
+                drawBackground meshes viewMatrix model.texture
+                    ++ drawForeground meshes viewMatrix model.texture
                     ++ Train.draw model.time model.mail model.trains viewMatrix trainTexture
                     ++ List.filterMap
                         (\flag ->
@@ -2792,7 +2993,7 @@ canvasView audioData model =
                                                 (flagPosition.y * toFloat (Coord.yRaw Units.tileSize))
                                                 0
                                                 |> Mat4.mul viewMatrix
-                                        , texture = texture
+                                        , texture = model.texture
                                         , textureSize = textureSize
                                         , color = Vec4.vec4 1 1 1 1
                                         }
@@ -2808,7 +3009,7 @@ canvasView audioData model =
                             Shaders.fragmentShader
                             model.debrisMesh
                             { view = viewMatrix
-                            , texture = texture
+                            , texture = model.texture
                             , textureSize = textureSize
                             , time = Duration.from model.startTime model.time |> Duration.inSeconds
                             , color = Vec4.vec4 1 1 1 1
@@ -2856,7 +3057,7 @@ canvasView audioData model =
                                                 (round (point.y * toFloat (Coord.yRaw Units.tileSize)) + yOffset |> toFloat)
                                                 0
                                                 |> Mat4.mul viewMatrix
-                                        , texture = texture
+                                        , texture = model.texture
                                         , textureSize = textureSize
                                         , color = Vec4.vec4 1 1 1 1
                                         }
@@ -2942,7 +3143,7 @@ canvasView audioData model =
                                                 (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
                                                 (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
                                                 0
-                                    , texture = texture
+                                    , texture = model.texture
                                     , textureSize = textureSize
                                     , color =
                                         if currentTile.tile == EmptyTile then
@@ -2982,7 +3183,7 @@ canvasView audioData model =
                                     1
                                     |> Coord.translateMat4
                                         (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                            , texture = texture
+                            , texture = model.texture
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1
                             }
@@ -2999,7 +3200,7 @@ canvasView audioData model =
                                     |> Coord.translateMat4
                                         (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                                     |> Coord.translateMat4 (toolbarPosition model.devicePixelRatio model.windowSize)
-                            , texture = texture
+                            , texture = model.texture
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1
                             }
@@ -3020,7 +3221,7 @@ canvasView audioData model =
                        --     }
                        ]
                     ++ MailEditor.drawMail
-                        texture
+                        model.texture
                         (case model.mouseLeft of
                             MouseButtonDown { current } ->
                                 current
@@ -3297,6 +3498,7 @@ subscriptions _ model =
     Sub.batch
         [ martinsstewart_elm_device_pixel_ratio_from_js GotDevicePixelRatio
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
+        , Browser.Events.onAnimationFrame AnimationFrame
         , case model of
             Loading _ ->
                 Sub.none
@@ -3306,7 +3508,6 @@ subscriptions _ model =
                     [ Sub.map KeyMsg Keyboard.subscriptions
                     , Keyboard.downs KeyDown
                     , Time.every 1000 (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
-                    , Browser.Events.onAnimationFrame AnimationFrame
                     , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         ]

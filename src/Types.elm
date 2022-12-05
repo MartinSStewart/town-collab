@@ -78,6 +78,7 @@ type alias FrontendLoading =
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , loadingData : Maybe LoadingData_
+    , texture : Maybe Texture
     }
 
 
@@ -93,7 +94,7 @@ type alias FrontendLoaded =
     , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
-    , texture : Maybe Texture
+    , texture : Texture
     , trainTexture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
