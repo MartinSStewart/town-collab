@@ -1904,11 +1904,11 @@ mouseScreenPosition model =
             current
 
 
-cursorPosition : TileData -> FrontendLoaded -> Coord WorldUnit
+cursorPosition : TileData WorldUnit -> FrontendLoaded -> Coord WorldUnit
 cursorPosition tileData model =
     mouseWorldPosition model
         |> Coord.floorPoint
-        |> Coord.minus (Coord.tuple tileData.size |> Coord.divide (Coord.tuple ( 2, 2 )))
+        |> Coord.minus (tileData.size |> Coord.divide (Coord.tuple ( 2, 2 )))
 
 
 placeTile : Bool -> Tile -> FrontendLoaded -> FrontendLoaded
@@ -2093,7 +2093,7 @@ createDebrisMesh appStartTime removedTiles =
                             ( _, Quantity y ) =
                                 position
 
-                            ( _, height ) =
+                            ( _, Quantity height ) =
                                 Tile.getData tile |> .size
                         in
                         y + height
@@ -2128,21 +2128,21 @@ createDebrisMesh appStartTime removedTiles =
 
 createDebrisMeshHelper :
     ( Quantity Int WorldUnit, Quantity Int WorldUnit )
-    -> ( Int, Int )
-    -> ( Int, Int )
+    -> Coord unit
+    -> Coord unit
     -> Color
     -> Color
     -> Time.Posix
     -> Time.Posix
     -> List DebrisVertex
-createDebrisMeshHelper ( Quantity x, Quantity y ) ( textureX, textureY ) ( textureW, textureH ) primaryColor secondaryColor appStartTime time =
+createDebrisMeshHelper ( Quantity x, Quantity y ) texturePosition ( Quantity textureW, Quantity textureH ) primaryColor secondaryColor appStartTime time =
     List.concatMap
         (\x2 ->
             List.concatMap
                 (\y2 ->
                     let
                         { topLeft, topRight, bottomLeft, bottomRight } =
-                            Tile.texturePosition_ ( textureX + x2, textureY + y2 ) ( 1, 1 )
+                            Tile.texturePosition_ (texturePosition |> Coord.plus (Coord.xy x2 y2)) (Coord.xy 1 1)
 
                         ( ( randomX, randomY ), _ ) =
                             Random.step
@@ -2851,13 +2851,13 @@ startButtonMesh =
         (Color.rgb255 157 143 134)
         Coord.origin
         loadingTextSize
-        ( 508, 28 )
-        ( 1, 1 )
+        (Coord.xy 508 28)
+        (Coord.xy 1 1)
         ++ Sprite.sprite
             (Coord.xy 2 2)
             (loadingTextSize |> Coord.minus (Coord.xy 4 4))
-            ( 507, 28 )
-            ( 1, 1 )
+            (Coord.xy 507 28)
+            (Coord.xy 1 1)
         ++ Sprite.text Color.black 2 "Press to start!" (Coord.xy 16 8)
         |> Sprite.toMesh
 
@@ -2868,13 +2868,13 @@ startButtonHighlightMesh =
         (Color.rgb255 241 231 223)
         Coord.origin
         loadingTextSize
-        ( 508, 28 )
-        ( 1, 1 )
+        (Coord.xy 508 28)
+        (Coord.xy 1 1)
         ++ Sprite.sprite
             (Coord.xy 2 2)
             (loadingTextSize |> Coord.minus (Coord.xy 4 4))
-            ( 505, 28 )
-            ( 1, 1 )
+            (Coord.xy 505 28)
+            (Coord.xy 1 1)
         ++ Sprite.text Color.black 2 "Press to start!" (Coord.xy 16 8)
         |> Sprite.toMesh
 
@@ -3112,7 +3112,7 @@ canvasView audioData model =
                                         Coord.toTuple mousePosition
 
                                     tileSize =
-                                        Tile.getData currentTile.tile |> .size |> Coord.tuple
+                                        Tile.getData currentTile.tile |> .size
 
                                     lastPlacementOffset : () -> Float
                                     lastPlacementOffset () =
@@ -3421,7 +3421,7 @@ sendingMailFlagMesh frame =
             6
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels ( 80, 594 + frame * 6 ) ( width, 6 )
+            Tile.texturePositionPixels (Coord.xy 80 (594 + frame * 6)) (Coord.xy width 6)
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0
@@ -3468,7 +3468,7 @@ receivingMailFlagMesh frame =
             6
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels ( 90, 594 + frame * 6 ) ( width, 6 )
+            Tile.texturePositionPixels (Coord.xy 90 (594 + frame * 6)) (Coord.xy width 6)
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0
@@ -3612,25 +3612,29 @@ toolbarTileButton colors maybeHotkey highlight offset tile =
     Sprite.sprite
         offset
         toolbarButtonSize
-        ( if highlight then
-            505
+        (Coord.xy
+            (if highlight then
+                505
 
-          else
-            506
-        , 28
+             else
+                506
+            )
+            28
         )
-        ( 1, 1 )
+        (Coord.xy 1 1)
         ++ Sprite.sprite
             (offset |> Coord.plus (Coord.xy 2 2))
             (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
-            ( if highlight then
-                505
+            (Coord.xy
+                (if highlight then
+                    505
 
-              else
-                507
-            , 28
+                 else
+                    507
+                )
+                28
             )
-            ( 1, 1 )
+            (Coord.xy 1 1)
         ++ tileMesh primaryAndSecondaryColors offset tile
         ++ (case maybeHotkey of
                 Just hotkey ->
@@ -3640,8 +3644,8 @@ toolbarTileButton colors maybeHotkey highlight offset tile =
                             offset
                         )
                         (Coord.plus (Coord.xy 2 -4) charSize)
-                        ( 506, 28 )
-                        ( 1, 1 )
+                        (Coord.xy 506 28)
+                        (Coord.xy 1 1)
                         ++ Sprite.text
                             Color.white
                             2
@@ -3669,8 +3673,8 @@ toolbarMesh primaryColorTextInput secondaryColorTextInput colors hotkeys focus c
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
             showColorTextInputs currentTile
     in
-    Sprite.sprite Coord.origin toolbarSize ( 506, 28 ) ( 1, 1 )
-        ++ Sprite.sprite (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4)) ( 507, 28 ) ( 1, 1 )
+    Sprite.sprite Coord.origin toolbarSize (Coord.xy 506 28) (Coord.xy 1 1)
+        ++ Sprite.sprite (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4)) (Coord.xy 507 28) (Coord.xy 1 1)
         ++ (List.indexedMap
                 (\index tile ->
                     toolbarTileButton
@@ -3749,17 +3753,17 @@ toolbarToPixel devicePixelRatio windowSize coord =
 tileMesh : { primaryColor : Color, secondaryColor : Color } -> Coord unit -> Tile -> List Vertex
 tileMesh colors position tile =
     let
-        data : TileData
+        data : TileData b
         data =
             Tile.getData tile
 
         size : Coord units
         size =
-            Coord.multiply Units.tileSize (Coord.tuple data.size)
+            Coord.multiply Units.tileSize data.size
                 |> Coord.minimum toolbarButtonSize
 
         spriteSize =
-            if data.size == ( 1, 1 ) then
+            if data.size == Coord.xy 1 1 then
                 Coord.multiplyTuple ( 2, 2 ) size
 
             else
@@ -3770,34 +3774,34 @@ tileMesh colors position tile =
 
         texturePosition : Coord units
         texturePosition =
-            Coord.multiply Units.tileSize (Coord.tuple data.texturePosition)
+            Coord.multiply Units.tileSize data.texturePosition
     in
     if tile == EmptyTile then
         Sprite.sprite
             (Coord.plus (Coord.xy 10 12) position)
             (Coord.tuple ( 30 * 2, 29 * 2 ))
-            ( 504, 42 )
-            ( 30, 29 )
+            (Coord.xy 504 42)
+            (Coord.xy 30 29)
 
     else
         Sprite.spriteWithTwoColors
             colors
             position2
             spriteSize
-            (Coord.toTuple texturePosition)
-            (Coord.toTuple size)
+            texturePosition
+            size
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
                         let
                             texturePosition2 =
-                                Coord.multiply Units.tileSize (Coord.tuple topLayer.texturePosition)
+                                Coord.multiply Units.tileSize topLayer.texturePosition
                         in
                         Sprite.spriteWithTwoColors
                             colors
                             position2
                             spriteSize
-                            (Coord.toTuple texturePosition2)
-                            (Coord.toTuple size)
+                            texturePosition2
+                            size
 
                     Nothing ->
                         []
@@ -3835,14 +3839,14 @@ stuckMessageDelay =
 speechBubbleMesh : Array (WebGL.Mesh Vertex)
 speechBubbleMesh =
     List.range 0 (speechBubbleFrames - 1)
-        |> List.map (\frame -> speechBubbleMeshHelper frame ( 517, 29 ) ( 8, 12 ))
+        |> List.map (\frame -> speechBubbleMeshHelper frame (Coord.xy 517 29) (Coord.xy 8 12))
         |> Array.fromList
 
 
 speechBubbleRadioMesh : Array (WebGL.Mesh Vertex)
 speechBubbleRadioMesh =
     List.range 0 (speechBubbleFrames - 1)
-        |> List.map (\frame -> speechBubbleMeshHelper frame ( 525, 29 ) ( 8, 13 ))
+        |> List.map (\frame -> speechBubbleMeshHelper frame (Coord.xy 525 29) (Coord.xy 8 13))
         |> Array.fromList
 
 
@@ -3850,7 +3854,7 @@ speechBubbleFrames =
     3
 
 
-speechBubbleMeshHelper : Int -> ( Int, Int ) -> ( Int, Int ) -> WebGL.Mesh Vertex
+speechBubbleMeshHelper : Int -> Coord a -> Coord a -> WebGL.Mesh Vertex
 speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
     let
         text =

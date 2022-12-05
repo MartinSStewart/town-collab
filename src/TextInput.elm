@@ -123,19 +123,21 @@ view offset width hasFocus isValid model =
         )
         offset
         (size width)
-        ( 508, 28 )
-        ( 1, 1 )
+        (Coord.xy 508 28)
+        (Coord.xy 1 1)
         ++ Sprite.sprite
             (offset |> Coord.plus padding)
             (size width |> Coord.minus (Coord.multiplyTuple ( 2, 2 ) padding))
-            ( if hasFocus then
-                505
+            (Coord.xy
+                (if hasFocus then
+                    505
 
-              else
-                507
-            , 28
+                 else
+                    507
+                )
+                28
             )
-            ( 1, 1 )
+            (Coord.xy 1 1)
         ++ Sprite.text Color.black charScale model.text (offset |> Coord.plus padding |> Coord.plus (Coord.xy charScale 0))
         ++ (if hasFocus then
                 Sprite.sprite
@@ -147,8 +149,8 @@ view offset width hasFocus isValid model =
                         charScale
                         (Coord.yRaw Sprite.charSize * charScale)
                     )
-                    ( 504, 28 )
-                    ( 1, 1 )
+                    (Coord.xy 504 28)
+                    (Coord.xy 1 1)
 
             else
                 []

@@ -262,11 +262,11 @@ canPlaceTile change =
         ( cellPosition, ( Quantity x, Quantity y ) ) =
             worldToCellAndLocalCoord change.position
 
-        tileData : TileData
+        tileData : TileData unit
         tileData =
             Tile.getData change.change
 
-        ( tileW, tileH ) =
+        ( Quantity tileW, Quantity tileH ) =
             tileData.size
     in
     List.range 0 (1 + tileW // Terrain.terrainSize)
@@ -298,7 +298,9 @@ canPlaceTile change =
                                     change.position
                                     tileData
                                     terrainPosition
-                                    { size = ( Terrain.terrainSize, Terrain.terrainSize ), collisionMask = DefaultCollision }
+                                    { size = Coord.xy Terrain.terrainSize Terrain.terrainSize
+                                    , collisionMask = DefaultCollision
+                                    }
                         )
             )
         |> not
@@ -447,7 +449,7 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
     List.map
         (\{ position, userId, value, primaryColor, secondaryColor } ->
             let
-                data : TileData
+                data : TileData unit
                 data =
                     Tile.getData value
 
@@ -476,7 +478,7 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             if value == PostOffice && userId /= currentUserId then
-                                tileMeshHelper opacity colors True position ( 4, 35 ) data.size
+                                tileMeshHelper opacity colors True position (Coord.xy 4 35) data.size
 
                             else
                                 tileMeshHelper
@@ -532,9 +534,9 @@ backgroundMesh cellPosition =
                                             ((y2 * Terrain.terrainDivisionsPerCell + y) * Coord.yRaw Units.tileSize)
                                         )
                                         0.9
-                                        (Coord.tuple ( 80, 72 ))
-                                        ( textureX, textureY )
-                                        ( 80, 72 )
+                                        (Coord.xy 80 72)
+                                        (Coord.xy textureX textureY)
+                                        (Coord.xy 80 72)
 
                                 corners =
                                     [ { side1 = getValue 0 -1
@@ -640,7 +642,7 @@ tileMesh position tile colors =
             Tile.getData tile
     in
     if tile == EmptyTile then
-        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position) (Coord.tuple ( 30, 29 )) ( 504, 42 ) ( 30, 29 )
+        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position) (Coord.tuple ( 30, 29 )) (Coord.xy 504 42) (Coord.xy 30 29)
 
     else
         tileMeshHelper 1 colors False position data.texturePosition data.size
@@ -658,8 +660,8 @@ tileMeshHelper :
     -> { primaryColor : Color, secondaryColor : Color }
     -> Bool
     -> Coord WorldUnit
-    -> ( Int, Int )
-    -> ( Int, Int )
+    -> Coord unit
+    -> Coord unit
     -> List Vertex
 tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer position texturePosition size =
     let
@@ -672,7 +674,7 @@ tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer position text
         ( Quantity x, Quantity y ) =
             position
 
-        height =
+        (Quantity height) =
             Tuple.second size
     in
     List.map

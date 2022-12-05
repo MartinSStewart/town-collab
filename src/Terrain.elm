@@ -19,6 +19,7 @@ terrainToLocalCoord coord =
     Coord.multiplyTuple ( terrainSize, terrainSize ) coord |> Coord.toTuple |> Coord.tuple
 
 
+treeSize : Coord unit
 treeSize =
     Tile.getData PineTree |> .size
 
@@ -26,8 +27,8 @@ treeSize =
 randomTreePosition : Coord CellLocalUnit -> Random.Generator (Coord CellLocalUnit)
 randomTreePosition offset =
     Random.map2 (\x y -> Coord.xy x y |> Coord.plus offset)
-        (Random.int 0 (terrainSize - Tuple.first treeSize))
-        (Random.int -1 (terrainSize - Tuple.second treeSize))
+        (Random.int 0 (terrainSize - Coord.xRaw treeSize))
+        (Random.int -1 (terrainSize - Coord.yRaw treeSize))
 
 
 randomTrees : Float -> Coord CellLocalUnit -> Random.Generator (List (Coord CellLocalUnit))

@@ -513,7 +513,7 @@ mailMesh : List Vertex
 mailMesh =
     let
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels ( 234, 0 ) ( mailWidth, mailHeight )
+            Tile.texturePositionPixels (Coord.xy 234 0) (Coord.xy mailWidth mailHeight)
     in
     [ { position = Vec3.vec3 0 0 0
       , texturePosition = topLeft
@@ -643,7 +643,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                     imageData.textureSize
 
                 { topLeft, bottomRight, bottomLeft, topRight } =
-                    Tile.texturePositionPixels imageData.texturePosition ( imageWidth, imageHeight )
+                    Tile.texturePositionPixels (Coord.tuple imageData.texturePosition) (Coord.xy imageWidth imageHeight)
 
                 tilePosition : Coord UiPixelUnit
                 tilePosition =
@@ -843,8 +843,8 @@ submitButtonMesh : WebGL.Mesh Vertex
 submitButtonMesh =
     let
         vertices =
-            Sprite.sprite Coord.origin submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+            Sprite.sprite Coord.origin submitButtonSize (Coord.xy 380 153) (Coord.xy 1 1)
+                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 381 153) (Coord.xy 1 1)
                 ++ Sprite.text Color.black 1 "SUBMIT" (Coord.xy 12 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
@@ -854,8 +854,8 @@ submittingButtonMesh : WebGL.Mesh Vertex
 submittingButtonMesh =
     let
         vertices =
-            Sprite.sprite Coord.origin submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+            Sprite.sprite Coord.origin submitButtonSize (Coord.xy 380 153) (Coord.xy 1 1)
+                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 379 153) (Coord.xy 1 1)
                 ++ Sprite.text Color.black 1 "SUBMITTING" (Coord.xy 2 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
@@ -865,8 +865,8 @@ submitButtonHoverMesh : WebGL.Mesh Vertex
 submitButtonHoverMesh =
     let
         vertices =
-            Sprite.sprite Coord.origin submitButtonSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+            Sprite.sprite Coord.origin submitButtonSize (Coord.xy 380 153) (Coord.xy 1 1)
+                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 379 153) (Coord.xy 1 1)
                 ++ Sprite.text Color.black 1 "SUBMIT" (Coord.xy 12 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
@@ -884,8 +884,8 @@ textInputMesh : WebGL.Mesh Vertex
 textInputMesh =
     let
         vertices =
-            Sprite.sprite Coord.origin textInputSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.sprite (Coord.xy 1 1) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 381, 153 ) ( 1, 1 )
+            Sprite.sprite Coord.origin textInputSize (Coord.xy 380 153) (Coord.xy 1 1)
+                ++ Sprite.sprite (Coord.xy 1 1) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 381 153) (Coord.xy 1 1)
                 ++ Sprite.text Color.black 1 "TO:" (Coord.xy 3 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
@@ -895,8 +895,8 @@ textInputHoverMesh : WebGL.Mesh Vertex
 textInputHoverMesh =
     let
         vertices =
-            Sprite.sprite Coord.origin textInputSize ( 380, 153 ) ( 1, 1 )
-                ++ Sprite.sprite (Coord.xy 1 1) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) ( 379, 153 ) ( 1, 1 )
+            Sprite.sprite Coord.origin textInputSize (Coord.xy 380 153) (Coord.xy 1 1)
+                ++ Sprite.sprite (Coord.xy 1 1) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 379 153) (Coord.xy 1 1)
                 ++ Sprite.text Color.black 1 "TO:" (Coord.xy 3 7)
     in
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
@@ -920,7 +920,7 @@ imageMesh { position, image } =
             position
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels imageData.texturePosition ( width, height )
+            Tile.texturePositionPixels (Coord.tuple imageData.texturePosition) (Coord.xy width height)
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0
       , texturePosition = topLeft
