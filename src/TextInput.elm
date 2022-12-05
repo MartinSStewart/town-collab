@@ -10,9 +10,9 @@ import Sprite
 
 
 type alias Model =
-    { cursorPosition : Int
-    , cursorSize : Int
-    , text : String
+    { current : State
+    , undoHistory : List State
+    , redoHistory : List State
     }
 
 
@@ -25,7 +25,7 @@ type alias State =
 
 init : Model
 init =
-    { cursorPosition = 0, cursorSize = 0, text = "" }
+    { current = { cursorPosition = 0, cursorSize = 0, text = "" }, undoHistory = [], redoHistory = [] }
 
 
 withText : String -> Model -> Model
@@ -33,17 +33,53 @@ withText text model =
     { model | text = text }
 
 
+pushChange : (State -> State) -> Model -> Model
+pushChange changeFunc model =
+    { redoHistory = [], undoHistory = model.current :: model.undoHistory, current = changeFunc model.current }
+
+
+replaceChange : (State -> State) -> Model -> Model
+replaceChange changeFunc model =
+    { model | current = changeFunc model.current }
+
+
+undo : Model -> Model
+undo model =
+    case model.undoHistory of
+        head :: rest ->
+            { undoHistory = rest
+            , current = head
+            , redoHistory = model.current :: model.redoHistory
+            }
+
+        [] ->
+            model
+
+
+redo : Model -> Model
+redo model =
+    case model.redoHistory of
+        head :: rest ->
+            { redoHistory = rest
+            , current = head
+            , undoHistory = model.current :: model.undoHistory
+            }
+
+        [] ->
+            model
+
+
 bounds : Coord units -> Quantity Int units -> Bounds.Bounds units
 bounds position width =
     Bounds.fromCoordAndSize position (size width)
 
 
-selectionMin : Model -> Int
+selectionMin : State -> Int
 selectionMin model =
     min model.cursorPosition (model.cursorPosition + model.cursorSize)
 
 
-selectionMax : Model -> Int
+selectionMax : State -> Int
 selectionMax model =
     max model.cursorPosition (model.cursorPosition + model.cursorSize)
 
@@ -173,11 +209,15 @@ mouseDown mousePosition position model =
         positionX =
             Coord.xRaw position
     in
-    { model
-        | cursorPosition =
-            toFloat (mouseX - (positionX + paddingX + charScale)) / toFloat (Coord.xRaw Sprite.charSize * 2) |> round
-        , cursorSize = 0
-    }
+    replaceChange
+        (\state ->
+            { state
+                | cursorPosition =
+                    toFloat (mouseX - (positionX + paddingX + charScale)) / toFloat (Coord.xRaw Sprite.charSize * 2) |> round
+                , cursorSize = 0
+            }
+        )
+        model
 
 
 charScale : number
@@ -197,8 +237,12 @@ size width =
 
 view : Coord units -> Quantity Int units -> Bool -> (String -> Bool) -> Model -> List Vertex
 view offset width hasFocus isValid model =
+    let
+        current =
+            model.current
+    in
     Sprite.spriteWithColor
-        (if not (isValid model.text) then
+        (if not (isValid current.text) then
             Color.rgb255 255 0 0
 
          else if hasFocus then
@@ -224,7 +268,7 @@ view offset width hasFocus isValid model =
                 28
             )
             (Coord.xy 1 1)
-        ++ (if model.cursorSize == 0 then
+        ++ (if current.cursorSize == 0 then
                 []
 
             else
@@ -232,21 +276,21 @@ view offset width hasFocus isValid model =
                     (Color.rgb255 100 160 255)
                     (offset
                         |> Coord.plus
-                            (Coord.xy (model.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
+                            (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
                     )
                     (Coord.xy
-                        (Coord.xRaw Sprite.charSize * charScale * model.cursorSize)
+                        (Coord.xRaw Sprite.charSize * charScale * current.cursorSize)
                         (Coord.yRaw Sprite.charSize * charScale)
                     )
                     (Coord.xy 508 28)
                     (Coord.xy 1 1)
            )
-        ++ Sprite.text Color.black charScale model.text (offset |> Coord.plus padding |> Coord.plus (Coord.xy charScale 0))
+        ++ Sprite.text Color.black charScale current.text (offset |> Coord.plus padding |> Coord.plus (Coord.xy charScale 0))
         ++ (if hasFocus then
                 Sprite.sprite
                     (offset
                         |> Coord.plus
-                            (Coord.xy (model.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
+                            (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
                     )
                     (Coord.xy
                         charScale
