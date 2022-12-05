@@ -136,6 +136,7 @@ type alias FrontendLoaded =
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
     , focus : Hover
+    , music : { startTime : Time.Posix, sound : Sound }
     }
 
 

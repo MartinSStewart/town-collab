@@ -257,6 +257,7 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , playSound model.music.sound model.music.startTime |> Audio.scaleVolume 0.5
     ]
         |> Audio.group
 
@@ -411,6 +412,7 @@ loadedInit time loading loadingData =
             , primaryColorTextInput = TextInput.init
             , secondaryColorTextInput = TextInput.init
             , focus = focus
+            , music = { startTime = time, sound = Music0 }
             }
     in
     ( updateMeshes model model
@@ -942,6 +944,11 @@ updateLoaded audioData msg model =
                             (\( _, train ) -> BoundingBox2d.contains (Train.trainPosition model.time train) viewBounds)
                             (AssocList.toList model.trains)
 
+                musicEnd : Time.Posix
+                musicEnd =
+                    Duration.addTo model3.music.startTime (Sound.length audioData model3.sounds model3.music.sound)
+
+                model4 : FrontendLoaded
                 model4 =
                     { model3
                         | lastTrainWhistle =
@@ -950,6 +957,14 @@ updateLoaded audioData msg model =
 
                             else
                                 model.lastTrainWhistle
+                        , music =
+                            if Duration.from musicEnd time |> Quantity.lessThanZero then
+                                model3.music
+
+                            else
+                                { startTime = Duration.addTo time (Duration.minutes 3)
+                                , sound = Music0
+                                }
                     }
             in
             case List.Nonempty.fromList model4.pendingChanges of
