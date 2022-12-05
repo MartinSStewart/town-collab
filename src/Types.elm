@@ -49,7 +49,7 @@ import SendGrid
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput
-import Tile exposing (Tile)
+import Tile exposing (Tile, TileGroup)
 import Time
 import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
@@ -120,20 +120,20 @@ type alias FrontendLoaded =
     , lastTrainWhistle : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : Model
-    , currentTile : Maybe { tile : Tile, mesh : WebGL.Mesh Vertex }
+    , currentTile : Maybe { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
     , lastTileRotation : List Time.Posix
     , userIdMesh : WebGL.Mesh Vertex
     , lastPlacementError : Maybe Time.Posix
-    , tileHotkeys : Dict String Tile
+    , tileHotkeys : Dict String TileGroup
     , toolbarMesh : WebGL.Mesh Vertex
-    , previousTileHover : Maybe Tile
+    , previousTileHover : Maybe TileGroup
     , lastHouseClick : Maybe Time.Posix
     , eventIdCounter : Id EventId
     , pingData : Maybe PingData
     , pingStartTime : Maybe Time.Posix
     , localTime : Time.Posix
     , scrollThreshold : Float
-    , tileColors : AssocList.Dict Tile { primaryColor : Color, secondaryColor : Color }
+    , tileColors : AssocList.Dict TileGroup { primaryColor : Color, secondaryColor : Color }
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
     , focus : Hover
@@ -160,7 +160,7 @@ type MouseButtonState
 
 
 type Hover
-    = TileHover Tile
+    = TileHover TileGroup
     | ToolbarHover
     | PostOfficeHover { postOfficePosition : Coord WorldUnit }
     | TrainHover { trainId : Id TrainId, train : Train }

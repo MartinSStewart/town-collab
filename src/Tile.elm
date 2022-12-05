@@ -7,19 +7,19 @@ module Tile exposing
     , RailPathType(..)
     , Tile(..)
     , TileData
+    , TileGroup(..)
     , allTiles
     , defaultPostOfficeColor
     , defaultToPrimaryAndSecondary
     , defaultTreeColor
     , getData
+    , getTileGroupData
     , hasCollision
     , hasCollisionWithCoord
     , pathDirection
     , railDataReverse
     , railPathData
     , reverseDirection
-    , rotateAntiClockwise
-    , rotateClockwise
     , texturePositionPixels
     , texturePosition_
     , trainHouseLeftRailPath
@@ -31,13 +31,134 @@ import Axis2d
 import Color exposing (Color)
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
-import List.Nonempty exposing (Nonempty)
+import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
 import Units exposing (CellLocalUnit, TileLocalUnit, WorldUnit)
 import Vector2d
+
+
+type TileGroup
+    = EmptyTileGroup
+    | HouseGroup
+    | RailStraightGroup
+    | RailTurnGroup
+    | RailTurnLargeGroup
+    | RailStrafeGroup
+    | RailStrafeSmallGroup
+    | RailCrossingGroup
+    | TrainHouseGroup
+    | SidewalkGroup
+    | SidewalkRailGroup
+    | RailTurnSplitGroup
+    | RailTurnSplitMirrorGroup
+    | PostOfficeGroup
+    | MowedGrass1Group
+    | MowedGrass4Group
+    | PineTreeGroup
+
+
+type alias TileGroupData =
+    { defaultColors : DefaultColor
+    , tiles : Nonempty Tile
+    }
+
+
+getTileGroupData : TileGroup -> TileGroupData
+getTileGroupData tileGroup =
+    case tileGroup of
+        EmptyTileGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty EmptyTile []
+            }
+
+        HouseGroup ->
+            { defaultColors = defaultHouseColors
+            , tiles = Nonempty HouseDown [ HouseLeft, HouseUp, HouseRight ]
+            }
+
+        RailStraightGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RailHorizontal [ RailVertical ]
+            }
+
+        RailTurnGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RailBottomToLeft [ RailTopToLeft, RailTopToRight, RailBottomToRight ]
+            }
+
+        RailTurnLargeGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RailBottomToLeftLarge [ RailTopToLeftLarge, RailTopToRightLarge, RailBottomToRightLarge ]
+            }
+
+        RailStrafeGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RailStrafeDown [ RailStrafeLeft, RailStrafeUp, RailStrafeRight ]
+            }
+
+        RailStrafeSmallGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RailStrafeDownSmall [ RailStrafeLeftSmall, RailStrafeUpSmall, RailStrafeRightSmall ]
+            }
+
+        RailCrossingGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RailCrossing []
+            }
+
+        TrainHouseGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty TrainHouseRight [ TrainHouseLeft ]
+            }
+
+        SidewalkGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles = Nonempty Sidewalk []
+            }
+
+        SidewalkRailGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles = Nonempty SidewalkHorizontalRailCrossing [ SidewalkVerticalRailCrossing ]
+            }
+
+        RailTurnSplitGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles =
+                Nonempty
+                    RailBottomToRight_SplitLeft
+                    [ RailBottomToLeft_SplitUp, RailTopToLeft_SplitRight, RailTopToRight_SplitDown ]
+            }
+
+        RailTurnSplitMirrorGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles =
+                Nonempty
+                    RailTopToLeft_SplitDown
+                    [ RailTopToRight_SplitLeft, RailBottomToRight_SplitUp, RailBottomToLeft_SplitRight ]
+            }
+
+        PostOfficeGroup ->
+            { defaultColors = defaultPostOfficeColor
+            , tiles = Nonempty PostOffice []
+            }
+
+        MowedGrass1Group ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty MowedGrass1 []
+            }
+
+        MowedGrass4Group ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty MowedGrass4 []
+            }
+
+        PineTreeGroup ->
+            { defaultColors = defaultTreeColor
+            , tiles = Nonempty PineTree []
+            }
 
 
 type Tile
@@ -474,8 +595,6 @@ type alias TileData unit =
     , size : Coord unit
     , collisionMask : CollisionMask
     , railPath : RailPathType
-    , nextClockwise : Tile
-    , defaultColors : DefaultColor
     }
 
 
@@ -659,8 +778,6 @@ getData tile =
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
-            , nextClockwise = EmptyTile
-            , defaultColors = ZeroDefaultColors
             }
 
         HouseDown ->
@@ -678,8 +795,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = NoRailPath
-            , nextClockwise = HouseLeft
-            , defaultColors = defaultHouseColors
             }
 
         HouseRight ->
@@ -697,8 +812,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = NoRailPath
-            , nextClockwise = HouseDown
-            , defaultColors = defaultHouseColors
             }
 
         HouseUp ->
@@ -716,8 +829,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = NoRailPath
-            , nextClockwise = HouseRight
-            , defaultColors = defaultHouseColors
             }
 
         HouseLeft ->
@@ -735,8 +846,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = NoRailPath
-            , nextClockwise = HouseUp
-            , defaultColors = defaultHouseColors
             }
 
         RailHorizontal ->
@@ -745,8 +854,6 @@ getData tile =
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
-            , nextClockwise = RailVertical
-            , defaultColors = ZeroDefaultColors
             }
 
         RailVertical ->
@@ -755,8 +862,6 @@ getData tile =
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
-            , nextClockwise = RailHorizontal
-            , defaultColors = ZeroDefaultColors
             }
 
         RailBottomToRight ->
@@ -779,8 +884,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathBottomToRight
-            , nextClockwise = RailBottomToLeft
-            , defaultColors = ZeroDefaultColors
             }
 
         RailBottomToLeft ->
@@ -803,8 +906,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathBottomToLeft
-            , nextClockwise = RailTopToLeft
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToRight ->
@@ -827,8 +928,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathTopToRight
-            , nextClockwise = RailBottomToRight
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToLeft ->
@@ -851,8 +950,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathTopToLeft
-            , nextClockwise = RailTopToRight
-            , defaultColors = ZeroDefaultColors
             }
 
         RailBottomToRightLarge ->
@@ -883,8 +980,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathBottomToRightLarge
-            , nextClockwise = RailBottomToLeftLarge
-            , defaultColors = ZeroDefaultColors
             }
 
         RailBottomToLeftLarge ->
@@ -915,8 +1010,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathBottomToLeftLarge
-            , nextClockwise = RailTopToLeftLarge
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToRightLarge ->
@@ -947,8 +1040,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathTopToRightLarge
-            , nextClockwise = RailBottomToRightLarge
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToLeftLarge ->
@@ -979,8 +1070,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathTopToLeftLarge
-            , nextClockwise = RailTopToRightLarge
-            , defaultColors = ZeroDefaultColors
             }
 
         RailCrossing ->
@@ -992,8 +1081,6 @@ getData tile =
                 DoubleRailPath
                     (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
                     (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
-            , nextClockwise = RailCrossing
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeDown ->
@@ -1016,8 +1103,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathStrafeDown
-            , nextClockwise = RailStrafeLeft
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeUp ->
@@ -1040,8 +1125,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathStrafeUp
-            , nextClockwise = RailStrafeRight
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeLeft ->
@@ -1064,8 +1147,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathStrafeLeft
-            , nextClockwise = RailStrafeUp
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeRight ->
@@ -1088,8 +1169,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath RailPathStrafeRight
-            , nextClockwise = RailStrafeDown
-            , defaultColors = ZeroDefaultColors
             }
 
         TrainHouseRight ->
@@ -1113,8 +1192,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath trainHouseRightRailPath
-            , nextClockwise = TrainHouseLeft
-            , defaultColors = ZeroDefaultColors
             }
 
         TrainHouseLeft ->
@@ -1138,8 +1215,6 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath = SingleRailPath trainHouseLeftRailPath
-            , nextClockwise = TrainHouseRight
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeDownSmall ->
@@ -1148,8 +1223,6 @@ getData tile =
             , size = Coord.xy 4 2
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath RailPathStrafeDownSmall
-            , nextClockwise = RailStrafeLeftSmall
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeUpSmall ->
@@ -1158,8 +1231,6 @@ getData tile =
             , size = Coord.xy 4 2
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath RailPathStrafeUpSmall
-            , nextClockwise = RailStrafeRightSmall
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeLeftSmall ->
@@ -1168,8 +1239,6 @@ getData tile =
             , size = Coord.xy 2 4
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath RailPathStrafeLeftSmall
-            , nextClockwise = RailStrafeUpSmall
-            , defaultColors = ZeroDefaultColors
             }
 
         RailStrafeRightSmall ->
@@ -1178,8 +1247,6 @@ getData tile =
             , size = Coord.xy 2 4
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath RailPathStrafeRightSmall
-            , nextClockwise = RailStrafeDownSmall
-            , defaultColors = ZeroDefaultColors
             }
 
         Sidewalk ->
@@ -1188,8 +1255,6 @@ getData tile =
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
-            , nextClockwise = Sidewalk
-            , defaultColors = defaultSidewalkColor
             }
 
         SidewalkHorizontalRailCrossing ->
@@ -1198,8 +1263,6 @@ getData tile =
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
-            , nextClockwise = SidewalkVerticalRailCrossing
-            , defaultColors = defaultSidewalkColor
             }
 
         SidewalkVerticalRailCrossing ->
@@ -1208,8 +1271,6 @@ getData tile =
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
             , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
-            , nextClockwise = SidewalkHorizontalRailCrossing
-            , defaultColors = defaultSidewalkColor
             }
 
         RailBottomToRight_SplitLeft ->
@@ -1235,8 +1296,6 @@ getData tile =
                 DoubleRailPath
                     RailPathBottomToRight
                     (RailPathHorizontal { offsetX = 1, offsetY = 0, length = 3 })
-            , nextClockwise = RailBottomToLeft_SplitUp
-            , defaultColors = ZeroDefaultColors
             }
 
         RailBottomToLeft_SplitUp ->
@@ -1262,8 +1321,6 @@ getData tile =
                 DoubleRailPath
                     RailPathBottomToLeft
                     (RailPathVertical { offsetX = 3, offsetY = 1, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitRight
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToRight_SplitDown ->
@@ -1289,8 +1346,6 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToRight
                     (RailPathVertical { offsetX = 0, offsetY = 0, length = 3 })
-            , nextClockwise = RailBottomToRight_SplitLeft
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToLeft_SplitRight ->
@@ -1316,8 +1371,6 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToLeft
                     (RailPathHorizontal { offsetX = 0, offsetY = 3, length = 3 })
-            , nextClockwise = RailTopToRight_SplitDown
-            , defaultColors = ZeroDefaultColors
             }
 
         RailBottomToRight_SplitUp ->
@@ -1343,8 +1396,6 @@ getData tile =
                 DoubleRailPath
                     RailPathBottomToRight
                     (RailPathVertical { offsetX = 0, offsetY = 1, length = 3 })
-            , nextClockwise = RailBottomToLeft_SplitRight
-            , defaultColors = ZeroDefaultColors
             }
 
         RailBottomToLeft_SplitRight ->
@@ -1370,8 +1421,6 @@ getData tile =
                 DoubleRailPath
                     RailPathBottomToLeft
                     (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 })
-            , nextClockwise = RailTopToLeft_SplitDown
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToRight_SplitLeft ->
@@ -1397,8 +1446,6 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToRight
                     (RailPathHorizontal { offsetX = 1, offsetY = 3, length = 3 })
-            , nextClockwise = RailBottomToRight_SplitUp
-            , defaultColors = ZeroDefaultColors
             }
 
         RailTopToLeft_SplitDown ->
@@ -1424,8 +1471,6 @@ getData tile =
                 DoubleRailPath
                     RailPathTopToLeft
                     (RailPathVertical { offsetX = 3, offsetY = 0, length = 3 })
-            , nextClockwise = RailTopToRight_SplitLeft
-            , defaultColors = ZeroDefaultColors
             }
 
         PostOffice ->
@@ -1436,8 +1481,6 @@ getData tile =
             , railPath =
                 SingleRailPath
                     (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
-            , nextClockwise = PostOffice
-            , defaultColors = defaultPostOfficeColor
             }
 
         MowedGrass1 ->
@@ -1446,8 +1489,6 @@ getData tile =
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
-            , nextClockwise = MowedGrass4
-            , defaultColors = ZeroDefaultColors
             }
 
         MowedGrass4 ->
@@ -1456,8 +1497,6 @@ getData tile =
             , size = Coord.xy 4 4
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
-            , nextClockwise = MowedGrass4
-            , defaultColors = ZeroDefaultColors
             }
 
         PineTree ->
@@ -1466,32 +1505,7 @@ getData tile =
             , size = Coord.xy 1 2
             , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
             , railPath = NoRailPath
-            , nextClockwise = PineTree
-            , defaultColors = defaultTreeColor
             }
-
-
-rotateClockwise : Tile -> Tile
-rotateClockwise tile =
-    getData tile |> .nextClockwise
-
-
-rotateAntiClockwise : Tile -> Tile
-rotateAntiClockwise tile =
-    rotationAntiClockwiseHelper (List.Nonempty.singleton tile) |> List.Nonempty.head
-
-
-rotationAntiClockwiseHelper : Nonempty Tile -> Nonempty Tile
-rotationAntiClockwiseHelper list =
-    let
-        next =
-            List.Nonempty.head list |> rotateClockwise
-    in
-    if List.Nonempty.any ((==) next) list then
-        list
-
-    else
-        rotationAntiClockwiseHelper (List.Nonempty.cons next list)
 
 
 postOfficeCollision =
