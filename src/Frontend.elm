@@ -1197,10 +1197,15 @@ handleKeyDownColorInput getTextInputModel setTextInputModel updateColor tileGrou
     let
         newTextInput : TextInput.Model
         newTextInput =
-            TextInput.keyMsg key (getTextInputModel model)
+            TextInput.keyMsg
+                (keyDown Keyboard.Control model || keyDown Keyboard.Meta model)
+                (keyDown Keyboard.Shift model)
+                key
+                (getTextInputModel model)
                 |> (\a ->
                         { text = String.left 6 a.text
                         , cursorPosition = min 6 a.cursorPosition
+                        , cursorSize = a.cursorSize
                         }
                    )
 
@@ -3767,7 +3772,9 @@ toolbarMesh primaryColorTextInput secondaryColorTextInput colors hotkeys focus c
 
                         position2 : Coord ToolbarUnit
                         position2 =
-                            primaryColorInputPosition |> Coord.plus ( secondaryColorInputWidth, Quantity.zero )
+                            primaryColorInputPosition
+                                |> Coord.plus ( secondaryColorInputWidth, Quantity.zero )
+                                |> Coord.plus (Coord.xy 4 0)
                     in
                     Sprite.spriteWithTwoColors
                         primaryAndSecondaryColors

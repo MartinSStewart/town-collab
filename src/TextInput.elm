@@ -11,13 +11,21 @@ import Sprite
 
 type alias Model =
     { cursorPosition : Int
+    , cursorSize : Int
+    , text : String
+    }
+
+
+type alias State =
+    { cursorPosition : Int
+    , cursorSize : Int
     , text : String
     }
 
 
 init : Model
 init =
-    { cursorPosition = 0, text = "" }
+    { cursorPosition = 0, cursorSize = 0, text = "" }
 
 
 withText : String -> Model -> Model
@@ -30,10 +38,23 @@ bounds position width =
     Bounds.fromCoordAndSize position (size width)
 
 
-keyMsg : Keyboard.Key -> Model -> Model
-keyMsg key model =
-    case key of
-        Keyboard.Character string ->
+selectionMin : Model -> Int
+selectionMin model =
+    min model.cursorPosition (model.cursorPosition + model.cursorSize)
+
+
+selectionMax : Model -> Int
+selectionMax model =
+    max model.cursorPosition (model.cursorPosition + model.cursorSize)
+
+
+keyMsg : Bool -> Bool -> Keyboard.Key -> Model -> Model
+keyMsg ctrlDown shiftDown key model =
+    case ( ctrlDown, shiftDown, key ) of
+        ( True, False, Keyboard.Character "a" ) ->
+            { model | cursorPosition = String.length model.text, cursorSize = String.length model.text |> negate }
+
+        ( False, _, Keyboard.Character string ) ->
             { model
                 | text =
                     String.left model.cursorPosition model.text
@@ -42,27 +63,91 @@ keyMsg key model =
                 , cursorPosition = model.cursorPosition + String.length string
             }
 
-        Keyboard.ArrowLeft ->
-            { model | cursorPosition = model.cursorPosition - 1 |> max 0 }
-
-        Keyboard.ArrowRight ->
-            { model | cursorPosition = model.cursorPosition + 1 |> min (String.length model.text) }
-
-        Keyboard.ArrowUp ->
-            { model | cursorPosition = 0 }
-
-        Keyboard.ArrowDown ->
-            { model | cursorPosition = String.length model.text }
-
-        Keyboard.Backspace ->
+        ( True, False, Keyboard.ArrowLeft ) ->
             { model
-                | text =
-                    String.left (model.cursorPosition - 1) model.text
-                        ++ String.dropLeft model.cursorPosition model.text
-                , cursorPosition = model.cursorPosition - 1 |> max 0
+                | cursorPosition =
+                    if model.cursorSize == 0 then
+                        0
+
+                    else
+                        selectionMin model
+                , cursorSize = 0
             }
 
-        Keyboard.Delete ->
+        ( False, False, Keyboard.ArrowLeft ) ->
+            { model
+                | cursorPosition =
+                    if model.cursorSize == 0 then
+                        model.cursorPosition - 1 |> max 0
+
+                    else
+                        selectionMin model
+                , cursorSize = 0
+            }
+
+        ( True, False, Keyboard.ArrowRight ) ->
+            { model
+                | cursorPosition =
+                    if model.cursorSize == 0 then
+                        String.length model.text
+
+                    else
+                        selectionMax model
+                , cursorSize = 0
+            }
+
+        ( False, False, Keyboard.ArrowRight ) ->
+            { model
+                | cursorPosition =
+                    (if model.cursorSize == 0 then
+                        model.cursorPosition + 1
+
+                     else
+                        selectionMax model
+                    )
+                        |> min (String.length model.text)
+                , cursorSize = 0
+            }
+
+        ( False, False, Keyboard.ArrowUp ) ->
+            { model | cursorPosition = 0, cursorSize = 0 }
+
+        ( False, False, Keyboard.ArrowDown ) ->
+            { model | cursorPosition = String.length model.text, cursorSize = 0 }
+
+        ( True, False, Keyboard.Backspace ) ->
+            if model.cursorSize == 0 then
+                { model
+                    | text = String.dropLeft model.cursorPosition model.text
+                    , cursorPosition = 0
+                    , cursorSize = 0
+                }
+
+            else
+                { model
+                    | text = String.left (selectionMin model) model.text ++ String.dropLeft (selectionMax model) model.text
+                    , cursorPosition = selectionMin model
+                    , cursorSize = 0
+                }
+
+        ( False, False, Keyboard.Backspace ) ->
+            if model.cursorSize == 0 then
+                { model
+                    | text =
+                        String.left (model.cursorPosition - 1) model.text
+                            ++ String.dropLeft model.cursorPosition model.text
+                    , cursorPosition = model.cursorPosition - 1 |> max 0
+                    , cursorSize = 0
+                }
+
+            else
+                { model
+                    | text = String.left (selectionMin model) model.text ++ String.dropLeft (selectionMax model) model.text
+                    , cursorPosition = selectionMin model
+                    , cursorSize = 0
+                }
+
+        ( False, False, Keyboard.Delete ) ->
             { model
                 | text =
                     String.left (model.cursorPosition - 1) model.text
@@ -91,6 +176,7 @@ mouseDown mousePosition position model =
     { model
         | cursorPosition =
             toFloat (mouseX - (positionX + paddingX + charScale)) / toFloat (Coord.xRaw Sprite.charSize * 2) |> round
+        , cursorSize = 0
     }
 
 
@@ -138,6 +224,23 @@ view offset width hasFocus isValid model =
                 28
             )
             (Coord.xy 1 1)
+        ++ (if model.cursorSize == 0 then
+                []
+
+            else
+                Sprite.spriteWithColor
+                    (Color.rgb255 100 160 255)
+                    (offset
+                        |> Coord.plus
+                            (Coord.xy (model.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
+                    )
+                    (Coord.xy
+                        (Coord.xRaw Sprite.charSize * charScale * model.cursorSize)
+                        (Coord.yRaw Sprite.charSize * charScale)
+                    )
+                    (Coord.xy 508 28)
+                    (Coord.xy 1 1)
+           )
         ++ Sprite.text Color.black charScale model.text (offset |> Coord.plus padding |> Coord.plus (Coord.xy charScale 0))
         ++ (if hasFocus then
                 Sprite.sprite
