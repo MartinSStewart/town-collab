@@ -555,6 +555,19 @@ update audioData msg model =
                     else
                         ( model, Cmd.none )
 
+                KeyDown rawKey ->
+                    case Keyboard.anyKeyOriginal rawKey of
+                        Just Keyboard.Enter ->
+                            case tryLoading loadingModel of
+                                Just a ->
+                                    a ()
+
+                                Nothing ->
+                                    ( model, Cmd.none )
+
+                        _ ->
+                            ( model, Cmd.none )
+
                 AnimationFrame time ->
                     ( Loading { loadingModel | time = Just time }, Cmd.none )
 
@@ -878,6 +891,12 @@ updateLoaded audioData msg model =
 
                         _ ->
                             Nothing
+
+                mousePosition2 : Coord Pixels
+                mousePosition2 =
+                    mousePosition
+                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                        |> Coord.roundPoint
             in
             ( { model
                 | mouseLeft =
@@ -925,7 +944,17 @@ updateLoaded audioData msg model =
                                         model2
 
                                     PrimaryColorInput ->
-                                        model2
+                                        { model2
+                                            | primaryColorTextInput =
+                                                TextInput.mouseDownMove
+                                                    mousePosition2
+                                                    (toolbarToPixel
+                                                        model2.devicePixelRatio
+                                                        model2.windowSize
+                                                        primaryColorInputPosition
+                                                    )
+                                                    model2.primaryColorTextInput
+                                        }
 
                                     SecondaryColorInput ->
                                         model2
@@ -1202,16 +1231,20 @@ handleKeyDownColorInput getTextInputModel setTextInputModel updateColor tileGrou
                 (keyDown Keyboard.Shift model)
                 key
                 (getTextInputModel model)
-                |> (\a ->
-                        { text = String.left 6 a.text
-                        , cursorPosition = min 6 a.cursorPosition
-                        , cursorSize = a.cursorSize
-                        }
+                |> (\textInput ->
+                        TextInput.replaceState
+                            (\a ->
+                                { text = String.left 6 a.text
+                                , cursorPosition = min 6 a.cursorPosition
+                                , cursorSize = a.cursorSize
+                                }
+                            )
+                            textInput
                    )
 
         maybeNewColor : Maybe Color
         maybeNewColor =
-            Color.fromHexCode newTextInput.text
+            Color.fromHexCode newTextInput.current.text
     in
     { model
         | tileColors =
@@ -3565,6 +3598,7 @@ subscriptions _ model =
         [ martinsstewart_elm_device_pixel_ratio_from_js GotDevicePixelRatio
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
         , Browser.Events.onAnimationFrame AnimationFrame
+        , Keyboard.downs KeyDown
         , case model of
             Loading _ ->
                 Sub.none
@@ -3572,7 +3606,6 @@ subscriptions _ model =
             Loaded loaded ->
                 Sub.batch
                     [ Sub.map KeyMsg Keyboard.subscriptions
-                    , Keyboard.downs KeyDown
                     , Time.every 1000 (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
