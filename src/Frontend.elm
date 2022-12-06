@@ -52,7 +52,7 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import Task
-import TextInput
+import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
 import Time
 import Train exposing (Status(..), Train)
@@ -78,6 +78,15 @@ port audioPortToJS : Json.Encode.Value -> Cmd msg
 
 
 port audioPortFromJS : (Json.Decode.Value -> msg) -> Sub msg
+
+
+port supermario_copy_to_clipboard_to_js : String -> Cmd msg
+
+
+port supermario_read_from_clipboard_to_js : () -> Cmd msg
+
+
+port supermario_read_from_clipboard_from_js : (String -> msg) -> Sub msg
 
 
 app =
@@ -571,6 +580,13 @@ update audioData msg model =
                 AnimationFrame time ->
                     ( Loading { loadingModel | time = Just time }, Cmd.none )
 
+                OnInput text ->
+                    let
+                        _ =
+                            Debug.log "onpaste" text
+                    in
+                    ( model, Cmd.none )
+
                 _ ->
                     ( model, Cmd.none )
 
@@ -636,6 +652,18 @@ updateLoaded audioData msg model =
 
                     else
                         case ( model.focus, model.currentTile, key ) of
+                            ( _, _, Keyboard.Tab ) ->
+                                ( setFocus
+                                    (if keyDown Keyboard.Shift model then
+                                        previousFocus model
+
+                                     else
+                                        nextFocus model
+                                    )
+                                    model
+                                , Cmd.none
+                                )
+
                             ( PrimaryColorInput, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Cmd.none )
 
@@ -643,26 +671,22 @@ updateLoaded audioData msg model =
                                 ( setFocus MapHover model, Cmd.none )
 
                             ( PrimaryColorInput, Just { tileGroup }, _ ) ->
-                                ( handleKeyDownColorInput
-                                    .primaryColorTextInput
+                                handleKeyDownColorInput
                                     (\a b -> { b | primaryColorTextInput = a })
                                     (\color a -> { a | primaryColor = color })
                                     tileGroup
                                     key
                                     model
-                                , Cmd.none
-                                )
+                                    model.primaryColorTextInput
 
                             ( SecondaryColorInput, Just { tileGroup }, _ ) ->
-                                ( handleKeyDownColorInput
-                                    .secondaryColorTextInput
+                                handleKeyDownColorInput
                                     (\a b -> { b | secondaryColorTextInput = a })
                                     (\color a -> { a | secondaryColor = color })
                                     tileGroup
                                     key
                                     model
-                                , Cmd.none
-                                )
+                                    model.secondaryColorTextInput
 
                             ( PrimaryColorInput, Nothing, _ ) ->
                                 ( model, Cmd.none )
@@ -957,7 +981,17 @@ updateLoaded audioData msg model =
                                         }
 
                                     SecondaryColorInput ->
-                                        model2
+                                        { model2
+                                            | secondaryColorTextInput =
+                                                TextInput.mouseDownMove
+                                                    mousePosition2
+                                                    (toolbarToPixel
+                                                        model2.devicePixelRatio
+                                                        model2.windowSize
+                                                        secondaryColorInputPosition
+                                                    )
+                                                    model2.secondaryColorTextInput
+                                        }
 
                             _ ->
                                 model2
@@ -1213,35 +1247,179 @@ updateLoaded audioData msg model =
                 Err _ ->
                     ( model, Cmd.none )
 
+        OnInput string ->
+            let
+                _ =
+                    Debug.log "OnPaste" string
+            in
+            ( model, Cmd.none )
+
+        PastedText text ->
+            ( case model.focus of
+                TileHover tileGroup ->
+                    model
+
+                ToolbarHover ->
+                    model
+
+                PostOfficeHover record ->
+                    model
+
+                TrainHover record ->
+                    model
+
+                TrainHouseHover record ->
+                    model
+
+                HouseHover record ->
+                    model
+
+                MapHover ->
+                    model
+
+                MailEditorHover hover ->
+                    model
+
+                PrimaryColorInput ->
+                    case model.currentTile of
+                        Just { tileGroup } ->
+                            TextInput.paste text model.primaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    (\a b -> { b | primaryColorTextInput = a })
+                                    (\a b -> { b | primaryColor = a })
+                                    tileGroup
+                                    model
+
+                        Nothing ->
+                            model
+
+                SecondaryColorInput ->
+                    case model.currentTile of
+                        Just { tileGroup } ->
+                            TextInput.paste text model.secondaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    (\a b -> { b | secondaryColorTextInput = a })
+                                    (\a b -> { b | secondaryColor = a })
+                                    tileGroup
+                                    model
+
+                        Nothing ->
+                            model
+            , Cmd.none
+            )
+
+
+previousFocus : FrontendLoaded -> Hover
+previousFocus model =
+    rotationAntiClockwiseHelper model (List.Nonempty.singleton model.focus) |> List.Nonempty.head
+
+
+rotationAntiClockwiseHelper : FrontendLoaded -> Nonempty Hover -> Nonempty Hover
+rotationAntiClockwiseHelper model list =
+    let
+        next =
+            nextFocus { model | focus = List.Nonempty.head list }
+    in
+    if List.Nonempty.any ((==) next) list then
+        list
+
+    else
+        rotationAntiClockwiseHelper model (List.Nonempty.cons next list)
+
+
+nextFocus : FrontendLoaded -> Hover
+nextFocus model =
+    case model.focus of
+        PrimaryColorInput ->
+            if showColorTextInputs (Maybe.map .tileGroup model.currentTile) |> .showSecondaryColorTextInput then
+                SecondaryColorInput
+
+            else
+                PrimaryColorInput
+
+        SecondaryColorInput ->
+            if showColorTextInputs (Maybe.map .tileGroup model.currentTile) |> .showPrimaryColorTextInput then
+                PrimaryColorInput
+
+            else
+                SecondaryColorInput
+
+        TileHover tileGroup ->
+            model.focus
+
+        ToolbarHover ->
+            model.focus
+
+        PostOfficeHover record ->
+            model.focus
+
+        TrainHover record ->
+            model.focus
+
+        TrainHouseHover record ->
+            model.focus
+
+        HouseHover record ->
+            model.focus
+
+        MapHover ->
+            model.focus
+
+        MailEditorHover hover ->
+            model.focus
+
+
+colorTextInputAdjustText : TextInput.Model -> TextInput.Model
+colorTextInputAdjustText model =
+    TextInput.replaceState
+        (\a ->
+            { text = String.left 6 a.text
+            , cursorPosition = min 6 a.cursorPosition
+            , cursorSize = a.cursorSize
+            }
+        )
+        model
+
 
 handleKeyDownColorInput :
-    (FrontendLoaded -> TextInput.Model)
-    -> (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
+    (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
     -> (Color -> { primaryColor : Color, secondaryColor : Color } -> { primaryColor : Color, secondaryColor : Color })
     -> TileGroup
     -> Keyboard.Key
     -> FrontendLoaded
-    -> FrontendLoaded
-handleKeyDownColorInput getTextInputModel setTextInputModel updateColor tileGroup key model =
+    -> TextInput.Model
+    -> ( FrontendLoaded, Cmd msg )
+handleKeyDownColorInput setTextInputModel updateColor tileGroup key model textInput =
     let
-        newTextInput : TextInput.Model
-        newTextInput =
+        ( newTextInput, cmd ) =
             TextInput.keyMsg
                 (keyDown Keyboard.Control model || keyDown Keyboard.Meta model)
                 (keyDown Keyboard.Shift model)
                 key
-                (getTextInputModel model)
-                |> (\textInput ->
-                        TextInput.replaceState
-                            (\a ->
-                                { text = String.left 6 a.text
-                                , cursorPosition = min 6 a.cursorPosition
-                                , cursorSize = a.cursorSize
-                                }
-                            )
-                            textInput
-                   )
+                textInput
+                |> (\( textInput2, maybeCopied ) ->
+                        ( colorTextInputAdjustText textInput2
+                        , case maybeCopied of
+                            CopyText text ->
+                                supermario_copy_to_clipboard_to_js text
 
+                            PasteText ->
+                                supermario_read_from_clipboard_to_js ()
+
+                            NoOutMsg ->
+                                Cmd.none
+                        )
+                   )
+    in
+    ( handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newTextInput
+    , cmd
+    )
+
+
+handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newTextInput =
+    let
         maybeNewColor : Maybe Color
         maybeNewColor =
             Color.fromHexCode newTextInput.current.text
@@ -1768,6 +1946,9 @@ setFocus newFocus model =
                     Nothing ->
                         model.primaryColorTextInput
 
+            else if model.focus /= PrimaryColorInput && newFocus == PrimaryColorInput then
+                TextInput.selectAll model.primaryColorTextInput
+
             else
                 model.primaryColorTextInput
         , secondaryColorTextInput =
@@ -1779,6 +1960,9 @@ setFocus newFocus model =
 
                     Nothing ->
                         model.secondaryColorTextInput
+
+            else if model.focus /= SecondaryColorInput && newFocus == SecondaryColorInput then
+                TextInput.selectAll model.secondaryColorTextInput
 
             else
                 model.secondaryColorTextInput
@@ -3599,6 +3783,7 @@ subscriptions _ model =
         , Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
         , Browser.Events.onAnimationFrame AnimationFrame
         , Keyboard.downs KeyDown
+        , supermario_read_from_clipboard_from_js PastedText
         , case model of
             Loading _ ->
                 Sub.none

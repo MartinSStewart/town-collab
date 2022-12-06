@@ -3,6 +3,7 @@
 // In future this will be more structured + restricted once the design is done
 
 const devicePixelRatio = require('./elm-pkg-js/devicePixelRatio.js');
+const copyToClipboard = require('./elm-pkg-js/copy-to-clipboard.js');
 const elmAudio = require('./elm-pkg-js/elmAudio.js');
 
 exports.init = async function init(app) {
@@ -10,5 +11,6 @@ exports.init = async function init(app) {
   // This file will not run in Local development, an equivalent to this is
   // automatically generated in Local Development for every file in elm-pkg-js/
   devicePixelRatio.init(app);
+  copyToClipboard.init(app);
   elmAudio.init(app);
 }

@@ -1,4 +1,4 @@
-module TextInput exposing (Model, bounds, charScale, init, keyMsg, mouseDown, mouseDownMove, padding, pushState, replaceState, size, view, withText)
+module TextInput exposing (Model, OutMsg(..), bounds, charScale, init, keyMsg, mouseDown, mouseDownMove, padding, paste, pushState, replaceState, selectAll, size, view, withText)
 
 import Bounds
 import Color
@@ -31,6 +31,18 @@ init =
 withText : String -> Model -> Model
 withText text model =
     replaceState (\state -> { state | text = text }) model
+
+
+selectAll : Model -> Model
+selectAll model =
+    replaceState
+        (\state ->
+            { state
+                | cursorPosition = String.length state.text
+                , cursorSize = String.length state.text |> negate
+            }
+        )
+        model
 
 
 pushState : (State -> State) -> Model -> Model
@@ -84,20 +96,43 @@ selectionMax model =
     max model.cursorPosition (model.cursorPosition + model.cursorSize)
 
 
-keyMsg : Bool -> Bool -> Keyboard.Key -> Model -> Model
+type OutMsg
+    = CopyText String
+    | PasteText
+    | NoOutMsg
+
+
+keyMsg : Bool -> Bool -> Keyboard.Key -> Model -> ( Model, OutMsg )
 keyMsg ctrlDown shiftDown key model =
     case ( ctrlDown, shiftDown, key ) of
+        ( True, False, Keyboard.Character "c" ) ->
+            ( model
+            , String.dropLeft (selectionMin model.current) model.current.text
+                |> String.left (abs model.current.cursorSize)
+                |> CopyText
+            )
+
+        ( True, False, Keyboard.Character "x" ) ->
+            ( pushState deleteSelection model
+            , String.dropLeft (selectionMin model.current) model.current.text
+                |> String.left (abs model.current.cursorSize)
+                |> CopyText
+            )
+
+        ( True, False, Keyboard.Character "v" ) ->
+            ( model, PasteText )
+
         ( True, False, Keyboard.Character "z" ) ->
-            undo model
+            ( undo model, NoOutMsg )
 
         ( True, False, Keyboard.Character "y" ) ->
-            redo model
+            ( redo model, NoOutMsg )
 
         ( True, True, Keyboard.Character "Z" ) ->
-            redo model
+            ( redo model, NoOutMsg )
 
         ( True, False, Keyboard.Character "a" ) ->
-            replaceState
+            ( replaceState
                 (\state ->
                     { state
                         | cursorPosition = String.length state.text
@@ -105,23 +140,14 @@ keyMsg ctrlDown shiftDown key model =
                     }
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, _, Keyboard.Character string ) ->
-            pushState
-                (\state ->
-                    { state
-                        | text =
-                            String.left (selectionMin state) state.text
-                                ++ string
-                                ++ String.dropLeft (selectionMax state) state.text
-                        , cursorPosition = state.cursorPosition + String.length string
-                        , cursorSize = 0
-                    }
-                )
-                model
+            ( pushState (insertText string) model, NoOutMsg )
 
         ( True, False, Keyboard.ArrowLeft ) ->
-            replaceState
+            ( replaceState
                 (\state ->
                     { state
                         | cursorPosition =
@@ -134,9 +160,11 @@ keyMsg ctrlDown shiftDown key model =
                     }
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, True, Keyboard.ArrowLeft ) ->
-            replaceState
+            ( replaceState
                 (\state ->
                     { state
                         | cursorPosition = state.cursorPosition - 1 |> max 0
@@ -149,9 +177,11 @@ keyMsg ctrlDown shiftDown key model =
                     }
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, False, Keyboard.ArrowLeft ) ->
-            replaceState
+            ( replaceState
                 (\state ->
                     { state
                         | cursorPosition =
@@ -164,9 +194,11 @@ keyMsg ctrlDown shiftDown key model =
                     }
                 )
                 model
+            , NoOutMsg
+            )
 
         ( True, False, Keyboard.ArrowRight ) ->
-            replaceState
+            ( replaceState
                 (\state ->
                     { state
                         | cursorPosition =
@@ -179,9 +211,11 @@ keyMsg ctrlDown shiftDown key model =
                     }
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, True, Keyboard.ArrowRight ) ->
-            replaceState
+            ( replaceState
                 (\state ->
                     { state
                         | cursorPosition = state.cursorPosition + 1 |> min (String.length state.text)
@@ -194,9 +228,11 @@ keyMsg ctrlDown shiftDown key model =
                     }
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, False, Keyboard.ArrowRight ) ->
-            replaceState
+            ( replaceState
                 (\state ->
                     { state
                         | cursorPosition =
@@ -211,19 +247,25 @@ keyMsg ctrlDown shiftDown key model =
                     }
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, False, Keyboard.ArrowUp ) ->
-            replaceState
+            ( replaceState
                 (\state -> { state | cursorPosition = 0, cursorSize = 0 })
                 model
+            , NoOutMsg
+            )
 
         ( False, False, Keyboard.ArrowDown ) ->
-            replaceState
+            ( replaceState
                 (\state -> { state | cursorPosition = String.length state.text, cursorSize = 0 })
                 model
+            , NoOutMsg
+            )
 
         ( True, False, Keyboard.Backspace ) ->
-            pushState
+            ( pushState
                 (\state ->
                     if state.cursorSize == 0 then
                         { state
@@ -233,16 +275,14 @@ keyMsg ctrlDown shiftDown key model =
                         }
 
                     else
-                        { state
-                            | text = String.left (selectionMin state) state.text ++ String.dropLeft (selectionMax state) state.text
-                            , cursorPosition = selectionMin state
-                            , cursorSize = 0
-                        }
+                        deleteSelection state
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, False, Keyboard.Backspace ) ->
-            pushState
+            ( pushState
                 (\state ->
                     if state.cursorSize == 0 then
                         { state
@@ -254,27 +294,57 @@ keyMsg ctrlDown shiftDown key model =
                         }
 
                     else
-                        { state
-                            | text = String.left (selectionMin state) state.text ++ String.dropLeft (selectionMax state) state.text
-                            , cursorPosition = selectionMin state
-                            , cursorSize = 0
-                        }
+                        deleteSelection state
                 )
                 model
+            , NoOutMsg
+            )
 
         ( False, False, Keyboard.Delete ) ->
-            pushState
+            ( pushState
                 (\state ->
-                    { state
-                        | text =
-                            String.left (state.cursorPosition - 1) state.text
-                                ++ String.dropLeft state.cursorPosition state.text
-                    }
+                    if state.cursorSize == 0 then
+                        { state
+                            | text =
+                                String.left state.cursorPosition state.text
+                                    ++ String.dropLeft (state.cursorPosition + 1) state.text
+                        }
+
+                    else
+                        deleteSelection state
                 )
                 model
+            , NoOutMsg
+            )
 
         _ ->
-            model
+            ( model, NoOutMsg )
+
+
+paste : String -> Model -> Model
+paste text model =
+    pushState (insertText text) model
+
+
+insertText : String -> State -> State
+insertText text state =
+    { state
+        | text =
+            String.left (selectionMin state) state.text
+                ++ text
+                ++ String.dropLeft (selectionMax state) state.text
+        , cursorPosition = state.cursorPosition + String.length text
+        , cursorSize = 0
+    }
+
+
+deleteSelection : State -> State
+deleteSelection state =
+    { state
+        | text = String.left (selectionMin state) state.text ++ String.dropLeft (selectionMax state) state.text
+        , cursorPosition = selectionMin state
+        , cursorSize = 0
+    }
 
 
 mouseDown : Coord units -> Coord units -> Model -> Model
@@ -390,7 +460,7 @@ view offset width hasFocus isValid model =
 
             else
                 Sprite.spriteWithColor
-                    (Color.rgb255 100 160 255)
+                    (Color.rgb255 120 170 255)
                     (offset
                         |> Coord.plus
                             (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)

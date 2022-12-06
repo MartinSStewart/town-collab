@@ -235,6 +235,8 @@ type FrontendMsg_
     | AnimationFrame Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
+    | OnInput String
+    | PastedText String
 
 
 type ToBackend
