@@ -580,13 +580,6 @@ update audioData msg model =
                 AnimationFrame time ->
                     ( Loading { loadingModel | time = Just time }, Cmd.none )
 
-                OnInput text ->
-                    let
-                        _ =
-                            Debug.log "onpaste" text
-                    in
-                    ( model, Cmd.none )
-
                 _ ->
                     ( model, Cmd.none )
 
@@ -1246,13 +1239,6 @@ updateLoaded audioData msg model =
 
                 Err _ ->
                     ( model, Cmd.none )
-
-        OnInput string ->
-            let
-                _ =
-                    Debug.log "OnPaste" string
-            in
-            ( model, Cmd.none )
 
         PastedText text ->
             ( case model.focus of
