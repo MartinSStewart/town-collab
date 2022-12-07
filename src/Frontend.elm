@@ -339,20 +339,21 @@ defaultTileHotkeys =
         [ ( "1", EmptyTileGroup )
         , ( "2", PostOfficeGroup )
         , ( "3", HouseGroup )
-        , ( "4", TrainHouseGroup )
-        , ( "q", RailTurnGroup )
-        , ( "w", RailTurnSplitGroup )
-        , ( "e", RailTurnSplitMirrorGroup )
-        , ( "r", RailStrafeSmallGroup )
-        , ( "a", RailStrafeGroup )
-        , ( "s", RailTurnLargeGroup )
-        , ( "d", RailStraightGroup )
-        , ( "f", RailCrossingGroup )
-        , ( "z", SidewalkRailGroup )
-        , ( "x", SidewalkGroup )
-        , ( "c", MowedGrass1Group )
-        , ( "v", MowedGrass4Group )
-        , ( "b", PineTreeGroup )
+        , ( "4", LogCabinGroup )
+        , ( "q", TrainHouseGroup )
+        , ( "w", RailTurnGroup )
+        , ( "e", RailTurnSplitGroup )
+        , ( "r", RailTurnSplitMirrorGroup )
+        , ( "a", RailStrafeSmallGroup )
+        , ( "s", RailStrafeGroup )
+        , ( "d", RailTurnLargeGroup )
+        , ( "f", RailStraightGroup )
+        , ( "z", RailCrossingGroup )
+        , ( "x", SidewalkRailGroup )
+        , ( "c", SidewalkGroup )
+        , ( "v", MowedGrass1Group )
+        , ( "b", MowedGrass4Group )
+        , ( "n", PineTreeGroup )
         ]
 
 
@@ -4046,6 +4047,9 @@ buttonTiles =
     , MowedGrass1Group
     , MowedGrass4Group
     , PineTreeGroup
+    , RoadStraightGroup
+    , RoadTurnGroup
+    , RoadTurnWithSidewalkGroup
     ]
 
 

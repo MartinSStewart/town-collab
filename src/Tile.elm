@@ -59,6 +59,9 @@ type TileGroup
     | MowedGrass4Group
     | PineTreeGroup
     | LogCabinGroup
+    | RoadStraightGroup
+    | RoadTurnGroup
+    | RoadTurnWithSidewalkGroup
 
 
 type alias TileGroupData =
@@ -166,6 +169,24 @@ getTileGroupData tileGroup =
             , tiles = Nonempty LogCabinDown [ LogCabinLeft, LogCabinUp, LogCabinRight ]
             }
 
+        RoadStraightGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RoadHorizontal [ RoadVertical ]
+            }
+
+        RoadTurnGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty RoadBottomToLeft [ RoadTopToLeft, RoadTopToRight, RoadBottomToRight ]
+            }
+
+        RoadTurnWithSidewalkGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles =
+                Nonempty
+                    RoadBottomToLeftWithSidewalk
+                    [ RoadTopToLeftWithSidewalk, RoadTopToRightWithSidewalk, RoadBottomToRightWithSidewalk ]
+            }
+
 
 type Tile
     = EmptyTile
@@ -213,6 +234,16 @@ type Tile
     | LogCabinRight
     | LogCabinUp
     | LogCabinLeft
+    | RoadHorizontal
+    | RoadVertical
+    | RoadBottomToLeft
+    | RoadTopToLeft
+    | RoadTopToRight
+    | RoadBottomToRight
+    | RoadBottomToLeftWithSidewalk
+    | RoadTopToLeftWithSidewalk
+    | RoadTopToRightWithSidewalk
+    | RoadBottomToRightWithSidewalk
 
 
 type Direction
@@ -1579,6 +1610,86 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        RoadHorizontal ->
+            { texturePosition = Just (Coord.xy 13 30)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 1 2
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadVertical ->
+            { texturePosition = Just (Coord.xy 14 30)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 2 1
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadBottomToLeft ->
+            { texturePosition = Just (Coord.xy 16 24)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadTopToLeft ->
+            { texturePosition = Just (Coord.xy 16 27)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadTopToRight ->
+            { texturePosition = Just (Coord.xy 13 27)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadBottomToRight ->
+            { texturePosition = Just (Coord.xy 13 24)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadBottomToLeftWithSidewalk ->
+            { texturePosition = Just (Coord.xy 16 32)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadTopToLeftWithSidewalk ->
+            { texturePosition = Just (Coord.xy 16 35)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadTopToRightWithSidewalk ->
+            { texturePosition = Just (Coord.xy 13 35)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadBottomToRightWithSidewalk ->
+            { texturePosition = Just (Coord.xy 13 32)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
             , railPath = NoRailPath
             }
 
