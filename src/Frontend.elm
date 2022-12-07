@@ -4049,7 +4049,9 @@ buttonTiles =
     , PineTreeGroup
     , RoadStraightGroup
     , RoadTurnGroup
-    , RoadTurnWithSidewalkGroup
+    , Road4WayGroup
+    , RoadSidewalkCrossingGroup
+    , Road3WayGroup
     ]
 
 

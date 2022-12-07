@@ -61,7 +61,9 @@ type TileGroup
     | LogCabinGroup
     | RoadStraightGroup
     | RoadTurnGroup
-    | RoadTurnWithSidewalkGroup
+    | Road4WayGroup
+    | RoadSidewalkCrossingGroup
+    | Road3WayGroup
 
 
 type alias TileGroupData =
@@ -170,21 +172,28 @@ getTileGroupData tileGroup =
             }
 
         RoadStraightGroup ->
-            { defaultColors = ZeroDefaultColors
+            { defaultColors = defaultSidewalkColor
             , tiles = Nonempty RoadHorizontal [ RoadVertical ]
             }
 
         RoadTurnGroup ->
-            { defaultColors = ZeroDefaultColors
+            { defaultColors = defaultSidewalkColor
             , tiles = Nonempty RoadBottomToLeft [ RoadTopToLeft, RoadTopToRight, RoadBottomToRight ]
             }
 
-        RoadTurnWithSidewalkGroup ->
+        Road4WayGroup ->
             { defaultColors = defaultSidewalkColor
-            , tiles =
-                Nonempty
-                    RoadBottomToLeftWithSidewalk
-                    [ RoadTopToLeftWithSidewalk, RoadTopToRightWithSidewalk, RoadBottomToRightWithSidewalk ]
+            , tiles = Nonempty Road4Way []
+            }
+
+        RoadSidewalkCrossingGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles = Nonempty RoadSidewalkCrossingHorizontal [ RoadSidewalkCrossingVertical ]
+            }
+
+        Road3WayGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles = Nonempty Road3WayDown [ Road3WayLeft, Road3WayUp, Road3WayRight ]
             }
 
 
@@ -240,10 +249,13 @@ type Tile
     | RoadTopToLeft
     | RoadTopToRight
     | RoadBottomToRight
-    | RoadBottomToLeftWithSidewalk
-    | RoadTopToLeftWithSidewalk
-    | RoadTopToRightWithSidewalk
-    | RoadBottomToRightWithSidewalk
+    | Road4Way
+    | RoadSidewalkCrossingHorizontal
+    | RoadSidewalkCrossingVertical
+    | Road3WayDown
+    | Road3WayLeft
+    | Road3WayUp
+    | Road3WayRight
 
 
 type Direction
@@ -1614,9 +1626,9 @@ getData tile =
             }
 
         RoadHorizontal ->
-            { texturePosition = Just (Coord.xy 13 30)
+            { texturePosition = Just (Coord.xy 15 21)
             , texturePositionTopLayer = Nothing
-            , size = Coord.xy 1 2
+            , size = Coord.xy 1 3
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
             }
@@ -1624,7 +1636,7 @@ getData tile =
         RoadVertical ->
             { texturePosition = Just (Coord.xy 14 30)
             , texturePositionTopLayer = Nothing
-            , size = Coord.xy 2 1
+            , size = Coord.xy 3 1
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
             }
@@ -1661,7 +1673,39 @@ getData tile =
             , railPath = NoRailPath
             }
 
-        RoadBottomToLeftWithSidewalk ->
+        Road4Way ->
+            { texturePosition = Just (Coord.xy 16 21)
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 16 18 }
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadSidewalkCrossingHorizontal ->
+            { texturePosition = Just (Coord.xy 15 18)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 1 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadSidewalkCrossingVertical ->
+            { texturePosition = Just (Coord.xy 14 31)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 1
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        Road3WayDown ->
+            { texturePosition = Just (Coord.xy 13 32)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 3
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        Road3WayLeft ->
             { texturePosition = Just (Coord.xy 16 32)
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 3 3
@@ -1669,7 +1713,7 @@ getData tile =
             , railPath = NoRailPath
             }
 
-        RoadTopToLeftWithSidewalk ->
+        Road3WayUp ->
             { texturePosition = Just (Coord.xy 16 35)
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 3 3
@@ -1677,16 +1721,8 @@ getData tile =
             , railPath = NoRailPath
             }
 
-        RoadTopToRightWithSidewalk ->
+        Road3WayRight ->
             { texturePosition = Just (Coord.xy 13 35)
-            , texturePositionTopLayer = Nothing
-            , size = Coord.xy 3 3
-            , collisionMask = DefaultCollision
-            , railPath = NoRailPath
-            }
-
-        RoadBottomToRightWithSidewalk ->
-            { texturePosition = Just (Coord.xy 13 32)
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 3 3
             , collisionMask = DefaultCollision
