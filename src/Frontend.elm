@@ -2336,7 +2336,13 @@ createDebrisMesh appStartTime removedTiles =
                 data =
                     Tile.getData tile
             in
-            createDebrisMeshHelper position data.texturePosition data.size primaryColor secondaryColor appStartTime time
+            (case data.texturePosition of
+                Just texturePosition ->
+                    createDebrisMeshHelper position texturePosition data.size primaryColor secondaryColor appStartTime time
+
+                Nothing ->
+                    []
+            )
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             createDebrisMeshHelper
@@ -3980,12 +3986,18 @@ toolbarMesh primaryColorTextInput secondaryColorTextInput colors hotkeys focus c
                                 |> Coord.plus ( secondaryColorInputWidth, Quantity.zero )
                                 |> Coord.plus (Coord.xy 4 0)
                     in
-                    Sprite.spriteWithTwoColors
-                        primaryAndSecondaryColors
-                        position2
-                        spriteSize
-                        (Coord.multiply Units.tileSize data.texturePosition)
-                        size
+                    (case data.texturePosition of
+                        Just texturePosition ->
+                            Sprite.spriteWithTwoColors
+                                primaryAndSecondaryColors
+                                position2
+                                spriteSize
+                                (Coord.multiply Units.tileSize texturePosition)
+                                size
+
+                        Nothing ->
+                            []
+                    )
                         ++ (case data.texturePositionTopLayer of
                                 Just topLayer ->
                                     let
@@ -4019,6 +4031,7 @@ buttonTiles =
     [ EmptyTileGroup
     , PostOfficeGroup
     , HouseGroup
+    , LogCabinGroup
     , TrainHouseGroup
     , RailTurnGroup
     , RailTurnSplitGroup
@@ -4073,10 +4086,6 @@ tileMesh colors position tile =
 
         position2 =
             position |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize) |> Coord.plus (Coord.divide (Coord.xy 2 2) toolbarButtonSize)
-
-        texturePosition : Coord units
-        texturePosition =
-            Coord.multiply Units.tileSize data.texturePosition
     in
     if tile == EmptyTile then
         Sprite.sprite
@@ -4086,12 +4095,18 @@ tileMesh colors position tile =
             (Coord.xy 30 29)
 
     else
-        Sprite.spriteWithTwoColors
-            colors
-            position2
-            spriteSize
-            texturePosition
-            size
+        (case data.texturePosition of
+            Just texturePosition ->
+                Sprite.spriteWithTwoColors
+                    colors
+                    position2
+                    spriteSize
+                    (Coord.multiply Units.tileSize texturePosition)
+                    size
+
+            Nothing ->
+                []
+        )
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
                         let

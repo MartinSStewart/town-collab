@@ -474,7 +474,13 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
                         Nothing ->
                             1
             in
-            tileMeshHelper opacity colors False position data.texturePosition data.size
+            (case data.texturePosition of
+                Just texturePosition ->
+                    tileMeshHelper opacity colors False position texturePosition data.size
+
+                Nothing ->
+                    []
+            )
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             if value == PostOffice && userId /= currentUserId then
@@ -645,7 +651,13 @@ tileMesh position tile colors =
         Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position) (Coord.tuple ( 30, 29 )) (Coord.xy 504 42) (Coord.xy 30 29)
 
     else
-        tileMeshHelper 1 colors False position data.texturePosition data.size
+        (case data.texturePosition of
+            Just texturePosition ->
+                tileMeshHelper 1 colors False position texturePosition data.size
+
+            Nothing ->
+                []
+        )
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
                         tileMeshHelper 1 colors True position topLayer.texturePosition data.size

@@ -58,6 +58,7 @@ type TileGroup
     | MowedGrass1Group
     | MowedGrass4Group
     | PineTreeGroup
+    | LogCabinGroup
 
 
 type alias TileGroupData =
@@ -160,6 +161,11 @@ getTileGroupData tileGroup =
             , tiles = Nonempty PineTree []
             }
 
+        LogCabinGroup ->
+            { defaultColors = defaultLogCabinColor
+            , tiles = Nonempty LogCabinDown [ LogCabinLeft, LogCabinUp, LogCabinRight ]
+            }
+
 
 type Tile
     = EmptyTile
@@ -203,6 +209,10 @@ type Tile
     | MowedGrass1
     | MowedGrass4
     | PineTree
+    | LogCabinDown
+    | LogCabinRight
+    | LogCabinUp
+    | LogCabinLeft
 
 
 type Direction
@@ -590,7 +600,7 @@ texturePositionPixels position textureSize =
 
 
 type alias TileData unit =
-    { texturePosition : Coord unit
+    { texturePosition : Maybe (Coord unit)
     , texturePositionTopLayer : Maybe { yOffset : Int, texturePosition : Coord unit }
     , size : Coord unit
     , collisionMask : CollisionMask
@@ -769,11 +779,16 @@ defaultPostOfficeColor =
     OneDefaultColor (Color.rgb255 209 209 209)
 
 
+defaultLogCabinColor : DefaultColor
+defaultLogCabinColor =
+    TwoDefaultColors (Color.rgb255 220 129 97) (Color.rgb255 236 202 66)
+
+
 getData : Tile -> TileData unit
 getData tile =
     case tile of
         EmptyTile ->
-            { texturePosition = Coord.xy 0 5
+            { texturePosition = Nothing
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -781,7 +796,7 @@ getData tile =
             }
 
         HouseDown ->
-            { texturePosition = Coord.xy 0 1
+            { texturePosition = Coord.xy 0 1 |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 0 5 }
             , size = Coord.xy 3 3
             , collisionMask =
@@ -798,7 +813,7 @@ getData tile =
             }
 
         HouseRight ->
-            { texturePosition = Coord.xy 11 4
+            { texturePosition = Coord.xy 11 4 |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 16 }
             , size = Coord.xy 2 4
             , collisionMask =
@@ -815,7 +830,7 @@ getData tile =
             }
 
         HouseUp ->
-            { texturePosition = Coord.xy 15 12
+            { texturePosition = Coord.xy 15 12 |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 15 15 }
             , size = Coord.xy 3 3
             , collisionMask =
@@ -832,7 +847,7 @@ getData tile =
             }
 
         HouseLeft ->
-            { texturePosition = Coord.xy 11 0
+            { texturePosition = Coord.xy 11 0 |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 8 }
             , size = Coord.xy 2 4
             , collisionMask =
@@ -849,7 +864,7 @@ getData tile =
             }
 
         RailHorizontal ->
-            { texturePosition = Coord.xy 0 0
+            { texturePosition = Coord.xy 0 0 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -857,7 +872,7 @@ getData tile =
             }
 
         RailVertical ->
-            { texturePosition = Coord.xy 1 0
+            { texturePosition = Coord.xy 1 0 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -865,7 +880,7 @@ getData tile =
             }
 
         RailBottomToRight ->
-            { texturePosition = Coord.xy 3 0
+            { texturePosition = Coord.xy 3 0 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -887,7 +902,7 @@ getData tile =
             }
 
         RailBottomToLeft ->
-            { texturePosition = Coord.xy 7 0
+            { texturePosition = Coord.xy 7 0 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -909,7 +924,7 @@ getData tile =
             }
 
         RailTopToRight ->
-            { texturePosition = Coord.xy 3 4
+            { texturePosition = Coord.xy 3 4 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -931,7 +946,7 @@ getData tile =
             }
 
         RailTopToLeft ->
-            { texturePosition = Coord.xy 7 4
+            { texturePosition = Coord.xy 7 4 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -953,7 +968,7 @@ getData tile =
             }
 
         RailBottomToRightLarge ->
-            { texturePosition = Coord.xy 0 43
+            { texturePosition = Coord.xy 0 43 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 6 6
             , collisionMask =
@@ -983,7 +998,7 @@ getData tile =
             }
 
         RailBottomToLeftLarge ->
-            { texturePosition = Coord.xy 6 43
+            { texturePosition = Coord.xy 6 43 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 6 6
             , collisionMask =
@@ -1013,7 +1028,7 @@ getData tile =
             }
 
         RailTopToRightLarge ->
-            { texturePosition = Coord.xy 0 49
+            { texturePosition = Coord.xy 0 49 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 6 6
             , collisionMask =
@@ -1043,7 +1058,7 @@ getData tile =
             }
 
         RailTopToLeftLarge ->
-            { texturePosition = Coord.xy 6 49
+            { texturePosition = Coord.xy 6 49 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 6 6
             , collisionMask =
@@ -1073,7 +1088,7 @@ getData tile =
             }
 
         RailCrossing ->
-            { texturePosition = Coord.xy 2 0
+            { texturePosition = Coord.xy 2 0 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -1084,7 +1099,7 @@ getData tile =
             }
 
         RailStrafeDown ->
-            { texturePosition = Coord.xy 0 8
+            { texturePosition = Coord.xy 0 8 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 5 3
             , collisionMask =
@@ -1106,7 +1121,7 @@ getData tile =
             }
 
         RailStrafeUp ->
-            { texturePosition = Coord.xy 5 8
+            { texturePosition = Coord.xy 5 8 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 5 3
             , collisionMask =
@@ -1128,7 +1143,7 @@ getData tile =
             }
 
         RailStrafeLeft ->
-            { texturePosition = Coord.xy 0 11
+            { texturePosition = Coord.xy 0 11 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 3 5
             , collisionMask =
@@ -1150,7 +1165,7 @@ getData tile =
             }
 
         RailStrafeRight ->
-            { texturePosition = Coord.xy 0 16
+            { texturePosition = Coord.xy 0 16 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 3 5
             , collisionMask =
@@ -1172,7 +1187,7 @@ getData tile =
             }
 
         TrainHouseRight ->
-            { texturePosition = Coord.xy 3 11
+            { texturePosition = Coord.xy 3 11 |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 13 8 }
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1195,7 +1210,7 @@ getData tile =
             }
 
         TrainHouseLeft ->
-            { texturePosition = Coord.xy 7 11
+            { texturePosition = Coord.xy 7 11 |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 17 8 }
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1218,7 +1233,7 @@ getData tile =
             }
 
         RailStrafeDownSmall ->
-            { texturePosition = Coord.xy 3 15
+            { texturePosition = Coord.xy 3 15 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 2
             , collisionMask = DefaultCollision
@@ -1226,7 +1241,7 @@ getData tile =
             }
 
         RailStrafeUpSmall ->
-            { texturePosition = Coord.xy 7 15
+            { texturePosition = Coord.xy 7 15 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 2
             , collisionMask = DefaultCollision
@@ -1234,7 +1249,7 @@ getData tile =
             }
 
         RailStrafeLeftSmall ->
-            { texturePosition = Coord.xy 0 21
+            { texturePosition = Coord.xy 0 21 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 2 4
             , collisionMask = DefaultCollision
@@ -1242,7 +1257,7 @@ getData tile =
             }
 
         RailStrafeRightSmall ->
-            { texturePosition = Coord.xy 0 25
+            { texturePosition = Coord.xy 0 25 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 2 4
             , collisionMask = DefaultCollision
@@ -1250,7 +1265,7 @@ getData tile =
             }
 
         Sidewalk ->
-            { texturePosition = Coord.xy 2 4
+            { texturePosition = Coord.xy 2 4 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -1258,7 +1273,7 @@ getData tile =
             }
 
         SidewalkHorizontalRailCrossing ->
-            { texturePosition = Coord.xy 0 4
+            { texturePosition = Coord.xy 0 4 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -1266,7 +1281,7 @@ getData tile =
             }
 
         SidewalkVerticalRailCrossing ->
-            { texturePosition = Coord.xy 1 4
+            { texturePosition = Coord.xy 1 4 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -1274,7 +1289,7 @@ getData tile =
             }
 
         RailBottomToRight_SplitLeft ->
-            { texturePosition = Coord.xy 3 17
+            { texturePosition = Coord.xy 3 17 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1299,7 +1314,7 @@ getData tile =
             }
 
         RailBottomToLeft_SplitUp ->
-            { texturePosition = Coord.xy 7 17
+            { texturePosition = Coord.xy 7 17 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1324,7 +1339,7 @@ getData tile =
             }
 
         RailTopToRight_SplitDown ->
-            { texturePosition = Coord.xy 3 21
+            { texturePosition = Coord.xy 3 21 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1349,7 +1364,7 @@ getData tile =
             }
 
         RailTopToLeft_SplitRight ->
-            { texturePosition = Coord.xy 7 21
+            { texturePosition = Coord.xy 7 21 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1374,7 +1389,7 @@ getData tile =
             }
 
         RailBottomToRight_SplitUp ->
-            { texturePosition = Coord.xy 3 25
+            { texturePosition = Coord.xy 3 25 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1399,7 +1414,7 @@ getData tile =
             }
 
         RailBottomToLeft_SplitRight ->
-            { texturePosition = Coord.xy 7 25
+            { texturePosition = Coord.xy 7 25 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1424,7 +1439,7 @@ getData tile =
             }
 
         RailTopToRight_SplitLeft ->
-            { texturePosition = Coord.xy 3 29
+            { texturePosition = Coord.xy 3 29 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1449,7 +1464,7 @@ getData tile =
             }
 
         RailTopToLeft_SplitDown ->
-            { texturePosition = Coord.xy 7 29
+            { texturePosition = Coord.xy 7 29 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask =
@@ -1474,7 +1489,7 @@ getData tile =
             }
 
         PostOffice ->
-            { texturePosition = Coord.xy 0 38
+            { texturePosition = Coord.xy 0 38 |> Just
             , texturePositionTopLayer = Just { yOffset = -1, texturePosition = Coord.xy 0 33 }
             , size = Coord.xy 4 5
             , collisionMask = postOfficeCollision
@@ -1484,7 +1499,7 @@ getData tile =
             }
 
         MowedGrass1 ->
-            { texturePosition = Coord.xy 11 20
+            { texturePosition = Coord.xy 11 20 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 1 1
             , collisionMask = DefaultCollision
@@ -1492,7 +1507,7 @@ getData tile =
             }
 
         MowedGrass4 ->
-            { texturePosition = Coord.xy 11 20
+            { texturePosition = Coord.xy 11 20 |> Just
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 4 4
             , collisionMask = DefaultCollision
@@ -1500,10 +1515,70 @@ getData tile =
             }
 
         PineTree ->
-            { texturePosition = Coord.xy 11 24
+            { texturePosition = Nothing
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 24 }
             , size = Coord.xy 1 2
             , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        LogCabinDown ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 26 }
+            , size = Coord.xy 2 3
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        LogCabinRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 29 }
+            , size = Coord.xy 2 3
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        LogCabinUp ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 32 }
+            , size = Coord.xy 2 3
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        LogCabinLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 35 }
+            , size = Coord.xy 2 3
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
             , railPath = NoRailPath
             }
 
