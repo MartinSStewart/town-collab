@@ -4052,6 +4052,7 @@ buttonTiles =
     , Road4WayGroup
     , RoadSidewalkCrossingGroup
     , Road3WayGroup
+    , RoadRailCrossingGroup
     ]
 
 

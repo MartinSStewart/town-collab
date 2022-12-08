@@ -64,6 +64,7 @@ type TileGroup
     | Road4WayGroup
     | RoadSidewalkCrossingGroup
     | Road3WayGroup
+    | RoadRailCrossingGroup
 
 
 type alias TileGroupData =
@@ -196,6 +197,11 @@ getTileGroupData tileGroup =
             , tiles = Nonempty Road3WayDown [ Road3WayLeft, Road3WayUp, Road3WayRight ]
             }
 
+        RoadRailCrossingGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles = Nonempty RoadRailCrossingHorizontal [ RoadRailCrossingVertical ]
+            }
+
 
 type Tile
     = EmptyTile
@@ -256,6 +262,8 @@ type Tile
     | Road3WayLeft
     | Road3WayUp
     | Road3WayRight
+    | RoadRailCrossingHorizontal
+    | RoadRailCrossingVertical
 
 
 type Direction
@@ -1727,6 +1735,22 @@ getData tile =
             , size = Coord.xy 3 3
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
+            }
+
+        RoadRailCrossingHorizontal ->
+            { texturePosition = Just (Coord.xy 19 27)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 1 3
+            , collisionMask = DefaultCollision
+            , railPath = RailPathVertical { offsetX = 0, offsetY = 0, length = 3 } |> SingleRailPath
+            }
+
+        RoadRailCrossingVertical ->
+            { texturePosition = Just (Coord.xy 17 30)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 3 1
+            , collisionMask = DefaultCollision
+            , railPath = RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 } |> SingleRailPath
             }
 
 
