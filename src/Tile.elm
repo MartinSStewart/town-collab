@@ -1800,7 +1800,13 @@ getData tile =
             { texturePosition = Nothing
             , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 36, yOffset = 0 }
             , size = Coord.xy 2 2
-            , collisionMask = DefaultCollision
+            , collisionMask =
+                [ ( 1, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
             , railPath = NoRailPath
             }
 
@@ -1808,7 +1814,13 @@ getData tile =
             { texturePosition = Nothing
             , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 34, yOffset = 0 }
             , size = Coord.xy 2 2
-            , collisionMask = DefaultCollision
+            , collisionMask =
+                [ ( 0, 0 )
+                , ( 0, 1 )
+                , ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
             , railPath = NoRailPath
             }
 
