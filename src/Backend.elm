@@ -67,7 +67,7 @@ init =
     , secretLinkCounter = 0
     , errors = []
     , trains = AssocList.empty
-    , cows = []
+    , cows = AssocList.empty
     , lastWorldUpdateTrains = AssocList.empty
     , lastWorldUpdate = Nothing
     , mail = AssocList.empty
@@ -243,7 +243,7 @@ update msg model =
                         , mail = mergeTrains.mail
                       }
                     , Cmd.batch
-                        [ TrainBroadcast mergeTrains.diff |> Lamdera.broadcast
+                        [ WorldUpdateBroadcast mergeTrains.diff model.cows |> Lamdera.broadcast
                         , if mergeTrains.mailChanged then
                             AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) mergeTrains.mail
                                 |> MailBroadcast
@@ -644,6 +644,16 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 
                                                 Nothing ->
                                                     model.trains
+                                        , cows = model.cows
+
+                                        --if cellExists then
+                                        --    model.cows
+                                        --
+                                        --else
+                                        --    AssocList.insert
+                                        --        (Id.nextId model.cows)
+                                        --        { position = Coord.toPoint2d localChange.position }
+                                        --        model.cows
                                     }
                                 |> updateUser
                                     userId

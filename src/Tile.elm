@@ -8,7 +8,6 @@ module Tile exposing
     , Tile(..)
     , TileData
     , TileGroup(..)
-    , allTiles
     , defaultPostOfficeColor
     , defaultToPrimaryAndSecondary
     , defaultTreeColor
@@ -706,49 +705,6 @@ pathDirection : (Float -> Point2d TileLocalUnit TileLocalUnit) -> Float -> Direc
 pathDirection path t =
     Direction2d.from (path (t - 0.01 |> max 0)) (path (t + 0.01 |> min 1))
         |> Maybe.withDefault Direction2d.x
-
-
-allTiles : List Tile
-allTiles =
-    [ EmptyTile
-    , HouseDown
-    , RailHorizontal
-    , RailVertical
-    , RailBottomToRight
-    , RailBottomToLeft
-    , RailTopToRight
-    , RailTopToLeft
-    , RailBottomToRightLarge
-    , RailBottomToLeftLarge
-    , RailTopToRightLarge
-    , RailTopToLeftLarge
-    , RailCrossing
-    , RailStrafeUp
-    , RailStrafeDown
-    , RailStrafeLeft
-    , RailStrafeRight
-    , TrainHouseRight
-    , TrainHouseLeft
-    , RailStrafeUpSmall
-    , RailStrafeDownSmall
-    , RailStrafeLeftSmall
-    , RailStrafeRightSmall
-    , Sidewalk
-    , SidewalkHorizontalRailCrossing
-    , SidewalkVerticalRailCrossing
-    , RailBottomToRight_SplitLeft
-    , RailBottomToLeft_SplitUp
-    , RailTopToRight_SplitDown
-    , RailTopToLeft_SplitRight
-    , RailBottomToRight_SplitUp
-    , RailBottomToLeft_SplitRight
-    , RailTopToRight_SplitLeft
-    , RailTopToLeft_SplitDown
-    , PostOffice
-    , MowedGrass1
-    , MowedGrass4
-    , PineTree
-    ]
 
 
 type CollisionMask

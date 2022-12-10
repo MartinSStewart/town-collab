@@ -4,7 +4,6 @@ module Grid exposing
     , GridData
     , LocalGridChange
     , addChange
-    , allCells
     , allCellsDict
     , backgroundMesh
     , canPlaceTile
@@ -320,6 +319,7 @@ addChange :
                 , primaryColor : Color
                 , secondaryColor : Color
                 }
+        , newCells : List (Coord CellUnit)
         }
 addChange change grid =
     let
@@ -383,6 +383,7 @@ addChange change grid =
                                     )
                                     neighbor.removed
                             )
+                , newCells = []
                 }
            )
 
@@ -390,11 +391,6 @@ addChange change grid =
 maxTileSize : number
 maxTileSize =
     6
-
-
-allCells : Grid -> List ( Coord CellUnit, Cell )
-allCells (Grid grid) =
-    Dict.toList grid |> List.map (Tuple.mapFirst (\( x, y ) -> ( Units.cellUnit x, Units.cellUnit y )))
 
 
 allCellsDict : Grid -> Dict ( Int, Int ) Cell

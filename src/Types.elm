@@ -35,7 +35,7 @@ import EverySet exposing (EverySet)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (EventId, Id, MailId, TrainId, UserId)
+import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
@@ -91,7 +91,7 @@ type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : AssocList.Dict (Id TrainId) Train
-    , cows : List Cow
+    , cows : AssocList.Dict (Id CowId) Cow
     , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
@@ -183,7 +183,7 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
     , trains : AssocList.Dict (Id TrainId) Train
-    , cows : List Cow
+    , cows : AssocList.Dict (Id CowId) Cow
     , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
@@ -269,7 +269,7 @@ type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | TrainBroadcast (AssocList.Dict (Id TrainId) TrainDiff)
+    | WorldUpdateBroadcast (AssocList.Dict (Id TrainId) TrainDiff) (AssocList.Dict (Id CowId) Cow)
     | MailEditorToFrontend MailEditor.ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Time.Posix
@@ -289,7 +289,7 @@ type alias LoadingData_ =
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
     , trains : AssocList.Dict (Id TrainId) Train
-    , cows : List Cow
+    , cows : AssocList.Dict (Id CowId) Cow
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : MailEditorData
     }

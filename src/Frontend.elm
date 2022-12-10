@@ -351,9 +351,7 @@ defaultTileHotkeys =
         , ( "z", RailCrossingGroup )
         , ( "x", SidewalkRailGroup )
         , ( "c", SidewalkGroup )
-        , ( "v", MowedGrass1Group )
-        , ( "b", MowedGrass4Group )
-        , ( "n", PineTreeGroup )
+        , ( "v", PineTreeGroup )
         ]
 
 
@@ -2746,7 +2744,7 @@ updateLoadedFromBackend msg model =
         UnsubscribeEmailConfirmed ->
             ( model, Cmd.none )
 
-        TrainBroadcast diff ->
+        WorldUpdateBroadcast diff cows ->
             ( { model
                 | trains =
                     AssocList.toList diff
@@ -2760,6 +2758,7 @@ updateLoadedFromBackend msg model =
                                         Nothing
                             )
                         |> AssocList.fromList
+                , cows = Debug.log "cows" cows
               }
             , Cmd.none
             )
@@ -3236,6 +3235,29 @@ canvasView audioData model =
                 drawBackground meshes viewMatrix model.texture
                     ++ drawForeground meshes viewMatrix model.texture
                     ++ Train.draw model.time model.mail model.trains viewMatrix trainTexture
+                    ++ List.map
+                        (\( _, cow ) ->
+                            let
+                                point =
+                                    Point2d.unwrap cow.position
+                            in
+                            WebGL.entityWith
+                                [ WebGL.Settings.DepthTest.default, Shaders.blend ]
+                                Shaders.vertexShader
+                                Shaders.fragmentShader
+                                cowMesh
+                                { view =
+                                    Mat4.makeTranslate3
+                                        (point.x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
+                                        (point.y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
+                                        (Grid.tileZ True y 0)
+                                        |> Mat4.mul viewMatrix
+                                , texture = trainTexture
+                                , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
+                                , color = Vec4.vec4 1 1 1 1
+                                }
+                        )
+                        (AssocList.toList model.cows)
                     ++ List.filterMap
                         (\flag ->
                             let
@@ -4045,8 +4067,6 @@ buttonTiles =
     , RailCrossingGroup
     , SidewalkRailGroup
     , SidewalkGroup
-    , MowedGrass1Group
-    , MowedGrass4Group
     , PineTreeGroup
     , RoadStraightGroup
     , RoadTurnGroup
@@ -4213,3 +4233,42 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         ++ Sprite.shiverText frame 1 "Help!" padding
         ++ Sprite.spriteWithTwoColors colors (Coord.xy 7 27) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
         |> Sprite.toMesh
+
+
+cowMesh =
+    let
+        width =
+            15
+
+        height =
+            11
+
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePositionPixels (Coord.xy 100 594) (Coord.xy width height)
+    in
+    Shaders.triangleFan
+        [ { position = Vec3.vec3 0 0 0
+          , texturePosition = topLeft
+          , opacity = 1
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
+          }
+        , { position = Vec3.vec3 width 0 0
+          , texturePosition = topRight
+          , opacity = 1
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
+          }
+        , { position = Vec3.vec3 width height 0
+          , texturePosition = bottomRight
+          , opacity = 1
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
+          }
+        , { position = Vec3.vec3 0 height 0
+          , texturePosition = bottomLeft
+          , opacity = 1
+          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
+          , secondaryColor = Vec3.vec3 0 0 0
+          }
+        ]

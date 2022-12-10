@@ -1,4 +1,6 @@
-module Id exposing (EventId, Id, MailId, TrainId, UserId, fromInt, increment, toInt)
+module Id exposing (CowId, EventId, Id, MailId, TrainId, UserId, fromInt, increment, nextId, toInt)
+
+import AssocList
 
 
 type Id a
@@ -21,6 +23,10 @@ type EventId
     = EventId Never
 
 
+type CowId
+    = CowId Never
+
+
 fromInt : Int -> Id a
 fromInt =
     Id
@@ -34,3 +40,13 @@ toInt (Id int) =
 increment : Id a -> Id a
 increment (Id id) =
     Id (id + 1)
+
+
+nextId : AssocList.Dict (Id a) b -> Id a
+nextId ids =
+    AssocList.toList ids
+        |> List.map (Tuple.first >> toInt)
+        |> List.maximum
+        |> Maybe.withDefault 0
+        |> (+) 1
+        |> fromInt

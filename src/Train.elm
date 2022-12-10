@@ -1210,12 +1210,7 @@ handleAddingTrain trains owner_ tile position =
                 else
                     ( Tile.trainHouseRightRailPath, Tile.trainHouseRightRailPath )
         in
-        ( AssocList.toList trains
-            |> List.map (Tuple.first >> Id.toInt)
-            |> List.maximum
-            |> Maybe.withDefault 0
-            |> (+) 1
-            |> Id.fromInt
+        ( Id.nextId trains
         , Train
             { position = position
             , path = railPath
