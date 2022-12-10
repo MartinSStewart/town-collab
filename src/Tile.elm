@@ -66,8 +66,6 @@ type TileGroup
     | Road3WayGroup
     | RoadRailCrossingGroup
     | FenceStraightGroup
-    | FenceTurnGroup
-    | Fence3WayGroup
 
 
 type alias TileGroupData =
@@ -210,16 +208,6 @@ getTileGroupData tileGroup =
             , tiles = Nonempty FenceHorizontal [ FenceVertical ]
             }
 
-        FenceTurnGroup ->
-            { defaultColors = defaultFenceColor
-            , tiles = Nonempty FenceLeftToTop [ FenceRightToTop ]
-            }
-
-        Fence3WayGroup ->
-            { defaultColors = defaultFenceColor
-            , tiles = Nonempty Fence3Way []
-            }
-
 
 type Tile
     = EmptyTile
@@ -284,9 +272,6 @@ type Tile
     | RoadRailCrossingVertical
     | FenceHorizontal
     | FenceVertical
-    | FenceLeftToTop
-    | FenceRightToTop
-    | Fence3Way
 
 
 type Direction
@@ -761,14 +746,15 @@ type CollisionMask
     | CustomCollision (Set ( Int, Int ))
 
 
-hasCollision :
-    Coord c
-    -> { a | size : Coord unit, collisionMask : CollisionMask }
-    -> Coord c
-    -> { b | size : Coord unit, collisionMask : CollisionMask }
-    -> Bool
+hasCollision : Coord c -> Tile -> Coord c -> Tile -> Bool
 hasCollision positionA tileA positionB tileB =
     let
+        tileDataA =
+            getData tileA
+
+        tileDataB =
+            getData tileB
+
         ( Quantity x, Quantity y ) =
             positionA
 
@@ -776,41 +762,50 @@ hasCollision positionA tileA positionB tileB =
             positionB
 
         ( Quantity width, Quantity height ) =
-            tileA.size
+            tileDataA.size
 
         ( Quantity width2, Quantity height2 ) =
-            tileB.size
+            tileDataB.size
     in
-    case ( tileA.collisionMask, tileB.collisionMask ) of
-        ( DefaultCollision, DefaultCollision ) ->
-            ((x2 >= x && x2 < x + width) || (x >= x2 && x < x2 + width2))
-                && ((y2 >= y && y2 < y + height) || (y >= y2 && y < y2 + height2))
+    if
+        (tileA == FenceHorizontal && tileB == FenceHorizontal && positionA /= positionB)
+            || (tileA == FenceVertical && tileB == FenceVertical && positionA /= positionB)
+            || (tileA == FenceHorizontal && tileB == FenceVertical)
+            || (tileA == FenceVertical && tileB == FenceHorizontal)
+    then
+        False
 
-        ( CustomCollision setA, DefaultCollision ) ->
-            Set.toList setA
-                |> List.any
-                    (\( cx, cy ) ->
-                        x2 <= x + cx && x2 + width2 > x + cx && y2 <= y + cy && y2 + height2 > y + cy
-                    )
+    else
+        case ( tileDataA.collisionMask, tileDataB.collisionMask ) of
+            ( DefaultCollision, DefaultCollision ) ->
+                ((x2 >= x && x2 < x + width) || (x >= x2 && x < x2 + width2))
+                    && ((y2 >= y && y2 < y + height) || (y >= y2 && y < y2 + height2))
 
-        ( DefaultCollision, CustomCollision setB ) ->
-            Set.toList setB
-                |> List.any
-                    (\( cx, cy ) ->
-                        x <= x2 + cx && x + width > x2 + cx && y <= y2 + cy && y + height > y2 + cy
-                    )
+            ( CustomCollision setA, DefaultCollision ) ->
+                Set.toList setA
+                    |> List.any
+                        (\( cx, cy ) ->
+                            x2 <= x + cx && x2 + width2 > x + cx && y2 <= y + cy && y2 + height2 > y + cy
+                        )
 
-        ( CustomCollision setA, CustomCollision setB ) ->
-            let
-                ( Quantity offsetX, Quantity offsetY ) =
-                    positionB
-                        |> Coord.minus positionA
+            ( DefaultCollision, CustomCollision setB ) ->
+                Set.toList setB
+                    |> List.any
+                        (\( cx, cy ) ->
+                            x <= x2 + cx && x + width > x2 + cx && y <= y2 + cy && y + height > y2 + cy
+                        )
 
-                intersection =
-                    Set.map (\( cx, cy ) -> ( cx + offsetX, cy + offsetY )) setB
-                        |> Set.intersect setA
-            in
-            Set.size intersection > 0
+            ( CustomCollision setA, CustomCollision setB ) ->
+                let
+                    ( Quantity offsetX, Quantity offsetY ) =
+                        positionB
+                            |> Coord.minus positionA
+
+                    intersection =
+                        Set.map (\( cx, cy ) -> ( cx + offsetX, cy + offsetY )) setB
+                            |> Set.intersect setA
+                in
+                Set.size intersection > 0
 
 
 hasCollisionWithCoord : Coord CellLocalUnit -> Coord CellLocalUnit -> TileData unit -> Bool
@@ -1784,40 +1779,16 @@ getData tile =
         FenceHorizontal ->
             { texturePosition = Nothing
             , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 33, yOffset = 0 }
-            , size = Coord.xy 3 1
-            , collisionMask = [ ( 1, 0 ) ] |> Set.fromList |> CustomCollision
+            , size = Coord.xy 2 1
+            , collisionMask = DefaultCollision
             , railPath = NoRailPath
             }
 
         FenceVertical ->
             { texturePosition = Nothing
-            , texturePositionTopLayer = Just { texturePosition = Coord.xy 10 34, yOffset = 0 }
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 10 33, yOffset = 0 }
             , size = Coord.xy 1 2
-            , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
-            , railPath = NoRailPath
-            }
-
-        FenceLeftToTop ->
-            { texturePosition = Nothing
-            , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 34, yOffset = 0 }
-            , size = Coord.xy 2 2
-            , collisionMask = [ ( 1, 1 ) ] |> Set.fromList |> CustomCollision
-            , railPath = NoRailPath
-            }
-
-        FenceRightToTop ->
-            { texturePosition = Nothing
-            , texturePositionTopLayer = Just { texturePosition = Coord.xy 9 36, yOffset = 0 }
-            , size = Coord.xy 2 2
-            , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
-            , railPath = NoRailPath
-            }
-
-        Fence3Way ->
-            { texturePosition = Nothing
-            , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 38, yOffset = 0 }
-            , size = Coord.xy 3 2
-            , collisionMask = [ ( 1, 1 ) ] |> Set.fromList |> CustomCollision
+            , collisionMask = DefaultCollision
             , railPath = NoRailPath
             }
 

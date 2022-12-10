@@ -296,11 +296,12 @@ canPlaceTile change =
                                 in
                                 Tile.hasCollision
                                     change.position
-                                    tileData
+                                    change.change
                                     terrainPosition
-                                    { size = Coord.xy Terrain.terrainSize Terrain.terrainSize
-                                    , collisionMask = DefaultCollision
-                                    }
+                                    MowedGrass4
+                         --{ size = Coord.xy Terrain.terrainSize Terrain.terrainSize
+                         --, collisionMask = DefaultCollision
+                         --}
                         )
             )
         |> not
@@ -459,13 +460,7 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
                 opacity =
                     case maybeCurrentTile of
                         Just currentTile ->
-                            if
-                                Tile.hasCollision
-                                    currentTile.position
-                                    (Tile.getData currentTile.tile)
-                                    position
-                                    data
-                            then
+                            if Tile.hasCollision currentTile.position currentTile.tile position value then
                                 0.5
 
                             else

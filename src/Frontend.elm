@@ -2157,7 +2157,7 @@ placeTile isDragPlacement tileGroup index model =
         hasCollision =
             case model.lastTilePlaced of
                 Just lastPlaced ->
-                    Tile.hasCollision cursorPosition_ tileData lastPlaced.position (Tile.getData lastPlaced.tile)
+                    Tile.hasCollision cursorPosition_ tile lastPlaced.position lastPlaced.tile
 
                 Nothing ->
                     False
@@ -4054,8 +4054,6 @@ buttonTiles =
     , Road3WayGroup
     , RoadRailCrossingGroup
     , FenceStraightGroup
-    , FenceTurnGroup
-    , Fence3WayGroup
     ]
 
 

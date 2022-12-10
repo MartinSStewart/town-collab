@@ -148,10 +148,6 @@ stepCache ({ userId, position, value } as item) state =
 
 stepCacheHelper : Value -> List Value -> List Value
 stepCacheHelper ({ userId, position, value } as item) cache =
-    let
-        data =
-            Tile.getData value
-    in
     (if Bounds.contains position cellBounds && value /= EmptyTile then
         [ item ]
 
@@ -160,7 +156,7 @@ stepCacheHelper ({ userId, position, value } as item) cache =
     )
         ++ List.filter
             (\item2 ->
-                Tile.hasCollision position data item2.position (Tile.getData item2.value)
+                Tile.hasCollision position value item2.position item2.value
                     |> not
             )
             cache
@@ -169,13 +165,10 @@ stepCacheHelper ({ userId, position, value } as item) cache =
 stepCacheHelperWithRemoved : Value -> List Value -> { remaining : List Value, removed : List Value }
 stepCacheHelperWithRemoved ({ userId, position, value } as item) cache =
     let
-        data =
-            Tile.getData value
-
         ( remaining, removed ) =
             List.partition
                 (\item2 ->
-                    Tile.hasCollision position data item2.position (Tile.getData item2.value)
+                    Tile.hasCollision position value item2.position item2.value
                         |> not
                 )
                 cache
