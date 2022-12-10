@@ -205,7 +205,7 @@ getTileGroupData tileGroup =
 
         FenceStraightGroup ->
             { defaultColors = defaultFenceColor
-            , tiles = Nonempty FenceHorizontal [ FenceVertical ]
+            , tiles = Nonempty FenceHorizontal [ FenceDiagonal, FenceVertical, FenceAntidiagonal ]
             }
 
 
@@ -272,6 +272,8 @@ type Tile
     | RoadRailCrossingVertical
     | FenceHorizontal
     | FenceVertical
+    | FenceDiagonal
+    | FenceAntidiagonal
 
 
 type Direction
@@ -768,10 +770,8 @@ hasCollision positionA tileA positionB tileB =
             tileDataB.size
     in
     if
-        (tileA == FenceHorizontal && tileB == FenceHorizontal && positionA /= positionB)
-            || (tileA == FenceVertical && tileB == FenceVertical && positionA /= positionB)
-            || (tileA == FenceHorizontal && tileB == FenceVertical)
-            || (tileA == FenceVertical && tileB == FenceHorizontal)
+        ((isFence tileA && tileA == tileB) && positionA /= positionB)
+            || (isFence tileA && isFence tileB && tileA /= tileB)
     then
         False
 
@@ -806,6 +806,10 @@ hasCollision positionA tileA positionB tileB =
                             |> Set.intersect setA
                 in
                 Set.size intersection > 0
+
+
+isFence tile =
+    tile == FenceHorizontal || tile == FenceVertical || tile == FenceDiagonal || tile == FenceAntidiagonal
 
 
 hasCollisionWithCoord : Coord CellLocalUnit -> Coord CellLocalUnit -> TileData unit -> Bool
@@ -1788,6 +1792,22 @@ getData tile =
             { texturePosition = Nothing
             , texturePositionTopLayer = Just { texturePosition = Coord.xy 10 33, yOffset = 0 }
             , size = Coord.xy 1 2
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        FenceDiagonal ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 36, yOffset = 0 }
+            , size = Coord.xy 2 2
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        FenceAntidiagonal ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 34, yOffset = 0 }
+            , size = Coord.xy 2 2
             , collisionMask = DefaultCollision
             , railPath = NoRailPath
             }
