@@ -4053,6 +4053,9 @@ buttonTiles =
     , RoadSidewalkCrossingGroup
     , Road3WayGroup
     , RoadRailCrossingGroup
+    , FenceStraightGroup
+    , FenceTurnGroup
+    , Fence3WayGroup
     ]
 
 

@@ -65,6 +65,9 @@ type TileGroup
     | RoadSidewalkCrossingGroup
     | Road3WayGroup
     | RoadRailCrossingGroup
+    | FenceStraightGroup
+    | FenceTurnGroup
+    | Fence3WayGroup
 
 
 type alias TileGroupData =
@@ -202,6 +205,21 @@ getTileGroupData tileGroup =
             , tiles = Nonempty RoadRailCrossingHorizontal [ RoadRailCrossingVertical ]
             }
 
+        FenceStraightGroup ->
+            { defaultColors = defaultFenceColor
+            , tiles = Nonempty FenceHorizontal [ FenceVertical ]
+            }
+
+        FenceTurnGroup ->
+            { defaultColors = defaultFenceColor
+            , tiles = Nonempty FenceLeftToTop [ FenceRightToTop ]
+            }
+
+        Fence3WayGroup ->
+            { defaultColors = defaultFenceColor
+            , tiles = Nonempty Fence3Way []
+            }
+
 
 type Tile
     = EmptyTile
@@ -264,6 +282,11 @@ type Tile
     | Road3WayRight
     | RoadRailCrossingHorizontal
     | RoadRailCrossingVertical
+    | FenceHorizontal
+    | FenceVertical
+    | FenceLeftToTop
+    | FenceRightToTop
+    | Fence3Way
 
 
 type Direction
@@ -818,6 +841,11 @@ defaultHouseColors =
 defaultSidewalkColor : DefaultColor
 defaultSidewalkColor =
     TwoDefaultColors (Color.rgb255 193 182 162) (Color.rgb255 170 160 140)
+
+
+defaultFenceColor : DefaultColor
+defaultFenceColor =
+    OneDefaultColor (Color.rgb255 220 129 97)
 
 
 defaultTreeColor : DefaultColor
@@ -1751,6 +1779,46 @@ getData tile =
             , size = Coord.xy 3 1
             , collisionMask = DefaultCollision
             , railPath = RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 } |> SingleRailPath
+            }
+
+        FenceHorizontal ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 33, yOffset = 0 }
+            , size = Coord.xy 3 1
+            , collisionMask = [ ( 1, 0 ) ] |> Set.fromList |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        FenceVertical ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 10 34, yOffset = 0 }
+            , size = Coord.xy 1 2
+            , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        FenceLeftToTop ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 34, yOffset = 0 }
+            , size = Coord.xy 2 2
+            , collisionMask = [ ( 1, 1 ) ] |> Set.fromList |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        FenceRightToTop ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 9 36, yOffset = 0 }
+            , size = Coord.xy 2 2
+            , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        Fence3Way ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { texturePosition = Coord.xy 8 38, yOffset = 0 }
+            , size = Coord.xy 3 2
+            , collisionMask = [ ( 1, 1 ) ] |> Set.fromList |> CustomCollision
+            , railPath = NoRailPath
             }
 
 

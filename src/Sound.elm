@@ -124,7 +124,7 @@ load onLoad =
                             "teleport.mp3"
 
                         Music0 ->
-                            "train-game-thingy.mp3"
+                            "grasslands.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)
