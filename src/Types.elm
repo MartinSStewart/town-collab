@@ -91,6 +91,7 @@ type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : AssocList.Dict (Id TrainId) Train
+    , cows : List Cow
     , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
@@ -182,9 +183,15 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
     , trains : AssocList.Dict (Id TrainId) Train
+    , cows : List Cow
     , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
+    }
+
+
+type alias Cow =
+    { position : Point2d WorldUnit WorldUnit
     }
 
 
@@ -282,6 +289,7 @@ type alias LoadingData_ =
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
     , trains : AssocList.Dict (Id TrainId) Train
+    , cows : List Cow
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : MailEditorData
     }

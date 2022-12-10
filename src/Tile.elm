@@ -65,6 +65,7 @@ type TileGroup
     | RoadSidewalkCrossingGroup
     | Road3WayGroup
     | RoadRailCrossingGroup
+    | RoadDeadendGroup
     | FenceStraightGroup
 
 
@@ -208,6 +209,11 @@ getTileGroupData tileGroup =
             , tiles = Nonempty FenceHorizontal [ FenceDiagonal, FenceVertical, FenceAntidiagonal ]
             }
 
+        RoadDeadendGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles = Nonempty RoadDeadendDown [ RoadDeadendUp ]
+            }
+
 
 type Tile
     = EmptyTile
@@ -274,6 +280,8 @@ type Tile
     | FenceVertical
     | FenceDiagonal
     | FenceAntidiagonal
+    | RoadDeadendUp
+    | RoadDeadendDown
 
 
 type Direction
@@ -1821,6 +1829,22 @@ getData tile =
                 ]
                     |> Set.fromList
                     |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        RoadDeadendUp ->
+            { texturePosition = Just (Coord.xy 10 38)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 5 4
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RoadDeadendDown ->
+            { texturePosition = Just (Coord.xy 15 38)
+            , texturePositionTopLayer = Nothing
+            , size = Coord.xy 5 4
+            , collisionMask = DefaultCollision
             , railPath = NoRailPath
             }
 

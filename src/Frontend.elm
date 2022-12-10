@@ -374,6 +374,7 @@ loadedInit time loading texture loadingData =
             { key = loading.key
             , localModel = LocalGrid.init loadingData
             , trains = loadingData.trains
+            , cows = loadingData.cows
             , meshes = Dict.empty
             , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
             , viewPointLastInterval = Point2d.origin
@@ -4053,6 +4054,7 @@ buttonTiles =
     , RoadSidewalkCrossingGroup
     , Road3WayGroup
     , RoadRailCrossingGroup
+    , RoadDeadendGroup
     , FenceStraightGroup
     ]
 

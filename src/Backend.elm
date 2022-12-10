@@ -67,6 +67,7 @@ init =
     , secretLinkCounter = 0
     , errors = []
     , trains = AssocList.empty
+    , cows = []
     , lastWorldUpdateTrains = AssocList.empty
     , lastWorldUpdate = Nothing
     , mail = AssocList.empty
@@ -802,6 +803,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             , undoCurrent = user.undoCurrent
             , viewBounds = viewBounds
             , trains = model.trains
+            , cows = model.cows
             , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model.mail
             , mailEditor = user.mailEditor
             }
