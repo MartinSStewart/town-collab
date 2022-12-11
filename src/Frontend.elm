@@ -326,9 +326,12 @@ maxVolumeDistance =
 
 tryLoading : FrontendLoading -> Maybe (() -> ( FrontendModel_, Cmd FrontendMsg_ ))
 tryLoading frontendLoading =
-    Maybe.map3
-        (\time texture loadingData () -> loadedInit time frontendLoading texture loadingData)
+    Maybe.map4
+        (\time devicePixelRatio texture loadingData () ->
+            loadedInit time devicePixelRatio frontendLoading texture loadingData
+        )
         frontendLoading.time
+        frontendLoading.devicePixelRatio
         frontendLoading.texture
         frontendLoading.loadingData
 
@@ -355,8 +358,8 @@ defaultTileHotkeys =
         ]
 
 
-loadedInit : Time.Posix -> FrontendLoading -> Texture -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
-loadedInit time loading texture loadingData =
+loadedInit : Time.Posix -> Float -> FrontendLoading -> Texture -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
+loadedInit time devicePixelRatio loading texture loadingData =
     let
         currentTile =
             Nothing
@@ -380,7 +383,7 @@ loadedInit time loading texture loadingData =
             , trainTexture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
-            , devicePixelRatio = loading.devicePixelRatio
+            , devicePixelRatio = devicePixelRatio
             , zoomFactor = loading.zoomFactor
             , mouseLeft = MouseButtonUp { current = loading.mousePosition }
             , mouseMiddle = MouseButtonUp { current = loading.mousePosition }
@@ -492,7 +495,7 @@ init url key =
     ( Loading
         { key = key
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
-        , devicePixelRatio = 1
+        , devicePixelRatio = Nothing
         , zoomFactor = 2
         , time = Nothing
         , viewPoint = viewPoint
@@ -536,7 +539,7 @@ update audioData msg model =
                     windowResizedUpdate windowSize loadingModel |> Tuple.mapFirst Loading
 
                 GotDevicePixelRatio devicePixelRatio ->
-                    devicePixelRatioUpdate devicePixelRatio loadingModel |> Tuple.mapFirst Loading
+                    ( Loading { loadingModel | devicePixelRatio = Just devicePixelRatio }, Cmd.none )
 
                 SoundLoaded sound result ->
                     ( Loading { loadingModel | sounds = AssocList.insert sound result loadingModel.sounds }, Cmd.none )
@@ -697,7 +700,7 @@ updateLoaded audioData msg model =
             windowResizedUpdate windowSize model
 
         GotDevicePixelRatio devicePixelRatio ->
-            devicePixelRatioUpdate devicePixelRatio model
+            ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
 
         MouseDown button mousePosition ->
             let
@@ -2109,14 +2112,6 @@ windowResizedUpdate windowSize model =
     ( { model | windowSize = windowSize }, martinsstewart_elm_device_pixel_ratio_to_js () )
 
 
-devicePixelRatioUpdate :
-    Float
-    -> { b | devicePixelRatio : Float, zoomFactor : Int }
-    -> ( { b | devicePixelRatio : Float, zoomFactor : Int }, Cmd msg )
-devicePixelRatioUpdate devicePixelRatio model =
-    ( { model | devicePixelRatio = devicePixelRatio }, Cmd.none )
-
-
 mouseWorldPosition : FrontendLoaded -> Point2d WorldUnit WorldUnit
 mouseWorldPosition model =
     mouseScreenPosition model |> screenToWorld model
@@ -2852,7 +2847,12 @@ view audioData model =
     , body =
         [ case model of
             Loading loadingModel ->
-                loadingCanvasView loadingModel
+                case loadingModel.devicePixelRatio of
+                    Just devicePixelRatio ->
+                        loadingCanvasView devicePixelRatio loadingModel
+
+                    Nothing ->
+                        Html.text ""
 
             Loaded loadedModel ->
                 canvasView audioData loadedModel
@@ -2917,8 +2917,8 @@ viewBoundingBox_ model =
     BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
-loadingCanvasView : FrontendLoading -> Html FrontendMsg_
-loadingCanvasView model =
+loadingCanvasView : Float -> FrontendLoading -> Html FrontendMsg_
+loadingCanvasView devicePixelRatio model =
     let
         ( windowWidth, windowHeight ) =
             actualCanvasSize
@@ -2927,10 +2927,10 @@ loadingCanvasView model =
             canvasSize
 
         { canvasSize, actualCanvasSize } =
-            findPixelPerfectSize model
+            findPixelPerfectSize { devicePixelRatio = devicePixelRatio, windowSize = model.windowSize }
 
         loadingTextPosition2 =
-            loadingTextPosition model.devicePixelRatio model.windowSize
+            loadingTextPosition devicePixelRatio model.windowSize
 
         isHovering =
             insideStartButton model.mousePosition model
@@ -2985,7 +2985,7 @@ loadingCanvasView model =
                             (-2 / toFloat windowHeight)
                             1
                             |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                            |> Coord.translateMat4 (touchDevicesNotSupportedPosition model.devicePixelRatio model.windowSize)
+                            |> Coord.translateMat4 (touchDevicesNotSupportedPosition devicePixelRatio model.windowSize)
                     , texture = texture
                     , textureSize = textureSize
                     , color = Vec4.vec4 1 1 1 1
@@ -3028,7 +3028,7 @@ loadingCanvasView model =
                                             1
                                             |> Coord.translateMat4
                                                 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                            |> Coord.translateMat4 (loadingTextPosition model.devicePixelRatio model.windowSize)
+                                            |> Coord.translateMat4 (loadingTextPosition devicePixelRatio model.windowSize)
                                     , texture = texture
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
@@ -3041,19 +3041,24 @@ loadingCanvasView model =
         )
 
 
-insideStartButton : Point2d Pixels Pixels -> { a | devicePixelRatio : Float, windowSize : Coord Pixels } -> Bool
+insideStartButton : Point2d Pixels Pixels -> { a | devicePixelRatio : Maybe Float, windowSize : Coord Pixels } -> Bool
 insideStartButton mousePosition model =
-    let
-        mousePosition2 : Coord Pixels
-        mousePosition2 =
-            mousePosition
-                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
-                |> Coord.roundPoint
+    case model.devicePixelRatio of
+        Just devicePixelRatio ->
+            let
+                mousePosition2 : Coord Pixels
+                mousePosition2 =
+                    mousePosition
+                        |> Point2d.scaleAbout Point2d.origin devicePixelRatio
+                        |> Coord.roundPoint
 
-        loadingTextPosition2 =
-            loadingTextPosition model.devicePixelRatio model.windowSize
-    in
-    Bounds.fromCoordAndSize loadingTextPosition2 loadingTextSize |> Bounds.contains mousePosition2
+                loadingTextPosition2 =
+                    loadingTextPosition devicePixelRatio model.windowSize
+            in
+            Bounds.fromCoordAndSize loadingTextPosition2 loadingTextSize |> Bounds.contains mousePosition2
+
+        Nothing ->
+            False
 
 
 loadingTextPosition : Float -> Coord units -> Coord units

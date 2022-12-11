@@ -71,7 +71,7 @@ type FrontendModel_
 type alias FrontendLoading =
     { key : Browser.Navigation.Key
     , windowSize : Coord Pixels
-    , devicePixelRatio : Float
+    , devicePixelRatio : Maybe Float
     , zoomFactor : Int
     , time : Maybe Time.Posix
     , viewPoint : Coord WorldUnit
