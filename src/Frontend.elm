@@ -268,6 +268,19 @@ audioLoaded audioData model =
         Nothing ->
             Audio.silence
     , playSound model.music.sound model.music.startTime |> Audio.scaleVolume 0.5
+    , playWithConfig
+        (\duration ->
+            { loop =
+                Just
+                    { loopStart = Quantity.zero
+                    , loopEnd = duration
+                    }
+            , playbackRate = 1
+            , startAt = Quantity.zero
+            }
+        )
+        Ambience0
+        (Time.millisToPosix 0)
     , playSound PopSound (Duration.addTo model.startTime (Duration.milliseconds 100))
         -- Increase the volume on this sound effect to compensate for the volume fade in at the start of the game
         |> Audio.scaleVolume 2

@@ -24,6 +24,7 @@ type Sound
     | Hello2Sound
     | TeleportSound
     | Music0
+    | Ambience0
 
 
 allSounds =
@@ -43,6 +44,7 @@ allSounds =
     , Hello2Sound
     , TeleportSound
     , Music0
+    , Ambience0
     ]
 
 
@@ -125,6 +127,9 @@ load onLoad =
 
                         Music0 ->
                             "grasslands.mp3"
+
+                        Ambience0 ->
+                            "windy-grasslands-ambience.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)
