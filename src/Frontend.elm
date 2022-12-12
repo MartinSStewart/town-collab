@@ -3260,7 +3260,7 @@ canvasView audioData model =
                                     Point2d.unwrap cow.position
                             in
                             WebGL.entityWith
-                                [ WebGL.Settings.DepthTest.default, Shaders.blend ]
+                                [ Shaders.blend ]
                                 Shaders.vertexShader
                                 Shaders.fragmentShader
                                 cowMesh
@@ -3268,10 +3268,10 @@ canvasView audioData model =
                                     Mat4.makeTranslate3
                                         (point.x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
                                         (point.y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
-                                        (Grid.tileZ True y 0)
+                                        (Grid.tileZ True y (Coord.yRaw cowSize))
                                         |> Mat4.mul viewMatrix
-                                , texture = trainTexture
-                                , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
+                                , texture = model.texture
+                                , textureSize = textureSize
                                 , color = Vec4.vec4 1 1 1 1
                                 }
                         )
@@ -4253,40 +4253,50 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         |> Sprite.toMesh
 
 
+cowSize =
+    Coord.xy 20 14
+
+
+cowPrimaryColor =
+    Vec3.vec3 1 1 1
+
+
+cowSecondaryColor =
+    Vec3.vec3 0.2 0.2 0.2
+
+
+cowMesh : WebGL.Mesh Vertex
 cowMesh =
     let
-        width =
-            15
-
-        height =
-            11
+        ( width, height ) =
+            Coord.toTuple cowSize |> Tuple.mapBoth toFloat toFloat
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 100 594) (Coord.xy width height)
+            Tile.texturePositionPixels (Coord.xy 99 594) cowSize
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0
           , texturePosition = topLeft
           , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
+          , primaryColor = cowPrimaryColor
+          , secondaryColor = cowSecondaryColor
           }
         , { position = Vec3.vec3 width 0 0
           , texturePosition = topRight
           , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
+          , primaryColor = cowPrimaryColor
+          , secondaryColor = cowSecondaryColor
           }
         , { position = Vec3.vec3 width height 0
           , texturePosition = bottomRight
           , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
+          , primaryColor = cowPrimaryColor
+          , secondaryColor = cowSecondaryColor
           }
         , { position = Vec3.vec3 0 height 0
           , texturePosition = bottomLeft
           , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
+          , primaryColor = cowPrimaryColor
+          , secondaryColor = cowSecondaryColor
           }
         ]

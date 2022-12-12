@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , Cow
     , EmailEvent(..)
     , FrontendLoaded
     , FrontendLoading

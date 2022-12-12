@@ -25,10 +25,13 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
-import Quantity
+import Point2d
+import Quantity exposing (Quantity(..))
+import Random
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
+import Terrain
 import Tile exposing (RailPathType(..), Tile(..))
 import Time
 import Train exposing (Status(..), Train, TrainDiff)
@@ -535,6 +538,32 @@ generateKey keyType model =
     )
 
 
+randomCows : Coord CellUnit -> Random.Generator (List Cow)
+randomCows coord =
+    let
+        worldCoord =
+            Grid.cellAndLocalCoordToWorld ( coord, Coord.origin )
+    in
+    Random.weighted
+        ( 0.93, 0 )
+        [ ( 0.05, 1 )
+        , ( 0.01, 2 )
+        , ( 0.01, 3 )
+        ]
+        |> Random.andThen
+            (\amount ->
+                Random.list amount (randomCow worldCoord)
+            )
+
+
+randomCow : Coord WorldUnit -> Random.Generator Cow
+randomCow ( Quantity xOffset, Quantity yOffset ) =
+    Random.map2
+        (\x y -> { position = Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y } })
+        (Random.float 0 Units.cellSize)
+        (Random.float 0 Units.cellSize)
+
+
 updateLocalChange :
     Time.Posix
     -> ( Id UserId, BackendUserData )
@@ -627,7 +656,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                             else
                                 Nothing
 
-                        { grid, removed } =
+                        { grid, removed, newCells } =
                             Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
                     in
                     case Train.canRemoveTiles time removed model.trains of
@@ -644,16 +673,33 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 
                                                 Nothing ->
                                                     model.trains
-                                        , cows = model.cows
+                                        , cows =
+                                            List.foldl
+                                                (\newCell dict ->
+                                                    Random.step
+                                                        (randomCows newCell)
+                                                        (Random.initialSeed
+                                                            (Coord.xRaw newCell * 10000 + Coord.yRaw newCell)
+                                                        )
+                                                        |> Tuple.first
+                                                        |> List.foldl
+                                                            (\cow dict2 ->
+                                                                let
+                                                                    ( cellUnit, terrainUnit ) =
+                                                                        Coord.floorPoint cow.position
+                                                                            |> Grid.worldToCellAndLocalCoord
+                                                                            |> Tuple.mapSecond Terrain.localCoordToTerrain
+                                                                in
+                                                                if Terrain.isGroundTerrain terrainUnit cellUnit |> Debug.log "terrain" then
+                                                                    AssocList.insert (Id.nextId dict2) cow dict2
 
-                                        --if cellExists then
-                                        --    model.cows
-                                        --
-                                        --else
-                                        --    AssocList.insert
-                                        --        (Id.nextId model.cows)
-                                        --        { position = Coord.toPoint2d localChange.position }
-                                        --        model.cows
+                                                                else
+                                                                    dict2
+                                                            )
+                                                            dict
+                                                )
+                                                model.cows
+                                                newCells
                                     }
                                 |> updateUser
                                     userId

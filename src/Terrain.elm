@@ -16,7 +16,12 @@ terrainCoord x y =
 
 terrainToLocalCoord : Coord TerrainUnit -> Coord CellLocalUnit
 terrainToLocalCoord coord =
-    Coord.multiplyTuple ( terrainSize, terrainSize ) coord |> Coord.toTuple |> Coord.tuple
+    Coord.multiplyTuple ( terrainSize, terrainSize ) coord |> Coord.changeUnit
+
+
+localCoordToTerrain : Coord CellLocalUnit -> Coord TerrainUnit
+localCoordToTerrain coord =
+    Coord.divide (Coord.xy terrainSize terrainSize) coord |> Coord.changeUnit
 
 
 treeSize : Coord unit
@@ -83,23 +88,7 @@ getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
 
 isGroundTerrain : Coord TerrainUnit -> Coord CellUnit -> Bool
 isGroundTerrain ( Quantity x, Quantity y ) cellPosition =
-    let
-        getValue x2 y2 =
-            getTerrainValue (Coord.xy (x + x2) (y + y2)) cellPosition > 0
-    in
-    case
-        ( {- Top -} getValue 0 -1
-        , ( getValue -1 0, getValue 0 0, getValue 1 0 ) {- Left, Center, Right -}
-        , {- Bottom -} getValue 0 1
-        )
-    of
-        --( True, ( True, _, True ), True ) ->
-        --    True
-        ( _, ( _, True, _ ), _ ) ->
-            True
-
-        ( _, ( _, False, _ ), _ ) ->
-            False
+    getTerrainValue (Coord.xy x y) cellPosition > 0
 
 
 fractalConfig : Simplex.FractalConfig

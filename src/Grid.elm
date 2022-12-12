@@ -335,43 +335,56 @@ addChange change grid =
             , secondaryColor = change.secondaryColor
             }
 
-        neighborCells_ : List ( Coord CellUnit, { cell : Cell, removed : List GridCell.Value } )
+        neighborCells_ :
+            List
+                { neighborPos : Coord CellUnit
+                , neighbor : { cell : Cell, removed : List GridCell.Value }
+                , isNewCell : Bool
+                }
         neighborCells_ =
             closeNeighborCells cellPosition localPosition
                 |> List.map
                     (\( newCellPos, newLocalPos ) ->
-                        (case getCell newCellPos grid of
-                            Just cell ->
-                                cell
+                        let
+                            oldCell =
+                                getCell newCellPos grid
+                        in
+                        { neighborPos = newCellPos
+                        , neighbor =
+                            (case oldCell of
+                                Just cell2 ->
+                                    cell2
 
-                            Nothing ->
-                                GridCell.empty newCellPos
-                        )
-                            |> GridCell.addValue { value | position = newLocalPos }
-                            |> Tuple.pair newCellPos
+                                Nothing ->
+                                    GridCell.empty newCellPos
+                            )
+                                |> GridCell.addValue { value | position = newLocalPos }
+                        , isNewCell = oldCell == Nothing
+                        }
                     )
-    in
-    (case getCell cellPosition grid of
-        Just cell ->
-            cell
 
-        Nothing ->
-            GridCell.empty cellPosition
-    )
-        |> GridCell.addValue value
+        ( cell, newCells ) =
+            case getCell cellPosition grid of
+                Just cell2 ->
+                    ( cell2, [] )
+
+                Nothing ->
+                    ( GridCell.empty cellPosition, [ cellPosition ] )
+    in
+    GridCell.addValue value cell
         |> (\cell_ ->
                 { grid =
                     List.foldl
-                        (\( neighborPos, neighbor ) grid2 ->
+                        (\{ neighborPos, neighbor } grid2 ->
                             setCell neighborPos neighbor.cell grid2
                         )
                         (setCell cellPosition cell_.cell grid)
                         neighborCells_
                 , removed =
-                    ( cellPosition, cell_ )
+                    { neighborPos = cellPosition, neighbor = cell_, isNewCell = False }
                         :: neighborCells_
                         |> List.concatMap
-                            (\( neighborPos, neighbor ) ->
+                            (\{ neighborPos, neighbor } ->
                                 List.map
                                     (\removed ->
                                         { tile = removed.value
@@ -383,7 +396,17 @@ addChange change grid =
                                     )
                                     neighbor.removed
                             )
-                , newCells = []
+                , newCells =
+                    newCells
+                        ++ List.filterMap
+                            (\{ neighborPos, isNewCell } ->
+                                if isNewCell then
+                                    Just neighborPos
+
+                                else
+                                    Nothing
+                            )
+                            neighborCells_
                 }
            )
 
