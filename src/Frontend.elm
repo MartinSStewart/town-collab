@@ -28,7 +28,7 @@ import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel
-import Id exposing (Id, TrainId, UserId)
+import Id exposing (CowId, Id, TrainId, UserId)
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -284,6 +284,27 @@ audioLoaded audioData model =
     , playSound PopSound (Duration.addTo model.startTime (Duration.milliseconds 100))
         -- Increase the volume on this sound effect to compensate for the volume fade in at the start of the game
         |> Audio.scaleVolume 2
+    , case model.holdingCow of
+        Just { pickupTime } ->
+            playSound
+                (Random.step
+                    (Random.weighted
+                        ( 1 / 6, Moo0 )
+                        [ ( 1 / 6, Moo1 )
+                        , ( 1 / 12, Moo2 )
+                        , ( 1 / 12, Moo3 )
+                        , ( 1 / 6, Moo4 )
+                        , ( 1 / 6, Moo5 )
+                        , ( 1 / 6, Moo6 )
+                        ]
+                    )
+                    (Random.initialSeed (Time.posixToMillis pickupTime))
+                    |> Tuple.first
+                )
+                pickupTime
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
         |> Audio.scaleVolumeAt [ ( model.startTime, 0 ), ( Duration.addTo model.startTime Duration.second, 1 ) ]
@@ -443,6 +464,7 @@ loadedInit time devicePixelRatio loading texture loadingData =
             , secondaryColorTextInput = TextInput.init
             , focus = focus
             , music = { startTime = Duration.addTo time (Duration.seconds 10), sound = Music0 }
+            , holdingCow = Nothing
             }
     in
     ( updateMeshes model model
@@ -1002,6 +1024,9 @@ updateLoaded audioData msg model =
                                                     model2.secondaryColorTextInput
                                         }
 
+                                    CowHover _ ->
+                                        placeTile True tileGroup index model2
+
                             _ ->
                                 model2
                    )
@@ -1192,6 +1217,9 @@ updateLoaded audioData msg model =
                         MailEditorHover hover ->
                             True
 
+                        CowHover _ ->
+                            True
+
                 model2 =
                     { model
                         | time = time
@@ -1309,6 +1337,9 @@ updateLoaded audioData msg model =
 
                         Nothing ->
                             model
+
+                CowHover _ ->
+                    model
             , Cmd.none
             )
 
@@ -1370,6 +1401,9 @@ nextFocus model =
             model.focus
 
         MailEditorHover hover ->
+            model.focus
+
+        CowHover record ->
             model.focus
 
 
@@ -1634,35 +1668,43 @@ hoverAt model mousePosition =
 
             trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
             trainHovers =
-                case model.currentTile of
-                    Just _ ->
-                        Nothing
+                AssocList.toList model.trains
+                    |> List.filterMap
+                        (\( trainId, train ) ->
+                            let
+                                distance =
+                                    Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                            in
+                            if distance |> Quantity.lessThan (Quantity 0.9) then
+                                Just ( { trainId = trainId, train = train }, distance )
 
-                    Nothing ->
-                        AssocList.toList model.trains
-                            |> List.filterMap
-                                (\( trainId, train ) ->
-                                    let
-                                        distance =
-                                            Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                    in
-                                    if distance |> Quantity.lessThan (Quantity 0.9) then
-                                        Just ( { trainId = trainId, train = train }, distance )
+                            else
+                                Nothing
+                        )
+                    |> Quantity.minimumBy Tuple.second
 
-                                    else
-                                        Nothing
-                                )
-                            |> Quantity.minimumBy Tuple.second
+            cowHovers : Maybe ( Id CowId, Cow )
+            cowHovers =
+                AssocList.toList model.cows
+                    |> List.filter (\( _, cow ) -> insideCow mouseWorldPosition_ cow)
+                    |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
         in
-        case ( trainHovers, tileHover ) of
-            ( Just ( train, _ ), _ ) ->
+        case trainHovers of
+            Just ( train, _ ) ->
                 TrainHover train
 
-            ( Nothing, Just hover ) ->
-                hover
+            Nothing ->
+                case cowHovers of
+                    Just ( cowId, cow ) ->
+                        CowHover { cowId = cowId, cow = cow }
 
-            ( Nothing, Nothing ) ->
-                MapHover
+                    Nothing ->
+                        case tileHover of
+                            Just hover ->
+                                hover
+
+                            Nothing ->
+                                MapHover
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1838,97 +1880,107 @@ mainMouseButtonUp mousePosition previousMouseState model =
             hoverAt model mousePosition
     in
     if isSmallDistance then
-        case hoverAt2 of
-            TileHover tileHover_ ->
-                ( setCurrentTile tileHover_ model2, Cmd.none )
-
-            PostOfficeHover { postOfficePosition } ->
-                ( if canOpenMailEditor model2 then
-                    { model2
-                        | mailEditor =
-                            MailEditor.open
-                                model2
-                                (Coord.toPoint2d postOfficePosition
-                                    |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                    |> worldToScreen model2
-                                )
-                                model2.mailEditor
-                    }
-
-                  else
-                    model2
+        case model2.holdingCow of
+            Just _ ->
+                ( { model2 | holdingCow = Nothing }
                 , Cmd.none
                 )
 
-            TrainHover { trainId, train } ->
-                case Train.status model.time train of
-                    WaitingAtHome ->
-                        clickLeaveHomeTrain trainId train model2
+            Nothing ->
+                case hoverAt2 of
+                    TileHover tileHover_ ->
+                        ( setCurrentTile tileHover_ model2, Cmd.none )
 
-                    TeleportingHome _ ->
-                        ( { model2
-                            | viewPoint = actualViewPoint model2 |> NormalViewPoint
-                            , trains =
-                                AssocList.update
-                                    trainId
-                                    (\_ -> Train.leaveHome model.time train |> Just)
-                                    model2.trains
-                          }
-                        , CancelTeleportHomeTrainRequest trainId |> Lamdera.sendToBackend
+                    PostOfficeHover { postOfficePosition } ->
+                        ( if canOpenMailEditor model2 then
+                            { model2
+                                | mailEditor =
+                                    MailEditor.open
+                                        model2
+                                        (Coord.toPoint2d postOfficePosition
+                                            |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
+                                            |> worldToScreen model2
+                                        )
+                                        model2.mailEditor
+                            }
+
+                          else
+                            model2
+                        , Cmd.none
                         )
 
-                    _ ->
-                        case Train.isStuck model.time train of
-                            Just stuckTime ->
-                                if Duration.from stuckTime model2.time |> Quantity.lessThan stuckMessageDelay then
-                                    ( setTrainViewPoint trainId model2, Cmd.none )
-
-                                else
-                                    clickTeleportHomeTrain trainId train model2
-
-                            Nothing ->
-                                ( setTrainViewPoint trainId model2, Cmd.none )
-
-            ToolbarHover ->
-                ( model2, Cmd.none )
-
-            TrainHouseHover { trainHousePosition } ->
-                case
-                    AssocList.toList model.trains
-                        |> List.find (\( _, train ) -> Train.home train == trainHousePosition)
-                of
-                    Just ( trainId, train ) ->
-                        case Train.status model2.time train of
+                    TrainHover { trainId, train } ->
+                        case Train.status model.time train of
                             WaitingAtHome ->
                                 clickLeaveHomeTrain trainId train model2
 
-                            _ ->
-                                clickTeleportHomeTrain trainId train model2
+                            TeleportingHome _ ->
+                                ( { model2
+                                    | viewPoint = actualViewPoint model2 |> NormalViewPoint
+                                    , trains =
+                                        AssocList.update
+                                            trainId
+                                            (\_ -> Train.leaveHome model.time train |> Just)
+                                            model2.trains
+                                  }
+                                , CancelTeleportHomeTrainRequest trainId |> Lamdera.sendToBackend
+                                )
 
-                    Nothing ->
+                            _ ->
+                                case Train.isStuck model.time train of
+                                    Just stuckTime ->
+                                        if Duration.from stuckTime model2.time |> Quantity.lessThan stuckMessageDelay then
+                                            ( setTrainViewPoint trainId model2, Cmd.none )
+
+                                        else
+                                            clickTeleportHomeTrain trainId train model2
+
+                                    Nothing ->
+                                        ( setTrainViewPoint trainId model2, Cmd.none )
+
+                    ToolbarHover ->
                         ( model2, Cmd.none )
 
-            HouseHover _ ->
-                ( { model2 | lastHouseClick = Just model.time }, Cmd.none )
+                    TrainHouseHover { trainHousePosition } ->
+                        case
+                            AssocList.toList model.trains
+                                |> List.find (\( _, train ) -> Train.home train == trainHousePosition)
+                        of
+                            Just ( trainId, train ) ->
+                                case Train.status model2.time train of
+                                    WaitingAtHome ->
+                                        clickLeaveHomeTrain trainId train model2
 
-            MapHover ->
-                ( case previousMouseState.hover of
-                    TrainHover { trainId, train } ->
-                        setTrainViewPoint trainId model2
+                                    _ ->
+                                        clickTeleportHomeTrain trainId train model2
 
-                    _ ->
-                        model2
-                , Cmd.none
-                )
+                            Nothing ->
+                                ( model2, Cmd.none )
 
-            MailEditorHover _ ->
-                ( model2, Cmd.none )
+                    HouseHover _ ->
+                        ( { model2 | lastHouseClick = Just model.time }, Cmd.none )
 
-            PrimaryColorInput ->
-                ( model2, Cmd.none )
+                    MapHover ->
+                        ( case previousMouseState.hover of
+                            TrainHover { trainId, train } ->
+                                setTrainViewPoint trainId model2
 
-            SecondaryColorInput ->
-                ( model2, Cmd.none )
+                            _ ->
+                                model2
+                        , Cmd.none
+                        )
+
+                    MailEditorHover _ ->
+                        ( model2, Cmd.none )
+
+                    PrimaryColorInput ->
+                        ( model2, Cmd.none )
+
+                    SecondaryColorInput ->
+                        ( model2, Cmd.none )
+
+                    CowHover { cowId } ->
+                        ( { model2 | holdingCow = Just { cowId = cowId, pickupTime = model2.time } }, Cmd.none )
 
     else
         ( model2, Cmd.none )
@@ -2049,6 +2101,11 @@ screenToWorld model =
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
         >> point2dAt2 (scaleForScreenToWorld model)
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
+
+
+screenToWorldVector : FrontendLoaded -> Vector2d Pixels Pixels -> Vector2d WorldUnit WorldUnit
+screenToWorldVector model vector =
+    vector2dAt2 (scaleForScreenToWorld model) vector |> Vector2d.unwrap |> Vector2d.unsafe
 
 
 worldToScreen : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Point2d Pixels Pixels
@@ -2665,6 +2722,9 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurr
 
                 SecondaryColorInput ->
                     False
+
+                CowHover _ ->
+                    True
     in
     if canDragView then
         let
@@ -2766,7 +2826,7 @@ updateLoadedFromBackend msg model =
                                         Nothing
                             )
                         |> AssocList.fromList
-                , cows = Debug.log "cows" cows
+                , cows = cows
               }
             , Cmd.none
             )
@@ -3200,6 +3260,9 @@ canvasView audioData model =
                         True
 
                     SecondaryColorInput ->
+                        True
+
+                    CowHover _ ->
                         True
     in
     WebGL.toHtmlWith
@@ -4253,8 +4316,17 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         |> Sprite.toMesh
 
 
+cowSize : Coord Pixels
 cowSize =
     Coord.xy 20 14
+
+
+cowSizeWorld : Vector2d WorldUnit WorldUnit
+cowSizeWorld =
+    Vector2d.unsafe
+        { x = toFloat (Coord.xRaw cowSize) / toFloat (Coord.xRaw Units.tileSize)
+        , y = toFloat (Coord.yRaw cowSize) / toFloat (Coord.yRaw Units.tileSize)
+        }
 
 
 cowPrimaryColor =
@@ -4263,6 +4335,14 @@ cowPrimaryColor =
 
 cowSecondaryColor =
     Vec3.vec3 0.2 0.2 0.2
+
+
+insideCow : Point2d WorldUnit WorldUnit -> Cow -> Bool
+insideCow point cow =
+    BoundingBox2d.from
+        (Point2d.translateBy (Vector2d.scaleBy 0.5 cowSizeWorld) cow.position)
+        (Point2d.translateBy (Vector2d.scaleBy -0.5 cowSizeWorld) cow.position)
+        |> BoundingBox2d.contains point
 
 
 cowMesh : WebGL.Mesh Vertex
@@ -4275,25 +4355,25 @@ cowMesh =
             Tile.texturePositionPixels (Coord.xy 99 594) cowSize
     in
     Shaders.triangleFan
-        [ { position = Vec3.vec3 0 0 0
+        [ { position = Vec3.vec3 (-width / 2) (-height / 2) 0
           , texturePosition = topLeft
           , opacity = 1
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
           }
-        , { position = Vec3.vec3 width 0 0
+        , { position = Vec3.vec3 (width / 2) (-height / 2) 0
           , texturePosition = topRight
           , opacity = 1
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
           }
-        , { position = Vec3.vec3 width height 0
+        , { position = Vec3.vec3 (width / 2) (height / 2) 0
           , texturePosition = bottomRight
           , opacity = 1
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
           }
-        , { position = Vec3.vec3 0 height 0
+        , { position = Vec3.vec3 (-width / 2) (height / 2) 0
           , texturePosition = bottomLeft
           , opacity = 1
           , primaryColor = cowPrimaryColor

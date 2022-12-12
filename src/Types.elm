@@ -140,6 +140,7 @@ type alias FrontendLoaded =
     , secondaryColorTextInput : TextInput.Model
     , focus : Hover
     , music : { startTime : Time.Posix, sound : Sound }
+    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Time.Posix }
     }
 
 
@@ -172,6 +173,7 @@ type Hover
     | MailEditorHover MailEditor.Hover
     | PrimaryColorInput
     | SecondaryColorInput
+    | CowHover { cowId : Id CowId, cow : Cow }
 
 
 type alias BackendModel =

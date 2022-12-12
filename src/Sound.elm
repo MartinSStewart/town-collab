@@ -25,6 +25,13 @@ type Sound
     | TeleportSound
     | Music0
     | Ambience0
+    | Moo0
+    | Moo1
+    | Moo2
+    | Moo3
+    | Moo4
+    | Moo5
+    | Moo6
 
 
 allSounds =
@@ -45,6 +52,13 @@ allSounds =
     , TeleportSound
     , Music0
     , Ambience0
+    , Moo0
+    , Moo1
+    , Moo2
+    , Moo3
+    , Moo4
+    , Moo5
+    , Moo6
     ]
 
 
@@ -130,6 +144,27 @@ load onLoad =
 
                         Ambience0 ->
                             "windy-grasslands-ambience.mp3"
+
+                        Moo0 ->
+                            "moo0.mp3"
+
+                        Moo1 ->
+                            "moo1.mp3"
+
+                        Moo2 ->
+                            "moo2.mp3"
+
+                        Moo3 ->
+                            "moo3.mp3"
+
+                        Moo4 ->
+                            "moo4.mp3"
+
+                        Moo5 ->
+                            "moo5.mp3"
+
+                        Moo6 ->
+                            "moo6.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)
