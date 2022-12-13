@@ -12,6 +12,7 @@ module Types exposing
     , FrontendMsg_(..)
     , Hover(..)
     , LoadingData_
+    , LoadingLocalModel(..)
     , MouseButtonState(..)
     , RemovedTileParticle
     , ToBackend(..)
@@ -78,9 +79,14 @@ type alias FrontendLoading =
     , viewPoint : Coord WorldUnit
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
-    , loadingData : Maybe LoadingData_
     , texture : Maybe Texture
+    , localModel : LoadingLocalModel
     }
+
+
+type LoadingLocalModel
+    = LoadingLocalModel (List Change)
+    | LoadedLocalModel (LocalModel Change LocalGrid) LoadingData_
 
 
 type ViewPoint

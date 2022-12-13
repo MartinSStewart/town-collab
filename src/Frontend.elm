@@ -38,6 +38,7 @@ import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
+import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -309,6 +310,7 @@ audioLoaded audioData model =
                             |> Tuple.first
                         )
                         pickupTime
+                        |> Audio.scaleVolume 0.5
 
                 Nothing ->
                     Audio.silence
@@ -370,14 +372,18 @@ maxVolumeDistance =
 
 tryLoading : FrontendLoading -> Maybe (() -> ( FrontendModel_, Cmd FrontendMsg_ ))
 tryLoading frontendLoading =
-    Maybe.map4
-        (\time devicePixelRatio texture loadingData () ->
-            loadedInit time devicePixelRatio frontendLoading texture loadingData
-        )
-        frontendLoading.time
-        frontendLoading.devicePixelRatio
-        frontendLoading.texture
-        frontendLoading.loadingData
+    case frontendLoading.localModel of
+        LoadingLocalModel _ ->
+            Nothing
+
+        LoadedLocalModel localModel loadingData ->
+            Maybe.map3
+                (\time devicePixelRatio texture () ->
+                    loadedInit time devicePixelRatio frontendLoading texture loadingData localModel
+                )
+                frontendLoading.time
+                frontendLoading.devicePixelRatio
+                frontendLoading.texture
 
 
 defaultTileHotkeys : Dict String TileGroup
@@ -402,8 +408,15 @@ defaultTileHotkeys =
         ]
 
 
-loadedInit : Time.Posix -> Float -> FrontendLoading -> Texture -> LoadingData_ -> ( FrontendModel_, Cmd FrontendMsg_ )
-loadedInit time devicePixelRatio loading texture loadingData =
+loadedInit :
+    Time.Posix
+    -> Float
+    -> FrontendLoading
+    -> Texture
+    -> LoadingData_
+    -> LocalModel Change LocalGrid
+    -> ( FrontendModel_, Cmd FrontendMsg_ )
+loadedInit time devicePixelRatio loading texture loadingData localModel =
     let
         currentTile =
             Nothing
@@ -417,7 +430,7 @@ loadedInit time devicePixelRatio loading texture loadingData =
         model : FrontendLoaded
         model =
             { key = loading.key
-            , localModel = LocalGrid.init loadingData
+            , localModel = localModel
             , trains = loadingData.trains
             , meshes = Dict.empty
             , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
@@ -544,8 +557,8 @@ init url key =
         , viewPoint = viewPoint
         , mousePosition = Point2d.origin
         , sounds = AssocList.empty
-        , loadingData = Nothing
         , texture = Nothing
+        , localModel = LoadingLocalModel []
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (ConnectToBackend bounds)
@@ -668,7 +681,7 @@ updateLoaded audioData msg model =
         NoOpFrontendMsg ->
             ( model, Cmd.none )
 
-        TextureLoaded result ->
+        TextureLoaded _ ->
             ( model, Cmd.none )
 
         KeyMsg keyMsg ->
@@ -979,7 +992,22 @@ updateLoaded audioData msg model =
                 , previousTileHover = tileHover_
               }
                 |> (\model2 ->
-                        updateLocalModel (Change.MoveCursor (mouseWorldPosition model2)) model2 |> Tuple.first
+                        let
+                            localModel =
+                                LocalModel.unwrap model2.localModel
+                        in
+                        (case ( localModel.localMsgs, model2.pendingChanges ) of
+                            ( (Change.LocalChange _ (Change.MoveCursor _)) :: rest, ( _, Change.MoveCursor _ ) :: restPending ) ->
+                                { model2
+                                    | localModel = { localModel | localMsgs = rest } |> LocalModel.unsafe
+                                    , pendingChanges = restPending
+                                }
+
+                            _ ->
+                                model2
+                        )
+                            |> updateLocalModel (Change.MoveCursor (mouseWorldPosition model2))
+                            |> Tuple.first
                    )
                 |> (\model2 ->
                         case ( model2.currentTile, model2.mouseLeft ) of
@@ -1105,7 +1133,7 @@ updateLoaded audioData msg model =
                 Just nonempty ->
                     ( { model4 | pendingChanges = [] }
                     , Cmd.batch
-                        [ GridChange nonempty |> Lamdera.sendToBackend
+                        [ List.Nonempty.reverse nonempty |> GridChange |> Lamdera.sendToBackend
                         , urlChange
                         ]
                     )
@@ -1704,8 +1732,12 @@ hoverAt model mousePosition =
                     |> List.filter
                         (\( cowId, _ ) ->
                             case LocalGrid.cowActualPosition cowId model.localModel of
-                                Just cowPosition ->
-                                    insideCow mouseWorldPosition_ cowPosition
+                                Just a ->
+                                    if a.isHeld then
+                                        False
+
+                                    else
+                                        insideCow mouseWorldPosition_ a.position
 
                                 Nothing ->
                                     False
@@ -2126,7 +2158,7 @@ updateLocalModel msg model =
             LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
     in
     ( { model
-        | pendingChanges = model.pendingChanges ++ [ ( model.eventIdCounter, msg ) ]
+        | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
         , localModel = newLocalModel
         , eventIdCounter = Id.increment model.eventIdCounter
       }
@@ -2830,7 +2862,38 @@ updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Cmd Fronte
 updateFromBackend msg model =
     case ( model, msg ) of
         ( Loading loading, LoadingData loadingData ) ->
-            ( Loading { loading | loadingData = Just loadingData }, Cmd.none )
+            ( Loading
+                { loading
+                    | localModel =
+                        case loading.localModel of
+                            LoadingLocalModel [] ->
+                                LoadedLocalModel (LocalGrid.init loadingData) loadingData
+
+                            LoadingLocalModel (first :: rest) ->
+                                LoadedLocalModel
+                                    (LocalGrid.init loadingData |> LocalGrid.updateFromBackend (Nonempty first rest))
+                                    loadingData
+
+                            LoadedLocalModel _ _ ->
+                                loading.localModel
+                }
+            , Cmd.none
+            )
+
+        ( Loading loading, ChangeBroadcast changes ) ->
+            ( (case loading.localModel of
+                LoadingLocalModel pendingChanges ->
+                    { loading | localModel = pendingChanges ++ List.Nonempty.toList changes |> LoadingLocalModel }
+
+                LoadedLocalModel localModel loadingData ->
+                    { loading
+                        | localModel =
+                            LoadedLocalModel (LocalGrid.updateFromBackend changes localModel) loadingData
+                    }
+              )
+                |> Loading
+            , Cmd.none
+            )
 
         ( Loaded loaded, _ ) ->
             updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
@@ -3365,7 +3428,7 @@ canvasView audioData model =
                     ++ List.filterMap
                         (\( cowId, _ ) ->
                             case LocalGrid.cowActualPosition cowId model.localModel of
-                                Just position ->
+                                Just { position } ->
                                     let
                                         point =
                                             Point2d.unwrap position

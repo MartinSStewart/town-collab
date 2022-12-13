@@ -742,21 +742,38 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
             ( model, originalChange, Nothing )
 
         PickupCow cowId position time2 ->
-            ( updateUser
-                userId
-                (\user ->
-                    { user
-                        | cursor =
-                            { position = position
-                            , holdingCow = Just { cowId = cowId, pickupTime = time2 }
-                            }
-                                |> Just
-                    }
+            let
+                isCowHeld =
+                    IdDict.toList model.users
+                        |> List.any
+                            (\( _, user ) ->
+                                case user.cursor of
+                                    Just cursor ->
+                                        Maybe.map .cowId cursor.holdingCow == Just cowId
+
+                                    Nothing ->
+                                        False
+                            )
+            in
+            if isCowHeld then
+                ( model, ( eventId, InvalidChange ), Nothing )
+
+            else
+                ( updateUser
+                    userId
+                    (\user ->
+                        { user
+                            | cursor =
+                                { position = position
+                                , holdingCow = Just { cowId = cowId, pickupTime = time2 }
+                                }
+                                    |> Just
+                        }
+                    )
+                    model
+                , ( eventId, PickupCow cowId position (adjustEventTime time time2) )
+                , ServerPickupCow userId cowId position time2 |> Just
                 )
-                model
-            , ( eventId, PickupCow cowId position (adjustEventTime time time2) )
-            , ServerPickupCow userId cowId position time2 |> Just
-            )
 
         DropCow cowId position time2 ->
             case IdDict.get userId model.users |> Maybe.andThen .cursor of
@@ -774,7 +791,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                                                 (Maybe.map (\cow -> { cow | position = position }))
                                                 model.cows
                                     }
-                                , ( eventId, PickupCow cowId position (adjustEventTime time time2) )
+                                , ( eventId, DropCow cowId position (adjustEventTime time time2) )
                                 , ServerDropCow userId cowId position |> Just
                                 )
 
@@ -790,7 +807,19 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
         MoveCursor position ->
             ( updateUser
                 userId
-                (\user2 -> { user2 | cursor = Just { position = position, holdingCow = Nothing } })
+                (\user2 ->
+                    { user2
+                        | cursor =
+                            (case user2.cursor of
+                                Just cursor ->
+                                    { cursor | position = position }
+
+                                Nothing ->
+                                    { position = position, holdingCow = Nothing }
+                            )
+                                |> Just
+                    }
+                )
                 model
             , originalChange
             , ServerMoveCursor userId position |> Just

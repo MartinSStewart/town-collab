@@ -94,7 +94,7 @@ init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHidd
         |> LocalModel.init
 
 
-cowActualPosition : Id CowId -> LocalModel Change LocalGrid -> Maybe (Point2d WorldUnit WorldUnit)
+cowActualPosition : Id CowId -> LocalModel Change LocalGrid -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
 cowActualPosition cowId localModel_ =
     let
         localGrid =
@@ -105,12 +105,12 @@ cowActualPosition cowId localModel_ =
             |> List.find (\( _, cursor ) -> Just cowId == Maybe.map .cowId cursor.holdingCow)
     of
         Just ( _, cursor ) ->
-            Just cursor.position
+            Just { position = cursor.position, isHeld = True }
 
         Nothing ->
             case IdDict.get cowId localGrid.cows of
                 Just cow ->
-                    Just cow.position
+                    Just { position = cow.position, isHeld = False }
 
                 Nothing ->
                     Nothing
@@ -232,7 +232,7 @@ updateLocalChange localChange model =
             pickupCow model.user cowId position time model
 
         DropCow cowId position time ->
-            dropCow model.user position model
+            dropCow model.user cowId position model
 
         MoveCursor position ->
             moveCursor model.user position model
@@ -265,7 +265,7 @@ updateServerChange serverChange model =
             pickupCow userId cowId position time model
 
         ServerDropCow userId cowId position ->
-            dropCow userId position model
+            dropCow userId cowId position model
 
         ServerMoveCursor userId position ->
             moveCursor userId position model
@@ -284,9 +284,17 @@ pickupCow userId cowId position time model =
     )
 
 
-dropCow : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
-dropCow userId position model =
-    ( { model | cursors = IdDict.insert userId { position = position, holdingCow = Nothing } model.cursors }
+dropCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+dropCow userId cowId position model =
+    ( { model
+        | cursors =
+            IdDict.insert userId
+                { position = position
+                , holdingCow = Nothing
+                }
+                model.cursors
+        , cows = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position })) model.cows
+      }
     , NoOutMsg
     )
 
