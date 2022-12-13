@@ -5,7 +5,7 @@ module IdDict exposing
     , keys, values, toList, fromList
     , map, foldl, foldr, filter, partition
     , union, intersect, diff, merge
-    , filterMap
+    , filterMap, nextId
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any comparable
@@ -454,7 +454,7 @@ singleton key value =
 {-| Combine two dictionaries. If there is a collision, preference is given
 to the first dictionary.
 -}
-union : IdDict comparable v -> IdDict comparable v -> IdDict comparable v
+union : IdDict a v -> IdDict a v -> IdDict a v
 union t1 t2 =
     foldl insert t2 t1
 
@@ -666,3 +666,13 @@ toList dict =
 fromList : List ( Id a, v ) -> IdDict a v
 fromList assocs =
     List.foldl (\( key, value ) dict -> insert key value dict) empty assocs
+
+
+nextId : IdDict a b -> Id a
+nextId ids =
+    toList ids
+        |> List.map (Tuple.first >> Id.toInt)
+        |> List.maximum
+        |> Maybe.withDefault 0
+        |> (+) 1
+        |> Id.fromInt

@@ -151,7 +151,7 @@ convert convertFunc (Bounds bounds_) =
         }
 
 
-center : Bounds unit -> Point2d unit coordinate
+center : Bounds unit -> Point2d unit unit
 center (Bounds bounds_) =
     let
         ( minX, minY ) =

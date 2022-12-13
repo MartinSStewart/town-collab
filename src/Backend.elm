@@ -26,13 +26,10 @@ import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
-import Point2d
 import Quantity exposing (Quantity(..))
-import Random
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
-import Terrain
 import Tile exposing (RailPathType(..), Tile(..))
 import Time
 import Train exposing (Status(..), Train, TrainDiff)
@@ -71,7 +68,7 @@ init =
     , secretLinkCounter = 0
     , errors = []
     , trains = AssocList.empty
-    , cows = AssocList.empty
+    , cows = IdDict.empty
     , lastWorldUpdateTrains = AssocList.empty
     , lastWorldUpdate = Nothing
     , mail = AssocList.empty
@@ -247,7 +244,7 @@ update msg model =
                         , mail = mergeTrains.mail
                       }
                     , Cmd.batch
-                        [ WorldUpdateBroadcast mergeTrains.diff model.cows |> Lamdera.broadcast
+                        [ WorldUpdateBroadcast mergeTrains.diff |> Lamdera.broadcast
                         , if mergeTrains.mailChanged then
                             AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) mergeTrains.mail
                                 |> MailBroadcast
@@ -640,7 +637,9 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                                 |> List.foldl
                                     removeTrain
                                     { model
-                                        | grid = Grid.addChange (Grid.localChangeToChange userId localChange) model.grid |> .grid
+                                        | grid =
+                                            Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+                                                |> .grid
                                         , trains =
                                             case maybeTrain of
                                                 Just ( trainId, train ) ->
@@ -659,7 +658,9 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                                         }
                                     )
                             , originalChange
-                            , ServerGridChange (Grid.localChangeToChange userId localChange) |> Just
+                            , ServerGridChange
+                                { gridChange = Grid.localChangeToChange userId localChange, newCells = newCells }
+                                |> Just
                             )
 
                         Err _ ->
@@ -739,6 +740,61 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 
         Change.InvalidChange ->
             ( model, originalChange, Nothing )
+
+        PickupCow cowId position time2 ->
+            ( updateUser
+                userId
+                (\user ->
+                    { user
+                        | cursor =
+                            { position = position
+                            , holdingCow = Just { cowId = cowId, pickupTime = time2 }
+                            }
+                                |> Just
+                    }
+                )
+                model
+            , ( eventId, PickupCow cowId position (adjustEventTime time time2) )
+            , ServerPickupCow userId cowId position time2 |> Just
+            )
+
+        DropCow cowId position time2 ->
+            case IdDict.get userId model.users |> Maybe.andThen .cursor of
+                Just cursor ->
+                    case cursor.holdingCow of
+                        Just holdingCow ->
+                            if holdingCow.cowId == cowId then
+                                ( updateUser
+                                    userId
+                                    (\user2 -> { user2 | cursor = Just { position = position, holdingCow = Nothing } })
+                                    { model
+                                        | cows =
+                                            IdDict.update
+                                                cowId
+                                                (Maybe.map (\cow -> { cow | position = position }))
+                                                model.cows
+                                    }
+                                , ( eventId, PickupCow cowId position (adjustEventTime time time2) )
+                                , ServerDropCow userId cowId position |> Just
+                                )
+
+                            else
+                                ( model, ( eventId, InvalidChange ), Nothing )
+
+                        Nothing ->
+                            ( model, ( eventId, InvalidChange ), Nothing )
+
+                Nothing ->
+                    ( model, ( eventId, InvalidChange ), Nothing )
+
+        MoveCursor position ->
+            ( updateUser
+                userId
+                (\user2 -> { user2 | cursor = Just { position = position, holdingCow = Nothing } })
+                model
+            , originalChange
+            , ServerMoveCursor userId position |> Just
+            )
 
 
 removeTrain : Id TrainId -> BackendModel -> BackendModel

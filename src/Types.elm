@@ -25,7 +25,7 @@ import Audio
 import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
-import Change exposing (Change, ServerChange)
+import Change exposing (Change, Cow, ServerChange)
 import Color exposing (Color)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
@@ -40,7 +40,7 @@ import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
-import LocalGrid exposing (Cow, Cursor, LocalGrid)
+import LocalGrid exposing (Cursor, LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
 import PingData exposing (PingData)
@@ -92,7 +92,6 @@ type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : AssocList.Dict (Id TrainId) Train
-    , cows : AssocList.Dict (Id CowId) Cow
     , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
@@ -183,7 +182,7 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
     , trains : AssocList.Dict (Id TrainId) Train
-    , cows : AssocList.Dict (Id CowId) Cow
+    , cows : IdDict CowId Cow
     , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
@@ -265,7 +264,7 @@ type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | WorldUpdateBroadcast (AssocList.Dict (Id TrainId) TrainDiff) (AssocList.Dict (Id CowId) Cow)
+    | WorldUpdateBroadcast (AssocList.Dict (Id TrainId) TrainDiff)
     | MailEditorToFrontend MailEditor.ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Time.Posix
@@ -287,6 +286,6 @@ type alias LoadingData_ =
     , trains : AssocList.Dict (Id TrainId) Train
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : MailEditorData
-    , cows : AssocList.Dict (Id CowId) Cow
+    , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
     }

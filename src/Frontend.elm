@@ -15,7 +15,7 @@ import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Events exposing (Visibility(..))
 import Browser.Navigation
-import Change exposing (Change(..))
+import Change exposing (Change(..), Cow)
 import Color exposing (Color)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
@@ -37,7 +37,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (Cow, LocalGrid, LocalGrid_)
+import LocalGrid exposing (LocalGrid, LocalGrid_)
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -419,7 +419,6 @@ loadedInit time devicePixelRatio loading texture loadingData =
             { key = loading.key
             , localModel = LocalGrid.init loadingData
             , trains = loadingData.trains
-            , cows = loadingData.cows
             , meshes = Dict.empty
             , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
             , viewPointLastInterval = Point2d.origin
@@ -979,6 +978,9 @@ updateLoaded audioData msg model =
                             MouseButtonUp { current = mousePosition }
                 , previousTileHover = tileHover_
               }
+                |> (\model2 ->
+                        updateLocalModel (Change.MoveCursor (mouseWorldPosition model2)) model2 |> Tuple.first
+                   )
                 |> (\model2 ->
                         case ( model2.currentTile, model2.mouseLeft ) of
                             ( Just { tileGroup, index }, MouseButtonDown { hover } ) ->
@@ -1692,10 +1694,22 @@ hoverAt model mousePosition =
                         )
                     |> Quantity.minimumBy Tuple.second
 
+            localGrid : LocalGrid_
+            localGrid =
+                LocalGrid.localModel model.localModel
+
             cowHovers : Maybe ( Id CowId, Cow )
             cowHovers =
-                AssocList.toList model.cows
-                    |> List.filter (\( _, cow ) -> insideCow mouseWorldPosition_ cow)
+                IdDict.toList localGrid.cows
+                    |> List.filter
+                        (\( cowId, _ ) ->
+                            case LocalGrid.cowActualPosition cowId model.localModel of
+                                Just cowPosition ->
+                                    insideCow mouseWorldPosition_ cowPosition
+
+                                Nothing ->
+                                    False
+                        )
                     |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
         in
         case trainHovers of
@@ -1836,6 +1850,20 @@ getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
 
 
+isHoldingCow : FrontendLoaded -> Maybe { cowId : Id CowId, pickupTime : Time.Posix }
+isHoldingCow model =
+    let
+        localGrid =
+            LocalGrid.localModel model.localModel
+    in
+    case IdDict.get localGrid.user localGrid.cursors of
+        Just cursor ->
+            cursor.holdingCow
+
+        Nothing ->
+            Nothing
+
+
 mainMouseButtonUp :
     Point2d Pixels Pixels
     -> { a | start : Point2d Pixels Pixels, hover : Hover }
@@ -1847,6 +1875,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
             Vector2d.from previousMouseState.start mousePosition
                 |> Vector2d.length
                 |> Quantity.lessThan (Pixels.pixels 5)
+
+        hoverAt2 : Hover
+        hoverAt2 =
+            hoverAt model mousePosition
 
         model2 =
             { model
@@ -1883,17 +1915,15 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         else
                             m
                    )
-
-        hoverAt2 : Hover
-        hoverAt2 =
-            hoverAt model mousePosition
     in
     if isSmallDistance then
-        case model2.holdingCow of
-            Just _ ->
-                ( { model2 | holdingCow = Nothing }
-                , Cmd.none
-                )
+        case isHoldingCow model2 of
+            Just { cowId } ->
+                let
+                    ( model3, _ ) =
+                        updateLocalModel (Change.DropCow cowId (mouseWorldPosition model2) model2.time) model2
+                in
+                ( model3, Cmd.none )
 
             Nothing ->
                 case hoverAt2 of
@@ -1989,7 +2019,11 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( model2, Cmd.none )
 
                     CowHover { cowId } ->
-                        ( { model2 | holdingCow = Just { cowId = cowId, pickupTime = model2.time } }, Cmd.none )
+                        let
+                            ( model3, _ ) =
+                                updateLocalModel (Change.PickupCow cowId (mouseWorldPosition model2) model2.time) model2
+                        in
+                        ( model3, Cmd.none )
 
     else
         ( model2, Cmd.none )
@@ -2821,7 +2855,7 @@ updateLoadedFromBackend msg model =
         UnsubscribeEmailConfirmed ->
             ( model, Cmd.none )
 
-        WorldUpdateBroadcast diff cows ->
+        WorldUpdateBroadcast diff ->
             ( { model
                 | trains =
                     AssocList.toList diff
@@ -2835,7 +2869,6 @@ updateLoadedFromBackend msg model =
                                         Nothing
                             )
                         |> AssocList.fromList
-                , cows = cows
               }
             , Cmd.none
             )
@@ -3235,6 +3268,10 @@ canvasView audioData model =
         mouseScreenPosition_ =
             mouseScreenPosition model
 
+        localGrid : LocalGrid_
+        localGrid =
+            LocalGrid.localModel model.localModel
+
         showMousePointer =
             if MailEditor.isOpen model.mailEditor then
                 False
@@ -3325,29 +3362,35 @@ canvasView audioData model =
                 drawBackground meshes viewMatrix model.texture
                     ++ drawForeground meshes viewMatrix model.texture
                     ++ Train.draw model.time model.mail model.trains viewMatrix trainTexture
-                    ++ List.map
-                        (\( _, cow ) ->
-                            let
-                                point =
-                                    Point2d.unwrap cow.position
-                            in
-                            WebGL.entityWith
-                                [ Shaders.blend ]
-                                Shaders.vertexShader
-                                Shaders.fragmentShader
-                                cowMesh
-                                { view =
-                                    Mat4.makeTranslate3
-                                        (point.x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
-                                        (point.y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
-                                        (Grid.tileZ True y (Coord.yRaw cowSize))
-                                        |> Mat4.mul viewMatrix
-                                , texture = model.texture
-                                , textureSize = textureSize
-                                , color = Vec4.vec4 1 1 1 1
-                                }
+                    ++ List.filterMap
+                        (\( cowId, _ ) ->
+                            case LocalGrid.cowActualPosition cowId model.localModel of
+                                Just position ->
+                                    let
+                                        point =
+                                            Point2d.unwrap position
+                                    in
+                                    WebGL.entityWith
+                                        [ Shaders.blend ]
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        cowMesh
+                                        { view =
+                                            Mat4.makeTranslate3
+                                                (point.x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
+                                                (point.y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
+                                                (Grid.tileZ True y (Coord.yRaw cowSize))
+                                                |> Mat4.mul viewMatrix
+                                        , texture = model.texture
+                                        , textureSize = textureSize
+                                        , color = Vec4.vec4 1 1 1 1
+                                        }
+                                        |> Just
+
+                                Nothing ->
+                                    Nothing
                         )
-                        (AssocList.toList model.cows)
+                        (IdDict.toList localGrid.cows)
                     ++ List.filterMap
                         (\flag ->
                             let
@@ -4346,11 +4389,11 @@ cowSecondaryColor =
     Vec3.vec3 0.2 0.2 0.2
 
 
-insideCow : Point2d WorldUnit WorldUnit -> Cow -> Bool
-insideCow point cow =
+insideCow : Point2d WorldUnit WorldUnit -> Point2d WorldUnit WorldUnit -> Bool
+insideCow point cowPosition =
     BoundingBox2d.from
-        (Point2d.translateBy (Vector2d.scaleBy 0.5 cowSizeWorld) cow.position)
-        (Point2d.translateBy (Vector2d.scaleBy -0.5 cowSizeWorld) cow.position)
+        (Point2d.translateBy (Vector2d.scaleBy 0.5 cowSizeWorld) cowPosition)
+        (Point2d.translateBy (Vector2d.scaleBy -0.5 cowSizeWorld) cowPosition)
         |> BoundingBox2d.contains point
 
 

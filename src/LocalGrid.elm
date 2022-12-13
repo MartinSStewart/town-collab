@@ -1,8 +1,19 @@
-module LocalGrid exposing (Cow, Cursor, LocalGrid, LocalGrid_, OutMsg(..), addCows, incrementUndoCurrent, init, localModel, update, updateFromBackend)
+module LocalGrid exposing
+    ( Cursor
+    , LocalGrid
+    , LocalGrid_
+    , OutMsg(..)
+    , addCows
+    , cowActualPosition
+    , incrementUndoCurrent
+    , init
+    , localModel
+    , update
+    , updateFromBackend
+    )
 
-import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
+import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..))
 import Color exposing (Color)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
@@ -11,6 +22,7 @@ import Grid exposing (Grid, GridData)
 import GridCell
 import Id exposing (CowId, Id, UserId)
 import IdDict exposing (IdDict)
+import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Point2d exposing (Point2d)
@@ -36,19 +48,14 @@ type alias LocalGrid_ =
     , adminHiddenUsers : EverySet (Id UserId)
     , viewBounds : Bounds CellUnit
     , undoCurrent : Dict RawCellCoord Int
-    , cows : AssocList.Dict (Id CowId) Cow
+    , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
-    }
-
-
-type alias Cow =
-    { position : Point2d WorldUnit WorldUnit
     }
 
 
 type alias Cursor =
     { position : Point2d WorldUnit WorldUnit
-    , holdingCow : Maybe { userId : Id UserId, cowId : Id CowId, pickupTime : Time.Posix }
+    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Time.Posix }
     }
 
 
@@ -67,7 +74,7 @@ init :
         , redoHistory : List (Dict RawCellCoord Int)
         , undoCurrent : Dict RawCellCoord Int
         , viewBounds : Bounds CellUnit
-        , cows : AssocList.Dict (Id CowId) Cow
+        , cows : IdDict CowId Cow
         , cursors : IdDict UserId Cursor
     }
     -> LocalModel Change LocalGrid
@@ -85,6 +92,28 @@ init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHidd
         , cursors = cursors
         }
         |> LocalModel.init
+
+
+cowActualPosition : Id CowId -> LocalModel Change LocalGrid -> Maybe (Point2d WorldUnit WorldUnit)
+cowActualPosition cowId localModel_ =
+    let
+        localGrid =
+            localModel localModel_
+    in
+    case
+        IdDict.toList localGrid.cursors
+            |> List.find (\( _, cursor ) -> Just cowId == Maybe.map .cowId cursor.holdingCow)
+    of
+        Just ( _, cursor ) ->
+            Just cursor.position
+
+        Nothing ->
+            case IdDict.get cowId localGrid.cows of
+                Just cow ->
+                    Just cow.position
+
+                Nothing ->
+                    Nothing
 
 
 update : Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, OutMsg )
@@ -124,10 +153,10 @@ type OutMsg
     | NoOutMsg
 
 
-update_ : Change -> LocalGrid_ -> ( LocalGrid_, OutMsg )
-update_ msg model =
-    case msg of
-        LocalChange _ (LocalGridChange gridChange) ->
+updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+updateLocalChange localChange model =
+    case localChange of
+        LocalGridChange gridChange ->
             let
                 ( cellPosition, localPosition ) =
                     Grid.worldToCellAndLocalCoord gridChange.position
@@ -145,10 +174,11 @@ update_ msg model =
                         model.grid
                 , undoCurrent = incrementUndoCurrent cellPosition localPosition model.undoCurrent
               }
+                |> addCows change.newCells
             , TilesRemoved change.removed
             )
 
-        LocalChange _ LocalRedo ->
+        LocalRedo ->
             ( case Undo.redo model of
                 Just newModel ->
                     { newModel | grid = Grid.moveUndoPoint model.user newModel.undoCurrent model.grid }
@@ -158,7 +188,7 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange _ LocalUndo ->
+        LocalUndo ->
             ( case Undo.undo model of
                 Just newModel ->
                     { newModel | grid = Grid.moveUndoPoint model.user (Dict.map (\_ a -> -a) model.undoCurrent) model.grid }
@@ -168,10 +198,10 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange _ LocalAddUndo ->
+        LocalAddUndo ->
             ( Undo.add model, NoOutMsg )
 
-        LocalChange _ (LocalHideUser userId_ _) ->
+        LocalHideUser userId_ _ ->
             ( { model
                 | hiddenUsers =
                     if userId_ == model.user then
@@ -183,7 +213,7 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange _ (LocalUnhideUser userId_) ->
+        LocalUnhideUser userId_ ->
             ( { model
                 | hiddenUsers =
                     if userId_ == model.user then
@@ -195,26 +225,104 @@ update_ msg model =
             , NoOutMsg
             )
 
-        LocalChange _ InvalidChange ->
+        InvalidChange ->
             ( model, NoOutMsg )
 
-        ServerChange (ServerGridChange gridChange) ->
-            ( if
+        PickupCow cowId position time ->
+            pickupCow model.user cowId position time model
+
+        DropCow cowId position time ->
+            dropCow model.user position model
+
+        MoveCursor position ->
+            moveCursor model.user position model
+
+
+updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+updateServerChange serverChange model =
+    case serverChange of
+        ServerGridChange { gridChange, newCells } ->
+            ( (if
                 Bounds.contains
                     (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first)
                     model.viewBounds
-              then
+               then
                 { model | grid = Grid.addChange gridChange model.grid |> .grid }
 
-              else
+               else
                 model
+              )
+                |> addCows newCells
             , NoOutMsg
             )
 
-        ServerChange (ServerUndoPoint undoPoint) ->
+        ServerUndoPoint undoPoint ->
             ( { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
             , NoOutMsg
             )
+
+        ServerPickupCow userId cowId position time ->
+            pickupCow userId cowId position time model
+
+        ServerDropCow userId cowId position ->
+            dropCow userId position model
+
+        ServerMoveCursor userId position ->
+            moveCursor userId position model
+
+
+pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+pickupCow userId cowId position time model =
+    ( { model
+        | cursors =
+            IdDict.insert
+                userId
+                { position = position, holdingCow = Just { cowId = cowId, pickupTime = time } }
+                model.cursors
+      }
+    , NoOutMsg
+    )
+
+
+dropCow : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+dropCow userId position model =
+    ( { model | cursors = IdDict.insert userId { position = position, holdingCow = Nothing } model.cursors }
+    , NoOutMsg
+    )
+
+
+moveCursor : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+moveCursor userId position model =
+    ( { model
+        | cursors =
+            IdDict.update
+                userId
+                (\maybeCursor ->
+                    (case maybeCursor of
+                        Just cursor ->
+                            { cursor | position = position }
+
+                        Nothing ->
+                            { position = position
+                            , holdingCow = Nothing
+                            }
+                    )
+                        |> Just
+                )
+                model.cursors
+      }
+    , NoOutMsg
+    )
+
+
+update_ : Change -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+update_ msg model =
+    case msg of
+        LocalChange _ localChange ->
+            updateLocalChange localChange model
+
+        ServerChange serverChange ->
+            updateServerChange serverChange model
 
         ClientChange (ViewBoundsChange bounds newCells) ->
             let
@@ -279,8 +387,8 @@ randomCow ( Quantity xOffset, Quantity yOffset ) =
 
 addCows :
     List (Coord CellUnit)
-    -> { a | cows : AssocList.Dict (Id CowId) Cow }
-    -> { a | cows : AssocList.Dict (Id CowId) Cow }
+    -> { a | cows : IdDict CowId Cow }
+    -> { a | cows : IdDict CowId Cow }
 addCows newCells model =
     { model
         | cows =
@@ -301,7 +409,7 @@ addCows newCells model =
                                             |> Tuple.mapSecond Terrain.localCoordToTerrain
                                 in
                                 if Terrain.isGroundTerrain terrainUnit cellUnit |> Debug.log "terrain" then
-                                    AssocList.insert (Id.nextId dict2) cow dict2
+                                    IdDict.insert (IdDict.nextId dict2) cow dict2
 
                                 else
                                     dict2
