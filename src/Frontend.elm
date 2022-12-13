@@ -3971,7 +3971,8 @@ createInfoMesh maybePingData userId =
             Sprite.text
                 Color.black
                 2
-                ("User ID: "
+                ("Warning! Game is in alpha. The world will be reset often.\n"
+                    ++ "User ID: "
                     ++ String.fromInt (Id.toInt userId)
                     ++ "\n"
                     ++ (case maybePingData of

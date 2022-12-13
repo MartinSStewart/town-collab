@@ -416,7 +416,7 @@ addCows newCells model =
                                             |> Grid.worldToCellAndLocalCoord
                                             |> Tuple.mapSecond Terrain.localCoordToTerrain
                                 in
-                                if Terrain.isGroundTerrain terrainUnit cellUnit |> Debug.log "terrain" then
+                                if Terrain.isGroundTerrain terrainUnit cellUnit then
                                     IdDict.insert (IdDict.nextId dict2) cow dict2
 
                                 else
