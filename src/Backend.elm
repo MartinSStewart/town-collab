@@ -21,6 +21,7 @@ import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (EventId, Id, MailId, TrainId, UserId)
+import IdDict exposing (IdDict)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
@@ -65,7 +66,7 @@ init : BackendModel
 init =
     { grid = Grid.empty
     , userSessions = Dict.empty
-    , users = Dict.empty
+    , users = IdDict.empty
     , usersHiddenRecently = []
     , secretLinkCounter = 0
     , errors = []
@@ -318,7 +319,7 @@ getUserFromSessionId : SessionId -> BackendModel -> Maybe ( Id UserId, BackendUs
 getUserFromSessionId sessionId model =
     case Dict.get sessionId model.userSessions of
         Just { userId } ->
-            case Dict.get (Id.toInt userId) model.users of
+            case IdDict.get userId model.users of
                 Just user ->
                     Just ( userId, user )
 
@@ -538,32 +539,6 @@ generateKey keyType model =
     )
 
 
-randomCows : Coord CellUnit -> Random.Generator (List Cow)
-randomCows coord =
-    let
-        worldCoord =
-            Grid.cellAndLocalCoordToWorld ( coord, Coord.origin )
-    in
-    Random.weighted
-        ( 0.93, 0 )
-        [ ( 0.05, 1 )
-        , ( 0.01, 2 )
-        , ( 0.01, 3 )
-        ]
-        |> Random.andThen
-            (\amount ->
-                Random.list amount (randomCow worldCoord)
-            )
-
-
-randomCow : Coord WorldUnit -> Random.Generator Cow
-randomCow ( Quantity xOffset, Quantity yOffset ) =
-    Random.map2
-        (\x y -> { position = Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y } })
-        (Random.float 0 Units.cellSize)
-        (Random.float 0 Units.cellSize)
-
-
 updateLocalChange :
     Time.Posix
     -> ( Id UserId, BackendUserData )
@@ -577,7 +552,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
     in
     case change of
         Change.LocalUndo ->
-            case Dict.get (Id.toInt userId) model.users of
+            case IdDict.get userId model.users of
                 Just user ->
                     case Undo.undo user of
                         Just newUser ->
@@ -642,7 +617,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                     ( model, invalidChange, Nothing )
 
         Change.LocalGridChange localChange ->
-            case Dict.get (Id.toInt userId) model.users of
+            case IdDict.get userId model.users of
                 Just user ->
                     let
                         ( cellPosition, localPosition ) =
@@ -673,34 +648,8 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 
                                                 Nothing ->
                                                     model.trains
-                                        , cows =
-                                            List.foldl
-                                                (\newCell dict ->
-                                                    Random.step
-                                                        (randomCows newCell)
-                                                        (Random.initialSeed
-                                                            (Coord.xRaw newCell * 10000 + Coord.yRaw newCell)
-                                                        )
-                                                        |> Tuple.first
-                                                        |> List.foldl
-                                                            (\cow dict2 ->
-                                                                let
-                                                                    ( cellUnit, terrainUnit ) =
-                                                                        Coord.floorPoint cow.position
-                                                                            |> Grid.worldToCellAndLocalCoord
-                                                                            |> Tuple.mapSecond Terrain.localCoordToTerrain
-                                                                in
-                                                                if Terrain.isGroundTerrain terrainUnit cellUnit |> Debug.log "terrain" then
-                                                                    AssocList.insert (Id.nextId dict2) cow dict2
-
-                                                                else
-                                                                    dict2
-                                                            )
-                                                            dict
-                                                )
-                                                model.cows
-                                                newCells
                                     }
+                                |> LocalGrid.addCows newCells
                                 |> updateUser
                                     userId
                                     (always
@@ -720,7 +669,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                     ( model, invalidChange, Nothing )
 
         Change.LocalRedo ->
-            case Dict.get (Id.toInt userId) model.users of
+            case IdDict.get userId model.users of
                 Just user ->
                     case Undo.redo user of
                         Just newUser ->
@@ -749,7 +698,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
             ( if userId == hideUserId then
                 model
 
-              else if Dict.member (Id.toInt hideUserId) model.users then
+              else if IdDict.member hideUserId model.users then
                 updateUser
                     userId
                     (\user -> { user | hiddenUsers = Coord.toggleSet hideUserId user.hiddenUsers })
@@ -822,22 +771,22 @@ removeTrain trainId model =
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
 updateUser userId updateUserFunc model =
-    { model | users = Dict.update (Id.toInt userId) (Maybe.map updateUserFunc) model.users }
+    { model | users = IdDict.update userId (Maybe.map updateUserFunc) model.users }
 
 
 {-| Gets globally hidden users known to a specific user.
 -}
 hiddenUsers :
     Maybe (Id UserId)
-    -> { a | users : Dict.Dict Int { b | hiddenForAll : Bool } }
+    -> { a | users : IdDict UserId { b | hiddenForAll : Bool } }
     -> EverySet (Id UserId)
 hiddenUsers userId model =
     model.users
-        |> Dict.toList
+        |> IdDict.toList
         |> List.filterMap
             (\( userId_, { hiddenForAll } ) ->
-                if hiddenForAll && userId /= Just (Id.fromInt userId_) then
-                    Just (Id.fromInt userId_)
+                if hiddenForAll && userId /= Just userId_ then
+                    Just userId_
 
                 else
                     Nothing
@@ -859,9 +808,10 @@ requestDataUpdate sessionId clientId viewBounds model =
             , undoCurrent = user.undoCurrent
             , viewBounds = viewBounds
             , trains = model.trains
-            , cows = model.cows
             , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model.mail
             , mailEditor = user.mailEditor
+            , cows = model.cows
+            , cursors = IdDict.filterMap (\_ a -> a.cursor) model.users
             }
     in
     case getUserFromSessionId sessionId model of
@@ -885,7 +835,7 @@ requestDataUpdate sessionId clientId viewBounds model =
         Nothing ->
             let
                 userId =
-                    Dict.size model.users |> Id.fromInt
+                    IdDict.size model.users |> Id.fromInt
 
                 ( newModel, userData ) =
                     { model
@@ -915,9 +865,10 @@ createUser userId model =
             , redoHistory = []
             , undoCurrent = Dict.empty
             , mailEditor = MailEditor.init
+            , cursor = Nothing
             }
     in
-    ( { model | users = Dict.insert (Id.toInt userId) userBackendData model.users }, userBackendData )
+    ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg

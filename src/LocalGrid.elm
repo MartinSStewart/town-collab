@@ -1,5 +1,6 @@
-module LocalGrid exposing (LocalGrid, LocalGrid_, OutMsg(..), incrementUndoCurrent, init, localModel, update, updateFromBackend)
+module LocalGrid exposing (Cow, Cursor, LocalGrid, LocalGrid_, OutMsg(..), addCows, incrementUndoCurrent, init, localModel, update, updateFromBackend)
 
+import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), LocalChange(..), ServerChange(..))
 import Color exposing (Color)
@@ -8,10 +9,16 @@ import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid, GridData)
 import GridCell
-import Id exposing (Id, UserId)
+import Id exposing (CowId, Id, UserId)
+import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
+import Point2d exposing (Point2d)
+import Quantity exposing (Quantity(..))
+import Random
+import Terrain
 import Tile exposing (Tile)
+import Time
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 
@@ -29,6 +36,19 @@ type alias LocalGrid_ =
     , adminHiddenUsers : EverySet (Id UserId)
     , viewBounds : Bounds CellUnit
     , undoCurrent : Dict RawCellCoord Int
+    , cows : AssocList.Dict (Id CowId) Cow
+    , cursors : IdDict UserId Cursor
+    }
+
+
+type alias Cow =
+    { position : Point2d WorldUnit WorldUnit
+    }
+
+
+type alias Cursor =
+    { position : Point2d WorldUnit WorldUnit
+    , holdingCow : Maybe { userId : Id UserId, cowId : Id CowId, pickupTime : Time.Posix }
     }
 
 
@@ -47,9 +67,11 @@ init :
         , redoHistory : List (Dict RawCellCoord Int)
         , undoCurrent : Dict RawCellCoord Int
         , viewBounds : Bounds CellUnit
+        , cows : AssocList.Dict (Id CowId) Cow
+        , cursors : IdDict UserId Cursor
     }
     -> LocalModel Change LocalGrid
-init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds } =
+init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds, cows, cursors } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , user = user
@@ -59,6 +81,8 @@ init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHidd
         , adminHiddenUsers = adminHiddenUsers
         , viewBounds = viewBounds
         , undoCurrent = undoCurrent
+        , cows = cows
+        , cursors = cursors
         }
         |> LocalModel.init
 
@@ -224,4 +248,66 @@ config =
                 _ ->
                     msg0 == msg1
     , update = \msg (LocalGrid model) -> update_ msg model |> Tuple.mapFirst LocalGrid
+    }
+
+
+randomCows : Coord CellUnit -> Random.Generator (List Cow)
+randomCows coord =
+    let
+        worldCoord =
+            Grid.cellAndLocalCoordToWorld ( coord, Coord.origin )
+    in
+    Random.weighted
+        ( 0.93, 0 )
+        [ ( 0.05, 1 )
+        , ( 0.01, 2 )
+        , ( 0.01, 3 )
+        ]
+        |> Random.andThen
+            (\amount ->
+                Random.list amount (randomCow worldCoord)
+            )
+
+
+randomCow : Coord WorldUnit -> Random.Generator Cow
+randomCow ( Quantity xOffset, Quantity yOffset ) =
+    Random.map2
+        (\x y -> { position = Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y } })
+        (Random.float 0 Units.cellSize)
+        (Random.float 0 Units.cellSize)
+
+
+addCows :
+    List (Coord CellUnit)
+    -> { a | cows : AssocList.Dict (Id CowId) Cow }
+    -> { a | cows : AssocList.Dict (Id CowId) Cow }
+addCows newCells model =
+    { model
+        | cows =
+            List.foldl
+                (\newCell dict ->
+                    Random.step
+                        (randomCows newCell)
+                        (Random.initialSeed
+                            (Coord.xRaw newCell * 10000 + Coord.yRaw newCell)
+                        )
+                        |> Tuple.first
+                        |> List.foldl
+                            (\cow dict2 ->
+                                let
+                                    ( cellUnit, terrainUnit ) =
+                                        Coord.floorPoint cow.position
+                                            |> Grid.worldToCellAndLocalCoord
+                                            |> Tuple.mapSecond Terrain.localCoordToTerrain
+                                in
+                                if Terrain.isGroundTerrain terrainUnit cellUnit |> Debug.log "terrain" then
+                                    AssocList.insert (Id.nextId dict2) cow dict2
+
+                                else
+                                    dict2
+                            )
+                            dict
+                )
+                model.cows
+                newCells
     }

@@ -29,6 +29,7 @@ import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel
 import Id exposing (CowId, Id, TrainId, UserId)
+import IdDict
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -36,7 +37,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (LocalGrid, LocalGrid_)
+import LocalGrid exposing (Cow, LocalGrid, LocalGrid_)
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -116,6 +117,10 @@ audio audioData model =
 audioLoaded : AudioData -> FrontendLoaded -> Audio
 audioLoaded audioData model =
     let
+        localModel : LocalGrid_
+        localModel =
+            LocalGrid.localModel model.localModel
+
         timeOffset =
             PingData.pingOffset model
 
@@ -284,24 +289,29 @@ audioLoaded audioData model =
     , playSound PopSound (Duration.addTo model.startTime (Duration.milliseconds 100))
         -- Increase the volume on this sound effect to compensate for the volume fade in at the start of the game
         |> Audio.scaleVolume 2
-    , case model.holdingCow of
-        Just { pickupTime } ->
-            playSound
-                (Random.step
-                    (Random.weighted
-                        ( 1 / 6, Moo0 )
-                        [ ( 1 / 6, Moo1 )
-                        , ( 1 / 12, Moo2 )
-                        , ( 1 / 12, Moo3 )
-                        , ( 1 / 6, Moo4 )
-                        , ( 1 / 6, Moo5 )
-                        , ( 1 / 6, Moo6 )
-                        ]
-                    )
-                    (Random.initialSeed (Time.posixToMillis pickupTime))
-                    |> Tuple.first
-                )
-                pickupTime
+    , case IdDict.get localModel.user localModel.cursors of
+        Just cursor ->
+            case cursor.holdingCow of
+                Just { pickupTime } ->
+                    playSound
+                        (Random.step
+                            (Random.weighted
+                                ( 1 / 6, Moo0 )
+                                [ ( 1 / 6, Moo1 )
+                                , ( 1 / 12, Moo2 )
+                                , ( 1 / 12, Moo3 )
+                                , ( 1 / 6, Moo4 )
+                                , ( 1 / 6, Moo5 )
+                                , ( 1 / 6, Moo6 )
+                                ]
+                            )
+                            (Random.initialSeed (Time.posixToMillis pickupTime))
+                            |> Tuple.first
+                        )
+                        pickupTime
+
+                Nothing ->
+                    Audio.silence
 
         Nothing ->
             Audio.silence
@@ -464,7 +474,6 @@ loadedInit time devicePixelRatio loading texture loadingData =
             , secondaryColorTextInput = TextInput.init
             , focus = focus
             , music = { startTime = Duration.addTo time (Duration.seconds 10), sound = Music0 }
-            , holdingCow = Nothing
             }
     in
     ( updateMeshes model model

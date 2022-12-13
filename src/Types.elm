@@ -3,7 +3,6 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
-    , Cow
     , EmailEvent(..)
     , FrontendLoaded
     , FrontendLoading
@@ -37,10 +36,11 @@ import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
 import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
+import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
-import LocalGrid exposing (LocalGrid)
+import LocalGrid exposing (Cow, Cursor, LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
 import PingData exposing (PingData)
@@ -140,7 +140,6 @@ type alias FrontendLoaded =
     , secondaryColorTextInput : TextInput.Model
     , focus : Hover
     , music : { startTime : Time.Posix, sound : Sound }
-    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Time.Posix }
     }
 
 
@@ -179,9 +178,7 @@ type Hover
 type alias BackendModel =
     { grid : Grid
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : Id UserId }
-    , users :
-        -- Key is Id UserId
-        Dict Int BackendUserData
+    , users : IdDict UserId BackendUserData
     , usersHiddenRecently : List { reporter : Id UserId, hiddenUser : Id UserId, hidePoint : Coord WorldUnit }
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
@@ -190,11 +187,6 @@ type alias BackendModel =
     , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
-    }
-
-
-type alias Cow =
-    { position : Point2d WorldUnit WorldUnit
     }
 
 
@@ -209,6 +201,7 @@ type alias BackendUserData =
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
     , mailEditor : MailEditorData
+    , cursor : Maybe Cursor
     }
 
 
@@ -292,7 +285,8 @@ type alias LoadingData_ =
     , undoCurrent : Dict RawCellCoord Int
     , viewBounds : Bounds CellUnit
     , trains : AssocList.Dict (Id TrainId) Train
-    , cows : AssocList.Dict (Id CowId) Cow
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : MailEditorData
+    , cows : AssocList.Dict (Id CowId) Cow
+    , cursors : IdDict UserId Cursor
     }
