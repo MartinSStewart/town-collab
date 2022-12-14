@@ -3787,32 +3787,45 @@ canvasView audioData model =
                                 point =
                                     Point2d.unwrap cursor.position
                             in
-                            if userId == currentUserId model && showMousePointer == Nothing then
-                                Nothing
+                            case ( userId == currentUserId model, showMousePointer ) of
+                                ( True, Nothing ) ->
+                                    Nothing
 
-                            else
-                                WebGL.entityWith
-                                    [ Shaders.blend ]
-                                    Shaders.vertexShader
-                                    Shaders.fragmentShader
-                                    handMesh
-                                    { view =
-                                        Mat4.makeTranslate3
-                                            (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                |> toFloat
-                                                |> (*) (1 / toFloat model.zoomFactor)
-                                            )
-                                            (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                |> toFloat
-                                                |> (*) (1 / toFloat model.zoomFactor)
-                                            )
-                                            0
-                                            |> Mat4.mul viewMatrix
-                                    , texture = model.texture
-                                    , textureSize = textureSize
-                                    , color = Vec4.vec4 1 1 1 1
-                                    }
-                                    |> Just
+                                _ ->
+                                    WebGL.entityWith
+                                        [ Shaders.blend ]
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        (case ( userId == currentUserId model, showMousePointer ) of
+                                            ( True, Nothing ) ->
+                                                handDefaultMesh
+
+                                            ( True, Just True ) ->
+                                                handPointerMesh
+
+                                            ( True, Just False ) ->
+                                                handDefaultMesh
+
+                                            ( False, _ ) ->
+                                                handDefaultMesh
+                                        )
+                                        { view =
+                                            Mat4.makeTranslate3
+                                                (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                    |> toFloat
+                                                    |> (*) (1 / toFloat model.zoomFactor)
+                                                )
+                                                (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                    |> toFloat
+                                                    |> (*) (1 / toFloat model.zoomFactor)
+                                                )
+                                                0
+                                                |> Mat4.mul viewMatrix
+                                        , texture = model.texture
+                                        , textureSize = textureSize
+                                        , color = Vec4.vec4 1 1 1 1
+                                        }
+                                        |> Just
                         )
                         (IdDict.toList localGrid.cursors)
 
@@ -4598,8 +4611,8 @@ handSecondaryColor =
     Vec3.vec3 0.6 0.6 0.55
 
 
-handMesh : WebGL.Mesh Vertex
-handMesh =
+handDefaultMesh : WebGL.Mesh Vertex
+handDefaultMesh =
     let
         x0 =
             -2
@@ -4617,7 +4630,56 @@ handMesh =
             Coord.toTuple handSize |> Tuple.mapBoth toFloat toFloat
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 99 611) handSize
+            Tile.texturePositionPixels (Coord.xy 533 28) handSize
+    in
+    Shaders.triangleFan
+        [ { position = Vec3.vec3 x0 y0 0
+          , texturePosition = topLeft
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
+          }
+        , { position = Vec3.vec3 x1 y0 0
+          , texturePosition = topRight
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
+          }
+        , { position = Vec3.vec3 x1 y1 0
+          , texturePosition = bottomRight
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
+          }
+        , { position = Vec3.vec3 x0 y1 0
+          , texturePosition = bottomLeft
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
+          }
+        ]
+
+
+handPointerMesh : WebGL.Mesh Vertex
+handPointerMesh =
+    let
+        x0 =
+            -11
+
+        x1 =
+            width + x0
+
+        y0 =
+            -1
+
+        y1 =
+            height + y0
+
+        ( width, height ) =
+            Coord.toTuple handSize |> Tuple.mapBoth toFloat toFloat
+
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePositionPixels (Coord.xy 563 28) handSize
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 x0 y0 0
