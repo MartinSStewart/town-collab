@@ -102,20 +102,28 @@ update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 update msg model =
     case msg of
         UserDisconnected sessionId clientId ->
-            ( { model
-                | userSessions =
-                    Dict.update sessionId
-                        (Maybe.map
-                            (\session ->
-                                { clientIds = Dict.remove clientId session.clientIds
-                                , userId = session.userId
-                                }
-                            )
-                        )
-                        model.userSessions
-              }
-            , Cmd.none
-            )
+            case getUserFromSessionId sessionId model of
+                Just ( userId, user ) ->
+                    ( { model
+                        | userSessions =
+                            Dict.update sessionId
+                                (Maybe.map
+                                    (\session ->
+                                        { clientIds = Dict.remove clientId session.clientIds
+                                        , userId = session.userId
+                                        }
+                                    )
+                                )
+                                model.userSessions
+                        , users = IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
+                      }
+                    , Nonempty (ServerUserDisconnected userId |> Change.ServerChange) []
+                        |> ChangeBroadcast
+                        |> Lamdera.broadcast
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         NotifyAdminTimeElapsed time ->
             let

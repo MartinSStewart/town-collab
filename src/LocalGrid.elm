@@ -270,6 +270,11 @@ updateServerChange serverChange model =
         ServerMoveCursor userId position ->
             moveCursor userId position model
 
+        ServerUserDisconnected userId ->
+            ( { model | cursors = IdDict.remove userId model.cursors }
+            , NoOutMsg
+            )
+
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 pickupCow userId cowId position time model =
@@ -393,10 +398,7 @@ randomCow ( Quantity xOffset, Quantity yOffset ) =
         (Random.float 0 Units.cellSize)
 
 
-addCows :
-    List (Coord CellUnit)
-    -> { a | cows : IdDict CowId Cow }
-    -> { a | cows : IdDict CowId Cow }
+addCows : List (Coord CellUnit) -> { a | cows : IdDict CowId Cow } -> { a | cows : IdDict CowId Cow }
 addCows newCells model =
     { model
         | cows =

@@ -41,6 +41,7 @@ type ServerChange
     | ServerPickupCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
     | ServerDropCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
+    | ServerUserDisconnected (Id UserId)
 
 
 type alias Cow =

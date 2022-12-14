@@ -1707,20 +1707,25 @@ hoverAt model mousePosition =
 
             trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
             trainHovers =
-                AssocList.toList model.trains
-                    |> List.filterMap
-                        (\( trainId, train ) ->
-                            let
-                                distance =
-                                    Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                            in
-                            if distance |> Quantity.lessThan (Quantity 0.9) then
-                                Just ( { trainId = trainId, train = train }, distance )
+                case model.currentTile of
+                    Just _ ->
+                        Nothing
 
-                            else
-                                Nothing
-                        )
-                    |> Quantity.minimumBy Tuple.second
+                    Nothing ->
+                        AssocList.toList model.trains
+                            |> List.filterMap
+                                (\( trainId, train ) ->
+                                    let
+                                        distance =
+                                            Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                                    in
+                                    if distance |> Quantity.lessThan (Quantity 0.9) then
+                                        Just ( { trainId = trainId, train = train }, distance )
+
+                                    else
+                                        Nothing
+                                )
+                            |> Quantity.minimumBy Tuple.second
 
             localGrid : LocalGrid_
             localGrid =
@@ -1728,21 +1733,26 @@ hoverAt model mousePosition =
 
             cowHovers : Maybe ( Id CowId, Cow )
             cowHovers =
-                IdDict.toList localGrid.cows
-                    |> List.filter
-                        (\( cowId, _ ) ->
-                            case LocalGrid.cowActualPosition cowId model.localModel of
-                                Just a ->
-                                    if a.isHeld then
-                                        False
+                case model.currentTile of
+                    Just _ ->
+                        Nothing
 
-                                    else
-                                        insideCow mouseWorldPosition_ a.position
+                    Nothing ->
+                        IdDict.toList localGrid.cows
+                            |> List.filter
+                                (\( cowId, _ ) ->
+                                    case LocalGrid.cowActualPosition cowId model.localModel of
+                                        Just a ->
+                                            if a.isHeld then
+                                                False
 
-                                Nothing ->
-                                    False
-                        )
-                    |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+                                            else
+                                                insideCow mouseWorldPosition_ a.position
+
+                                        Nothing ->
+                                            False
+                                )
+                            |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
         in
         case trainHovers of
             Just ( train, _ ) ->
@@ -3335,44 +3345,85 @@ canvasView audioData model =
         localGrid =
             LocalGrid.localModel model.localModel
 
+        hoverAt2 =
+            hoverAt model mouseScreenPosition_
+
+        showMousePointer : Maybe Bool
         showMousePointer =
             if MailEditor.isOpen model.mailEditor then
-                False
+                Just False
 
             else
-                case hoverAt model mouseScreenPosition_ of
-                    TileHover _ ->
-                        True
+                case model.currentTile of
+                    Just _ ->
+                        case hoverAt2 of
+                            TileHover _ ->
+                                Just True
 
-                    ToolbarHover ->
-                        False
+                            ToolbarHover ->
+                                Just False
 
-                    PostOfficeHover _ ->
-                        True
+                            PostOfficeHover _ ->
+                                Nothing
 
-                    TrainHover _ ->
-                        True
+                            TrainHover _ ->
+                                Nothing
 
-                    TrainHouseHover _ ->
-                        True
+                            TrainHouseHover _ ->
+                                Nothing
 
-                    HouseHover _ ->
-                        True
+                            HouseHover _ ->
+                                Nothing
 
-                    MapHover ->
-                        False
+                            MapHover ->
+                                Nothing
 
-                    MailEditorHover _ ->
-                        False
+                            MailEditorHover _ ->
+                                Just False
 
-                    PrimaryColorInput ->
-                        True
+                            PrimaryColorInput ->
+                                Just True
 
-                    SecondaryColorInput ->
-                        True
+                            SecondaryColorInput ->
+                                Just True
 
-                    CowHover _ ->
-                        True
+                            CowHover _ ->
+                                Nothing
+
+                    Nothing ->
+                        case hoverAt2 of
+                            TileHover _ ->
+                                Just True
+
+                            ToolbarHover ->
+                                Just False
+
+                            PostOfficeHover _ ->
+                                Just True
+
+                            TrainHover _ ->
+                                Just True
+
+                            TrainHouseHover _ ->
+                                Just True
+
+                            HouseHover _ ->
+                                Just True
+
+                            MapHover ->
+                                Just False
+
+                            MailEditorHover _ ->
+                                Just False
+
+                            PrimaryColorInput ->
+                                Just True
+
+                            SecondaryColorInput ->
+                                Just True
+
+                            CowHover _ ->
+                                Just True
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False
@@ -3382,13 +3433,14 @@ canvasView audioData model =
         ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
-        , Html.Attributes.style "cursor"
-            (if showMousePointer then
-                "pointer"
+        , Html.Attributes.style "cursor" "none"
 
-             else
-                "default"
-            )
+        --(if showMousePointer then
+        --    "pointer"
+        --
+        -- else
+        --    "default"
+        --)
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
@@ -3729,6 +3781,40 @@ canvasView audioData model =
                         model
                         (actualViewPoint model)
                         model.mailEditor
+                    ++ List.filterMap
+                        (\( userId, cursor ) ->
+                            let
+                                point =
+                                    Point2d.unwrap cursor.position
+                            in
+                            if userId == currentUserId model && showMousePointer == Nothing then
+                                Nothing
+
+                            else
+                                WebGL.entityWith
+                                    [ Shaders.blend ]
+                                    Shaders.vertexShader
+                                    Shaders.fragmentShader
+                                    handMesh
+                                    { view =
+                                        Mat4.makeTranslate3
+                                            (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                |> toFloat
+                                                |> (*) (1 / toFloat model.zoomFactor)
+                                            )
+                                            (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                |> toFloat
+                                                |> (*) (1 / toFloat model.zoomFactor)
+                                            )
+                                            0
+                                            |> Mat4.mul viewMatrix
+                                    , texture = model.texture
+                                    , textureSize = textureSize
+                                    , color = Vec4.vec4 1 1 1 1
+                                    }
+                                    |> Just
+                        )
+                        (IdDict.toList localGrid.cursors)
 
             _ ->
                 []
@@ -4004,7 +4090,7 @@ subscriptions _ model =
             Loaded loaded ->
                 Sub.batch
                     [ Sub.map KeyMsg Keyboard.subscriptions
-                    , Time.every 1000 (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
+                    , Time.every 500 (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         ]
@@ -4494,5 +4580,68 @@ cowMesh =
           , opacity = 1
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
+          }
+        ]
+
+
+handSize =
+    Coord.xy 30 23
+
+
+handPrimaryColor : Vec3.Vec3
+handPrimaryColor =
+    Vec3.vec3 0.8 0.8 0.75
+
+
+handSecondaryColor : Vec3.Vec3
+handSecondaryColor =
+    Vec3.vec3 0.6 0.6 0.55
+
+
+handMesh : WebGL.Mesh Vertex
+handMesh =
+    let
+        x0 =
+            -2
+
+        x1 =
+            width + x0
+
+        y0 =
+            -3
+
+        y1 =
+            height + y0
+
+        ( width, height ) =
+            Coord.toTuple handSize |> Tuple.mapBoth toFloat toFloat
+
+        { topLeft, bottomRight, bottomLeft, topRight } =
+            Tile.texturePositionPixels (Coord.xy 99 611) handSize
+    in
+    Shaders.triangleFan
+        [ { position = Vec3.vec3 x0 y0 0
+          , texturePosition = topLeft
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
+          }
+        , { position = Vec3.vec3 x1 y0 0
+          , texturePosition = topRight
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
+          }
+        , { position = Vec3.vec3 x1 y1 0
+          , texturePosition = bottomRight
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
+          }
+        , { position = Vec3.vec3 x0 y1 0
+          , texturePosition = bottomLeft
+          , opacity = 1
+          , primaryColor = handPrimaryColor
+          , secondaryColor = handSecondaryColor
           }
         ]
