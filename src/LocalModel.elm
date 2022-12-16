@@ -25,7 +25,7 @@ update config msg (LocalModel localModel_) =
             config.update msg localModel_.localModel
     in
     ( LocalModel
-        { localMsgs = localModel_.localMsgs ++ [ msg ]
+        { localMsgs = msg :: localModel_.localMsgs
         , localModel = newModel
         , model = localModel_.model
         }
@@ -48,11 +48,18 @@ unsafe =
     LocalModel
 
 
-updateFromBackend : Config msg model outMsg -> Nonempty msg -> LocalModel msg model -> LocalModel msg model
+updateFromBackend :
+    Config msg model outMsg
+    -> Nonempty msg
+    -> LocalModel msg model
+    -> ( LocalModel msg model, List outMsg )
 updateFromBackend config msgs (LocalModel localModel_) =
     let
-        newModel =
-            List.Nonempty.foldl (\msg model -> config.update msg model |> Tuple.first) localModel_.model msgs
+        ( newModel, outMsgs ) =
+            List.Nonempty.foldl
+                (\msg ( model, outMsgs2 ) -> config.update msg model |> Tuple.mapSecond (\a -> a :: outMsgs2))
+                ( localModel_.model, [] )
+                msgs
 
         newLocalMsgs =
             List.Nonempty.foldl
@@ -73,11 +80,11 @@ updateFromBackend config msgs (LocalModel localModel_) =
                         |> Tuple.first
                         |> List.reverse
                 )
-                localModel_.localMsgs
+                (List.reverse localModel_.localMsgs)
                 msgs
     in
-    LocalModel
-        { localMsgs = newLocalMsgs
+    ( LocalModel
+        { localMsgs = List.reverse newLocalMsgs
         , localModel =
             List.foldl
                 (\msg model -> config.update msg model |> Tuple.first)
@@ -85,3 +92,5 @@ updateFromBackend config msgs (LocalModel localModel_) =
                 newLocalMsgs
         , model = newModel
         }
+    , List.reverse outMsgs
+    )

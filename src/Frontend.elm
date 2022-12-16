@@ -18,6 +18,7 @@ import Browser.Navigation
 import Change exposing (Change(..), Cow)
 import Color exposing (Color)
 import Coord exposing (Coord)
+import Cursor exposing (Cursor(..), CursorSprite(..))
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import Env
@@ -486,6 +487,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , secondaryColorTextInput = TextInput.init
             , focus = focus
             , music = { startTime = Duration.addTo time (Duration.seconds 10), sound = Music0 }
+            , previousCursorPositions = IdDict.empty
             }
     in
     ( updateMeshes model model
@@ -645,32 +647,44 @@ update audioData msg model =
         Loaded frontendLoaded ->
             updateLoaded audioData msg frontendLoaded
                 |> (\( newModel, cmd ) ->
-                        let
-                            localModel =
-                                LocalModel.unwrap newModel.localModel
+                        ( if mouseWorldPosition newModel == mouseWorldPosition frontendLoaded then
+                            newModel
 
-                            ( newModel2, _ ) =
-                                if mouseWorldPosition newModel == mouseWorldPosition frontendLoaded then
-                                    ( newModel, LocalGrid.NoOutMsg )
-
-                                else
-                                    updateLocalModel (Change.MoveCursor (mouseWorldPosition newModel)) newModel
-                        in
-                        --(case ( localModel.localMsgs, newModel.pendingChanges ) of
-                        --    ( (Change.LocalChange _ (Change.MoveCursor _)) :: rest, ( _, Change.MoveCursor _ ) :: restPending ) ->
-                        --        { newModel
-                        --            | localModel = { localModel | localMsgs = rest } |> LocalModel.unsafe
-                        --            , pendingChanges = restPending
-                        --        }
-                        --
-                        --    _ ->
-                        --        newModel
-                        --)
-                        ( newModel2, cmd )
+                          else
+                            removeLastCursorMove newModel
+                                |> updateLocalModel (Change.MoveCursor (mouseWorldPosition newModel))
+                                |> Tuple.first
+                        , cmd
+                        )
                    )
                 |> Tuple.mapFirst (updateMeshes frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
+
+
+removeLastCursorMove : FrontendLoaded -> FrontendLoaded
+removeLastCursorMove newModel2 =
+    let
+        localModel =
+            LocalModel.unwrap newModel2.localModel
+    in
+    case ( localModel.localMsgs, newModel2.pendingChanges ) of
+        ( (Change.LocalChange eventIdA (Change.MoveCursor _)) :: rest, ( eventIdB, Change.MoveCursor _ ) :: restPending ) ->
+            if eventIdA == eventIdB then
+                { newModel2
+                    | localModel = { localModel | localMsgs = rest } |> LocalModel.unsafe
+                    , pendingChanges = restPending
+                }
+
+            else
+                let
+                    _ =
+                        Debug.log "event not equal" ""
+                in
+                newModel2
+
+        _ ->
+            newModel2
 
 
 updateLoaded : AudioData -> FrontendMsg_ -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1139,7 +1153,7 @@ updateLoaded audioData msg model =
                 Just nonempty ->
                     ( { model4 | pendingChanges = [] }
                     , Cmd.batch
-                        [ List.Nonempty.reverse nonempty |> GridChange |> Lamdera.sendToBackend
+                        [ List.Nonempty.reverse nonempty |> Debug.log "a" |> GridChange |> Lamdera.sendToBackend
                         , urlChange
                         ]
                     )
@@ -1816,15 +1830,21 @@ keyMsgCanvasUpdate key model =
                     { model | currentTile = Nothing }
 
                 Nothing ->
-                    { model
-                        | viewPoint =
-                            case model.viewPoint of
-                                TrainViewPoint _ ->
-                                    actualViewPoint model |> NormalViewPoint
+                    case isHoldingCow model of
+                        Just { cowId } ->
+                            updateLocalModel (Change.DropCow cowId (mouseWorldPosition model) model.time) model
+                                |> Tuple.first
 
-                                NormalViewPoint _ ->
-                                    model.viewPoint
-                    }
+                        Nothing ->
+                            { model
+                                | viewPoint =
+                                    case model.viewPoint of
+                                        TrainViewPoint _ ->
+                                            actualViewPoint model |> NormalViewPoint
+
+                                        NormalViewPoint _ ->
+                                            model.viewPoint
+                            }
             , Cmd.none
             )
 
@@ -1912,6 +1932,13 @@ isHoldingCow model =
             Nothing
 
 
+isSmallDistance : { a | start : Point2d Pixels coordinates } -> Point2d Pixels coordinates -> Bool
+isSmallDistance previousMouseState mousePosition =
+    Vector2d.from previousMouseState.start mousePosition
+        |> Vector2d.length
+        |> Quantity.lessThan (Pixels.pixels 5)
+
+
 mainMouseButtonUp :
     Point2d Pixels Pixels
     -> { a | start : Point2d Pixels Pixels, hover : Hover }
@@ -1919,10 +1946,8 @@ mainMouseButtonUp :
     -> ( FrontendLoaded, Cmd FrontendMsg_ )
 mainMouseButtonUp mousePosition previousMouseState model =
     let
-        isSmallDistance =
-            Vector2d.from previousMouseState.start mousePosition
-                |> Vector2d.length
-                |> Quantity.lessThan (Pixels.pixels 5)
+        isSmallDistance2 =
+            isSmallDistance previousMouseState mousePosition
 
         hoverAt2 : Hover
         hoverAt2 =
@@ -1949,7 +1974,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         _ ->
                             model.viewPoint
                 , highlightContextMenu =
-                    if isSmallDistance then
+                    if isSmallDistance2 then
                         Nothing
 
                     else
@@ -1957,14 +1982,14 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
                 |> (\m ->
-                        if isSmallDistance then
+                        if isSmallDistance2 then
                             setFocus hoverAt2 m
 
                         else
                             m
                    )
     in
-    if isSmallDistance then
+    if isSmallDistance2 then
         case isHoldingCow model2 of
             Just { cowId } ->
                 let
@@ -2416,6 +2441,9 @@ placeTile isDragPlacement tileGroup index model =
                                 }
                             )
                             tiles
+
+                    LocalGrid.OtherUserCursorMoved _ ->
+                        []
         in
         { model3
             | lastTilePlaced =
@@ -2774,6 +2802,43 @@ viewBoundsUpdate ( model, cmd ) =
         )
 
 
+canDragView : Hover -> Bool
+canDragView hover =
+    case hover of
+        PostOfficeHover _ ->
+            True
+
+        TrainHover _ ->
+            True
+
+        ToolbarHover ->
+            False
+
+        TileHover _ ->
+            False
+
+        TrainHouseHover _ ->
+            True
+
+        HouseHover _ ->
+            True
+
+        MapHover ->
+            True
+
+        MailEditorHover _ ->
+            False
+
+        PrimaryColorInput ->
+            False
+
+        SecondaryColorInput ->
+            False
+
+        CowHover _ ->
+            True
+
+
 offsetViewPoint :
     FrontendLoaded
     -> Hover
@@ -2781,43 +2846,7 @@ offsetViewPoint :
     -> Point2d Pixels Pixels
     -> Point2d WorldUnit WorldUnit
 offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurrent =
-    let
-        canDragView =
-            case hover of
-                PostOfficeHover _ ->
-                    True
-
-                TrainHover _ ->
-                    True
-
-                ToolbarHover ->
-                    False
-
-                TileHover _ ->
-                    False
-
-                TrainHouseHover _ ->
-                    True
-
-                HouseHover _ ->
-                    True
-
-                MapHover ->
-                    True
-
-                MailEditorHover _ ->
-                    False
-
-                PrimaryColorInput ->
-                    False
-
-                SecondaryColorInput ->
-                    False
-
-                CowHover _ ->
-                    True
-    in
-    if canDragView then
+    if canDragView hover then
         let
             delta : Vector2d WorldUnit WorldUnit
             delta =
@@ -2887,7 +2916,10 @@ updateFromBackend msg model =
 
                             LoadingLocalModel (first :: rest) ->
                                 LoadedLocalModel
-                                    (LocalGrid.init loadingData |> LocalGrid.updateFromBackend (Nonempty first rest))
+                                    (LocalGrid.init loadingData
+                                        |> LocalGrid.updateFromBackend (Nonempty first rest)
+                                        |> Tuple.first
+                                    )
                                     loadingData
 
                             LoadedLocalModel _ _ ->
@@ -2904,7 +2936,7 @@ updateFromBackend msg model =
                 LoadedLocalModel localModel loadingData ->
                     { loading
                         | localModel =
-                            LoadedLocalModel (LocalGrid.updateFromBackend changes localModel) loadingData
+                            LoadedLocalModel (LocalGrid.updateFromBackend changes localModel |> Tuple.first) loadingData
                     }
               )
                 |> Loading
@@ -2918,6 +2950,30 @@ updateFromBackend msg model =
             ( model, Cmd.none )
 
 
+handleOutMsg : LocalGrid.OutMsg -> FrontendLoaded -> FrontendLoaded
+handleOutMsg outMsg model =
+    case outMsg of
+        LocalGrid.NoOutMsg ->
+            model
+
+        LocalGrid.TilesRemoved _ ->
+            model
+
+        LocalGrid.OtherUserCursorMoved { userId, previousPosition } ->
+            { model
+                | previousCursorPositions =
+                    case previousPosition of
+                        Just previousPosition2 ->
+                            IdDict.insert
+                                userId
+                                { position = previousPosition2, time = model.time }
+                                model.previousCursorPositions
+
+                        Nothing ->
+                            IdDict.remove userId model.previousCursorPositions
+            }
+
+
 updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 updateLoadedFromBackend msg model =
     case msg of
@@ -2925,11 +2981,11 @@ updateLoadedFromBackend msg model =
             ( model, Cmd.none )
 
         ChangeBroadcast changes ->
-            ( { model
-                | localModel = LocalGrid.updateFromBackend changes model.localModel
-              }
-            , Cmd.none
-            )
+            let
+                ( newLocalModel, outMsgs ) =
+                    LocalGrid.updateFromBackend changes model.localModel
+            in
+            ( List.foldl handleOutMsg { model | localModel = newLocalModel } outMsgs, Cmd.none )
 
         UnsubscribeEmailConfirmed ->
             ( model, Cmd.none )
@@ -3319,6 +3375,131 @@ startButtonHighlightMesh =
         |> Sprite.toMesh
 
 
+cursorSprite : Hover -> FrontendLoaded -> Cursor
+cursorSprite hover model =
+    let
+        helper () =
+            if MailEditor.isOpen model.mailEditor then
+                DefaultCursor
+
+            else if isHoldingCow model /= Nothing then
+                CursorSprite PinchSpriteCursor
+
+            else
+                case model.currentTile of
+                    Just _ ->
+                        case hover of
+                            TileHover _ ->
+                                PointerCursor
+
+                            ToolbarHover ->
+                                DefaultCursor
+
+                            PostOfficeHover _ ->
+                                NoCursor
+
+                            TrainHover _ ->
+                                NoCursor
+
+                            TrainHouseHover _ ->
+                                NoCursor
+
+                            HouseHover _ ->
+                                NoCursor
+
+                            MapHover ->
+                                NoCursor
+
+                            MailEditorHover _ ->
+                                DefaultCursor
+
+                            PrimaryColorInput ->
+                                PointerCursor
+
+                            SecondaryColorInput ->
+                                PointerCursor
+
+                            CowHover _ ->
+                                NoCursor
+
+                    Nothing ->
+                        case hover of
+                            TileHover _ ->
+                                PointerCursor
+
+                            ToolbarHover ->
+                                DefaultCursor
+
+                            PostOfficeHover _ ->
+                                CursorSprite PointerSpriteCursor
+
+                            TrainHover _ ->
+                                CursorSprite PointerSpriteCursor
+
+                            TrainHouseHover _ ->
+                                CursorSprite PointerSpriteCursor
+
+                            HouseHover _ ->
+                                CursorSprite PointerSpriteCursor
+
+                            MapHover ->
+                                CursorSprite DefaultSpriteCursor
+
+                            MailEditorHover _ ->
+                                DefaultCursor
+
+                            PrimaryColorInput ->
+                                PointerCursor
+
+                            SecondaryColorInput ->
+                                PointerCursor
+
+                            CowHover _ ->
+                                CursorSprite PointerSpriteCursor
+    in
+    case isDraggingView hover model of
+        Just mouse ->
+            if isSmallDistance mouse (mouseScreenPosition model) then
+                helper ()
+
+            else
+                CursorSprite DragScreenSpriteCursor
+
+        Nothing ->
+            helper ()
+
+
+isDraggingView :
+    Hover
+    -> FrontendLoaded
+    ->
+        Maybe
+            { start : Point2d Pixels Pixels
+            , start_ : Point2d WorldUnit WorldUnit
+            , current : Point2d Pixels Pixels
+            , hover : Hover
+            }
+isDraggingView hover model =
+    case ( MailEditor.isOpen model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
+        ( False, _, MouseButtonDown a ) ->
+            Just a
+
+        ( False, MouseButtonDown a, _ ) ->
+            case model.currentTile of
+                Just _ ->
+                    Nothing
+
+                Nothing ->
+                    if canDragView hover then
+                        Just a
+
+                    else
+                        Nothing
+
+        _ ->
+            Nothing
+
+
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
     let
@@ -3351,85 +3532,8 @@ canvasView audioData model =
         localGrid =
             LocalGrid.localModel model.localModel
 
-        hoverAt2 =
-            hoverAt model mouseScreenPosition_
-
-        showMousePointer : Maybe Bool
         showMousePointer =
-            if MailEditor.isOpen model.mailEditor then
-                Just False
-
-            else
-                case model.currentTile of
-                    Just _ ->
-                        case hoverAt2 of
-                            TileHover _ ->
-                                Just True
-
-                            ToolbarHover ->
-                                Just False
-
-                            PostOfficeHover _ ->
-                                Nothing
-
-                            TrainHover _ ->
-                                Nothing
-
-                            TrainHouseHover _ ->
-                                Nothing
-
-                            HouseHover _ ->
-                                Nothing
-
-                            MapHover ->
-                                Nothing
-
-                            MailEditorHover _ ->
-                                Just False
-
-                            PrimaryColorInput ->
-                                Just True
-
-                            SecondaryColorInput ->
-                                Just True
-
-                            CowHover _ ->
-                                Nothing
-
-                    Nothing ->
-                        case hoverAt2 of
-                            TileHover _ ->
-                                Just True
-
-                            ToolbarHover ->
-                                Just False
-
-                            PostOfficeHover _ ->
-                                Just True
-
-                            TrainHover _ ->
-                                Just True
-
-                            TrainHouseHover _ ->
-                                Just True
-
-                            HouseHover _ ->
-                                Just True
-
-                            MapHover ->
-                                Just False
-
-                            MailEditorHover _ ->
-                                Just False
-
-                            PrimaryColorInput ->
-                                Just True
-
-                            SecondaryColorInput ->
-                                Just True
-
-                            CowHover _ ->
-                                Just True
+            cursorSprite (hoverAt model (mouseScreenPosition model)) model
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False
@@ -3439,14 +3543,7 @@ canvasView audioData model =
         ]
         [ Html.Attributes.width windowWidth
         , Html.Attributes.height windowHeight
-        , Html.Attributes.style "cursor" "none"
-
-        --(if showMousePointer then
-        --    "pointer"
-        --
-        -- else
-        --    "default"
-        --)
+        , Cursor.htmlAttribute showMousePointer
         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
         , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
@@ -3568,16 +3665,30 @@ canvasView audioData model =
                     ++ (IdDict.remove (currentUserId model) localGrid.cursors
                             |> IdDict.toList
                             |> List.filterMap
-                                (\( _, cursor ) ->
+                                (\( userId, cursor ) ->
                                     let
                                         point =
-                                            Point2d.unwrap cursor.position
+                                            (case IdDict.get userId model.previousCursorPositions of
+                                                Just previous ->
+                                                    Point2d.interpolateFrom
+                                                        previous.position
+                                                        cursor.position
+                                                        (Quantity.ratio
+                                                            (Duration.from previous.time model.time)
+                                                            shortDelayDuration
+                                                            |> clamp 0 1
+                                                        )
+
+                                                Nothing ->
+                                                    cursor.position
+                                            )
+                                                |> Point2d.unwrap
                                     in
                                     WebGL.entityWith
                                         [ Shaders.blend ]
                                         Shaders.vertexShader
                                         Shaders.fragmentShader
-                                        handDefaultMesh
+                                        Cursor.defaultCursorMesh
                                         { view =
                                             Mat4.makeTranslate3
                                                 (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
@@ -3789,21 +3900,6 @@ canvasView audioData model =
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1
                             }
-
-                       --, WebGL.entityWith
-                       --     [ Shaders.blend ]
-                       --     Shaders.colorPickerVertexShader
-                       --     Shaders.colorPickerFragmentShader
-                       --     colorPickerMesh
-                       --     { view =
-                       --         Mat4.makeScale3
-                       --             (2 / toFloat windowWidth)
-                       --             (-2 / toFloat windowHeight)
-                       --             1
-                       --             |> Coord.translateMat4
-                       --                 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                       --             |> Coord.translateMat4 (colorPickerPosition model.devicePixelRatio model.windowSize)
-                       --     }
                        ]
                     ++ MailEditor.drawMail
                         model.texture
@@ -3822,7 +3918,7 @@ canvasView audioData model =
                     ++ (case IdDict.get (currentUserId model) localGrid.cursors of
                             Just cursor ->
                                 case showMousePointer of
-                                    Just mousePointer ->
+                                    CursorSprite mousePointer ->
                                         let
                                             point =
                                                 Point2d.unwrap cursor.position
@@ -3831,13 +3927,7 @@ canvasView audioData model =
                                             [ Shaders.blend ]
                                             Shaders.vertexShader
                                             Shaders.fragmentShader
-                                            (case mousePointer of
-                                                True ->
-                                                    handPointerMesh
-
-                                                False ->
-                                                    handDefaultMesh
-                                            )
+                                            (Cursor.toMesh mousePointer)
                                             { view =
                                                 Mat4.makeTranslate3
                                                     (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
@@ -3856,7 +3946,7 @@ canvasView audioData model =
                                             }
                                         ]
 
-                                    Nothing ->
+                                    _ ->
                                         []
 
                             Nothing ->
@@ -4122,6 +4212,11 @@ createInfoMesh maybePingData userId =
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
+shortDelayDuration : Duration
+shortDelayDuration =
+    Duration.milliseconds 100
+
+
 subscriptions : AudioData -> FrontendModel_ -> Sub FrontendMsg_
 subscriptions _ model =
     Sub.batch
@@ -4137,7 +4232,9 @@ subscriptions _ model =
             Loaded loaded ->
                 Sub.batch
                     [ Sub.map KeyMsg Keyboard.subscriptions
-                    , Time.every 500 (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
+                    , Time.every
+                        (Duration.inMilliseconds shortDelayDuration)
+                        (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         ]
@@ -4627,122 +4724,5 @@ cowMesh =
           , opacity = 1
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
-          }
-        ]
-
-
-handSize =
-    Coord.xy 30 23
-
-
-handPrimaryColor : Vec3.Vec3
-handPrimaryColor =
-    Vec3.vec3 0.8 0.8 0.75
-
-
-handSecondaryColor : Vec3.Vec3
-handSecondaryColor =
-    Vec3.vec3 0.6 0.6 0.55
-
-
-handDefaultMesh : WebGL.Mesh Vertex
-handDefaultMesh =
-    let
-        x0 =
-            -2
-
-        x1 =
-            width + x0
-
-        y0 =
-            -3
-
-        y1 =
-            height + y0
-
-        ( width, height ) =
-            Coord.toTuple handSize |> Tuple.mapBoth toFloat toFloat
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 533 28) handSize
-    in
-    Shaders.triangleFan
-        [ { position = Vec3.vec3 x0 y0 0
-          , texturePosition = topLeft
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
-          }
-        , { position = Vec3.vec3 x1 y0 0
-          , texturePosition = topRight
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
-          }
-        , { position = Vec3.vec3 x1 y1 0
-          , texturePosition = bottomRight
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
-          }
-        , { position = Vec3.vec3 x0 y1 0
-          , texturePosition = bottomLeft
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
-          }
-        ]
-
-
-handPointerSize : Coord units
-handPointerSize =
-    Coord.xy 27 26
-
-
-handPointerMesh : WebGL.Mesh Vertex
-handPointerMesh =
-    let
-        x0 =
-            -10
-
-        x1 =
-            width + x0
-
-        y0 =
-            -1
-
-        y1 =
-            height + y0
-
-        ( width, height ) =
-            Coord.toTuple handPointerSize |> Tuple.mapBoth toFloat toFloat
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 563 28) handPointerSize
-    in
-    Shaders.triangleFan
-        [ { position = Vec3.vec3 x0 y0 0
-          , texturePosition = topLeft
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
-          }
-        , { position = Vec3.vec3 x1 y0 0
-          , texturePosition = topRight
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
-          }
-        , { position = Vec3.vec3 x1 y1 0
-          , texturePosition = bottomRight
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
-          }
-        , { position = Vec3.vec3 x0 y1 0
-          , texturePosition = bottomLeft
-          , opacity = 1
-          , primaryColor = handPrimaryColor
-          , secondaryColor = handSecondaryColor
           }
         ]

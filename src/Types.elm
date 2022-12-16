@@ -145,6 +145,7 @@ type alias FrontendLoaded =
     , secondaryColorTextInput : TextInput.Model
     , focus : Hover
     , music : { startTime : Time.Posix, sound : Sound }
+    , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Time.Posix }
     }
 
 

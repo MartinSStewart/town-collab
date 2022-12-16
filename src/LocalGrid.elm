@@ -33,6 +33,7 @@ import Tile exposing (Tile)
 import Time
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
+import Vector2d
 
 
 type LocalGrid
@@ -105,7 +106,7 @@ cowActualPosition cowId localModel_ =
             |> List.find (\( _, cursor ) -> Just cowId == Maybe.map .cowId cursor.holdingCow)
     of
         Just ( _, cursor ) ->
-            Just { position = cursor.position, isHeld = True }
+            Just { position = Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 }) cursor.position, isHeld = True }
 
         Nothing ->
             case IdDict.get cowId localGrid.cows of
@@ -121,7 +122,7 @@ update change localModel_ =
     LocalModel.update config change localModel_
 
 
-updateFromBackend : Nonempty Change -> LocalModel Change LocalGrid -> LocalModel Change LocalGrid
+updateFromBackend : Nonempty Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, List OutMsg )
 updateFromBackend changes localModel_ =
     LocalModel.updateFromBackend config changes localModel_
 
@@ -150,6 +151,7 @@ type OutMsg
             , secondaryColor : Color
             }
         )
+    | OtherUserCursorMoved { userId : Id UserId, previousPosition : Maybe (Point2d WorldUnit WorldUnit) }
     | NoOutMsg
 
 
@@ -268,6 +270,10 @@ updateServerChange serverChange model =
             dropCow userId cowId position model
 
         ServerMoveCursor userId position ->
+            let
+                _ =
+                    Debug.log "move" position
+            in
             moveCursor userId position model
 
         ServerUserDisconnected userId ->
@@ -285,7 +291,7 @@ pickupCow userId cowId position time model =
                 { position = position, holdingCow = Just { cowId = cowId, pickupTime = time } }
                 model.cursors
       }
-    , NoOutMsg
+    , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
     )
 
 
@@ -300,7 +306,7 @@ dropCow userId cowId position model =
                 model.cursors
         , cows = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position })) model.cows
       }
-    , NoOutMsg
+    , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
     )
 
 
@@ -324,7 +330,7 @@ moveCursor userId position model =
                 )
                 model.cursors
       }
-    , NoOutMsg
+    , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
     )
 
 
