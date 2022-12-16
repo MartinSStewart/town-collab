@@ -662,7 +662,7 @@ tileMesh position tile colors =
             Tile.getData tile
     in
     if tile == EmptyTile then
-        Sprite.sprite (Coord.addTuple_ ( 6, -16 ) position) (Coord.tuple ( 30, 29 )) (Coord.xy 504 42) (Coord.xy 30 29)
+        Sprite.sprite (Coord.plus (Coord.xy 6 -16) position) (Coord.xy 28 27) (Coord.xy 504 42) (Coord.xy 28 27)
 
     else
         (case data.texturePosition of

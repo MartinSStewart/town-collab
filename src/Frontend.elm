@@ -644,6 +644,30 @@ update audioData msg model =
 
         Loaded frontendLoaded ->
             updateLoaded audioData msg frontendLoaded
+                |> (\( newModel, cmd ) ->
+                        let
+                            localModel =
+                                LocalModel.unwrap newModel.localModel
+
+                            ( newModel2, _ ) =
+                                if mouseWorldPosition newModel == mouseWorldPosition frontendLoaded then
+                                    ( newModel, LocalGrid.NoOutMsg )
+
+                                else
+                                    updateLocalModel (Change.MoveCursor (mouseWorldPosition newModel)) newModel
+                        in
+                        --(case ( localModel.localMsgs, newModel.pendingChanges ) of
+                        --    ( (Change.LocalChange _ (Change.MoveCursor _)) :: rest, ( _, Change.MoveCursor _ ) :: restPending ) ->
+                        --        { newModel
+                        --            | localModel = { localModel | localMsgs = rest } |> LocalModel.unsafe
+                        --            , pendingChanges = restPending
+                        --        }
+                        --
+                        --    _ ->
+                        --        newModel
+                        --)
+                        ( newModel2, cmd )
+                   )
                 |> Tuple.mapFirst (updateMeshes frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
@@ -991,24 +1015,6 @@ updateLoaded audioData msg model =
                             MouseButtonUp { current = mousePosition }
                 , previousTileHover = tileHover_
               }
-                |> (\model2 ->
-                        let
-                            localModel =
-                                LocalModel.unwrap model2.localModel
-                        in
-                        (case ( localModel.localMsgs, model2.pendingChanges ) of
-                            ( (Change.LocalChange _ (Change.MoveCursor _)) :: rest, ( _, Change.MoveCursor _ ) :: restPending ) ->
-                                { model2
-                                    | localModel = { localModel | localMsgs = rest } |> LocalModel.unsafe
-                                    , pendingChanges = restPending
-                                }
-
-                            _ ->
-                                model2
-                        )
-                            |> updateLocalModel (Change.MoveCursor (mouseWorldPosition model2))
-                            |> Tuple.first
-                   )
                 |> (\model2 ->
                         case ( model2.currentTile, model2.mouseLeft ) of
                             ( Just { tileGroup, index }, MouseButtonDown { hover } ) ->
@@ -3559,6 +3565,38 @@ canvasView audioData model =
                             , color = Vec4.vec4 1 1 1 1
                             }
                        ]
+                    ++ (IdDict.remove (currentUserId model) localGrid.cursors
+                            |> IdDict.toList
+                            |> List.filterMap
+                                (\( _, cursor ) ->
+                                    let
+                                        point =
+                                            Point2d.unwrap cursor.position
+                                    in
+                                    WebGL.entityWith
+                                        [ Shaders.blend ]
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        handDefaultMesh
+                                        { view =
+                                            Mat4.makeTranslate3
+                                                (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                    |> toFloat
+                                                    |> (*) (1 / toFloat model.zoomFactor)
+                                                )
+                                                (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                    |> toFloat
+                                                    |> (*) (1 / toFloat model.zoomFactor)
+                                                )
+                                                0
+                                                |> Mat4.mul viewMatrix
+                                        , texture = model.texture
+                                        , textureSize = textureSize
+                                        , color = Vec4.vec4 1 1 1 1
+                                        }
+                                        |> Just
+                                )
+                       )
                     ++ List.filterMap
                         (\{ position, isRadio } ->
                             let
@@ -3781,53 +3819,49 @@ canvasView audioData model =
                         model
                         (actualViewPoint model)
                         model.mailEditor
-                    ++ List.filterMap
-                        (\( userId, cursor ) ->
-                            let
-                                point =
-                                    Point2d.unwrap cursor.position
-                            in
-                            case ( userId == currentUserId model, showMousePointer ) of
-                                ( True, Nothing ) ->
-                                    Nothing
+                    ++ (case IdDict.get (currentUserId model) localGrid.cursors of
+                            Just cursor ->
+                                case showMousePointer of
+                                    Just mousePointer ->
+                                        let
+                                            point =
+                                                Point2d.unwrap cursor.position
+                                        in
+                                        [ WebGL.entityWith
+                                            [ Shaders.blend ]
+                                            Shaders.vertexShader
+                                            Shaders.fragmentShader
+                                            (case mousePointer of
+                                                True ->
+                                                    handPointerMesh
 
-                                _ ->
-                                    WebGL.entityWith
-                                        [ Shaders.blend ]
-                                        Shaders.vertexShader
-                                        Shaders.fragmentShader
-                                        (case ( userId == currentUserId model, showMousePointer ) of
-                                            ( True, Nothing ) ->
-                                                handDefaultMesh
+                                                False ->
+                                                    handDefaultMesh
+                                            )
+                                            { view =
+                                                Mat4.makeTranslate3
+                                                    (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                        |> toFloat
+                                                        |> (*) (1 / toFloat model.zoomFactor)
+                                                    )
+                                                    (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                        |> toFloat
+                                                        |> (*) (1 / toFloat model.zoomFactor)
+                                                    )
+                                                    0
+                                                    |> Mat4.mul viewMatrix
+                                            , texture = model.texture
+                                            , textureSize = textureSize
+                                            , color = Vec4.vec4 1 1 1 1
+                                            }
+                                        ]
 
-                                            ( True, Just True ) ->
-                                                handPointerMesh
+                                    Nothing ->
+                                        []
 
-                                            ( True, Just False ) ->
-                                                handDefaultMesh
-
-                                            ( False, _ ) ->
-                                                handDefaultMesh
-                                        )
-                                        { view =
-                                            Mat4.makeTranslate3
-                                                (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                    |> toFloat
-                                                    |> (*) (1 / toFloat model.zoomFactor)
-                                                )
-                                                (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                    |> toFloat
-                                                    |> (*) (1 / toFloat model.zoomFactor)
-                                                )
-                                                0
-                                                |> Mat4.mul viewMatrix
-                                        , texture = model.texture
-                                        , textureSize = textureSize
-                                        , color = Vec4.vec4 1 1 1 1
-                                        }
-                                        |> Just
-                        )
-                        (IdDict.toList localGrid.cursors)
+                            Nothing ->
+                                []
+                       )
 
             _ ->
                 []
@@ -4070,7 +4104,7 @@ createInfoMesh maybePingData userId =
             Sprite.text
                 Color.black
                 2
-                ("Warning! Game is in alpha. The world will be reset often.\n"
+                ("Warning! Game is in alpha. The world is reset often.\n"
                     ++ "User ID: "
                     ++ String.fromInt (Id.toInt userId)
                     ++ "\n"
@@ -4416,9 +4450,9 @@ tileMesh colors position tile =
     if tile == EmptyTile then
         Sprite.sprite
             (Coord.plus (Coord.xy 10 12) position)
-            (Coord.tuple ( 30 * 2, 29 * 2 ))
+            (Coord.tuple ( 28 * 2, 27 * 2 ))
             (Coord.xy 504 42)
-            (Coord.xy 30 29)
+            (Coord.xy 28 27)
 
     else
         (case data.texturePosition of
@@ -4660,11 +4694,16 @@ handDefaultMesh =
         ]
 
 
+handPointerSize : Coord units
+handPointerSize =
+    Coord.xy 27 26
+
+
 handPointerMesh : WebGL.Mesh Vertex
 handPointerMesh =
     let
         x0 =
-            -11
+            -10
 
         x1 =
             width + x0
@@ -4676,10 +4715,10 @@ handPointerMesh =
             height + y0
 
         ( width, height ) =
-            Coord.toTuple handSize |> Tuple.mapBoth toFloat toFloat
+            Coord.toTuple handPointerSize |> Tuple.mapBoth toFloat toFloat
 
         { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 563 28) handSize
+            Tile.texturePositionPixels (Coord.xy 563 28) handPointerSize
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 x0 y0 0
