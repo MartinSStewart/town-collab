@@ -4,7 +4,6 @@ module LocalGrid exposing
     , LocalGrid_
     , OutMsg(..)
     , addCows
-    , cowActualPosition
     , incrementUndoCurrent
     , init
     , localModel
@@ -93,28 +92,6 @@ init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHidd
         , cursors = cursors
         }
         |> LocalModel.init
-
-
-cowActualPosition : Id CowId -> LocalModel Change LocalGrid -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
-cowActualPosition cowId localModel_ =
-    let
-        localGrid =
-            localModel localModel_
-    in
-    case
-        IdDict.toList localGrid.cursors
-            |> List.find (\( _, cursor ) -> Just cowId == Maybe.map .cowId cursor.holdingCow)
-    of
-        Just ( _, cursor ) ->
-            Just { position = Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 }) cursor.position, isHeld = True }
-
-        Nothing ->
-            case IdDict.get cowId localGrid.cows of
-                Just cow ->
-                    Just { position = cow.position, isHeld = False }
-
-                Nothing ->
-                    Nothing
 
 
 update : Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, OutMsg )

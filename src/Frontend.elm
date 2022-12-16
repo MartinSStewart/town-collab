@@ -18,7 +18,7 @@ import Browser.Navigation
 import Change exposing (Change(..), Cow)
 import Color exposing (Color)
 import Coord exposing (Coord)
-import Cursor exposing (Cursor(..), CursorSprite(..))
+import Cursor exposing (CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import Env
@@ -38,7 +38,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (LocalGrid, LocalGrid_)
+import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -1761,7 +1761,7 @@ hoverAt model mousePosition =
                         IdDict.toList localGrid.cows
                             |> List.filter
                                 (\( cowId, _ ) ->
-                                    case LocalGrid.cowActualPosition cowId model.localModel of
+                                    case cowActualPosition cowId model of
                                         Just a ->
                                             if a.isHeld then
                                                 False
@@ -3375,7 +3375,7 @@ startButtonHighlightMesh =
         |> Sprite.toMesh
 
 
-cursorSprite : Hover -> FrontendLoaded -> Cursor
+cursorSprite : Hover -> FrontendLoaded -> CursorType
 cursorSprite hover model =
     let
         helper () =
@@ -3582,7 +3582,7 @@ canvasView audioData model =
                     ++ Train.draw model.time model.mail model.trains viewMatrix trainTexture
                     ++ List.filterMap
                         (\( cowId, _ ) ->
-                            case LocalGrid.cowActualPosition cowId model.localModel of
+                            case cowActualPosition cowId model of
                                 Just { position } ->
                                     let
                                         point =
@@ -3668,21 +3668,7 @@ canvasView audioData model =
                                 (\( userId, cursor ) ->
                                     let
                                         point =
-                                            (case IdDict.get userId model.previousCursorPositions of
-                                                Just previous ->
-                                                    Point2d.interpolateFrom
-                                                        previous.position
-                                                        cursor.position
-                                                        (Quantity.ratio
-                                                            (Duration.from previous.time model.time)
-                                                            shortDelayDuration
-                                                            |> clamp 0 1
-                                                        )
-
-                                                Nothing ->
-                                                    cursor.position
-                                            )
-                                                |> Point2d.unwrap
+                                            cursorActualPosition userId cursor model |> Point2d.unwrap
                                     in
                                     WebGL.entityWith
                                         [ Shaders.blend ]
@@ -3921,7 +3907,8 @@ canvasView audioData model =
                                     CursorSprite mousePointer ->
                                         let
                                             point =
-                                                Point2d.unwrap cursor.position
+                                                cursorActualPosition (currentUserId model) cursor model
+                                                    |> Point2d.unwrap
                                         in
                                         [ WebGL.entityWith
                                             [ Shaders.blend ]
@@ -3956,6 +3943,27 @@ canvasView audioData model =
             _ ->
                 []
         )
+
+
+cursorActualPosition : Id UserId -> Cursor -> FrontendLoaded -> Point2d WorldUnit WorldUnit
+cursorActualPosition userId cursor model =
+    if userId == currentUserId model then
+        cursor.position
+
+    else
+        case IdDict.get userId model.previousCursorPositions of
+            Just previous ->
+                Point2d.interpolateFrom
+                    previous.position
+                    cursor.position
+                    (Quantity.ratio
+                        (Duration.from previous.time model.time)
+                        shortDelayDuration
+                        |> clamp 0 1
+                    )
+
+            Nothing ->
+                cursor.position
 
 
 colorPickerMesh : WebGL.Mesh { position : Vec2, vcoord : Vec2 }
@@ -4726,3 +4734,30 @@ cowMesh =
           , secondaryColor = cowSecondaryColor
           }
         ]
+
+
+cowActualPosition : Id CowId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
+cowActualPosition cowId model =
+    let
+        localGrid =
+            LocalGrid.localModel model.localModel
+    in
+    case
+        IdDict.toList localGrid.cursors
+            |> List.find (\( _, cursor ) -> Just cowId == Maybe.map .cowId cursor.holdingCow)
+    of
+        Just ( userId, cursor ) ->
+            { position =
+                cursorActualPosition userId cursor model
+                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 })
+            , isHeld = True
+            }
+                |> Just
+
+        Nothing ->
+            case IdDict.get cowId localGrid.cows of
+                Just cow ->
+                    Just { position = cow.position, isHeld = False }
+
+                Nothing ->
+                    Nothing

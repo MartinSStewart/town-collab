@@ -1,4 +1,4 @@
-module Cursor exposing (Cursor(..), CursorSprite(..), defaultCursorMesh, dragScreenCursorMesh, htmlAttribute, pointerCursorMesh, toMesh)
+module Cursor exposing (CursorSprite(..), CursorType(..), defaultCursorMesh, dragScreenCursorMesh, htmlAttribute, pointerCursorMesh, toMesh)
 
 import Color exposing (Color)
 import Coord exposing (Coord)
@@ -9,7 +9,7 @@ import Sprite
 import WebGL
 
 
-type Cursor
+type CursorType
     = DefaultCursor
     | PointerCursor
     | CursorSprite CursorSprite
@@ -23,7 +23,7 @@ type CursorSprite
     | PinchSpriteCursor
 
 
-htmlAttribute : Cursor -> Html.Attribute msg
+htmlAttribute : CursorType -> Html.Attribute msg
 htmlAttribute cursor =
     Html.Attributes.style
         "cursor"
