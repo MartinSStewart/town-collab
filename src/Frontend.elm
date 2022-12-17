@@ -175,7 +175,7 @@ audioLoaded audioData model =
 
         volumeOffset : Float
         volumeOffset =
-            mailEditorVolumeScale * 0.3 / ((List.map .volume movingTrains |> List.sum) + 1)
+            mailEditorVolumeScale * 0.14 / ((List.map .volume movingTrains |> List.sum) + 1)
 
         trainSounds : Audio
         trainSounds =
@@ -1153,7 +1153,7 @@ updateLoaded audioData msg model =
                 Just nonempty ->
                     ( { model4 | pendingChanges = [] }
                     , Cmd.batch
-                        [ List.Nonempty.reverse nonempty |> Debug.log "a" |> GridChange |> Lamdera.sendToBackend
+                        [ List.Nonempty.reverse nonempty |> GridChange |> Lamdera.sendToBackend
                         , urlChange
                         ]
                     )
@@ -3964,16 +3964,6 @@ cursorActualPosition userId cursor model =
 
             Nothing ->
                 cursor.position
-
-
-colorPickerMesh : WebGL.Mesh { position : Vec2, vcoord : Vec2 }
-colorPickerMesh =
-    WebGL.triangleFan
-        [ { position = Vec2.vec2 0 0, vcoord = Vec2.vec2 0 0 }
-        , { position = Coord.xOnly colorPickerSize |> Coord.toVec2, vcoord = Vec2.vec2 1 0 }
-        , { position = Coord.toVec2 colorPickerSize, vcoord = Vec2.vec2 1 1 }
-        , { position = Coord.yOnly colorPickerSize |> Coord.toVec2, vcoord = Vec2.vec2 0 1 }
-        ]
 
 
 getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
