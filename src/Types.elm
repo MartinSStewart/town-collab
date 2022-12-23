@@ -18,6 +18,7 @@ module Types exposing
     , ToBackend(..)
     , ToFrontend(..)
     , Tool(..)
+    , ToolButton(..)
     , ToolType(..)
     , ViewPoint(..)
     )
@@ -96,6 +97,12 @@ type ViewPoint
     | TrainViewPoint { trainId : Id TrainId, startViewPoint : Point2d WorldUnit WorldUnit, startTime : Time.Posix }
 
 
+type ToolButton
+    = HandToolButton
+    | TilePlacerToolButton TileGroup
+    | TilePickerToolButton
+
+
 type Tool
     = HandTool
     | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
@@ -148,7 +155,7 @@ type alias FrontendLoaded =
     , pingStartTime : Maybe Time.Posix
     , localTime : Time.Posix
     , scrollThreshold : Float
-    , tileColors : AssocList.Dict TileGroup { primaryColor : Color, secondaryColor : Color }
+    , tileColors : AssocList.Dict TileGroup Colors
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
     , focus : Hover
@@ -177,7 +184,7 @@ type MouseButtonState
 
 
 type Hover
-    = TileHover TileGroup
+    = ToolButtonHover ToolButton
     | ToolbarHover
     | PostOfficeHover { postOfficePosition : Coord WorldUnit }
     | TrainHover { trainId : Id TrainId, train : Train }

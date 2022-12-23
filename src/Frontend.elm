@@ -1006,7 +1006,7 @@ updateLoaded audioData msg model =
             let
                 tileHover_ =
                     case hoverAt model mousePosition of
-                        TileHover tile ->
+                        ToolButtonHover (TilePlacerToolButton tile) ->
                             Just tile
 
                         _ ->
@@ -1042,7 +1042,7 @@ updateLoaded audioData msg model =
                                     ToolbarHover ->
                                         model2
 
-                                    TileHover _ ->
+                                    ToolButtonHover _ ->
                                         model2
 
                                     PostOfficeHover _ ->
@@ -1258,7 +1258,7 @@ updateLoaded audioData msg model =
                         SecondaryColorInput ->
                             False
 
-                        TileHover tile ->
+                        ToolButtonHover _ ->
                             True
 
                         ToolbarHover ->
@@ -1351,7 +1351,7 @@ updateLoaded audioData msg model =
 
         PastedText text ->
             ( case model.focus of
-                TileHover tileGroup ->
+                ToolButtonHover _ ->
                     model
 
                 ToolbarHover ->
@@ -1451,7 +1451,7 @@ nextFocus model =
     case model.focus of
         PrimaryColorInput ->
             if
-                showColorTextInputs (currentTileGroup model)
+                showColorTextInputs model.currentTile
                     |> .showSecondaryColorTextInput
             then
                 SecondaryColorInput
@@ -1461,7 +1461,7 @@ nextFocus model =
 
         SecondaryColorInput ->
             if
-                showColorTextInputs (currentTileGroup model)
+                showColorTextInputs model.currentTile
                     |> .showPrimaryColorTextInput
             then
                 PrimaryColorInput
@@ -1469,7 +1469,7 @@ nextFocus model =
             else
                 SecondaryColorInput
 
-        TileHover tileGroup ->
+        ToolButtonHover _ ->
             model.focus
 
         ToolbarHover ->
@@ -1612,11 +1612,11 @@ handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newT
            )
 
 
-showColorTextInputs : Maybe TileGroup -> { showPrimaryColorTextInput : Bool, showSecondaryColorTextInput : Bool }
-showColorTextInputs currentTile =
-    case currentTile of
-        Just tile ->
-            case Tile.getTileGroupData tile |> .defaultColors of
+showColorTextInputs : Tool -> { showPrimaryColorTextInput : Bool, showSecondaryColorTextInput : Bool }
+showColorTextInputs tool =
+    case tool of
+        TilePlacerTool { tileGroup } ->
+            case Tile.getTileGroupData tileGroup |> .defaultColors of
                 ZeroDefaultColors ->
                     { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
 
@@ -1626,7 +1626,10 @@ showColorTextInputs currentTile =
                 TwoDefaultColors _ _ ->
                     { showPrimaryColorTextInput = True, showSecondaryColorTextInput = True }
 
-        Nothing ->
+        HandTool ->
+            { showPrimaryColorTextInput = True, showSecondaryColorTextInput = True }
+
+        TilePickerTool ->
             { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
 
 
@@ -1656,7 +1659,7 @@ hoverAt model mousePosition =
     else if containsToolbar then
         let
             { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-                showColorTextInputs (currentTileGroup model)
+                showColorTextInputs model.currentTile
         in
         if
             showPrimaryColorTextInput
@@ -1688,22 +1691,22 @@ hoverAt model mousePosition =
 
         else
             let
-                containsTileButton : Maybe TileGroup
+                containsTileButton : Maybe ToolButton
                 containsTileButton =
                     List.indexedMap
-                        (\index tile ->
+                        (\index tool ->
                             let
                                 topLeft =
                                     toolbarToPixel
                                         model.devicePixelRatio
                                         model.windowSize
-                                        (toolbarTileButtonPosition (index + 2))
+                                        (toolbarTileButtonPosition index)
                             in
                             if
                                 Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
                                     |> Bounds.contains mousePosition2
                             then
-                                Just tile
+                                Just tool
 
                             else
                                 Nothing
@@ -1714,7 +1717,7 @@ hoverAt model mousePosition =
             in
             case containsTileButton of
                 Just tile ->
-                    TileHover tile
+                    ToolButtonHover tile
 
                 Nothing ->
                     ToolbarHover
@@ -1911,7 +1914,7 @@ keyMsgCanvasUpdate key model =
         ( Keyboard.Spacebar, False ) ->
             ( case Dict.get " " model.tileHotkeys of
                 Just tile ->
-                    setCurrentTile tile model
+                    setCurrentTool (TilePlacerToolButton tile) model
 
                 Nothing ->
                     model
@@ -1921,7 +1924,7 @@ keyMsgCanvasUpdate key model =
         ( Keyboard.Character string, False ) ->
             ( case Dict.get string model.tileHotkeys of
                 Just tile ->
-                    setCurrentTile tile model
+                    setCurrentTool (TilePlacerToolButton tile) model
 
                 Nothing ->
                     model
@@ -1934,8 +1937,8 @@ keyMsgCanvasUpdate key model =
 
 getTileColor :
     TileGroup
-    -> { a | tileColors : AssocList.Dict TileGroup { primaryColor : Color, secondaryColor : Color } }
-    -> { primaryColor : Color, secondaryColor : Color }
+    -> { a | tileColors : AssocList.Dict TileGroup Colors }
+    -> Colors
 getTileColor tileGroup model =
     case AssocList.get tileGroup model.tileColors of
         Just a ->
@@ -1945,19 +1948,35 @@ getTileColor tileGroup model =
             Tile.getTileGroupData tileGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
 
 
-setCurrentTile : TileGroup -> FrontendLoaded -> FrontendLoaded
-setCurrentTile tileGroup model =
+setCurrentTool : ToolButton -> FrontendLoaded -> FrontendLoaded
+setCurrentTool tool model =
     let
         colors =
-            getTileColor tileGroup model
+            case tool of
+                TilePlacerToolButton tileGroup ->
+                    getTileColor tileGroup model
+
+                HandToolButton ->
+                    getHandColor (currentUserId model) model
+
+                TilePickerToolButton ->
+                    { primaryColor = Color.white, secondaryColor = Color.black }
     in
     { model
         | currentTile =
-            TilePlacerTool
-                { tileGroup = tileGroup
-                , index = 0
-                , mesh = Grid.tileMesh Coord.origin (getTileGroupTile tileGroup 0) colors |> Sprite.toMesh
-                }
+            case tool of
+                TilePlacerToolButton tileGroup ->
+                    TilePlacerTool
+                        { tileGroup = tileGroup
+                        , index = 0
+                        , mesh = Grid.tileMesh Coord.origin (getTileGroupTile tileGroup 0) colors |> Sprite.toMesh
+                        }
+
+                HandToolButton ->
+                    HandTool
+
+                TilePickerToolButton ->
+                    TilePickerTool
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
     }
@@ -2053,8 +2072,8 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
             Nothing ->
                 case hoverAt2 of
-                    TileHover tileHover_ ->
-                        ( setCurrentTile tileHover_ model2, Cmd.none )
+                    ToolButtonHover tool ->
+                        ( setCurrentTool tool model2, Cmd.none )
 
                     PostOfficeHover { postOfficePosition } ->
                         ( if canOpenMailEditor model2 then
@@ -2883,7 +2902,7 @@ canDragView hover =
         ToolbarHover ->
             False
 
-        TileHover _ ->
+        ToolButtonHover _ ->
             False
 
         TrainHouseHover _ ->
@@ -3484,7 +3503,7 @@ cursorSprite hover model =
                 case model.currentTile of
                     TilePlacerTool _ ->
                         case hover of
-                            TileHover _ ->
+                            ToolButtonHover _ ->
                                 PointerCursor
 
                             ToolbarHover ->
@@ -3519,7 +3538,7 @@ cursorSprite hover model =
 
                     HandTool ->
                         case hover of
-                            TileHover _ ->
+                            ToolButtonHover _ ->
                                 PointerCursor
 
                             ToolbarHover ->
@@ -3554,7 +3573,7 @@ cursorSprite hover model =
 
                     TilePickerTool ->
                         case hover of
-                            TileHover _ ->
+                            ToolButtonHover _ ->
                                 PointerCursor
 
                             ToolbarHover ->
@@ -4437,8 +4456,13 @@ toolbarButtonSize =
     Coord.xy 80 80
 
 
-toolbarButton : Colors -> Maybe String -> Bool -> Coord ToolbarUnit -> List Vertex
-toolbarButton colors maybeHotkey highlight offset =
+toolbarTileButton :
+    (Coord ToolbarUnit -> List Vertex)
+    -> Maybe String
+    -> Bool
+    -> Coord ToolbarUnit
+    -> List Vertex
+toolbarTileButton mesh maybeHotkey highlight offset =
     let
         charSize : Coord unit
         charSize =
@@ -4470,6 +4494,7 @@ toolbarButton colors maybeHotkey highlight offset =
                 28
             )
             (Coord.xy 1 1)
+        ++ mesh offset
         ++ (case maybeHotkey of
                 Just hotkey ->
                     Sprite.sprite
@@ -4477,74 +4502,10 @@ toolbarButton colors maybeHotkey highlight offset =
                             (Coord.xy 0 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize + 4))
                             offset
                         )
-                        (Coord.plus (Coord.xy 2 -4) charSize)
-                        (Coord.xy 506 28)
-                        (Coord.xy 1 1)
-                        ++ Sprite.text
-                            Color.white
-                            2
-                            hotkey
-                            (Coord.plus
-                                (Coord.xy 2 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize))
-                                offset
-                            )
-
-                Nothing ->
-                    []
-           )
-
-
-toolbarTileButton : AssocList.Dict TileGroup Colors -> Maybe String -> Bool -> Coord ToolbarUnit -> TileGroup -> List Vertex
-toolbarTileButton colors maybeHotkey highlight offset tile =
-    let
-        charSize : Coord unit
-        charSize =
-            Sprite.charSize |> Coord.multiplyTuple ( 2, 2 )
-
-        primaryAndSecondaryColors : Colors
-        primaryAndSecondaryColors =
-            case AssocList.get tile colors of
-                Just a ->
-                    a
-
-                Nothing ->
-                    Tile.getTileGroupData tile |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
-    in
-    Sprite.sprite
-        offset
-        toolbarButtonSize
-        (Coord.xy
-            (if highlight then
-                505
-
-             else
-                506
-            )
-            28
-        )
-        (Coord.xy 1 1)
-        ++ Sprite.sprite
-            (offset |> Coord.plus (Coord.xy 2 2))
-            (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
-            (Coord.xy
-                (if highlight then
-                    505
-
-                 else
-                    507
-                )
-                28
-            )
-            (Coord.xy 1 1)
-        ++ tileMesh primaryAndSecondaryColors offset (getTileGroupTile tile 0)
-        ++ (case maybeHotkey of
-                Just hotkey ->
-                    Sprite.sprite
-                        (Coord.plus
-                            (Coord.xy 0 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize + 4))
-                            offset
+                        (Coord.multiply (Coord.xy (String.length hotkey) 1) charSize
+                            |> Coord.plus (Coord.xy 2 -4)
+                            |> Coord.minimum (toolbarButtonSize |> Coord.minus (Coord.xy 2 2))
                         )
-                        (Coord.plus (Coord.xy 2 -4) charSize)
                         (Coord.xy 506 28)
                         (Coord.xy 1 1)
                         ++ Sprite.text
@@ -4573,34 +4534,68 @@ toolbarMesh :
 toolbarMesh handColor primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-            showColorTextInputs maybeTileGroup
+            showColorTextInputs currentTile
 
-        maybeTileGroup =
+        currentTool2 =
             case currentTile of
-                HandTool ->
-                    Nothing
-
                 TilePlacerTool { tileGroup } ->
-                    Just tileGroup
+                    TilePlacerToolButton tileGroup
 
                 TilePickerTool ->
-                    Nothing
+                    TilePickerToolButton
+
+                HandTool ->
+                    HandToolButton
     in
     Sprite.sprite Coord.origin toolbarSize (Coord.xy 506 28) (Coord.xy 1 1)
         ++ Sprite.sprite (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4)) (Coord.xy 507 28) (Coord.xy 1 1)
-        ++ toolbarButton
-            handColor
-            Nothing
-            False
-            (toolbarTileButtonPosition 0)
         ++ (List.indexedMap
-                (\index tile ->
+                (\index tool ->
+                    let
+                        tileColors =
+                            case tool of
+                                TilePlacerToolButton tileGroup ->
+                                    case AssocList.get tileGroup colors of
+                                        Just a ->
+                                            a
+
+                                        Nothing ->
+                                            Tile.getTileGroupData tileGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
+
+                                HandToolButton ->
+                                    handColor
+
+                                TilePickerToolButton ->
+                                    Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
+
+                        hotkeyText =
+                            case tool of
+                                TilePlacerToolButton tileGroup ->
+                                    Dict.toList hotkeys |> List.find (Tuple.second >> (==) tileGroup) |> Maybe.map Tuple.first
+
+                                HandToolButton ->
+                                    Just "Esc"
+
+                                TilePickerToolButton ->
+                                    Just "Ctrl"
+
+                        innerMesh =
+                            \offset ->
+                                case tool of
+                                    TilePlacerToolButton tileGroup ->
+                                        tileMesh tileColors offset (getTileGroupTile tileGroup 0)
+
+                                    HandToolButton ->
+                                        Cursor.defaultCursorMesh2 handColor offset
+
+                                    TilePickerToolButton ->
+                                        Cursor.defaultCursorMesh2 handColor offset
+                    in
                     toolbarTileButton
-                        colors
-                        (Dict.toList hotkeys |> List.find (Tuple.second >> (==) tile) |> Maybe.map Tuple.first)
-                        (Just tile == maybeTileGroup)
-                        (toolbarTileButtonPosition (index + 2))
-                        tile
+                        innerMesh
+                        hotkeyText
+                        (tool == currentTool2)
+                        (toolbarTileButtonPosition index)
                 )
                 buttonTiles
                 |> List.concat
@@ -4627,10 +4622,16 @@ toolbarMesh handColor primaryColorTextInput secondaryColorTextInput colors hotke
             else
                 []
            )
-        ++ (case maybeTileGroup of
-                Just tileGroup ->
+        ++ (case currentTile of
+                HandTool ->
+                    []
+
+                TilePickerTool ->
+                    []
+
+                TilePlacerTool { tileGroup } ->
                     let
-                        primaryAndSecondaryColors : { primaryColor : Color, secondaryColor : Color }
+                        primaryAndSecondaryColors : Colors
                         primaryAndSecondaryColors =
                             case AssocList.get tileGroup colors of
                                 Just a ->
@@ -4688,9 +4689,6 @@ toolbarMesh handColor primaryColorTextInput secondaryColorTextInput colors hotke
                                 Nothing ->
                                     []
                            )
-
-                Nothing ->
-                    []
            )
         |> Sprite.toMesh
 
@@ -4700,32 +4698,34 @@ colorTextInputView position width hasFocus isValid model =
     TextInput.view position width hasFocus isValid model
 
 
-buttonTiles : List TileGroup
+buttonTiles : List ToolButton
 buttonTiles =
-    [ EmptyTileGroup
-    , PostOfficeGroup
-    , HouseGroup
-    , LogCabinGroup
-    , TrainHouseGroup
-    , RailTurnGroup
-    , RailTurnSplitGroup
-    , RailTurnSplitMirrorGroup
-    , RailStrafeSmallGroup
-    , RailStrafeGroup
-    , RailTurnLargeGroup
-    , RailStraightGroup
-    , RailCrossingGroup
-    , SidewalkRailGroup
-    , SidewalkGroup
-    , PineTreeGroup
-    , RoadStraightGroup
-    , RoadTurnGroup
-    , Road4WayGroup
-    , RoadSidewalkCrossingGroup
-    , Road3WayGroup
-    , RoadRailCrossingGroup
-    , RoadDeadendGroup
-    , FenceStraightGroup
+    [ HandToolButton
+    , TilePickerToolButton
+    , TilePlacerToolButton EmptyTileGroup
+    , TilePlacerToolButton PostOfficeGroup
+    , TilePlacerToolButton HouseGroup
+    , TilePlacerToolButton LogCabinGroup
+    , TilePlacerToolButton TrainHouseGroup
+    , TilePlacerToolButton RailTurnGroup
+    , TilePlacerToolButton RailTurnSplitGroup
+    , TilePlacerToolButton RailTurnSplitMirrorGroup
+    , TilePlacerToolButton RailStrafeSmallGroup
+    , TilePlacerToolButton RailStrafeGroup
+    , TilePlacerToolButton RailTurnLargeGroup
+    , TilePlacerToolButton RailStraightGroup
+    , TilePlacerToolButton RailCrossingGroup
+    , TilePlacerToolButton SidewalkRailGroup
+    , TilePlacerToolButton SidewalkGroup
+    , TilePlacerToolButton PineTreeGroup
+    , TilePlacerToolButton RoadStraightGroup
+    , TilePlacerToolButton RoadTurnGroup
+    , TilePlacerToolButton Road4WayGroup
+    , TilePlacerToolButton RoadSidewalkCrossingGroup
+    , TilePlacerToolButton Road3WayGroup
+    , TilePlacerToolButton RoadRailCrossingGroup
+    , TilePlacerToolButton RoadDeadendGroup
+    , TilePlacerToolButton FenceStraightGroup
     ]
 
 
@@ -4750,7 +4750,7 @@ toolbarRowCount =
     3
 
 
-tileMesh : { primaryColor : Color, secondaryColor : Color } -> Coord unit -> Tile -> List Vertex
+tileMesh : Colors -> Coord unit -> Tile -> List Vertex
 tileMesh colors position tile =
     let
         data : TileData b

@@ -27,7 +27,7 @@ module Tile exposing
 
 import Angle
 import Axis2d
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import List.Nonempty exposing (Nonempty(..))
@@ -682,7 +682,7 @@ type DefaultColor
     | TwoDefaultColors Color Color
 
 
-defaultToPrimaryAndSecondary : DefaultColor -> { primaryColor : Color, secondaryColor : Color }
+defaultToPrimaryAndSecondary : DefaultColor -> Colors
 defaultToPrimaryAndSecondary defaultColors =
     case defaultColors of
         ZeroDefaultColors ->

@@ -4,6 +4,7 @@ module Cursor exposing
     , CursorType(..)
     , defaultColors
     , defaultCursorMesh
+    , defaultCursorMesh2
     , dragScreenCursorMesh
     , getSpriteMesh
     , htmlAttribute
@@ -11,7 +12,7 @@ module Cursor exposing
     , pointerCursorMesh
     )
 
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Html
 import Html.Attributes
@@ -29,7 +30,7 @@ type alias CursorMeshes =
     }
 
 
-meshes : { primaryColor : Color, secondaryColor : Color } -> CursorMeshes
+meshes : Colors -> CursorMeshes
 meshes colors =
     { defaultSprite = defaultCursorMesh colors
     , pointerSprite = pointerCursorMesh colors
@@ -100,7 +101,7 @@ defaultColors =
     { primaryColor = Color.rgb255 190 190 185, secondaryColor = Color.rgb255 165 165 160 }
 
 
-pinchCursorMesh : { primaryColor : Color, secondaryColor : Color } -> WebGL.Mesh Vertex
+pinchCursorMesh : Colors -> WebGL.Mesh Vertex
 pinchCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
@@ -111,7 +112,7 @@ pinchCursorMesh colors =
         |> Sprite.toMesh
 
 
-dragScreenCursorMesh : { primaryColor : Color, secondaryColor : Color } -> WebGL.Mesh Vertex
+dragScreenCursorMesh : Colors -> WebGL.Mesh Vertex
 dragScreenCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
@@ -122,7 +123,7 @@ dragScreenCursorMesh colors =
         |> Sprite.toMesh
 
 
-defaultCursorMesh : { primaryColor : Color, secondaryColor : Color } -> WebGL.Mesh Vertex
+defaultCursorMesh : Colors -> WebGL.Mesh Vertex
 defaultCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
@@ -133,12 +134,22 @@ defaultCursorMesh colors =
         |> Sprite.toMesh
 
 
+defaultCursorMesh2 : Colors -> Coord unit -> List Vertex
+defaultCursorMesh2 colors offset =
+    Sprite.spriteWithTwoColors
+        colors
+        (Coord.plus (Coord.xy 12 16) offset)
+        (Coord.multiply (Coord.xy 2 2) handSize)
+        (Coord.xy 533 28)
+        handSize
+
+
 handPointerSize : Coord units
 handPointerSize =
     Coord.xy 27 26
 
 
-pointerCursorMesh : { primaryColor : Color, secondaryColor : Color } -> WebGL.Mesh Vertex
+pointerCursorMesh : Colors -> WebGL.Mesh Vertex
 pointerCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
@@ -149,7 +160,7 @@ pointerCursorMesh colors =
         |> Sprite.toMesh
 
 
-eyeDropperCursorMesh : { primaryColor : Color, secondaryColor : Color } -> WebGL.Mesh Vertex
+eyeDropperCursorMesh : Colors -> WebGL.Mesh Vertex
 eyeDropperCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors

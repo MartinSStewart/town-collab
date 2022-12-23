@@ -34,7 +34,7 @@ module Grid exposing
 import Array2D exposing (Array2D)
 import Basics.Extra
 import Bounds exposing (Bounds)
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import GridCell exposing (Cell, CellData)
@@ -655,7 +655,7 @@ backgroundMesh cellPosition =
         |> Sprite.toMesh
 
 
-tileMesh : Coord WorldUnit -> Tile -> { primaryColor : Color, secondaryColor : Color } -> List Vertex
+tileMesh : Coord WorldUnit -> Tile -> Colors -> List Vertex
 tileMesh position tile colors =
     let
         data =
@@ -683,7 +683,7 @@ tileMesh position tile colors =
 
 tileMeshHelper :
     Float
-    -> { primaryColor : Color, secondaryColor : Color }
+    -> Colors
     -> Bool
     -> Coord WorldUnit
     -> Coord unit

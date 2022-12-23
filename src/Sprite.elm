@@ -13,7 +13,7 @@ module Sprite exposing
     , toMesh
     )
 
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import List.Extra as List
 import Math.Vector3 as Vec3
@@ -123,13 +123,7 @@ spriteWithColor color position size texturePosition textureSize =
     spriteWithZ color color position 0 size texturePosition textureSize
 
 
-spriteWithTwoColors :
-    { primaryColor : Color, secondaryColor : Color }
-    -> Coord unit
-    -> Coord unit
-    -> Coord b
-    -> Coord b
-    -> List Vertex
+spriteWithTwoColors : Colors -> Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithTwoColors { primaryColor, secondaryColor } position size texturePosition textureSize =
     spriteWithZ primaryColor secondaryColor position 0 size texturePosition textureSize
 

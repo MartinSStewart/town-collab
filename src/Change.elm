@@ -30,7 +30,7 @@ type LocalChange
     | DropCow (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
-    | ChangeHandColor { primaryColor : Color, secondaryColor : Color }
+    | ChangeHandColor Colors
 
 
 type ClientChange
