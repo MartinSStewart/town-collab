@@ -13,15 +13,15 @@ module LocalGrid exposing
 
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..))
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
+import Cursor
 import Dict exposing (Dict)
 import EverySet exposing (EverySet)
 import Grid exposing (Grid, GridData)
 import GridCell
 import Id exposing (CowId, Id, UserId)
 import IdDict exposing (IdDict)
-import List.Extra as List
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import Point2d exposing (Point2d)
@@ -32,7 +32,6 @@ import Tile exposing (Tile)
 import Time
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
-import Vector2d
 
 
 type LocalGrid
@@ -50,6 +49,7 @@ type alias LocalGrid_ =
     , undoCurrent : Dict RawCellCoord Int
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
+    , handColors : IdDict UserId Colors
     }
 
 
@@ -76,9 +76,10 @@ init :
         , viewBounds : Bounds CellUnit
         , cows : IdDict CowId Cow
         , cursors : IdDict UserId Cursor
+        , handColors : IdDict UserId Colors
     }
     -> LocalModel Change LocalGrid
-init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds, cows, cursors } =
+init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds, cows, cursors, handColors } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , user = user
@@ -90,6 +91,7 @@ init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHidd
         , undoCurrent = undoCurrent
         , cows = cows
         , cursors = cursors
+        , handColors = handColors
         }
         |> LocalModel.init
 
@@ -130,6 +132,7 @@ type OutMsg
         )
     | OtherUserCursorMoved { userId : Id UserId, previousPosition : Maybe (Point2d WorldUnit WorldUnit) }
     | NoOutMsg
+    | HandColorChanged
 
 
 updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -216,6 +219,11 @@ updateLocalChange localChange model =
         MoveCursor position ->
             moveCursor model.user position model
 
+        ChangeHandColor colors ->
+            ( { model | handColors = IdDict.insert model.user colors model.handColors }
+            , HandColorChanged
+            )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -247,15 +255,21 @@ updateServerChange serverChange model =
             dropCow userId cowId position model
 
         ServerMoveCursor userId position ->
-            let
-                _ =
-                    Debug.log "move" position
-            in
             moveCursor userId position model
 
         ServerUserDisconnected userId ->
             ( { model | cursors = IdDict.remove userId model.cursors }
             , NoOutMsg
+            )
+
+        ServerChangeHandColor userId colors ->
+            ( { model | handColors = IdDict.insert userId colors model.handColors }
+            , HandColorChanged
+            )
+
+        ServerUserConnected userId colors ->
+            ( { model | handColors = IdDict.insert userId colors model.handColors }
+            , HandColorChanged
             )
 
 

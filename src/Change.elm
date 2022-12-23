@@ -1,6 +1,7 @@
 module Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..))
 
 import Bounds exposing (Bounds)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import Grid
@@ -29,6 +30,7 @@ type LocalChange
     | DropCow (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
+    | ChangeHandColor { primaryColor : Color, secondaryColor : Color }
 
 
 type ClientChange
@@ -42,6 +44,8 @@ type ServerChange
     | ServerDropCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
+    | ServerUserConnected (Id UserId) Colors
+    | ServerChangeHandColor (Id UserId) Colors
 
 
 type alias Cow =

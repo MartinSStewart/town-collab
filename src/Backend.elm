@@ -12,6 +12,7 @@ import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), LocalChange(..), ServerChange(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
+import Cursor
 import Dict
 import Duration exposing (Duration)
 import Email.Html
@@ -833,6 +834,15 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
             , ServerMoveCursor userId position |> Just
             )
 
+        ChangeHandColor colors ->
+            ( updateUser
+                userId
+                (\user2 -> { user2 | handColor = colors })
+                model
+            , originalChange
+            , ServerChangeHandColor userId colors |> Just
+            )
+
 
 removeTrain : Id TrainId -> BackendModel -> BackendModel
 removeTrain trainId model =
@@ -905,6 +915,7 @@ requestDataUpdate sessionId clientId viewBounds model =
             , mailEditor = user.mailEditor
             , cows = model.cows
             , cursors = IdDict.filterMap (\_ a -> a.cursor) model.users
+            , handColors = IdDict.map (\_ a -> a.handColor) model.users
             }
     in
     case getUserFromSessionId sessionId model of
@@ -941,9 +952,20 @@ requestDataUpdate sessionId clientId viewBounds model =
                         |> createUser userId
             in
             ( newModel
-            , Lamdera.sendToFrontend
-                clientId
-                (LoadingData (loadingData ( userId, userData )))
+            , Cmd.batch
+                [ Lamdera.sendToFrontend
+                    clientId
+                    (LoadingData (loadingData ( userId, userData )))
+                , broadcast
+                    (\_ _ ->
+                        ServerUserConnected userId Cursor.defaultColors
+                            |> Change.ServerChange
+                            |> Nonempty.singleton
+                            |> ChangeBroadcast
+                            |> Just
+                    )
+                    model
+                ]
             )
 
 
@@ -959,6 +981,7 @@ createUser userId model =
             , undoCurrent = Dict.empty
             , mailEditor = MailEditor.init
             , cursor = Nothing
+            , handColor = Cursor.defaultColors
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

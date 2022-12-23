@@ -1,8 +1,25 @@
-module Color exposing (Color, black, blue, fromHexCode, green, red, rgb255, toHexCode, toInt, toVec3, white)
+module Color exposing
+    ( Color
+    , Colors
+    , black
+    , blue
+    , fromHexCode
+    , green
+    , red
+    , rgb255
+    , toHexCode
+    , toInt
+    , toVec3
+    , white
+    )
 
 import Bitwise
 import Hex
 import Math.Vector3 as Vec3 exposing (Vec3)
+
+
+type alias Colors =
+    { primaryColor : Color, secondaryColor : Color }
 
 
 type Color

@@ -17,6 +17,7 @@ module Types exposing
     , RemovedTileParticle
     , ToBackend(..)
     , ToFrontend(..)
+    , Tool(..)
     , ToolType(..)
     , ViewPoint(..)
     )
@@ -27,8 +28,9 @@ import Bounds exposing (Bounds)
 import Browser exposing (UrlRequest)
 import Browser.Navigation
 import Change exposing (Change, Cow, ServerChange)
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
+import Cursor exposing (CursorMeshes)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
@@ -94,6 +96,12 @@ type ViewPoint
     | TrainViewPoint { trainId : Id TrainId, startViewPoint : Point2d WorldUnit WorldUnit, startTime : Time.Posix }
 
 
+type Tool
+    = HandTool
+    | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
+    | TilePickerTool
+
+
 type alias FrontendLoaded =
     { key : Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
@@ -127,7 +135,7 @@ type alias FrontendLoaded =
     , lastTrainWhistle : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : Model
-    , currentTile : Maybe { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
+    , currentTile : Tool
     , lastTileRotation : List Time.Posix
     , userIdMesh : WebGL.Mesh Vertex
     , lastPlacementError : Maybe Time.Posix
@@ -146,6 +154,7 @@ type alias FrontendLoaded =
     , focus : Hover
     , music : { startTime : Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Time.Posix }
+    , handMeshes : AssocList.Dict Colors CursorMeshes
     }
 
 
@@ -208,6 +217,7 @@ type alias BackendUserData =
     , undoCurrent : Dict RawCellCoord Int
     , mailEditor : MailEditorData
     , cursor : Maybe Cursor
+    , handColor : Colors
     }
 
 
@@ -295,4 +305,5 @@ type alias LoadingData_ =
     , mailEditor : MailEditorData
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
+    , handColors : IdDict UserId Colors
     }
