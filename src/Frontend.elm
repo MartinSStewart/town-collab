@@ -59,6 +59,7 @@ import Task
 import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
 import Time
+import Toolbar exposing (ToolbarUnit)
 import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
@@ -469,7 +470,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
             , toolbarMesh =
-                toolbarMesh
+                Toolbar.toolbarMesh
                     (IdDict.get loadingData.user loadingData.handColors
                         |> Maybe.withDefault Cursor.defaultColors
                     )
@@ -766,29 +767,23 @@ updateLoaded audioData msg model =
                             ( SecondaryColorInput, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Cmd.none )
 
-                            ( PrimaryColorInput, TilePlacerTool { tileGroup }, _ ) ->
+                            ( PrimaryColorInput, tool, _ ) ->
                                 handleKeyDownColorInput
                                     (\a b -> { b | primaryColorTextInput = a })
                                     (\color a -> { a | primaryColor = color })
-                                    tileGroup
+                                    tool
                                     key
                                     model
                                     model.primaryColorTextInput
 
-                            ( SecondaryColorInput, TilePlacerTool { tileGroup }, _ ) ->
+                            ( SecondaryColorInput, tool, _ ) ->
                                 handleKeyDownColorInput
                                     (\a b -> { b | secondaryColorTextInput = a })
                                     (\color a -> { a | secondaryColor = color })
-                                    tileGroup
+                                    tool
                                     key
                                     model
                                     model.secondaryColorTextInput
-
-                            ( PrimaryColorInput, _, _ ) ->
-                                ( model, Cmd.none )
-
-                            ( SecondaryColorInput, _, _ ) ->
-                                ( model, Cmd.none )
 
                             _ ->
                                 keyMsgCanvasUpdate key model
@@ -873,10 +868,10 @@ updateLoaded audioData msg model =
                                                 | primaryColorTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
-                                                        (toolbarToPixel
+                                                        (Toolbar.toolbarToPixel
                                                             model2.devicePixelRatio
                                                             model2.windowSize
-                                                            primaryColorInputPosition
+                                                            Toolbar.primaryColorInputPosition
                                                         )
                                                         model2.primaryColorTextInput
                                             }
@@ -887,10 +882,10 @@ updateLoaded audioData msg model =
                                                 | secondaryColorTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
-                                                        (toolbarToPixel
+                                                        (Toolbar.toolbarToPixel
                                                             model2.devicePixelRatio
                                                             model2.windowSize
-                                                            secondaryColorInputPosition
+                                                            Toolbar.secondaryColorInputPosition
                                                         )
                                                         model2.secondaryColorTextInput
                                             }
@@ -952,7 +947,7 @@ updateLoaded audioData msg model =
                                 , mesh =
                                     Grid.tileMesh
                                         Coord.origin
-                                        (getTileGroupTile tile.tileGroup (tile.index + offset))
+                                        (Toolbar.getTileGroupTile tile.tileGroup (tile.index + offset))
                                         (getTileColor tile.tileGroup model)
                                         |> Sprite.toMesh
                                 }
@@ -1068,10 +1063,10 @@ updateLoaded audioData msg model =
                                             | primaryColorTextInput =
                                                 TextInput.mouseDownMove
                                                     mousePosition2
-                                                    (toolbarToPixel
+                                                    (Toolbar.toolbarToPixel
                                                         model2.devicePixelRatio
                                                         model2.windowSize
-                                                        primaryColorInputPosition
+                                                        Toolbar.primaryColorInputPosition
                                                     )
                                                     model2.primaryColorTextInput
                                         }
@@ -1081,10 +1076,10 @@ updateLoaded audioData msg model =
                                             | secondaryColorTextInput =
                                                 TextInput.mouseDownMove
                                                     mousePosition2
-                                                    (toolbarToPixel
+                                                    (Toolbar.toolbarToPixel
                                                         model2.devicePixelRatio
                                                         model2.windowSize
-                                                        secondaryColorInputPosition
+                                                        Toolbar.secondaryColorInputPosition
                                                     )
                                                     model2.secondaryColorTextInput
                                         }
@@ -1350,69 +1345,51 @@ updateLoaded audioData msg model =
                     ( model, Cmd.none )
 
         PastedText text ->
-            ( case model.focus of
+            case model.focus of
                 ToolButtonHover _ ->
-                    model
+                    ( model, Cmd.none )
 
                 ToolbarHover ->
-                    model
+                    ( model, Cmd.none )
 
                 PostOfficeHover record ->
-                    model
+                    ( model, Cmd.none )
 
                 TrainHover record ->
-                    model
+                    ( model, Cmd.none )
 
                 TrainHouseHover record ->
-                    model
+                    ( model, Cmd.none )
 
                 HouseHover record ->
-                    model
+                    ( model, Cmd.none )
 
                 MapHover ->
-                    model
+                    ( model, Cmd.none )
 
                 MailEditorHover hover ->
-                    model
+                    ( model, Cmd.none )
 
                 PrimaryColorInput ->
-                    case model.currentTile of
-                        TilePlacerTool { tileGroup } ->
-                            TextInput.paste text model.primaryColorTextInput
-                                |> colorTextInputAdjustText
-                                |> handleKeyDownColorInputHelper
-                                    (\a b -> { b | primaryColorTextInput = a })
-                                    (\a b -> { b | primaryColor = a })
-                                    tileGroup
-                                    model
-
-                        TilePickerTool ->
-                            model
-
-                        HandTool ->
+                    TextInput.paste text model.primaryColorTextInput
+                        |> colorTextInputAdjustText
+                        |> handleKeyDownColorInputHelper
+                            (\a b -> { b | primaryColorTextInput = a })
+                            (\a b -> { b | primaryColor = a })
+                            model.currentTile
                             model
 
                 SecondaryColorInput ->
-                    case model.currentTile of
-                        TilePlacerTool { tileGroup } ->
-                            TextInput.paste text model.secondaryColorTextInput
-                                |> colorTextInputAdjustText
-                                |> handleKeyDownColorInputHelper
-                                    (\a b -> { b | secondaryColorTextInput = a })
-                                    (\a b -> { b | secondaryColor = a })
-                                    tileGroup
-                                    model
-
-                        TilePickerTool ->
-                            model
-
-                        HandTool ->
+                    TextInput.paste text model.secondaryColorTextInput
+                        |> colorTextInputAdjustText
+                        |> handleKeyDownColorInputHelper
+                            (\a b -> { b | secondaryColorTextInput = a })
+                            (\a b -> { b | secondaryColor = a })
+                            model.currentTile
                             model
 
                 CowHover _ ->
-                    model
-            , Cmd.none
-            )
+                    ( model, Cmd.none )
 
 
 previousFocus : FrontendLoaded -> Hover
@@ -1450,20 +1427,14 @@ nextFocus : FrontendLoaded -> Hover
 nextFocus model =
     case model.focus of
         PrimaryColorInput ->
-            if
-                showColorTextInputs model.currentTile
-                    |> .showSecondaryColorTextInput
-            then
+            if Toolbar.showColorTextInputs model.currentTile |> .showSecondaryColorTextInput then
                 SecondaryColorInput
 
             else
                 PrimaryColorInput
 
         SecondaryColorInput ->
-            if
-                showColorTextInputs model.currentTile
-                    |> .showPrimaryColorTextInput
-            then
+            if Toolbar.showColorTextInputs model.currentTile |> .showPrimaryColorTextInput then
                 PrimaryColorInput
 
             else
@@ -1512,11 +1483,11 @@ colorTextInputAdjustText model =
 handleKeyDownColorInput :
     (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
     -> (Color -> Colors -> Colors)
-    -> TileGroup
+    -> Tool
     -> Keyboard.Key
     -> FrontendLoaded
     -> TextInput.Model
-    -> ( FrontendLoaded, Cmd msg )
+    -> ( FrontendLoaded, Cmd FrontendMsg_ )
 handleKeyDownColorInput setTextInputModel updateColor tileGroup key model textInput =
     let
         ( newTextInput, cmd ) =
@@ -1538,64 +1509,90 @@ handleKeyDownColorInput setTextInputModel updateColor tileGroup key model textIn
                                 Cmd.none
                         )
                    )
+
+        ( model2, cmd2 ) =
+            handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newTextInput
     in
-    ( handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newTextInput
-    , cmd
-    )
+    ( model2, Cmd.batch [ cmd, cmd2 ] )
 
 
 handleKeyDownColorInputHelper :
     (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
     -> (Color -> Colors -> Colors)
-    -> TileGroup
+    -> Tool
     -> FrontendLoaded
     -> TextInput.Model
-    -> FrontendLoaded
-handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newTextInput =
+    -> ( FrontendLoaded, Cmd FrontendMsg_ )
+handleKeyDownColorInputHelper setTextInputModel updateColor tool model newTextInput =
     let
         maybeNewColor : Maybe Color
         maybeNewColor =
             Color.fromHexCode newTextInput.current.text
     in
-    { model
-        | tileColors =
+    (case tool of
+        TilePlacerTool { tileGroup } ->
+            ( { model
+                | tileColors =
+                    case maybeNewColor of
+                        Just color ->
+                            AssocList.update
+                                tileGroup
+                                (\maybeColor ->
+                                    (case maybeColor of
+                                        Just colors ->
+                                            updateColor color colors
+
+                                        Nothing ->
+                                            Tile.getTileGroupData tileGroup
+                                                |> .defaultColors
+                                                |> Tile.defaultToPrimaryAndSecondary
+                                                |> updateColor color
+                                    )
+                                        |> Just
+                                )
+                                model.tileColors
+
+                        Nothing ->
+                            model.tileColors
+              }
+            , Cmd.none
+            )
+
+        HandTool ->
             case maybeNewColor of
                 Just color ->
-                    AssocList.update
-                        tileGroup
-                        (\maybeColor ->
-                            (case maybeColor of
-                                Just colors ->
-                                    updateColor color colors
-
-                                Nothing ->
-                                    Tile.getTileGroupData tileGroup
-                                        |> .defaultColors
-                                        |> Tile.defaultToPrimaryAndSecondary
-                                        |> updateColor color
-                            )
-                                |> Just
-                        )
-                        model.tileColors
+                    let
+                        ( model2, outMsg ) =
+                            updateLocalModel
+                                (updateColor color (getHandColor (currentUserId model) model)
+                                    |> Change.ChangeHandColor
+                                )
+                                model
+                    in
+                    ( handleOutMsg outMsg model2, Cmd.none )
 
                 Nothing ->
-                    model.tileColors
-    }
-        |> setTextInputModel newTextInput
-        |> (\m ->
+                    ( model, Cmd.none )
+
+        TilePickerTool ->
+            ( model, Cmd.none )
+    )
+        |> Tuple.mapFirst (setTextInputModel newTextInput)
+        |> Tuple.mapFirst
+            (\m ->
                 case maybeNewColor of
                     Just _ ->
                         { m
                             | currentTile =
                                 case m.currentTile of
                                     TilePlacerTool currentTile ->
-                                        { tileGroup = tileGroup
+                                        { tileGroup = currentTile.tileGroup
                                         , index = currentTile.index
                                         , mesh =
                                             Grid.tileMesh
                                                 Coord.origin
-                                                (getTileGroupTile tileGroup currentTile.index)
-                                                (getTileColor tileGroup m)
+                                                (Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index)
+                                                (getTileColor currentTile.tileGroup m)
                                                 |> Sprite.toMesh
                                         }
                                             |> TilePlacerTool
@@ -1609,28 +1606,7 @@ handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newT
 
                     Nothing ->
                         m
-           )
-
-
-showColorTextInputs : Tool -> { showPrimaryColorTextInput : Bool, showSecondaryColorTextInput : Bool }
-showColorTextInputs tool =
-    case tool of
-        TilePlacerTool { tileGroup } ->
-            case Tile.getTileGroupData tileGroup |> .defaultColors of
-                ZeroDefaultColors ->
-                    { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
-
-                OneDefaultColor _ ->
-                    { showPrimaryColorTextInput = True, showSecondaryColorTextInput = False }
-
-                TwoDefaultColors _ _ ->
-                    { showPrimaryColorTextInput = True, showSecondaryColorTextInput = True }
-
-        HandTool ->
-            { showPrimaryColorTextInput = True, showSecondaryColorTextInput = True }
-
-        TilePickerTool ->
-            { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
+            )
 
 
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
@@ -1641,205 +1617,133 @@ hoverAt model mousePosition =
             mousePosition
                 |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                 |> Coord.roundPoint
-
-        toolbarTopLeft : Coord Pixels
-        toolbarTopLeft =
-            toolbarToPixel
-                model.devicePixelRatio
-                model.windowSize
-                Coord.origin
-
-        containsToolbar : Bool
-        containsToolbar =
-            Bounds.bounds toolbarTopLeft (Coord.plus toolbarSize toolbarTopLeft) |> Bounds.contains mousePosition2
     in
     if MailEditor.isOpen model.mailEditor then
         MailEditor.hoverAt model.mailEditor |> MailEditorHover
 
-    else if containsToolbar then
-        let
-            { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-                showColorTextInputs model.currentTile
-        in
-        if
-            showPrimaryColorTextInput
-                && (TextInput.bounds
-                        (toolbarToPixel
-                            model.devicePixelRatio
-                            model.windowSize
-                            primaryColorInputPosition
-                        )
-                        primaryColorInputWidth
-                        |> Bounds.contains mousePosition2
-                   )
-        then
-            PrimaryColorInput
-
-        else if
-            showSecondaryColorTextInput
-                && (TextInput.bounds
-                        (toolbarToPixel
-                            model.devicePixelRatio
-                            model.windowSize
-                            secondaryColorInputPosition
-                        )
-                        secondaryColorInputWidth
-                        |> Bounds.contains mousePosition2
-                   )
-        then
-            SecondaryColorInput
-
-        else
-            let
-                containsTileButton : Maybe ToolButton
-                containsTileButton =
-                    List.indexedMap
-                        (\index tool ->
-                            let
-                                topLeft =
-                                    toolbarToPixel
-                                        model.devicePixelRatio
-                                        model.windowSize
-                                        (toolbarTileButtonPosition index)
-                            in
-                            if
-                                Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
-                                    |> Bounds.contains mousePosition2
-                            then
-                                Just tool
-
-                            else
-                                Nothing
-                        )
-                        buttonTiles
-                        |> List.filterMap identity
-                        |> List.head
-            in
-            case containsTileButton of
-                Just tile ->
-                    ToolButtonHover tile
-
-                Nothing ->
-                    ToolbarHover
-
     else
-        let
-            mouseWorldPosition_ : Point2d WorldUnit WorldUnit
-            mouseWorldPosition_ =
-                screenToWorld model mousePosition
+        case Toolbar.hoverAt model.devicePixelRatio model.windowSize mousePosition2 model.currentTile of
+            Just hover ->
+                hover
 
-            tileHover : Maybe Hover
-            tileHover =
+            Nothing ->
                 let
-                    localModel : LocalGrid_
-                    localModel =
-                        LocalGrid.localModel model.localModel
-                in
-                case ( model.currentTile, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
-                    ( HandTool, Just tile ) ->
-                        case tile.value of
-                            PostOffice ->
-                                if tile.userId == localModel.user then
-                                    PostOfficeHover { postOfficePosition = tile.position } |> Just
+                    mouseWorldPosition_ : Point2d WorldUnit WorldUnit
+                    mouseWorldPosition_ =
+                        screenToWorld model mousePosition
 
-                                else
-                                    Nothing
+                    tileHover : Maybe Hover
+                    tileHover =
+                        let
+                            localModel : LocalGrid_
+                            localModel =
+                                LocalGrid.localModel model.localModel
+                        in
+                        case ( model.currentTile, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
+                            ( HandTool, Just tile ) ->
+                                case tile.value of
+                                    PostOffice ->
+                                        if tile.userId == localModel.user then
+                                            PostOfficeHover { postOfficePosition = tile.position } |> Just
 
-                            TrainHouseLeft ->
-                                TrainHouseHover { trainHousePosition = tile.position } |> Just
+                                        else
+                                            Nothing
 
-                            TrainHouseRight ->
-                                TrainHouseHover { trainHousePosition = tile.position } |> Just
+                                    TrainHouseLeft ->
+                                        TrainHouseHover { trainHousePosition = tile.position } |> Just
 
-                            HouseDown ->
-                                HouseHover { housePosition = tile.position } |> Just
+                                    TrainHouseRight ->
+                                        TrainHouseHover { trainHousePosition = tile.position } |> Just
 
-                            HouseLeft ->
-                                HouseHover { housePosition = tile.position } |> Just
+                                    HouseDown ->
+                                        HouseHover { housePosition = tile.position } |> Just
 
-                            HouseUp ->
-                                HouseHover { housePosition = tile.position } |> Just
+                                    HouseLeft ->
+                                        HouseHover { housePosition = tile.position } |> Just
 
-                            HouseRight ->
-                                HouseHover { housePosition = tile.position } |> Just
+                                    HouseUp ->
+                                        HouseHover { housePosition = tile.position } |> Just
+
+                                    HouseRight ->
+                                        HouseHover { housePosition = tile.position } |> Just
+
+                                    _ ->
+                                        Nothing
 
                             _ ->
                                 Nothing
 
-                    _ ->
-                        Nothing
+                    trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
+                    trainHovers =
+                        case model.currentTile of
+                            TilePlacerTool _ ->
+                                Nothing
 
-            trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
-            trainHovers =
-                case model.currentTile of
-                    TilePlacerTool _ ->
-                        Nothing
+                            TilePickerTool ->
+                                Nothing
 
-                    TilePickerTool ->
-                        Nothing
-
-                    HandTool ->
-                        AssocList.toList model.trains
-                            |> List.filterMap
-                                (\( trainId, train ) ->
-                                    let
-                                        distance =
-                                            Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                    in
-                                    if distance |> Quantity.lessThan (Quantity 0.9) then
-                                        Just ( { trainId = trainId, train = train }, distance )
-
-                                    else
-                                        Nothing
-                                )
-                            |> Quantity.minimumBy Tuple.second
-
-            localGrid : LocalGrid_
-            localGrid =
-                LocalGrid.localModel model.localModel
-
-            cowHovers : Maybe ( Id CowId, Cow )
-            cowHovers =
-                case model.currentTile of
-                    TilePlacerTool _ ->
-                        Nothing
-
-                    TilePickerTool ->
-                        Nothing
-
-                    HandTool ->
-                        IdDict.toList localGrid.cows
-                            |> List.filter
-                                (\( cowId, _ ) ->
-                                    case cowActualPosition cowId model of
-                                        Just a ->
-                                            if a.isHeld then
-                                                False
+                            HandTool ->
+                                AssocList.toList model.trains
+                                    |> List.filterMap
+                                        (\( trainId, train ) ->
+                                            let
+                                                distance =
+                                                    Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                                            in
+                                            if distance |> Quantity.lessThan (Quantity 0.9) then
+                                                Just ( { trainId = trainId, train = train }, distance )
 
                                             else
-                                                insideCow mouseWorldPosition_ a.position
+                                                Nothing
+                                        )
+                                    |> Quantity.minimumBy Tuple.second
 
-                                        Nothing ->
-                                            False
-                                )
-                            |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
-        in
-        case trainHovers of
-            Just ( train, _ ) ->
-                TrainHover train
+                    localGrid : LocalGrid_
+                    localGrid =
+                        LocalGrid.localModel model.localModel
 
-            Nothing ->
-                case cowHovers of
-                    Just ( cowId, cow ) ->
-                        CowHover { cowId = cowId, cow = cow }
+                    cowHovers : Maybe ( Id CowId, Cow )
+                    cowHovers =
+                        case model.currentTile of
+                            TilePlacerTool _ ->
+                                Nothing
+
+                            TilePickerTool ->
+                                Nothing
+
+                            HandTool ->
+                                IdDict.toList localGrid.cows
+                                    |> List.filter
+                                        (\( cowId, _ ) ->
+                                            case cowActualPosition cowId model of
+                                                Just a ->
+                                                    if a.isHeld then
+                                                        False
+
+                                                    else
+                                                        insideCow mouseWorldPosition_ a.position
+
+                                                Nothing ->
+                                                    False
+                                        )
+                                    |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+                in
+                case trainHovers of
+                    Just ( train, _ ) ->
+                        TrainHover train
 
                     Nothing ->
-                        case tileHover of
-                            Just hover ->
-                                hover
+                        case cowHovers of
+                            Just ( cowId, cow ) ->
+                                CowHover { cowId = cowId, cow = cow }
 
                             Nothing ->
-                                MapHover
+                                case tileHover of
+                                    Just hover ->
+                                        hover
+
+                                    Nothing ->
+                                        MapHover
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -1969,7 +1873,7 @@ setCurrentTool tool model =
                     TilePlacerTool
                         { tileGroup = tileGroup
                         , index = 0
-                        , mesh = Grid.tileMesh Coord.origin (getTileGroupTile tileGroup 0) colors |> Sprite.toMesh
+                        , mesh = Grid.tileMesh Coord.origin (Toolbar.getTileGroupTile tileGroup 0) colors |> Sprite.toMesh
                         }
 
                 HandToolButton ->
@@ -1980,11 +1884,6 @@ setCurrentTool tool model =
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
     }
-
-
-getTileGroupTile : TileGroup -> Int -> Tile
-getTileGroupTile tileGroup index =
-    Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
 
 
 isHoldingCow : FrontendLoaded -> Maybe { cowId : Id CowId, pickupTime : Time.Posix }
@@ -2402,7 +2301,7 @@ placeTile : Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
 placeTile isDragPlacement tileGroup index model =
     let
         tile =
-            getTileGroupTile tileGroup index
+            Toolbar.getTileGroupTile tileGroup index
 
         tileData =
             Tile.getData tile
@@ -2706,7 +2605,7 @@ updateMeshes oldModel newModel =
                 TilePlacerTool { tileGroup, index } ->
                     let
                         tile =
-                            getTileGroupTile tileGroup index
+                            Toolbar.getTileGroupTile tileGroup index
 
                         position =
                             cursorPosition (Tile.getData tile) model
@@ -2842,7 +2741,7 @@ updateMeshes oldModel newModel =
                 newModel.toolbarMesh
 
             else
-                toolbarMesh
+                Toolbar.toolbarMesh
                     (getHandColor (currentUserId newModel) newModel)
                     newModel.primaryColorTextInput
                     newModel.secondaryColorTextInput
@@ -3924,7 +3823,7 @@ canvasView audioData model =
                                 let
                                     currentTile2 : Tile
                                     currentTile2 =
-                                        getTileGroupTile currentTile.tileGroup currentTile.index
+                                        Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index
 
                                     mousePosition : Coord WorldUnit
                                     mousePosition =
@@ -4055,7 +3954,7 @@ canvasView audioData model =
                                     1
                                     |> Coord.translateMat4
                                         (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                    |> Coord.translateMat4 (toolbarPosition model.devicePixelRatio model.windowSize)
+                                    |> Coord.translateMat4 (Toolbar.toolbarPosition model.devicePixelRatio model.windowSize)
                             , texture = model.texture
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1
@@ -4415,399 +4314,6 @@ subscriptions _ model =
                     , Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         ]
-
-
-toolbarSize : Coord Pixels
-toolbarSize =
-    Coord.xy 1100 ((Coord.yRaw toolbarButtonSize + 4) * toolbarRowCount + 4)
-
-
-toolbarPosition : Float -> Coord Pixels -> Coord Pixels
-toolbarPosition devicePixelRatio windowSize =
-    windowSize
-        |> Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio )
-        |> Coord.divide (Coord.xy 2 1)
-        |> Coord.minus (Coord.divide (Coord.xy 2 1) toolbarSize)
-
-
-primaryColorInputPosition : Coord ToolbarUnit
-primaryColorInputPosition =
-    Coord.xy 800 8
-
-
-secondaryColorInputPosition : Coord ToolbarUnit
-secondaryColorInputPosition =
-    primaryColorInputPosition
-        |> Coord.plus (Coord.xy 0 (Coord.yRaw (TextInput.size primaryColorInputWidth) + 6))
-
-
-primaryColorInputWidth : Quantity Int units
-primaryColorInputWidth =
-    6 * Coord.xRaw Sprite.charSize * TextInput.charScale + Coord.xRaw TextInput.padding * 2 + 2 |> Quantity
-
-
-secondaryColorInputWidth : Quantity Int units
-secondaryColorInputWidth =
-    primaryColorInputWidth
-
-
-toolbarButtonSize : Coord units
-toolbarButtonSize =
-    Coord.xy 80 80
-
-
-toolbarTileButton :
-    (Coord ToolbarUnit -> List Vertex)
-    -> Maybe String
-    -> Bool
-    -> Coord ToolbarUnit
-    -> List Vertex
-toolbarTileButton mesh maybeHotkey highlight offset =
-    let
-        charSize : Coord unit
-        charSize =
-            Sprite.charSize |> Coord.multiplyTuple ( 2, 2 )
-    in
-    Sprite.sprite
-        offset
-        toolbarButtonSize
-        (Coord.xy
-            (if highlight then
-                505
-
-             else
-                506
-            )
-            28
-        )
-        (Coord.xy 1 1)
-        ++ Sprite.sprite
-            (offset |> Coord.plus (Coord.xy 2 2))
-            (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
-            (Coord.xy
-                (if highlight then
-                    505
-
-                 else
-                    507
-                )
-                28
-            )
-            (Coord.xy 1 1)
-        ++ mesh offset
-        ++ (case maybeHotkey of
-                Just hotkey ->
-                    Sprite.sprite
-                        (Coord.plus
-                            (Coord.xy 0 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize + 4))
-                            offset
-                        )
-                        (Coord.multiply (Coord.xy (String.length hotkey) 1) charSize
-                            |> Coord.plus (Coord.xy 2 -4)
-                            |> Coord.minimum (toolbarButtonSize |> Coord.minus (Coord.xy 2 2))
-                        )
-                        (Coord.xy 506 28)
-                        (Coord.xy 1 1)
-                        ++ Sprite.text
-                            Color.white
-                            2
-                            hotkey
-                            (Coord.plus
-                                (Coord.xy 2 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize))
-                                offset
-                            )
-
-                Nothing ->
-                    []
-           )
-
-
-toolbarMesh :
-    Colors
-    -> TextInput.Model
-    -> TextInput.Model
-    -> AssocList.Dict TileGroup Colors
-    -> Dict String TileGroup
-    -> Hover
-    -> Tool
-    -> WebGL.Mesh Vertex
-toolbarMesh handColor primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
-    let
-        { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-            showColorTextInputs currentTile
-
-        currentTool2 =
-            case currentTile of
-                TilePlacerTool { tileGroup } ->
-                    TilePlacerToolButton tileGroup
-
-                TilePickerTool ->
-                    TilePickerToolButton
-
-                HandTool ->
-                    HandToolButton
-    in
-    Sprite.sprite Coord.origin toolbarSize (Coord.xy 506 28) (Coord.xy 1 1)
-        ++ Sprite.sprite (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4)) (Coord.xy 507 28) (Coord.xy 1 1)
-        ++ (List.indexedMap
-                (\index tool ->
-                    let
-                        tileColors =
-                            case tool of
-                                TilePlacerToolButton tileGroup ->
-                                    case AssocList.get tileGroup colors of
-                                        Just a ->
-                                            a
-
-                                        Nothing ->
-                                            Tile.getTileGroupData tileGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
-
-                                HandToolButton ->
-                                    handColor
-
-                                TilePickerToolButton ->
-                                    Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
-
-                        hotkeyText =
-                            case tool of
-                                TilePlacerToolButton tileGroup ->
-                                    Dict.toList hotkeys |> List.find (Tuple.second >> (==) tileGroup) |> Maybe.map Tuple.first
-
-                                HandToolButton ->
-                                    Just "Esc"
-
-                                TilePickerToolButton ->
-                                    Just "Ctrl"
-
-                        innerMesh =
-                            \offset ->
-                                case tool of
-                                    TilePlacerToolButton tileGroup ->
-                                        tileMesh tileColors offset (getTileGroupTile tileGroup 0)
-
-                                    HandToolButton ->
-                                        Cursor.defaultCursorMesh2 handColor offset
-
-                                    TilePickerToolButton ->
-                                        Cursor.defaultCursorMesh2 handColor offset
-                    in
-                    toolbarTileButton
-                        innerMesh
-                        hotkeyText
-                        (tool == currentTool2)
-                        (toolbarTileButtonPosition index)
-                )
-                buttonTiles
-                |> List.concat
-           )
-        ++ (if showPrimaryColorTextInput then
-                colorTextInputView
-                    primaryColorInputPosition
-                    primaryColorInputWidth
-                    (focus == PrimaryColorInput)
-                    (Color.fromHexCode >> (/=) Nothing)
-                    primaryColorTextInput
-
-            else
-                []
-           )
-        ++ (if showSecondaryColorTextInput then
-                colorTextInputView
-                    secondaryColorInputPosition
-                    secondaryColorInputWidth
-                    (focus == SecondaryColorInput)
-                    (Color.fromHexCode >> (/=) Nothing)
-                    secondaryColorTextInput
-
-            else
-                []
-           )
-        ++ (case currentTile of
-                HandTool ->
-                    []
-
-                TilePickerTool ->
-                    []
-
-                TilePlacerTool { tileGroup } ->
-                    let
-                        primaryAndSecondaryColors : Colors
-                        primaryAndSecondaryColors =
-                            case AssocList.get tileGroup colors of
-                                Just a ->
-                                    a
-
-                                Nothing ->
-                                    Tile.getTileGroupData tileGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
-
-                        tile =
-                            getTileGroupTile tileGroup 0
-
-                        data : TileData unit
-                        data =
-                            Tile.getData tile
-
-                        size : Coord unit
-                        size =
-                            Coord.multiply Units.tileSize data.size
-
-                        spriteSize : Coord unit
-                        spriteSize =
-                            size |> Coord.multiply (Coord.xy 2 2)
-
-                        position2 : Coord ToolbarUnit
-                        position2 =
-                            primaryColorInputPosition
-                                |> Coord.plus ( secondaryColorInputWidth, Quantity.zero )
-                                |> Coord.plus (Coord.xy 4 0)
-                    in
-                    (case data.texturePosition of
-                        Just texturePosition ->
-                            Sprite.spriteWithTwoColors
-                                primaryAndSecondaryColors
-                                position2
-                                spriteSize
-                                (Coord.multiply Units.tileSize texturePosition)
-                                size
-
-                        Nothing ->
-                            []
-                    )
-                        ++ (case data.texturePositionTopLayer of
-                                Just topLayer ->
-                                    let
-                                        texturePosition2 =
-                                            Coord.multiply Units.tileSize topLayer.texturePosition
-                                    in
-                                    Sprite.spriteWithTwoColors
-                                        primaryAndSecondaryColors
-                                        position2
-                                        spriteSize
-                                        texturePosition2
-                                        size
-
-                                Nothing ->
-                                    []
-                           )
-           )
-        |> Sprite.toMesh
-
-
-colorTextInputView : Coord units -> Quantity Int units -> Bool -> (String -> Bool) -> TextInput.Model -> List Vertex
-colorTextInputView position width hasFocus isValid model =
-    TextInput.view position width hasFocus isValid model
-
-
-buttonTiles : List ToolButton
-buttonTiles =
-    [ HandToolButton
-    , TilePickerToolButton
-    , TilePlacerToolButton EmptyTileGroup
-    , TilePlacerToolButton PostOfficeGroup
-    , TilePlacerToolButton HouseGroup
-    , TilePlacerToolButton LogCabinGroup
-    , TilePlacerToolButton TrainHouseGroup
-    , TilePlacerToolButton RailTurnGroup
-    , TilePlacerToolButton RailTurnSplitGroup
-    , TilePlacerToolButton RailTurnSplitMirrorGroup
-    , TilePlacerToolButton RailStrafeSmallGroup
-    , TilePlacerToolButton RailStrafeGroup
-    , TilePlacerToolButton RailTurnLargeGroup
-    , TilePlacerToolButton RailStraightGroup
-    , TilePlacerToolButton RailCrossingGroup
-    , TilePlacerToolButton SidewalkRailGroup
-    , TilePlacerToolButton SidewalkGroup
-    , TilePlacerToolButton PineTreeGroup
-    , TilePlacerToolButton RoadStraightGroup
-    , TilePlacerToolButton RoadTurnGroup
-    , TilePlacerToolButton Road4WayGroup
-    , TilePlacerToolButton RoadSidewalkCrossingGroup
-    , TilePlacerToolButton Road3WayGroup
-    , TilePlacerToolButton RoadRailCrossingGroup
-    , TilePlacerToolButton RoadDeadendGroup
-    , TilePlacerToolButton FenceStraightGroup
-    ]
-
-
-type ToolbarUnit
-    = ToolbarUnit Never
-
-
-toolbarTileButtonPosition : Int -> Coord ToolbarUnit
-toolbarTileButtonPosition index =
-    Coord.xy
-        ((Coord.xRaw toolbarButtonSize + 2) * (index // toolbarRowCount) + 6)
-        ((Coord.yRaw toolbarButtonSize + 2) * modBy toolbarRowCount index + 6)
-
-
-toolbarToPixel : Float -> Coord Pixels -> Coord ToolbarUnit -> Coord Pixels
-toolbarToPixel devicePixelRatio windowSize coord =
-    toolbarPosition devicePixelRatio windowSize |> Coord.changeUnit |> Coord.plus coord |> Coord.changeUnit
-
-
-toolbarRowCount : number
-toolbarRowCount =
-    3
-
-
-tileMesh : Colors -> Coord unit -> Tile -> List Vertex
-tileMesh colors position tile =
-    let
-        data : TileData b
-        data =
-            Tile.getData tile
-
-        size : Coord units
-        size =
-            Coord.multiply Units.tileSize data.size
-                |> Coord.minimum toolbarButtonSize
-
-        spriteSize =
-            if data.size == Coord.xy 1 1 then
-                Coord.multiplyTuple ( 2, 2 ) size
-
-            else
-                size
-
-        position2 =
-            position |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize) |> Coord.plus (Coord.divide (Coord.xy 2 2) toolbarButtonSize)
-    in
-    if tile == EmptyTile then
-        Sprite.sprite
-            (Coord.plus (Coord.xy 10 12) position)
-            (Coord.tuple ( 28 * 2, 27 * 2 ))
-            (Coord.xy 504 42)
-            (Coord.xy 28 27)
-
-    else
-        (case data.texturePosition of
-            Just texturePosition ->
-                Sprite.spriteWithTwoColors
-                    colors
-                    position2
-                    spriteSize
-                    (Coord.multiply Units.tileSize texturePosition)
-                    size
-
-            Nothing ->
-                []
-        )
-            ++ (case data.texturePositionTopLayer of
-                    Just topLayer ->
-                        let
-                            texturePosition2 =
-                                Coord.multiply Units.tileSize topLayer.texturePosition
-                        in
-                        Sprite.spriteWithTwoColors
-                            colors
-                            position2
-                            spriteSize
-                            texturePosition2
-                            size
-
-                    Nothing ->
-                        []
-               )
 
 
 getSpeechBubbles : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isRadio : Bool }
