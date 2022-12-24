@@ -1040,16 +1040,10 @@ updateLoaded audioData msg model =
                                     ToolButtonHover _ ->
                                         model2
 
-                                    PostOfficeHover _ ->
+                                    TileHover _ ->
                                         placeTile True tileGroup index model2
 
                                     TrainHover _ ->
-                                        placeTile True tileGroup index model2
-
-                                    TrainHouseHover _ ->
-                                        placeTile True tileGroup index model2
-
-                                    HouseHover _ ->
                                         placeTile True tileGroup index model2
 
                                     MapHover ->
@@ -1259,16 +1253,10 @@ updateLoaded audioData msg model =
                         ToolbarHover ->
                             True
 
-                        PostOfficeHover record ->
+                        TileHover record ->
                             True
 
                         TrainHover record ->
-                            True
-
-                        TrainHouseHover record ->
-                            True
-
-                        HouseHover record ->
                             True
 
                         MapHover ->
@@ -1352,16 +1340,10 @@ updateLoaded audioData msg model =
                 ToolbarHover ->
                     ( model, Cmd.none )
 
-                PostOfficeHover record ->
+                TileHover record ->
                     ( model, Cmd.none )
 
                 TrainHover record ->
-                    ( model, Cmd.none )
-
-                TrainHouseHover record ->
-                    ( model, Cmd.none )
-
-                HouseHover record ->
                     ( model, Cmd.none )
 
                 MapHover ->
@@ -1446,16 +1428,10 @@ nextFocus model =
         ToolbarHover ->
             model.focus
 
-        PostOfficeHover record ->
+        TileHover record ->
             model.focus
 
         TrainHover record ->
-            model.focus
-
-        TrainHouseHover record ->
-            model.focus
-
-        HouseHover record ->
             model.focus
 
         MapHover ->
@@ -1641,34 +1617,9 @@ hoverAt model mousePosition =
                         in
                         case ( model.currentTile, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
                             ( HandTool, Just tile ) ->
-                                case tile.value of
-                                    PostOffice ->
-                                        if tile.userId == localModel.user then
-                                            PostOfficeHover { postOfficePosition = tile.position } |> Just
-
-                                        else
-                                            Nothing
-
-                                    TrainHouseLeft ->
-                                        TrainHouseHover { trainHousePosition = tile.position } |> Just
-
-                                    TrainHouseRight ->
-                                        TrainHouseHover { trainHousePosition = tile.position } |> Just
-
-                                    HouseDown ->
-                                        HouseHover { housePosition = tile.position } |> Just
-
-                                    HouseLeft ->
-                                        HouseHover { housePosition = tile.position } |> Just
-
-                                    HouseUp ->
-                                        HouseHover { housePosition = tile.position } |> Just
-
-                                    HouseRight ->
-                                        HouseHover { housePosition = tile.position } |> Just
-
-                                    _ ->
-                                        Nothing
+                                { tile = tile.value, userId = tile.userId, position = tile.position }
+                                    |> TileHover
+                                    |> Just
 
                             _ ->
                                 Nothing
@@ -1907,6 +1858,65 @@ isSmallDistance previousMouseState mousePosition =
         |> Quantity.lessThan (Pixels.pixels 5)
 
 
+tileInteraction { tile, userId, position } model2 =
+    let
+        handleTrainHouse =
+            case
+                AssocList.toList model2.trains
+                    |> List.find (\( _, train ) -> Train.home train == position)
+            of
+                Just ( trainId, train ) ->
+                    case Train.status model2.time train of
+                        WaitingAtHome ->
+                            clickLeaveHomeTrain trainId train model2
+
+                        _ ->
+                            clickTeleportHomeTrain trainId train model2
+
+                Nothing ->
+                    ( model2, Cmd.none )
+    in
+    case tile of
+        PostOffice ->
+            ( if userId == currentUserId model2 && canOpenMailEditor model2 then
+                { model2
+                    | mailEditor =
+                        MailEditor.open
+                            model2
+                            (Coord.toPoint2d position
+                                |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
+                                |> worldToScreen model2
+                            )
+                            model2.mailEditor
+                }
+
+              else
+                model2
+            , Cmd.none
+            )
+
+        HouseDown ->
+            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+
+        HouseLeft ->
+            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+
+        HouseUp ->
+            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+
+        HouseRight ->
+            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+
+        TrainHouseLeft ->
+            handleTrainHouse
+
+        TrainHouseRight ->
+            handleTrainHouse
+
+        _ ->
+            ( model2, Cmd.none )
+
+
 mainMouseButtonUp :
     Point2d Pixels Pixels
     -> { a | start : Point2d Pixels Pixels, hover : Hover }
@@ -1974,23 +1984,8 @@ mainMouseButtonUp mousePosition previousMouseState model =
                     ToolButtonHover tool ->
                         ( setCurrentTool tool model2, Cmd.none )
 
-                    PostOfficeHover { postOfficePosition } ->
-                        ( if canOpenMailEditor model2 then
-                            { model2
-                                | mailEditor =
-                                    MailEditor.open
-                                        model2
-                                        (Coord.toPoint2d postOfficePosition
-                                            |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                            |> worldToScreen model2
-                                        )
-                                        model2.mailEditor
-                            }
-
-                          else
-                            model2
-                        , Cmd.none
-                        )
+                    TileHover data ->
+                        tileInteraction data model2
 
                     TrainHover { trainId, train } ->
                         case Train.status model.time train of
@@ -2023,25 +2018,6 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                     ToolbarHover ->
                         ( model2, Cmd.none )
-
-                    TrainHouseHover { trainHousePosition } ->
-                        case
-                            AssocList.toList model.trains
-                                |> List.find (\( _, train ) -> Train.home train == trainHousePosition)
-                        of
-                            Just ( trainId, train ) ->
-                                case Train.status model2.time train of
-                                    WaitingAtHome ->
-                                        clickLeaveHomeTrain trainId train model2
-
-                                    _ ->
-                                        clickTeleportHomeTrain trainId train model2
-
-                            Nothing ->
-                                ( model2, Cmd.none )
-
-                    HouseHover _ ->
-                        ( { model2 | lastHouseClick = Just model.time }, Cmd.none )
 
                     MapHover ->
                         ( case previousMouseState.hover of
@@ -2792,7 +2768,7 @@ viewBoundsUpdate ( model, cmd ) =
 canDragView : Hover -> Bool
 canDragView hover =
     case hover of
-        PostOfficeHover _ ->
+        TileHover _ ->
             True
 
         TrainHover _ ->
@@ -2803,12 +2779,6 @@ canDragView hover =
 
         ToolButtonHover _ ->
             False
-
-        TrainHouseHover _ ->
-            True
-
-        HouseHover _ ->
-            True
 
         MapHover ->
             True
@@ -3408,16 +3378,10 @@ cursorSprite hover model =
                             ToolbarHover ->
                                 DefaultCursor
 
-                            PostOfficeHover _ ->
+                            TileHover _ ->
                                 NoCursor
 
                             TrainHover _ ->
-                                NoCursor
-
-                            TrainHouseHover _ ->
-                                NoCursor
-
-                            HouseHover _ ->
                                 NoCursor
 
                             MapHover ->
@@ -3443,16 +3407,10 @@ cursorSprite hover model =
                             ToolbarHover ->
                                 DefaultCursor
 
-                            PostOfficeHover _ ->
+                            TileHover { tile } ->
                                 CursorSprite PointerSpriteCursor
 
                             TrainHover _ ->
-                                CursorSprite PointerSpriteCursor
-
-                            TrainHouseHover _ ->
-                                CursorSprite PointerSpriteCursor
-
-                            HouseHover _ ->
                                 CursorSprite PointerSpriteCursor
 
                             MapHover ->
@@ -3478,16 +3436,10 @@ cursorSprite hover model =
                             ToolbarHover ->
                                 DefaultCursor
 
-                            PostOfficeHover _ ->
+                            TileHover _ ->
                                 CursorSprite EyeDropperSpriteCursor
 
                             TrainHover _ ->
-                                CursorSprite EyeDropperSpriteCursor
-
-                            TrainHouseHover _ ->
-                                CursorSprite EyeDropperSpriteCursor
-
-                            HouseHover _ ->
                                 CursorSprite EyeDropperSpriteCursor
 
                             MapHover ->

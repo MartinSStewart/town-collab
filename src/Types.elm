@@ -186,10 +186,8 @@ type MouseButtonState
 type Hover
     = ToolButtonHover ToolButton
     | ToolbarHover
-    | PostOfficeHover { postOfficePosition : Coord WorldUnit }
+    | TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit }
     | TrainHover { trainId : Id TrainId, train : Train }
-    | TrainHouseHover { trainHousePosition : Coord WorldUnit }
-    | HouseHover { housePosition : Coord WorldUnit }
     | MapHover
     | MailEditorHover MailEditor.Hover
     | PrimaryColorInput

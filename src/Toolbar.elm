@@ -98,7 +98,7 @@ toolbarMesh handColor primaryColorTextInput secondaryColorTextInput colors hotke
                                         Cursor.defaultCursorMesh2 handColor offset
 
                                     TilePickerToolButton ->
-                                        Cursor.defaultCursorMesh2 handColor offset
+                                        Cursor.eyeDropperCursor2 offset
                     in
                     toolbarTileButton
                         innerMesh

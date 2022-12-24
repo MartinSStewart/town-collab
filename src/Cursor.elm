@@ -6,6 +6,8 @@ module Cursor exposing
     , defaultCursorMesh
     , defaultCursorMesh2
     , dragScreenCursorMesh
+    , eyeDropperCursor2
+    , eyeDropperCursorMesh
     , getSpriteMesh
     , htmlAttribute
     , meshes
@@ -36,7 +38,7 @@ meshes colors =
     , pointerSprite = pointerCursorMesh colors
     , dragScreenSprite = dragScreenCursorMesh colors
     , pinchSprite = pinchCursorMesh colors
-    , eyeDropperSprite = eyeDropperCursorMesh colors
+    , eyeDropperSprite = eyeDropperCursorMesh
     }
 
 
@@ -144,6 +146,29 @@ defaultCursorMesh2 colors offset =
         handSize
 
 
+eyeDropperCursorMesh : WebGL.Mesh Vertex
+eyeDropperCursorMesh =
+    Sprite.sprite
+        (Coord.xy 0 0)
+        (Coord.xy 19 19)
+        (Coord.xy 534 78)
+        (Coord.xy 19 19)
+        |> Sprite.toMesh
+
+
+eyeDropperSize =
+    Coord.xy 19 19
+
+
+eyeDropperCursor2 : Coord unit -> List Vertex
+eyeDropperCursor2 offset =
+    Sprite.sprite
+        (Coord.plus (Coord.xy 20 12) offset)
+        (Coord.multiply (Coord.xy 2 2) eyeDropperSize)
+        (Coord.xy 534 78)
+        eyeDropperSize
+
+
 handPointerSize : Coord units
 handPointerSize =
     Coord.xy 27 26
@@ -151,17 +176,6 @@ handPointerSize =
 
 pointerCursorMesh : Colors -> WebGL.Mesh Vertex
 pointerCursorMesh colors =
-    Sprite.spriteWithTwoColors
-        colors
-        (Coord.xy -10 -1)
-        handPointerSize
-        (Coord.xy 563 28)
-        handPointerSize
-        |> Sprite.toMesh
-
-
-eyeDropperCursorMesh : Colors -> WebGL.Mesh Vertex
-eyeDropperCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
         (Coord.xy -10 -1)
