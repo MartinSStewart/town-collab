@@ -21,6 +21,7 @@ module Tile exposing
     , reverseDirection
     , texturePositionPixels
     , texturePosition_
+    , tileToTileGroup
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
     )
@@ -30,6 +31,7 @@ import Axis2d
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
+import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
@@ -66,6 +68,46 @@ type TileGroup
     | RoadRailCrossingGroup
     | RoadDeadendGroup
     | FenceStraightGroup
+
+
+allTileGroups : List TileGroup
+allTileGroups =
+    [ EmptyTileGroup
+    , HouseGroup
+    , RailStraightGroup
+    , RailTurnGroup
+    , RailTurnLargeGroup
+    , RailStrafeGroup
+    , RailStrafeSmallGroup
+    , RailCrossingGroup
+    , TrainHouseGroup
+    , SidewalkGroup
+    , SidewalkRailGroup
+    , RailTurnSplitGroup
+    , RailTurnSplitMirrorGroup
+    , PostOfficeGroup
+    , MowedGrass1Group
+    , MowedGrass4Group
+    , PineTreeGroup
+    , LogCabinGroup
+    , RoadStraightGroup
+    , RoadTurnGroup
+    , Road4WayGroup
+    , RoadSidewalkCrossingGroup
+    , Road3WayGroup
+    , RoadRailCrossingGroup
+    , RoadDeadendGroup
+    , FenceStraightGroup
+    ]
+
+
+tileToTileGroup : Tile -> Maybe TileGroup
+tileToTileGroup tile =
+    List.find
+        (\tileGroup ->
+            getTileGroupData tileGroup |> .tiles |> List.Nonempty.any ((==) tile)
+        )
+        allTileGroups
 
 
 type alias TileGroupData =

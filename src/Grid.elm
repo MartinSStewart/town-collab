@@ -158,11 +158,11 @@ cellAndLocalPointToWorld cell local =
 
 
 type alias GridChange =
-    { position : Coord WorldUnit, change : Tile, userId : Id UserId, primaryColor : Color, secondaryColor : Color }
+    { position : Coord WorldUnit, change : Tile, userId : Id UserId, colors : Colors }
 
 
 type alias LocalGridChange =
-    { position : Coord WorldUnit, change : Tile, primaryColor : Color, secondaryColor : Color }
+    { position : Coord WorldUnit, change : Tile, colors : Colors }
 
 
 localChangeToChange : Id UserId -> LocalGridChange -> GridChange
@@ -170,8 +170,7 @@ localChangeToChange userId change_ =
     { position = change_.position
     , change = change_.change
     , userId = userId
-    , primaryColor = change_.primaryColor
-    , secondaryColor = change_.secondaryColor
+    , colors = change_.colors
     }
 
 
@@ -316,8 +315,7 @@ addChange :
                 { tile : Tile
                 , position : Coord WorldUnit
                 , userId : Id UserId
-                , primaryColor : Color
-                , secondaryColor : Color
+                , colors : Colors
                 }
         , newCells : List (Coord CellUnit)
         }
@@ -331,8 +329,7 @@ addChange change grid =
             { userId = change.userId
             , position = localPosition
             , value = change.change
-            , primaryColor = change.primaryColor
-            , secondaryColor = change.secondaryColor
+            , colors = change.colors
             }
 
         neighborCells_ :
@@ -390,8 +387,7 @@ addChange change grid =
                                         { tile = removed.value
                                         , position = cellAndLocalCoordToWorld ( neighborPos, removed.position )
                                         , userId = removed.userId
-                                        , primaryColor = removed.primaryColor
-                                        , secondaryColor = removed.secondaryColor
+                                        , colors = removed.colors
                                         }
                                     )
                                     neighbor.removed
@@ -451,30 +447,25 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
                 { position : Coord WorldUnit
                 , userId : Id UserId
                 , value : Tile
-                , primaryColor : Color
-                , secondaryColor : Color
+                , colors : Colors
                 }
         list =
             List.map
-                (\{ userId, position, value, primaryColor, secondaryColor } ->
+                (\{ userId, position, value, colors } ->
                     { position = cellAndLocalCoordToWorld ( cellPosition, position )
                     , userId = userId
                     , value = value
-                    , primaryColor = primaryColor
-                    , secondaryColor = secondaryColor
+                    , colors = colors
                     }
                 )
                 tiles
     in
     List.map
-        (\{ position, userId, value, primaryColor, secondaryColor } ->
+        (\{ position, userId, value, colors } ->
             let
                 data : TileData unit
                 data =
                     Tile.getData value
-
-                colors =
-                    { primaryColor = primaryColor, secondaryColor = secondaryColor }
 
                 opacity =
                     case maybeCurrentTile of
@@ -746,7 +737,7 @@ removeUser userId grid =
         |> from
 
 
-getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, value : Tile, position : Coord WorldUnit }
+getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit }
 getTile coord grid =
     let
         ( cellPos, localPos ) =
@@ -765,7 +756,7 @@ getTile coord grid =
                             |> Maybe.map
                                 (\tile ->
                                     { userId = tile.userId
-                                    , value = tile.value
+                                    , tile = tile.value
                                     , position = cellAndLocalCoordToWorld ( cellPos2, tile.position )
                                     }
                                 )

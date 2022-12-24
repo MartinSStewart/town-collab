@@ -1617,7 +1617,12 @@ hoverAt model mousePosition =
                         in
                         case ( model.currentTile, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
                             ( HandTool, Just tile ) ->
-                                { tile = tile.value, userId = tile.userId, position = tile.position }
+                                { tile = tile.tile, userId = tile.userId, position = tile.position }
+                                    |> TileHover
+                                    |> Just
+
+                            ( TilePickerTool, Just tile ) ->
+                                { tile = tile.tile, userId = tile.userId, position = tile.position }
                                     |> TileHover
                                     |> Just
 
@@ -1958,7 +1963,12 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         |> NormalViewPoint
 
                                 TilePickerTool ->
-                                    model.viewPoint
+                                    offsetViewPoint
+                                        model
+                                        previousMouseState.hover
+                                        previousMouseState.start
+                                        mousePosition
+                                        |> NormalViewPoint
 
                         _ ->
                             model.viewPoint
@@ -1993,11 +2003,31 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( setCurrentTool tool model2, Cmd.none )
 
                     TileHover data ->
-                        case tileInteraction data model2 of
-                            Just func ->
-                                func ()
+                        case model2.currentTile of
+                            HandTool ->
+                                case tileInteraction data model2 of
+                                    Just func ->
+                                        func ()
 
-                            Nothing ->
+                                    Nothing ->
+                                        ( model2, Cmd.none )
+
+                            TilePickerTool ->
+                                ( case hoverAt2 of
+                                    TileHover { tile } ->
+                                        case Tile.tileToTileGroup tile of
+                                            Just tileGroup ->
+                                                setCurrentTool (TilePlacerToolButton tileGroup) model2
+
+                                            Nothing ->
+                                                model2
+
+                                    _ ->
+                                        model2
+                                , Cmd.none
+                                )
+
+                            TilePlacerTool _ ->
                                 ( model2, Cmd.none )
 
                     TrainHover { trainId, train } ->
@@ -2312,15 +2342,14 @@ placeTile isDragPlacement tileGroup index model =
         userId =
             currentUserId model
 
-        { primaryColor, secondaryColor } =
+        colors =
             getTileColor tileGroup model
 
         change =
             { position = cursorPosition_
             , change = tile
             , userId = userId
-            , primaryColor = primaryColor
-            , secondaryColor = secondaryColor
+            , colors = colors
             }
 
         grid : Grid
@@ -2384,8 +2413,7 @@ placeTile isDragPlacement tileGroup index model =
                     (Change.LocalGridChange
                         { position = cursorPosition_
                         , change = tile
-                        , primaryColor = primaryColor
-                        , secondaryColor = secondaryColor
+                        , colors = colors
                         }
                     )
                     model2
@@ -2402,8 +2430,7 @@ placeTile isDragPlacement tileGroup index model =
                                 { tile = removedTile.tile
                                 , time = model.time
                                 , position = removedTile.position
-                                , primaryColor = removedTile.primaryColor
-                                , secondaryColor = removedTile.secondaryColor
+                                , colors = removedTile.colors
                                 }
                             )
                             tiles
@@ -2484,14 +2511,14 @@ createDebrisMesh appStartTime removedTiles =
                     )
     in
     List.map
-        (\{ position, tile, time, primaryColor, secondaryColor } ->
+        (\{ position, tile, time, colors } ->
             let
                 data =
                     Tile.getData tile
             in
             (case data.texturePosition of
                 Just texturePosition ->
-                    createDebrisMeshHelper position texturePosition data.size primaryColor secondaryColor appStartTime time
+                    createDebrisMeshHelper position texturePosition data.size colors appStartTime time
 
                 Nothing ->
                     []
@@ -2502,8 +2529,7 @@ createDebrisMesh appStartTime removedTiles =
                                 position
                                 topLayer.texturePosition
                                 data.size
-                                primaryColor
-                                secondaryColor
+                                colors
                                 appStartTime
                                 time
 
@@ -2520,12 +2546,11 @@ createDebrisMeshHelper :
     ( Quantity Int WorldUnit, Quantity Int WorldUnit )
     -> Coord unit
     -> Coord unit
-    -> Color
-    -> Color
+    -> Colors
     -> Time.Posix
     -> Time.Posix
     -> List DebrisVertex
-createDebrisMeshHelper ( Quantity x, Quantity y ) texturePosition ( Quantity textureW, Quantity textureH ) primaryColor secondaryColor appStartTime time =
+createDebrisMeshHelper ( Quantity x, Quantity y ) texturePosition ( Quantity textureW, Quantity textureH ) colors appStartTime time =
     List.concatMap
         (\x2 ->
             List.concatMap
@@ -2554,8 +2579,8 @@ createDebrisMeshHelper ( Quantity x, Quantity y ) texturePosition ( Quantity tex
                                     (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
                             , texturePosition = uv
                             , startTime = Duration.from appStartTime time |> Duration.inSeconds
-                            , primaryColor = Color.toVec3 primaryColor
-                            , secondaryColor = Color.toVec3 secondaryColor
+                            , primaryColor = Color.toVec3 colors.primaryColor
+                            , secondaryColor = Color.toVec3 colors.secondaryColor
                             }
                         )
                         [ topLeft
@@ -2610,8 +2635,10 @@ updateMeshes oldModel newModel =
                             |> (::) cellPosition
                             |> List.map Coord.toTuple
                             |> Set.fromList
-                    , primaryColor = Color.rgb255 0 0 0
-                    , secondaryColor = Color.rgb255 255 255 255
+                    , colors =
+                        { primaryColor = Color.rgb255 0 0 0
+                        , secondaryColor = Color.rgb255 255 255 255
+                        }
                     }
                         |> Just
 
@@ -2647,8 +2674,7 @@ updateMeshes oldModel newModel =
                                     { userId = currentUserId newModel
                                     , position = newCurrentTile_.position
                                     , change = newCurrentTile_.tile
-                                    , primaryColor = newCurrentTile_.primaryColor
-                                    , secondaryColor = newCurrentTile_.secondaryColor
+                                    , colors = newCurrentTile_.colors
                                     }
                                     newModel.trains
                                     localModel.grid
@@ -2845,7 +2871,7 @@ actualViewPoint model =
                     actualViewPointHelper model
 
                 TilePickerTool ->
-                    actualViewPointHelper model
+                    offsetViewPoint model hover start current
 
                 HandTool ->
                     offsetViewPoint model hover start current
@@ -3508,7 +3534,11 @@ isDraggingView hover model =
                     Nothing
 
                 TilePickerTool ->
-                    Nothing
+                    if canDragView hover then
+                        Just a
+
+                    else
+                        Nothing
 
                 HandTool ->
                     if canDragView hover then
@@ -3880,8 +3910,10 @@ canvasView audioData model =
                                                 { position = mousePosition
                                                 , change = currentTile2
                                                 , userId = currentUserId model
-                                                , primaryColor = Color.rgb255 0 0 0
-                                                , secondaryColor = Color.rgb255 255 255 255
+                                                , colors =
+                                                    { primaryColor = Color.rgb255 0 0 0
+                                                    , secondaryColor = Color.rgb255 255 255 255
+                                                    }
                                                 }
                                                 model.trains
                                                 (LocalGrid.localModel model.localModel |> .grid)

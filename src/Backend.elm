@@ -585,7 +585,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                                                     of
                                                         Just tile ->
                                                             case
-                                                                ( Tile.getData tile.value |> .railPath
+                                                                ( Tile.getData tile.tile |> .railPath
                                                                 , tile.position == Train.home train
                                                                 , tile.userId == userId
                                                                 )

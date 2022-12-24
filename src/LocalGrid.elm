@@ -126,8 +126,7 @@ type OutMsg
             { tile : Tile
             , position : Coord WorldUnit
             , userId : Id UserId
-            , primaryColor : Color
-            , secondaryColor : Color
+            , colors : Colors
             }
         )
     | OtherUserCursorMoved { userId : Id UserId, previousPosition : Maybe (Point2d WorldUnit WorldUnit) }

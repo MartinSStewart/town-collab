@@ -15,7 +15,7 @@ module GridCell exposing
     )
 
 import Bounds exposing (Bounds)
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Id exposing (Id, UserId)
@@ -46,7 +46,7 @@ type Cell
 
 
 type alias Value =
-    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, primaryColor : Color, secondaryColor : Color }
+    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, colors : Colors }
 
 
 getPostOffices : Cell -> List { position : Coord CellLocalUnit, userId : Id UserId }
@@ -228,7 +228,7 @@ empty cellPosition =
 addTrees : ( Quantity Int CellUnit, Quantity Int CellUnit ) -> List Value
 addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
     let
-        { primaryColor, secondaryColor } =
+        colors =
             Tile.defaultToPrimaryAndSecondary Tile.defaultTreeColor
     in
     List.range 0 (Terrain.terrainDivisionsPerCell - 1)
@@ -259,8 +259,7 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                                 { userId = Id.fromInt -1
                                 , position = treePosition
                                 , value = PineTree
-                                , primaryColor = primaryColor
-                                , secondaryColor = secondaryColor
+                                , colors = colors
                                 }
                                     :: cell2
                             )

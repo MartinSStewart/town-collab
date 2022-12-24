@@ -166,7 +166,7 @@ type alias FrontendLoaded =
 
 
 type alias RemovedTileParticle =
-    { time : Time.Posix, position : Coord WorldUnit, tile : Tile, primaryColor : Color, secondaryColor : Color }
+    { time : Time.Posix, position : Coord WorldUnit, tile : Tile, colors : Colors }
 
 
 type ToolType

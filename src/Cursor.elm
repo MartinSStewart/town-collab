@@ -149,10 +149,10 @@ defaultCursorMesh2 colors offset =
 eyeDropperCursorMesh : WebGL.Mesh Vertex
 eyeDropperCursorMesh =
     Sprite.sprite
-        (Coord.xy 0 0)
-        (Coord.xy 19 19)
+        (Coord.xy 0 -19)
+        eyeDropperSize
         (Coord.xy 534 78)
-        (Coord.xy 19 19)
+        eyeDropperSize
         |> Sprite.toMesh
 
 
