@@ -1858,8 +1858,13 @@ isSmallDistance previousMouseState mousePosition =
         |> Quantity.lessThan (Pixels.pixels 5)
 
 
+tileInteraction :
+    { tile : Tile, userId : Id UserId, position : Coord WorldUnit }
+    -> FrontendLoaded
+    -> Maybe (() -> ( FrontendLoaded, Cmd FrontendMsg_ ))
 tileInteraction { tile, userId, position } model2 =
     let
+        handleTrainHouse : Maybe (() -> ( FrontendLoaded, Cmd frontendMsg ))
         handleTrainHouse =
             case
                 AssocList.toList model2.trains
@@ -1868,44 +1873,47 @@ tileInteraction { tile, userId, position } model2 =
                 Just ( trainId, train ) ->
                     case Train.status model2.time train of
                         WaitingAtHome ->
-                            clickLeaveHomeTrain trainId train model2
+                            Just (\() -> clickLeaveHomeTrain trainId train model2)
 
                         _ ->
-                            clickTeleportHomeTrain trainId train model2
+                            Just (\() -> clickTeleportHomeTrain trainId train model2)
 
                 Nothing ->
-                    ( model2, Cmd.none )
+                    Nothing
     in
     case tile of
         PostOffice ->
-            ( if userId == currentUserId model2 && canOpenMailEditor model2 then
-                { model2
-                    | mailEditor =
-                        MailEditor.open
-                            model2
-                            (Coord.toPoint2d position
-                                |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                |> worldToScreen model2
-                            )
-                            model2.mailEditor
-                }
+            if userId == currentUserId model2 && canOpenMailEditor model2 then
+                (\() ->
+                    ( { model2
+                        | mailEditor =
+                            MailEditor.open
+                                model2
+                                (Coord.toPoint2d position
+                                    |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
+                                    |> worldToScreen model2
+                                )
+                                model2.mailEditor
+                      }
+                    , Cmd.none
+                    )
+                )
+                    |> Just
 
-              else
-                model2
-            , Cmd.none
-            )
+            else
+                Nothing
 
         HouseDown ->
-            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )) |> Just
 
         HouseLeft ->
-            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )) |> Just
 
         HouseUp ->
-            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )) |> Just
 
         HouseRight ->
-            ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )
+            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Cmd.none )) |> Just
 
         TrainHouseLeft ->
             handleTrainHouse
@@ -1914,7 +1922,7 @@ tileInteraction { tile, userId, position } model2 =
             handleTrainHouse
 
         _ ->
-            ( model2, Cmd.none )
+            Nothing
 
 
 mainMouseButtonUp :
@@ -1985,7 +1993,12 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( setCurrentTool tool model2, Cmd.none )
 
                     TileHover data ->
-                        tileInteraction data model2
+                        case tileInteraction data model2 of
+                            Just func ->
+                                func ()
+
+                            Nothing ->
+                                ( model2, Cmd.none )
 
                     TrainHover { trainId, train } ->
                         case Train.status model.time train of
@@ -3407,8 +3420,13 @@ cursorSprite hover model =
                             ToolbarHover ->
                                 DefaultCursor
 
-                            TileHover { tile } ->
-                                CursorSprite PointerSpriteCursor
+                            TileHover data ->
+                                case tileInteraction data model of
+                                    Just _ ->
+                                        CursorSprite PointerSpriteCursor
+
+                                    Nothing ->
+                                        CursorSprite DefaultSpriteCursor
 
                             TrainHover _ ->
                                 CursorSprite PointerSpriteCursor
