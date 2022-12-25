@@ -659,7 +659,7 @@ update audioData msg model =
                     ( Loading { loadingModel | time = Just time }, Cmd.none )
 
                 GotUserAgent userAgent ->
-                    ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgent |> Debug.log "a") }
+                    ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgent) }
                     , Cmd.none
                     )
 
@@ -699,10 +699,6 @@ removeLastCursorMove newModel2 =
                 }
 
             else
-                let
-                    _ =
-                        Debug.log "event not equal" ""
-                in
                 newModel2
 
         _ ->
