@@ -2798,7 +2798,7 @@ updateMeshes forceUpdate oldModel newModel =
                 newModel.toolbarMesh
 
             else
-                Toolbar.toolbarMesh
+                Toolbar.mesh
                     newModel.hasCmdKey
                     (getHandColor (currentUserId newModel) newModel)
                     newModel.primaryColorTextInput
@@ -4012,7 +4012,7 @@ canvasView audioData model =
                                     1
                                     |> Coord.translateMat4
                                         (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                    |> Coord.translateMat4 (Toolbar.toolbarPosition model.devicePixelRatio model.windowSize)
+                                    |> Coord.translateMat4 (Toolbar.position model.devicePixelRatio model.windowSize)
                             , texture = model.texture
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1

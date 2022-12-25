@@ -333,7 +333,10 @@ insertText text state =
             String.left (selectionMin state) state.text
                 ++ text
                 ++ String.dropLeft (selectionMax state) state.text
-        , cursorPosition = state.cursorPosition + String.length text
+        , cursorPosition =
+            state.cursorPosition
+                + String.length text
+                - (selectionMax state - selectionMin state)
         , cursorSize = 0
     }
 

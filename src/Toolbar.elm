@@ -2,11 +2,11 @@ module Toolbar exposing
     ( ToolbarUnit
     , getTileGroupTile
     , hoverAt
+    , mesh
+    , position
     , primaryColorInputPosition
     , secondaryColorInputPosition
     , showColorTextInputs
-    , toolbarMesh
-    , toolbarPosition
     , toolbarSize
     , toolbarTileButtonPosition
     , toolbarToPixel
@@ -31,7 +31,7 @@ import Units
 import WebGL
 
 
-toolbarMesh :
+mesh :
     Bool
     -> Colors
     -> TextInput.Model
@@ -41,7 +41,7 @@ toolbarMesh :
     -> Hover
     -> Tool
     -> WebGL.Mesh Vertex
-toolbarMesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
+mesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
             showColorTextInputs currentTile
@@ -106,7 +106,7 @@ toolbarMesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput co
                                     TilePickerToolButton ->
                                         Cursor.eyeDropperCursor2 offset
                     in
-                    toolbarTileButton
+                    tileButton
                         innerMesh
                         hotkeyText
                         (tool == currentTool2)
@@ -139,7 +139,10 @@ toolbarMesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput co
            )
         ++ (case currentTile of
                 HandTool ->
-                    []
+                    primaryColorInputPosition
+                        |> Coord.plus ( secondaryColorInputWidth, Quantity.zero )
+                        |> Coord.plus (Coord.xy 4 0)
+                        |> Cursor.defaultCursorMesh2 handColor
 
                 TilePickerTool ->
                     []
@@ -209,8 +212,8 @@ toolbarMesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput co
 
 
 colorTextInputView : Coord units -> Quantity Int units -> Bool -> (String -> Bool) -> TextInput.Model -> List Vertex
-colorTextInputView position width hasFocus isValid model =
-    TextInput.view position width hasFocus isValid model
+colorTextInputView position2 width hasFocus isValid model =
+    TextInput.view position2 width hasFocus isValid model
 
 
 buttonTiles : List ToolButton
@@ -251,8 +254,8 @@ type ToolbarUnit
 toolbarTileButtonPosition : Int -> Coord ToolbarUnit
 toolbarTileButtonPosition index =
     Coord.xy
-        ((Coord.xRaw toolbarButtonSize + 2) * (index // toolbarRowCount) + 6)
-        ((Coord.yRaw toolbarButtonSize + 2) * modBy toolbarRowCount index + 6)
+        ((Coord.xRaw buttonSize + 2) * (index // toolbarRowCount) + 6)
+        ((Coord.yRaw buttonSize + 2) * modBy toolbarRowCount index + 6)
 
 
 toolbarRowCount : number
@@ -261,7 +264,7 @@ toolbarRowCount =
 
 
 tileMesh : Colors -> Coord unit -> Tile -> List Vertex
-tileMesh colors position tile =
+tileMesh colors position2 tile =
     let
         data : TileData b
         data =
@@ -270,7 +273,7 @@ tileMesh colors position tile =
         size : Coord units
         size =
             Coord.multiply Units.tileSize data.size
-                |> Coord.minimum toolbarButtonSize
+                |> Coord.minimum buttonSize
 
         spriteSize =
             if data.size == Coord.xy 1 1 then
@@ -279,12 +282,12 @@ tileMesh colors position tile =
             else
                 size
 
-        position2 =
-            position |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize) |> Coord.plus (Coord.divide (Coord.xy 2 2) toolbarButtonSize)
+        position3 =
+            position2 |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize) |> Coord.plus (Coord.divide (Coord.xy 2 2) buttonSize)
     in
     if tile == EmptyTile then
         Sprite.sprite
-            (Coord.plus (Coord.xy 10 12) position)
+            (Coord.plus (Coord.xy 10 12) position2)
             (Coord.tuple ( 28 * 2, 27 * 2 ))
             (Coord.xy 504 42)
             (Coord.xy 28 27)
@@ -294,7 +297,7 @@ tileMesh colors position tile =
             Just texturePosition ->
                 Sprite.spriteWithTwoColors
                     colors
-                    position2
+                    position3
                     spriteSize
                     (Coord.multiply Units.tileSize texturePosition)
                     size
@@ -310,7 +313,7 @@ tileMesh colors position tile =
                         in
                         Sprite.spriteWithTwoColors
                             colors
-                            position2
+                            position3
                             spriteSize
                             texturePosition2
                             size
@@ -322,11 +325,11 @@ tileMesh colors position tile =
 
 toolbarSize : Coord Pixels
 toolbarSize =
-    Coord.xy 1100 ((Coord.yRaw toolbarButtonSize + 4) * toolbarRowCount + 4)
+    Coord.xy 1100 ((Coord.yRaw buttonSize + 4) * toolbarRowCount + 4)
 
 
-toolbarPosition : Float -> Coord Pixels -> Coord Pixels
-toolbarPosition devicePixelRatio windowSize =
+position : Float -> Coord Pixels -> Coord Pixels
+position devicePixelRatio windowSize =
     windowSize
         |> Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio )
         |> Coord.divide (Coord.xy 2 1)
@@ -354,18 +357,18 @@ secondaryColorInputWidth =
     primaryColorInputWidth
 
 
-toolbarButtonSize : Coord units
-toolbarButtonSize =
+buttonSize : Coord units
+buttonSize =
     Coord.xy 80 80
 
 
-toolbarTileButton :
+tileButton :
     (Coord ToolbarUnit -> List Vertex)
     -> Maybe String
     -> Bool
     -> Coord ToolbarUnit
     -> List Vertex
-toolbarTileButton mesh maybeHotkey highlight offset =
+tileButton mesh2 maybeHotkey highlight offset =
     let
         charSize : Coord unit
         charSize =
@@ -373,7 +376,7 @@ toolbarTileButton mesh maybeHotkey highlight offset =
     in
     Sprite.sprite
         offset
-        toolbarButtonSize
+        buttonSize
         (Coord.xy
             (if highlight then
                 505
@@ -386,7 +389,7 @@ toolbarTileButton mesh maybeHotkey highlight offset =
         (Coord.xy 1 1)
         ++ Sprite.sprite
             (offset |> Coord.plus (Coord.xy 2 2))
-            (toolbarButtonSize |> Coord.minus (Coord.xy 4 4))
+            (buttonSize |> Coord.minus (Coord.xy 4 4))
             (Coord.xy
                 (if highlight then
                     505
@@ -397,17 +400,17 @@ toolbarTileButton mesh maybeHotkey highlight offset =
                 28
             )
             (Coord.xy 1 1)
-        ++ mesh offset
+        ++ mesh2 offset
         ++ (case maybeHotkey of
                 Just hotkey ->
                     Sprite.sprite
                         (Coord.plus
-                            (Coord.xy 0 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize + 4))
+                            (Coord.xy 0 (Coord.yRaw buttonSize - Coord.yRaw charSize + 4))
                             offset
                         )
                         (Coord.multiply (Coord.xy (String.length hotkey) 1) charSize
                             |> Coord.plus (Coord.xy 2 -4)
-                            |> Coord.minimum (toolbarButtonSize |> Coord.minus (Coord.xy 2 2))
+                            |> Coord.minimum (buttonSize |> Coord.minus (Coord.xy 2 2))
                         )
                         (Coord.xy 506 28)
                         (Coord.xy 1 1)
@@ -416,7 +419,7 @@ toolbarTileButton mesh maybeHotkey highlight offset =
                             2
                             hotkey
                             (Coord.plus
-                                (Coord.xy 2 (Coord.yRaw toolbarButtonSize - Coord.yRaw charSize))
+                                (Coord.xy 2 (Coord.yRaw buttonSize - Coord.yRaw charSize))
                                 offset
                             )
 
@@ -479,7 +482,7 @@ hoverAt devicePixelRatio windowSize mousePosition2 currentTile =
                                         (toolbarTileButtonPosition index)
                             in
                             if
-                                Bounds.bounds topLeft (Coord.plus toolbarButtonSize topLeft)
+                                Bounds.bounds topLeft (Coord.plus buttonSize topLeft)
                                     |> Bounds.contains mousePosition2
                             then
                                 Just tool
@@ -504,7 +507,7 @@ hoverAt devicePixelRatio windowSize mousePosition2 currentTile =
 
 toolbarToPixel : Float -> Coord Pixels -> Coord ToolbarUnit -> Coord Pixels
 toolbarToPixel devicePixelRatio windowSize coord =
-    toolbarPosition devicePixelRatio windowSize |> Coord.changeUnit |> Coord.plus coord |> Coord.changeUnit
+    position devicePixelRatio windowSize |> Coord.changeUnit |> Coord.plus coord |> Coord.changeUnit
 
 
 showColorTextInputs : Tool -> { showPrimaryColorTextInput : Bool, showSecondaryColorTextInput : Bool }
