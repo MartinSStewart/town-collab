@@ -856,11 +856,11 @@ updateLoaded audioData msg model =
                                     }
                         }
                             |> (\model2 ->
-                                    case ( model2.currentTool, hover, ctrlOrMeta model2 ) of
-                                        ( TilePlacerTool { tileGroup, index }, MapHover, False ) ->
+                                    case ( currentTool model2, hover ) of
+                                        ( TilePlacerTool { tileGroup, index }, MapHover ) ->
                                             placeTile False tileGroup index model2
 
-                                        ( _, PrimaryColorInput, _ ) ->
+                                        ( _, PrimaryColorInput ) ->
                                             { model2
                                                 | primaryColorTextInput =
                                                     TextInput.mouseDown
@@ -874,7 +874,7 @@ updateLoaded audioData msg model =
                                             }
                                                 |> setFocus PrimaryColorInput
 
-                                        ( _, SecondaryColorInput, _ ) ->
+                                        ( _, SecondaryColorInput ) ->
                                             { model2
                                                 | secondaryColorTextInput =
                                                     TextInput.mouseDown
@@ -1009,6 +1009,17 @@ updateLoaded audioData msg model =
                     mousePosition
                         |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                         |> Coord.roundPoint
+
+                placeTileHelper model2 =
+                    case currentTool model2 of
+                        TilePlacerTool { tileGroup, index } ->
+                            placeTile True tileGroup index model2
+
+                        HandTool ->
+                            model2
+
+                        TilePickerTool ->
+                            model2
             in
             ( { model
                 | mouseLeft =
@@ -1028,8 +1039,8 @@ updateLoaded audioData msg model =
                 , previousTileHover = tileHover_
               }
                 |> (\model2 ->
-                        case ( model2.currentTool, model2.mouseLeft ) of
-                            ( TilePlacerTool { tileGroup, index }, MouseButtonDown { hover } ) ->
+                        case model2.mouseLeft of
+                            MouseButtonDown { hover } ->
                                 case hover of
                                     ToolbarHover ->
                                         model2
@@ -1038,25 +1049,13 @@ updateLoaded audioData msg model =
                                         model2
 
                                     TileHover _ ->
-                                        if ctrlOrMeta model2 then
-                                            model2
-
-                                        else
-                                            placeTile True tileGroup index model2
+                                        placeTileHelper model2
 
                                     TrainHover _ ->
-                                        if ctrlOrMeta model2 then
-                                            model2
-
-                                        else
-                                            placeTile True tileGroup index model2
+                                        placeTileHelper model2
 
                                     MapHover ->
-                                        if ctrlOrMeta model2 then
-                                            model2
-
-                                        else
-                                            placeTile True tileGroup index model2
+                                        placeTileHelper model2
 
                                     MailEditorHover _ ->
                                         model2
@@ -1088,7 +1087,7 @@ updateLoaded audioData msg model =
                                         }
 
                                     CowHover _ ->
-                                        placeTile True tileGroup index model2
+                                        placeTileHelper model2
 
                             _ ->
                                 model2

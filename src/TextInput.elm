@@ -349,6 +349,18 @@ deleteSelection state =
 
 mouseDown : Coord units -> Coord units -> Model -> Model
 mouseDown mousePosition position model =
+    replaceState
+        (\state ->
+            { state
+                | cursorPosition = cursorPosition mousePosition position state
+                , cursorSize = 0
+            }
+        )
+        model
+
+
+cursorPosition : Coord units -> Coord units -> State -> Int
+cursorPosition mousePosition position state =
     let
         mouseX : Int
         mouseX =
@@ -362,18 +374,10 @@ mouseDown mousePosition position model =
         positionX =
             Coord.xRaw position
     in
-    replaceState
-        (\state ->
-            { state
-                | cursorPosition =
-                    toFloat (mouseX - (positionX + paddingX + charScale))
-                        / toFloat (Coord.xRaw Sprite.charSize * 2)
-                        |> round
-                        |> clamp 0 (String.length state.text)
-                , cursorSize = 0
-            }
-        )
-        model
+    toFloat (mouseX - (positionX + paddingX + charScale))
+        / toFloat (Coord.xRaw Sprite.charSize * 2)
+        |> round
+        |> clamp 0 (String.length state.text)
 
 
 mouseDownMove : Coord units -> Coord units -> Model -> Model
@@ -381,27 +385,12 @@ mouseDownMove mousePosition position model =
     replaceState
         (\state ->
             let
-                mouseX : Int
-                mouseX =
-                    Coord.xRaw mousePosition
-
-                paddingX : Int
-                paddingX =
-                    Coord.xRaw padding
-
-                positionX : Int
-                positionX =
-                    Coord.xRaw position
-
-                cursorPosition =
-                    toFloat (mouseX - (positionX + paddingX + charScale))
-                        / toFloat (Coord.xRaw Sprite.charSize * 2)
-                        |> round
-                        |> clamp 0 (String.length state.text)
+                cursorPosition2 =
+                    cursorPosition mousePosition position state
             in
             { state
-                | cursorPosition = cursorPosition
-                , cursorSize = state.cursorSize + (state.cursorPosition - cursorPosition)
+                | cursorPosition = cursorPosition2
+                , cursorSize = state.cursorSize + (state.cursorPosition - cursorPosition2)
             }
         )
         model
