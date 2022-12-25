@@ -475,18 +475,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , userIdMesh = createInfoMesh Nothing loadingData.user
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
-            , toolbarMesh =
-                Toolbar.toolbarMesh
-                    loading.hasCmdKey
-                    (IdDict.get loadingData.user loadingData.handColors
-                        |> Maybe.withDefault Cursor.defaultColors
-                    )
-                    TextInput.init
-                    TextInput.init
-                    defaultTileColors
-                    defaultTileHotkeys
-                    focus
-                    currentTile
+            , toolbarMesh = Shaders.triangleFan []
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
@@ -503,9 +492,10 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , handMeshes = AssocList.empty
             , hasCmdKey = loading.hasCmdKey
             }
+                |> setCurrentTool HandToolButton
                 |> handleOutMsg LocalGrid.HandColorChanged
     in
-    ( updateMeshes model model
+    ( updateMeshes True model model
     , Cmd.batch
         [ WebGL.Texture.loadWith
             { magnify = WebGL.Texture.nearest
@@ -679,7 +669,7 @@ update audioData msg model =
                         , cmd
                         )
                    )
-                |> Tuple.mapFirst (updateMeshes frontendLoaded)
+                |> Tuple.mapFirst (updateMeshes False frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
 
@@ -1341,7 +1331,7 @@ updateLoaded audioData msg model =
             ( { model | sounds = AssocList.insert sound result model.sounds }, Cmd.none )
 
         VisibilityChanged ->
-            ( { model | currentTool = HandTool }, Cmd.none )
+            ( setCurrentTool HandToolButton model, Cmd.none )
 
         TrainTextureLoaded result ->
             case result of
@@ -1754,10 +1744,10 @@ keyMsgCanvasUpdate key model =
         ( Keyboard.Escape, _ ) ->
             ( case model.currentTool of
                 TilePlacerTool _ ->
-                    { model | currentTool = HandTool }
+                    setCurrentTool HandToolButton model
 
                 TilePickerTool ->
-                    { model | currentTool = HandTool }
+                    setCurrentTool HandToolButton model
 
                 HandTool ->
                     case isHoldingCow model of
@@ -2151,7 +2141,9 @@ setFocus newFocus model =
                         model.primaryColorTextInput
 
                     HandTool ->
-                        model.primaryColorTextInput
+                        TextInput.withText
+                            (Color.toHexCode (getHandColor (currentUserId model) model).primaryColor)
+                            model.primaryColorTextInput
 
             else if model.focus /= PrimaryColorInput && newFocus == PrimaryColorInput then
                 TextInput.selectAll model.primaryColorTextInput
@@ -2169,7 +2161,9 @@ setFocus newFocus model =
                         model.secondaryColorTextInput
 
                     HandTool ->
-                        model.secondaryColorTextInput
+                        TextInput.withText
+                            (Color.toHexCode (getHandColor (currentUserId model) model).secondaryColor)
+                            model.secondaryColorTextInput
 
             else if model.focus /= SecondaryColorInput && newFocus == SecondaryColorInput then
                 TextInput.selectAll model.secondaryColorTextInput
@@ -2643,8 +2637,8 @@ keyDown key { pressedKeys } =
     List.any ((==) key) pressedKeys
 
 
-updateMeshes : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
-updateMeshes oldModel newModel =
+updateMeshes : Bool -> FrontendLoaded -> FrontendLoaded -> FrontendLoaded
+updateMeshes forceUpdate oldModel newModel =
     let
         oldCells : Dict ( Int, Int ) GridCell.Cell
         oldCells =
@@ -2659,36 +2653,33 @@ updateMeshes oldModel newModel =
             localModel.grid |> Grid.allCellsDict
 
         currentTile model =
-            case model.currentTool of
+            case currentTool model of
                 TilePlacerTool { tileGroup, index } ->
-                    if ctrlOrMeta model then
-                        Nothing
+                    let
+                        tile =
+                            Toolbar.getTileGroupTile tileGroup index
 
-                    else
-                        let
-                            tile =
-                                Toolbar.getTileGroupTile tileGroup index
+                        position : Coord WorldUnit
+                        position =
+                            cursorPosition (Tile.getData tile) model
 
-                            position =
-                                cursorPosition (Tile.getData tile) model
-
-                            ( cellPosition, localPosition ) =
-                                Grid.worldToCellAndLocalCoord position
-                        in
-                        { tile = tile
-                        , position = position
-                        , cellPosition =
-                            Grid.closeNeighborCells cellPosition localPosition
-                                |> List.map Tuple.first
-                                |> (::) cellPosition
-                                |> List.map Coord.toTuple
-                                |> Set.fromList
-                        , colors =
-                            { primaryColor = Color.rgb255 0 0 0
-                            , secondaryColor = Color.rgb255 255 255 255
-                            }
+                        ( cellPosition, localPosition ) =
+                            Grid.worldToCellAndLocalCoord position
+                    in
+                    { tile = tile
+                    , position = position
+                    , cellPosition =
+                        Grid.closeNeighborCells cellPosition localPosition
+                            |> List.map Tuple.first
+                            |> (::) cellPosition
+                            |> List.map Coord.toTuple
+                            |> Set.fromList
+                    , colors =
+                        { primaryColor = Color.rgb255 0 0 0
+                        , secondaryColor = Color.rgb255 255 255 255
                         }
-                            |> Just
+                    }
+                        |> Just
 
                 HandTool ->
                     Nothing
@@ -2696,12 +2687,15 @@ updateMeshes oldModel newModel =
                 TilePickerTool ->
                     Nothing
 
+        oldCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
         oldCurrentTile =
             currentTile oldModel
 
+        newCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
         newCurrentTile =
             currentTile newModel
 
+        currentTileUnchanged : Bool
         currentTileUnchanged =
             oldCurrentTile == newCurrentTile
 
@@ -2800,6 +2794,7 @@ updateMeshes oldModel newModel =
                     && (getHandColor (currentUserId newModel) newModel
                             == getHandColor (currentUserId oldModel) oldModel
                        )
+                    && not forceUpdate
             then
                 newModel.toolbarMesh
 
@@ -2992,7 +2987,7 @@ updateFromBackend msg model =
             )
 
         ( Loaded loaded, _ ) ->
-            updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
+            updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes False loaded) |> Tuple.mapFirst Loaded
 
         _ ->
             ( model, Cmd.none )
@@ -3446,6 +3441,15 @@ startButtonHighlightMesh =
         |> Sprite.toMesh
 
 
+currentTool : { a | pressedKeys : List Keyboard.Key, currentTool : Tool } -> Tool
+currentTool model =
+    if ctrlOrMeta model then
+        TilePickerTool
+
+    else
+        model.currentTool
+
+
 cursorSprite : Hover -> FrontendLoaded -> CursorType
 cursorSprite hover model =
     let
@@ -3456,11 +3460,8 @@ cursorSprite hover model =
             else if isHoldingCow model /= Nothing then
                 CursorSprite PinchSpriteCursor
 
-            else if ctrlOrMeta model then
-                CursorSprite EyeDropperSpriteCursor
-
             else
-                case model.currentTool of
+                case currentTool model of
                     TilePlacerTool _ ->
                         case hover of
                             ToolButtonHover _ ->

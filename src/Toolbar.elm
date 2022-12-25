@@ -46,6 +46,7 @@ toolbarMesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput co
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
             showColorTextInputs currentTile
 
+        currentTool2 : ToolButton
         currentTool2 =
             case currentTile of
                 TilePlacerTool { tileGroup } ->
