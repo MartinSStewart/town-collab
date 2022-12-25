@@ -464,7 +464,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
             , mailEditor = MailEditor.initEditor loadingData.mailEditor
-            , currentTile = currentTile
+            , currentTool = currentTile
             , lastTileRotation = []
             , userIdMesh = createInfoMesh Nothing loadingData.user
             , lastPlacementError = Nothing
@@ -748,7 +748,7 @@ updateLoaded audioData msg model =
                         )
 
                     else
-                        case ( model.focus, model.currentTile, key ) of
+                        case ( model.focus, model.currentTool, key ) of
                             ( _, _, Keyboard.Tab ) ->
                                 ( setFocus
                                     (if keyDown Keyboard.Shift model then
@@ -859,7 +859,7 @@ updateLoaded audioData msg model =
                                     }
                         }
                             |> (\model2 ->
-                                    case ( model2.currentTile, hover ) of
+                                    case ( model2.currentTool, hover ) of
                                         ( TilePlacerTool { tileGroup, index }, MapHover ) ->
                                             placeTile False tileGroup index model2
 
@@ -941,7 +941,7 @@ updateLoaded audioData msg model =
 
                     else
                         { model
-                            | currentTile =
+                            | currentTool =
                                 { tileGroup = tile.tileGroup
                                 , index = tile.index + offset
                                 , mesh =
@@ -982,7 +982,7 @@ updateLoaded audioData msg model =
                     }
 
                 else
-                    case ( scrollThreshold > 0, model.currentTile ) of
+                    case ( scrollThreshold > 0, model.currentTool ) of
                         ( True, TilePlacerTool currentTile ) ->
                             rotationHelper 1 currentTile
 
@@ -1031,7 +1031,7 @@ updateLoaded audioData msg model =
                 , previousTileHover = tileHover_
               }
                 |> (\model2 ->
-                        case ( model2.currentTile, model2.mouseLeft ) of
+                        case ( model2.currentTool, model2.mouseLeft ) of
                             ( TilePlacerTool { tileGroup, index }, MouseButtonDown { hover } ) ->
                                 case hover of
                                     ToolbarHover ->
@@ -1306,7 +1306,7 @@ updateLoaded audioData msg model =
                                 model.scrollThreshold + 1
                     }
             in
-            ( case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTile ) of
+            ( case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTool ) of
                 ( ( True, _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
                     placeTile True currentTile.tileGroup currentTile.index model2
 
@@ -1322,7 +1322,7 @@ updateLoaded audioData msg model =
             ( { model | sounds = AssocList.insert sound result model.sounds }, Cmd.none )
 
         VisibilityChanged ->
-            ( { model | currentTile = HandTool }, Cmd.none )
+            ( { model | currentTool = HandTool }, Cmd.none )
 
         TrainTextureLoaded result ->
             case result of
@@ -1358,7 +1358,7 @@ updateLoaded audioData msg model =
                         |> handleKeyDownColorInputHelper
                             (\a b -> { b | primaryColorTextInput = a })
                             (\a b -> { b | primaryColor = a })
-                            model.currentTile
+                            model.currentTool
                             model
 
                 SecondaryColorInput ->
@@ -1367,7 +1367,7 @@ updateLoaded audioData msg model =
                         |> handleKeyDownColorInputHelper
                             (\a b -> { b | secondaryColorTextInput = a })
                             (\a b -> { b | secondaryColor = a })
-                            model.currentTile
+                            model.currentTool
                             model
 
                 CowHover _ ->
@@ -1394,7 +1394,7 @@ rotationAntiClockwiseHelper model list =
 
 currentTileGroup : FrontendLoaded -> Maybe TileGroup
 currentTileGroup model =
-    case model.currentTile of
+    case model.currentTool of
         TilePlacerTool { tileGroup } ->
             Just tileGroup
 
@@ -1409,14 +1409,14 @@ nextFocus : FrontendLoaded -> Hover
 nextFocus model =
     case model.focus of
         PrimaryColorInput ->
-            if Toolbar.showColorTextInputs model.currentTile |> .showSecondaryColorTextInput then
+            if Toolbar.showColorTextInputs model.currentTool |> .showSecondaryColorTextInput then
                 SecondaryColorInput
 
             else
                 PrimaryColorInput
 
         SecondaryColorInput ->
-            if Toolbar.showColorTextInputs model.currentTile |> .showPrimaryColorTextInput then
+            if Toolbar.showColorTextInputs model.currentTool |> .showPrimaryColorTextInput then
                 PrimaryColorInput
 
             else
@@ -1559,8 +1559,8 @@ handleKeyDownColorInputHelper setTextInputModel updateColor tool model newTextIn
                 case maybeNewColor of
                     Just _ ->
                         { m
-                            | currentTile =
-                                case m.currentTile of
+                            | currentTool =
+                                case m.currentTool of
                                     TilePlacerTool currentTile ->
                                         { tileGroup = currentTile.tileGroup
                                         , index = currentTile.index
@@ -1574,10 +1574,10 @@ handleKeyDownColorInputHelper setTextInputModel updateColor tool model newTextIn
                                             |> TilePlacerTool
 
                                     HandTool ->
-                                        m.currentTile
+                                        m.currentTool
 
                                     TilePickerTool ->
-                                        m.currentTile
+                                        m.currentTool
                         }
 
                     Nothing ->
@@ -1598,7 +1598,7 @@ hoverAt model mousePosition =
         MailEditor.hoverAt model.mailEditor |> MailEditorHover
 
     else
-        case Toolbar.hoverAt model.devicePixelRatio model.windowSize mousePosition2 model.currentTile of
+        case Toolbar.hoverAt model.devicePixelRatio model.windowSize mousePosition2 model.currentTool of
             Just hover ->
                 hover
 
@@ -1615,23 +1615,19 @@ hoverAt model mousePosition =
                             localModel =
                                 LocalGrid.localModel model.localModel
                         in
-                        case ( model.currentTile, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
+                        case ( model.currentTool, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
                             ( HandTool, Just tile ) ->
-                                { tile = tile.tile, userId = tile.userId, position = tile.position }
-                                    |> TileHover
-                                    |> Just
+                                TileHover tile |> Just
 
                             ( TilePickerTool, Just tile ) ->
-                                { tile = tile.tile, userId = tile.userId, position = tile.position }
-                                    |> TileHover
-                                    |> Just
+                                TileHover tile |> Just
 
                             _ ->
                                 Nothing
 
                     trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
                     trainHovers =
-                        case model.currentTile of
+                        case model.currentTool of
                             TilePlacerTool _ ->
                                 Nothing
 
@@ -1660,7 +1656,7 @@ hoverAt model mousePosition =
 
                     cowHovers : Maybe ( Id CowId, Cow )
                     cowHovers =
-                        case model.currentTile of
+                        case model.currentTool of
                             TilePlacerTool _ ->
                                 Nothing
 
@@ -1735,12 +1731,12 @@ keyMsgCanvasUpdate key model =
             handleRedo ()
 
         ( Keyboard.Escape, _ ) ->
-            ( case model.currentTile of
+            ( case model.currentTool of
                 TilePlacerTool _ ->
-                    { model | currentTile = HandTool }
+                    { model | currentTool = HandTool }
 
                 TilePickerTool ->
-                    { model | currentTile = HandTool }
+                    { model | currentTool = HandTool }
 
                 HandTool ->
                     case isHoldingCow model of
@@ -1822,8 +1818,13 @@ setCurrentTool tool model =
                 TilePickerToolButton ->
                     { primaryColor = Color.white, secondaryColor = Color.black }
     in
+    setCurrentToolWithColors tool colors model
+
+
+setCurrentToolWithColors : ToolButton -> Colors -> FrontendLoaded -> FrontendLoaded
+setCurrentToolWithColors tool colors model =
     { model
-        | currentTile =
+        | currentTool =
             case tool of
                 TilePlacerToolButton tileGroup ->
                     TilePlacerTool
@@ -1839,6 +1840,16 @@ setCurrentTool tool model =
                     TilePickerTool
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
+        , tileColors =
+            case tool of
+                TilePlacerToolButton tileGroup ->
+                    AssocList.insert tileGroup colors model.tileColors
+
+                HandToolButton ->
+                    model.tileColors
+
+                TilePickerToolButton ->
+                    model.tileColors
     }
 
 
@@ -1864,7 +1875,7 @@ isSmallDistance previousMouseState mousePosition =
 
 
 tileInteraction :
-    { tile : Tile, userId : Id UserId, position : Coord WorldUnit }
+    { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     -> FrontendLoaded
     -> Maybe (() -> ( FrontendLoaded, Cmd FrontendMsg_ ))
 tileInteraction { tile, userId, position } model2 =
@@ -1950,7 +1961,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                 , viewPoint =
                     case ( MailEditor.isOpen model.mailEditor, model.mouseMiddle, model.tool ) of
                         ( False, MouseButtonUp _, DragTool ) ->
-                            case model.currentTile of
+                            case model.currentTool of
                                 TilePlacerTool _ ->
                                     model.viewPoint
 
@@ -2003,7 +2014,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( setCurrentTool tool model2, Cmd.none )
 
                     TileHover data ->
-                        case model2.currentTile of
+                        case model2.currentTool of
                             HandTool ->
                                 case tileInteraction data model2 of
                                     Just func ->
@@ -2014,10 +2025,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                             TilePickerTool ->
                                 ( case hoverAt2 of
-                                    TileHover { tile } ->
+                                    TileHover { tile, colors } ->
                                         case Tile.tileToTileGroup tile of
                                             Just tileGroup ->
-                                                setCurrentTool (TilePlacerToolButton tileGroup) model2
+                                                setCurrentToolWithColors (TilePlacerToolButton tileGroup) colors model2
 
                                             Nothing ->
                                                 model2
@@ -2098,7 +2109,7 @@ setFocus newFocus model =
         | focus = newFocus
         , primaryColorTextInput =
             if model.focus == PrimaryColorInput && newFocus /= PrimaryColorInput then
-                case model.currentTile of
+                case model.currentTool of
                     TilePlacerTool { tileGroup } ->
                         model.primaryColorTextInput
                             |> TextInput.withText (Color.toHexCode (getTileColor tileGroup model).primaryColor)
@@ -2116,7 +2127,7 @@ setFocus newFocus model =
                 model.primaryColorTextInput
         , secondaryColorTextInput =
             if model.focus == SecondaryColorInput && newFocus /= SecondaryColorInput then
-                case model.currentTile of
+                case model.currentTool of
                     TilePlacerTool { tileGroup } ->
                         model.secondaryColorTextInput
                             |> TextInput.withText (Color.toHexCode (getTileColor tileGroup model).secondaryColor)
@@ -2177,7 +2188,7 @@ setTrainViewPoint trainId model =
 
 canOpenMailEditor : FrontendLoaded -> Bool
 canOpenMailEditor model =
-    case ( model.mailEditor.showMailEditor, model.currentTile ) of
+    case ( model.mailEditor.showMailEditor, model.currentTool ) of
         ( MailEditorClosed, HandTool ) ->
             True
 
@@ -2615,7 +2626,7 @@ updateMeshes oldModel newModel =
             localModel.grid |> Grid.allCellsDict
 
         currentTile model =
-            case model.currentTile of
+            case model.currentTool of
                 TilePlacerTool { tileGroup, index } ->
                     let
                         tile =
@@ -2763,7 +2774,7 @@ updateMeshes oldModel newModel =
                     newModel.tileColors
                     newModel.tileHotkeys
                     newModel.focus
-                    newModel.currentTile
+                    newModel.currentTool
     }
 
 
@@ -2866,7 +2877,7 @@ actualViewPoint model =
             offsetViewPoint model hover start current
 
         ( False, MouseButtonDown { start, current, hover }, _ ) ->
-            case model.currentTile of
+            case model.currentTool of
                 TilePlacerTool _ ->
                     actualViewPointHelper model
 
@@ -3407,8 +3418,11 @@ cursorSprite hover model =
             else if isHoldingCow model /= Nothing then
                 CursorSprite PinchSpriteCursor
 
+            else if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                CursorSprite EyeDropperSpriteCursor
+
             else
-                case model.currentTile of
+                case model.currentTool of
                     TilePlacerTool _ ->
                         case hover of
                             ToolButtonHover _ ->
@@ -3529,7 +3543,7 @@ isDraggingView hover model =
             Just a
 
         ( False, MouseButtonDown a, _ ) ->
-            case model.currentTile of
+            case model.currentTool of
                 TilePlacerTool _ ->
                     Nothing
 
@@ -3818,7 +3832,7 @@ canvasView audioData model =
                                     Nothing
                         )
                         (getSpeechBubbles model)
-                    ++ (case ( hoverAt model mouseScreenPosition_, model.currentTile ) of
+                    ++ (case ( hoverAt model mouseScreenPosition_, model.currentTool ) of
                             ( MapHover, TilePlacerTool currentTile ) ->
                                 let
                                     currentTile2 : Tile

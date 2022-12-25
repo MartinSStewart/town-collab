@@ -142,7 +142,7 @@ type alias FrontendLoaded =
     , lastTrainWhistle : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : Model
-    , currentTile : Tool
+    , currentTool : Tool
     , lastTileRotation : List Time.Posix
     , userIdMesh : WebGL.Mesh Vertex
     , lastPlacementError : Maybe Time.Posix
@@ -186,7 +186,7 @@ type MouseButtonState
 type Hover
     = ToolButtonHover ToolButton
     | ToolbarHover
-    | TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit }
+    | TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
     | MailEditorHover MailEditor.Hover

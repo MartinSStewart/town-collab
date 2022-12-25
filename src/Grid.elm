@@ -737,7 +737,7 @@ removeUser userId grid =
         |> from
 
 
-getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit }
+getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit, colors : Colors }
 getTile coord grid =
     let
         ( cellPos, localPos ) =
@@ -758,6 +758,7 @@ getTile coord grid =
                                     { userId = tile.userId
                                     , tile = tile.value
                                     , position = cellAndLocalCoordToWorld ( cellPos2, tile.position )
+                                    , colors = tile.colors
                                     }
                                 )
 
