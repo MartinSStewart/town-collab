@@ -79,6 +79,12 @@ port martinsstewart_elm_device_pixel_ratio_from_js : (Float -> msg) -> Sub msg
 port martinsstewart_elm_device_pixel_ratio_to_js : () -> Cmd msg
 
 
+port user_agent_to_js : () -> Cmd msg
+
+
+port user_agent_from_js : (String -> msg) -> Sub msg
+
+
 port audioPortToJS : Json.Encode.Value -> Cmd msg
 
 
@@ -471,6 +477,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , tileHotkeys = defaultTileHotkeys
             , toolbarMesh =
                 Toolbar.toolbarMesh
+                    loading.hasCmdKey
                     (IdDict.get loadingData.user loadingData.handColors
                         |> Maybe.withDefault Cursor.defaultColors
                     )
@@ -494,6 +501,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , music = { startTime = Duration.addTo time (Duration.seconds 10), sound = Music0 }
             , previousCursorPositions = IdDict.empty
             , handMeshes = AssocList.empty
+            , hasCmdKey = loading.hasCmdKey
             }
                 |> handleOutMsg LocalGrid.HandColorChanged
     in
@@ -568,9 +576,11 @@ init url key =
         , sounds = AssocList.empty
         , texture = Nothing
         , localModel = LoadingLocalModel []
+        , hasCmdKey = False
         }
     , Cmd.batch
         [ Lamdera.sendToBackend (ConnectToBackend bounds)
+        , user_agent_to_js ()
         , Task.perform
             (\{ viewport } ->
                 WindowResized
@@ -647,6 +657,11 @@ update audioData msg model =
 
                 AnimationFrame time ->
                     ( Loading { loadingModel | time = Just time }, Cmd.none )
+
+                GotUserAgent userAgent ->
+                    ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgent |> Debug.log "a") }
+                    , Cmd.none
+                    )
 
                 _ ->
                     ( model, Cmd.none )
@@ -1380,6 +1395,9 @@ updateLoaded audioData msg model =
 
                 CowHover _ ->
                     ( model, Cmd.none )
+
+        GotUserAgent _ ->
+            ( model, Cmd.none )
 
 
 previousFocus : FrontendLoaded -> Hover
@@ -2791,6 +2809,7 @@ updateMeshes oldModel newModel =
 
             else
                 Toolbar.toolbarMesh
+                    newModel.hasCmdKey
                     (getHandColor (currentUserId newModel) newModel)
                     newModel.primaryColorTextInput
                     newModel.secondaryColorTextInput
@@ -4346,7 +4365,7 @@ subscriptions _ model =
         , supermario_read_from_clipboard_from_js PastedText
         , case model of
             Loading _ ->
-                Sub.none
+                user_agent_from_js GotUserAgent
 
             Loaded loaded ->
                 Sub.batch

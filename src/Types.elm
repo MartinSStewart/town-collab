@@ -84,6 +84,7 @@ type alias FrontendLoading =
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , texture : Maybe Texture
     , localModel : LoadingLocalModel
+    , hasCmdKey : Bool
     }
 
 
@@ -162,6 +163,7 @@ type alias FrontendLoaded =
     , music : { startTime : Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Time.Posix }
     , handMeshes : AssocList.Dict Colors CursorMeshes
+    , hasCmdKey : Bool
     }
 
 
@@ -260,6 +262,7 @@ type FrontendMsg_
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
     | PastedText String
+    | GotUserAgent String
 
 
 type ToBackend

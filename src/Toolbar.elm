@@ -32,7 +32,8 @@ import WebGL
 
 
 toolbarMesh :
-    Colors
+    Bool
+    -> Colors
     -> TextInput.Model
     -> TextInput.Model
     -> AssocList.Dict TileGroup Colors
@@ -40,7 +41,7 @@ toolbarMesh :
     -> Hover
     -> Tool
     -> WebGL.Mesh Vertex
-toolbarMesh handColor primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
+toolbarMesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
             showColorTextInputs currentTile
@@ -86,7 +87,11 @@ toolbarMesh handColor primaryColorTextInput secondaryColorTextInput colors hotke
                                     Just "Esc"
 
                                 TilePickerToolButton ->
-                                    Just "Ctrl"
+                                    if hasCmdKey then
+                                        Just "Cmd"
+
+                                    else
+                                        Just "Ctrl"
 
                         innerMesh =
                             \offset ->
