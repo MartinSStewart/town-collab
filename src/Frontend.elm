@@ -738,11 +738,7 @@ updateLoaded audioData msg model =
                     if MailEditor.isOpen model.mailEditor then
                         ( { model
                             | mailEditor =
-                                MailEditor.handleKeyDown
-                                    model
-                                    (keyDown Keyboard.Control model || keyDown Keyboard.Meta model)
-                                    key
-                                    model.mailEditor
+                                MailEditor.handleKeyDown model (ctrlOrMeta model) key model.mailEditor
                           }
                         , Cmd.none
                         )
@@ -859,11 +855,11 @@ updateLoaded audioData msg model =
                                     }
                         }
                             |> (\model2 ->
-                                    case ( model2.currentTool, hover ) of
-                                        ( TilePlacerTool { tileGroup, index }, MapHover ) ->
+                                    case ( model2.currentTool, hover, ctrlOrMeta model2 ) of
+                                        ( TilePlacerTool { tileGroup, index }, MapHover, False ) ->
                                             placeTile False tileGroup index model2
 
-                                        ( _, PrimaryColorInput ) ->
+                                        ( _, PrimaryColorInput, _ ) ->
                                             { model2
                                                 | primaryColorTextInput =
                                                     TextInput.mouseDown
@@ -877,7 +873,7 @@ updateLoaded audioData msg model =
                                             }
                                                 |> setFocus PrimaryColorInput
 
-                                        ( _, SecondaryColorInput ) ->
+                                        ( _, SecondaryColorInput, _ ) ->
                                             { model2
                                                 | secondaryColorTextInput =
                                                     TextInput.mouseDown
@@ -968,7 +964,7 @@ updateLoaded audioData msg model =
                     model.scrollThreshold + event.deltaY
             in
             ( if abs scrollThreshold > 50 then
-                if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+                if ctrlOrMeta model then
                     { model
                         | zoomFactor =
                             (if scrollThreshold > 0 then
@@ -1041,13 +1037,25 @@ updateLoaded audioData msg model =
                                         model2
 
                                     TileHover _ ->
-                                        placeTile True tileGroup index model2
+                                        if ctrlOrMeta model2 then
+                                            model2
+
+                                        else
+                                            placeTile True tileGroup index model2
 
                                     TrainHover _ ->
-                                        placeTile True tileGroup index model2
+                                        if ctrlOrMeta model2 then
+                                            model2
+
+                                        else
+                                            placeTile True tileGroup index model2
 
                                     MapHover ->
-                                        placeTile True tileGroup index model2
+                                        if ctrlOrMeta model2 then
+                                            model2
+
+                                        else
+                                            placeTile True tileGroup index model2
 
                                     MailEditorHover _ ->
                                         model2
@@ -1468,7 +1476,7 @@ handleKeyDownColorInput setTextInputModel updateColor tileGroup key model textIn
     let
         ( newTextInput, cmd ) =
             TextInput.keyMsg
-                (keyDown Keyboard.Control model || keyDown Keyboard.Meta model)
+                (ctrlOrMeta model)
                 (keyDown Keyboard.Shift model)
                 key
                 textInput
@@ -1615,14 +1623,23 @@ hoverAt model mousePosition =
                             localModel =
                                 LocalGrid.localModel model.localModel
                         in
-                        case ( model.currentTool, Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid ) of
-                            ( HandTool, Just tile ) ->
-                                TileHover tile |> Just
+                        case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
+                            Just tile ->
+                                case model.currentTool of
+                                    HandTool ->
+                                        TileHover tile |> Just
 
-                            ( TilePickerTool, Just tile ) ->
-                                TileHover tile |> Just
+                                    TilePickerTool ->
+                                        TileHover tile |> Just
 
-                            _ ->
+                                    TilePlacerTool _ ->
+                                        if ctrlOrMeta model then
+                                            TileHover tile |> Just
+
+                                        else
+                                            Nothing
+
+                            Nothing ->
                                 Nothing
 
                     trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
@@ -1703,32 +1720,22 @@ replaceUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Browser.Navigation.replaceUrl model.key url )
 
 
+ctrlOrMeta : { a | pressedKeys : List Keyboard.Key } -> Bool
+ctrlOrMeta model =
+    keyDown Keyboard.Control model || keyDown Keyboard.Meta model
+
+
 keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
 keyMsgCanvasUpdate key model =
-    let
-        ctrlOrMeta =
-            keyDown Keyboard.Control model || keyDown Keyboard.Meta model
-
-        handleRedo () =
-            if ctrlOrMeta then
-                ( updateLocalModel Change.LocalRedo model |> Tuple.first, Cmd.none )
-
-            else
-                ( model, Cmd.none )
-    in
-    case ( key, ctrlOrMeta ) of
+    case ( key, ctrlOrMeta model ) of
         ( Keyboard.Character "z", True ) ->
-            if ctrlOrMeta then
-                ( updateLocalModel Change.LocalUndo model |> Tuple.first, Cmd.none )
-
-            else
-                ( model, Cmd.none )
+            ( updateLocalModel Change.LocalUndo model |> Tuple.first, Cmd.none )
 
         ( Keyboard.Character "Z", True ) ->
-            handleRedo ()
+            ( updateLocalModel Change.LocalRedo model |> Tuple.first, Cmd.none )
 
         ( Keyboard.Character "y", True ) ->
-            handleRedo ()
+            ( updateLocalModel Change.LocalRedo model |> Tuple.first, Cmd.none )
 
         ( Keyboard.Escape, _ ) ->
             ( case model.currentTool of
@@ -2014,16 +2021,8 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( setCurrentTool tool model2, Cmd.none )
 
                     TileHover data ->
-                        case model2.currentTool of
-                            HandTool ->
-                                case tileInteraction data model2 of
-                                    Just func ->
-                                        func ()
-
-                                    Nothing ->
-                                        ( model2, Cmd.none )
-
-                            TilePickerTool ->
+                        let
+                            tilePickerToolHelper () =
                                 ( case hoverAt2 of
                                     TileHover { tile, colors } ->
                                         case Tile.tileToTileGroup tile of
@@ -2037,9 +2036,29 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         model2
                                 , Cmd.none
                                 )
+                        in
+                        case model2.currentTool of
+                            HandTool ->
+                                if ctrlOrMeta model2 then
+                                    tilePickerToolHelper ()
+
+                                else
+                                    case tileInteraction data model2 of
+                                        Just func ->
+                                            func ()
+
+                                        Nothing ->
+                                            ( model2, Cmd.none )
+
+                            TilePickerTool ->
+                                tilePickerToolHelper ()
 
                             TilePlacerTool _ ->
-                                ( model2, Cmd.none )
+                                if ctrlOrMeta model2 then
+                                    tilePickerToolHelper ()
+
+                                else
+                                    ( model2, Cmd.none )
 
                     TrainHover { trainId, train } ->
                         case Train.status model.time train of
@@ -2628,30 +2647,34 @@ updateMeshes oldModel newModel =
         currentTile model =
             case model.currentTool of
                 TilePlacerTool { tileGroup, index } ->
-                    let
-                        tile =
-                            Toolbar.getTileGroupTile tileGroup index
+                    if ctrlOrMeta model then
+                        Nothing
 
-                        position =
-                            cursorPosition (Tile.getData tile) model
+                    else
+                        let
+                            tile =
+                                Toolbar.getTileGroupTile tileGroup index
 
-                        ( cellPosition, localPosition ) =
-                            Grid.worldToCellAndLocalCoord position
-                    in
-                    { tile = tile
-                    , position = position
-                    , cellPosition =
-                        Grid.closeNeighborCells cellPosition localPosition
-                            |> List.map Tuple.first
-                            |> (::) cellPosition
-                            |> List.map Coord.toTuple
-                            |> Set.fromList
-                    , colors =
-                        { primaryColor = Color.rgb255 0 0 0
-                        , secondaryColor = Color.rgb255 255 255 255
+                            position =
+                                cursorPosition (Tile.getData tile) model
+
+                            ( cellPosition, localPosition ) =
+                                Grid.worldToCellAndLocalCoord position
+                        in
+                        { tile = tile
+                        , position = position
+                        , cellPosition =
+                            Grid.closeNeighborCells cellPosition localPosition
+                                |> List.map Tuple.first
+                                |> (::) cellPosition
+                                |> List.map Coord.toTuple
+                                |> Set.fromList
+                        , colors =
+                            { primaryColor = Color.rgb255 0 0 0
+                            , secondaryColor = Color.rgb255 255 255 255
+                            }
                         }
-                    }
-                        |> Just
+                            |> Just
 
                 HandTool ->
                     Nothing
@@ -3418,7 +3441,7 @@ cursorSprite hover model =
             else if isHoldingCow model /= Nothing then
                 CursorSprite PinchSpriteCursor
 
-            else if keyDown Keyboard.Control model || keyDown Keyboard.Meta model then
+            else if ctrlOrMeta model then
                 CursorSprite EyeDropperSpriteCursor
 
             else
@@ -3834,110 +3857,114 @@ canvasView audioData model =
                         (getSpeechBubbles model)
                     ++ (case ( hoverAt model mouseScreenPosition_, model.currentTool ) of
                             ( MapHover, TilePlacerTool currentTile ) ->
-                                let
-                                    currentTile2 : Tile
-                                    currentTile2 =
-                                        Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index
+                                if ctrlOrMeta model then
+                                    []
 
-                                    mousePosition : Coord WorldUnit
-                                    mousePosition =
-                                        mouseWorldPosition model
-                                            |> Coord.floorPoint
-                                            |> Coord.minus (tileSize |> Coord.divide (Coord.tuple ( 2, 2 )))
+                                else
+                                    let
+                                        currentTile2 : Tile
+                                        currentTile2 =
+                                            Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index
 
-                                    ( mouseX, mouseY ) =
-                                        Coord.toTuple mousePosition
+                                        mousePosition : Coord WorldUnit
+                                        mousePosition =
+                                            mouseWorldPosition model
+                                                |> Coord.floorPoint
+                                                |> Coord.minus (tileSize |> Coord.divide (Coord.tuple ( 2, 2 )))
 
-                                    tileSize =
-                                        Tile.getData currentTile2 |> .size
+                                        ( mouseX, mouseY ) =
+                                            Coord.toTuple mousePosition
 
-                                    lastPlacementOffset : () -> Float
-                                    lastPlacementOffset () =
-                                        case model.lastPlacementError of
-                                            Just time ->
-                                                let
-                                                    timeElapsed =
-                                                        Duration.from time model.time
-                                                in
-                                                if
-                                                    timeElapsed
-                                                        |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
-                                                then
-                                                    timeElapsed
-                                                        |> Duration.inSeconds
-                                                        |> (*) 40
-                                                        |> cos
-                                                        |> (*) 2
+                                        tileSize =
+                                            Tile.getData currentTile2 |> .size
 
-                                                else
+                                        lastPlacementOffset : () -> Float
+                                        lastPlacementOffset () =
+                                            case model.lastPlacementError of
+                                                Just time ->
+                                                    let
+                                                        timeElapsed =
+                                                            Duration.from time model.time
+                                                    in
+                                                    if
+                                                        timeElapsed
+                                                            |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
+                                                    then
+                                                        timeElapsed
+                                                            |> Duration.inSeconds
+                                                            |> (*) 40
+                                                            |> cos
+                                                            |> (*) 2
+
+                                                    else
+                                                        0
+
+                                                Nothing ->
                                                     0
 
-                                            Nothing ->
-                                                0
+                                        offsetX : Float
+                                        offsetX =
+                                            case model.lastTilePlaced of
+                                                Just { tile, time } ->
+                                                    let
+                                                        timeElapsed =
+                                                            Duration.from time model.time
+                                                    in
+                                                    if
+                                                        (timeElapsed
+                                                            |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
+                                                        )
+                                                            && (tile == EmptyTile)
+                                                    then
+                                                        timeElapsed
+                                                            |> Duration.inSeconds
+                                                            |> (*) 40
+                                                            |> cos
+                                                            |> (*) 2
 
-                                    offsetX : Float
-                                    offsetX =
-                                        case model.lastTilePlaced of
-                                            Just { tile, time } ->
-                                                let
-                                                    timeElapsed =
-                                                        Duration.from time model.time
-                                                in
-                                                if
-                                                    (timeElapsed
-                                                        |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
-                                                    )
-                                                        && (tile == EmptyTile)
-                                                then
-                                                    timeElapsed
-                                                        |> Duration.inSeconds
-                                                        |> (*) 40
-                                                        |> cos
-                                                        |> (*) 2
+                                                    else
+                                                        lastPlacementOffset ()
 
-                                                else
+                                                Nothing ->
                                                     lastPlacementOffset ()
+                                    in
+                                    [ WebGL.entityWith
+                                        [ Shaders.blend ]
+                                        Shaders.vertexShader
+                                        Shaders.fragmentShader
+                                        currentTile.mesh
+                                        { view =
+                                            viewMatrix
+                                                |> Mat4.translate3
+                                                    (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
+                                                    (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
+                                                    0
+                                        , texture = model.texture
+                                        , textureSize = textureSize
+                                        , color =
+                                            if currentTile.tileGroup == EmptyTileGroup then
+                                                Vec4.vec4 1 1 1 1
 
-                                            Nothing ->
-                                                lastPlacementOffset ()
-                                in
-                                [ WebGL.entityWith
-                                    [ Shaders.blend ]
-                                    Shaders.vertexShader
-                                    Shaders.fragmentShader
-                                    currentTile.mesh
-                                    { view =
-                                        viewMatrix
-                                            |> Mat4.translate3
-                                                (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
-                                                (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
-                                                0
-                                    , texture = model.texture
-                                    , textureSize = textureSize
-                                    , color =
-                                        if currentTile.tileGroup == EmptyTileGroup then
-                                            Vec4.vec4 1 1 1 1
-
-                                        else if
-                                            canPlaceTile
-                                                model.time
-                                                { position = mousePosition
-                                                , change = currentTile2
-                                                , userId = currentUserId model
-                                                , colors =
-                                                    { primaryColor = Color.rgb255 0 0 0
-                                                    , secondaryColor = Color.rgb255 255 255 255
+                                            else if
+                                                canPlaceTile
+                                                    model.time
+                                                    { position = mousePosition
+                                                    , change = currentTile2
+                                                    , userId = currentUserId model
+                                                    , colors =
+                                                        { primaryColor = Color.rgb255 0 0 0
+                                                        , secondaryColor = Color.rgb255 255 255 255
+                                                        }
                                                     }
-                                                }
-                                                model.trains
-                                                (LocalGrid.localModel model.localModel |> .grid)
-                                        then
-                                            Vec4.vec4 1 1 1 0.5
+                                                    model.trains
+                                                    (LocalGrid.localModel model.localModel |> .grid)
+                                            then
+                                                Vec4.vec4 1 1 1 0.5
 
-                                        else
-                                            Vec4.vec4 1 0 0 0.5
-                                    }
-                                ]
+                                            else
+                                                Vec4.vec4 1 0 0 0.5
+                                        }
+                                    ]
 
                             _ ->
                                 []
