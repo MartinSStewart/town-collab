@@ -37,7 +37,6 @@ import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
-import UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..))
 
 
 app =
@@ -55,7 +54,6 @@ subscriptions : BackendModel -> Sub BackendMsg
 subscriptions _ =
     Sub.batch
         [ Lamdera.onDisconnect UserDisconnected
-        , Time.every (notifyAdminWait |> Duration.inMilliseconds) NotifyAdminTimeElapsed
         , Time.every 1000 WorldUpdateTimeElapsed
         ]
 
@@ -65,7 +63,6 @@ init =
     { grid = Grid.empty
     , userSessions = Dict.empty
     , users = IdDict.empty
-    , usersHiddenRecently = []
     , secretLinkCounter = 0
     , errors = []
     , trains = AssocList.empty
@@ -125,13 +122,6 @@ update msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
-
-        NotifyAdminTimeElapsed time ->
-            let
-                ( newModel, cmd ) =
-                    notifyAdmin model
-            in
-            ( newModel, cmd )
 
         NotifyAdminEmailSent ->
             ( model, Cmd.none )
@@ -271,49 +261,6 @@ update msg model =
 addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
 addError time error model =
     { model | errors = ( time, error ) :: model.errors }
-
-
-notifyAdmin : BackendModel -> ( BackendModel, Cmd BackendMsg )
-notifyAdmin model =
-    let
-        idToString =
-            Id.toInt >> String.fromInt
-
-        fullUrl point =
-            Env.domain ++ "/" ++ UrlHelper.encodeUrl (UrlHelper.internalRoute point)
-
-        hidden =
-            List.map
-                (\{ reporter, hiddenUser, hidePoint } ->
-                    "User "
-                        ++ idToString reporter
-                        ++ " hid user "
-                        ++ idToString hiddenUser
-                        ++ "'s text at "
-                        ++ fullUrl hidePoint
-                )
-                model.usersHiddenRecently
-                |> String.join "\n"
-    in
-    if List.isEmpty model.usersHiddenRecently then
-        ( model, Cmd.none )
-
-    else
-        ( { model | usersHiddenRecently = [] }
-        , case Env.adminEmail of
-            Just adminEmail ->
-                sendEmail
-                    (always NotifyAdminEmailSent)
-                    (String.Nonempty.append_
-                        (String.Nonempty.fromInt (List.length model.usersHiddenRecently))
-                        " users hidden"
-                    )
-                    (Email.Html.text hidden)
-                    adminEmail
-
-            Nothing ->
-                Cmd.none
-        )
 
 
 backendUserId : Id UserId
@@ -704,49 +651,6 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
         Change.LocalAddUndo ->
             ( updateUser userId Undo.add model, originalChange, Nothing )
 
-        Change.LocalHideUser hideUserId hidePoint ->
-            ( if userId == hideUserId then
-                model
-
-              else if IdDict.member hideUserId model.users then
-                updateUser
-                    userId
-                    (\user -> { user | hiddenUsers = Coord.toggleSet hideUserId user.hiddenUsers })
-                    { model
-                        | usersHiddenRecently =
-                            if Just userId == Env.adminUserId then
-                                model.usersHiddenRecently
-
-                            else
-                                { reporter = userId, hiddenUser = hideUserId, hidePoint = hidePoint } :: model.usersHiddenRecently
-                    }
-
-              else
-                model
-            , originalChange
-            , Nothing
-            )
-
-        Change.LocalUnhideUser unhideUserId ->
-            ( updateUser
-                userId
-                (\user -> { user | hiddenUsers = Coord.toggleSet unhideUserId user.hiddenUsers })
-                { model
-                    | usersHiddenRecently =
-                        List.filterMap
-                            (\value ->
-                                if value.reporter == userId && unhideUserId == value.hiddenUser then
-                                    Nothing
-
-                                else
-                                    Just value
-                            )
-                            model.usersHiddenRecently
-                }
-            , originalChange
-            , Nothing
-            )
-
         Change.InvalidChange ->
             ( model, originalChange, Nothing )
 
@@ -941,8 +845,6 @@ requestDataUpdate sessionId clientId viewBounds model =
         loadingData =
             { user = userId2
             , grid = Grid.region viewBounds newModel2.grid
-            , hiddenUsers = userData2.hiddenUsers
-            , adminHiddenUsers = hiddenUsers (Just userId2) newModel2
             , undoHistory = userData2.undoHistory
             , redoHistory = userData2.redoHistory
             , undoCurrent = userData2.undoCurrent
@@ -980,9 +882,7 @@ createUser userId model =
     let
         userBackendData : BackendUserData
         userBackendData =
-            { hiddenUsers = EverySet.empty
-            , hiddenForAll = False
-            , undoHistory = []
+            { undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
             , mailEditor = MailEditor.init

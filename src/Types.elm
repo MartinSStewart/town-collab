@@ -124,15 +124,12 @@ type alias FrontendLoaded =
     , devicePixelRatio : Float
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
-    , lastMouseLeftUp : Maybe ( Time.Posix, Point2d Pixels Pixels )
     , mouseMiddle : MouseButtonState
     , pendingChanges : List ( Id EventId, Change.LocalChange )
     , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , startTime : Time.Posix
-    , userHoverHighlighted : Maybe (Id UserId)
-    , highlightContextMenu : Maybe { userId : Id UserId, hidePoint : Coord WorldUnit }
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
@@ -201,7 +198,6 @@ type alias BackendModel =
     { grid : Grid
     , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : Id UserId }
     , users : IdDict UserId BackendUserData
-    , usersHiddenRecently : List { reporter : Id UserId, hiddenUser : Id UserId, hidePoint : Coord WorldUnit }
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
     , trains : AssocList.Dict (Id TrainId) Train
@@ -217,9 +213,7 @@ type BackendError
 
 
 type alias BackendUserData =
-    { hiddenUsers : EverySet (Id UserId)
-    , hiddenForAll : Bool
-    , undoHistory : List (Dict RawCellCoord Int)
+    { undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
     , mailEditor : MailEditorData
@@ -253,11 +247,7 @@ type FrontendMsg_
     | RedoPressed
     | CopyPressed
     | CutPressed
-    | UnhideUserPressed (Id UserId)
-    | UserTagMouseEntered (Id UserId)
-    | UserTagMouseExited (Id UserId)
     | ToggleAdminEnabledPressed
-    | HideUserPressed { userId : Id UserId, hidePoint : Coord WorldUnit }
     | AnimationFrame Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
@@ -278,7 +268,6 @@ type ToBackend
 
 type BackendMsg
     = UserDisconnected SessionId ClientId
-    | NotifyAdminTimeElapsed Time.Posix
     | NotifyAdminEmailSent
     | ChangeEmailSent Time.Posix EmailAddress (Result SendGrid.Error ())
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
@@ -302,8 +291,6 @@ type EmailEvent
 type alias LoadingData_ =
     { user : Id UserId
     , grid : GridData
-    , hiddenUsers : EverySet (Id UserId)
-    , adminHiddenUsers : EverySet (Id UserId)
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int

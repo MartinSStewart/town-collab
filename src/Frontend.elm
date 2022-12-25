@@ -452,14 +452,11 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , zoomFactor = loading.zoomFactor
             , mouseLeft = MouseButtonUp { current = loading.mousePosition }
             , mouseMiddle = MouseButtonUp { current = loading.mousePosition }
-            , lastMouseLeftUp = Nothing
             , pendingChanges = []
             , tool = DragTool
             , undoAddLast = Time.millisToPosix 0
             , time = time
             , startTime = time
-            , userHoverHighlighted = Nothing
-            , highlightContextMenu = Nothing
             , adminEnabled = False
             , animationElapsedTime = Duration.seconds 0
             , ignoreNextUrlChanged = False
@@ -1184,40 +1181,12 @@ updateLoaded audioData msg model =
             -- TODO
             ( model, Cmd.none )
 
-        UnhideUserPressed userToUnhide ->
-            ( updateLocalModel
-                (Change.LocalUnhideUser userToUnhide)
-                { model
-                    | userHoverHighlighted =
-                        if Just userToUnhide == model.userHoverHighlighted then
-                            Nothing
-
-                        else
-                            model.userHoverHighlighted
-                }
-                |> Tuple.first
-            , Cmd.none
-            )
-
-        UserTagMouseEntered userId ->
-            ( { model | userHoverHighlighted = Just userId }, Cmd.none )
-
-        UserTagMouseExited _ ->
-            ( { model | userHoverHighlighted = Nothing }, Cmd.none )
-
         ToggleAdminEnabledPressed ->
             ( if Just (currentUserId model) == Env.adminUserId then
                 { model | adminEnabled = not model.adminEnabled }
 
               else
                 model
-            , Cmd.none
-            )
-
-        HideUserPressed { userId, hidePoint } ->
-            ( { model | highlightContextMenu = Nothing }
-                |> updateLocalModel (Change.LocalHideUser userId hidePoint)
-                |> Tuple.first
             , Cmd.none
             )
 
@@ -1993,13 +1962,6 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                         _ ->
                             model.viewPoint
-                , highlightContextMenu =
-                    if isSmallDistance2 then
-                        Nothing
-
-                    else
-                        model.highlightContextMenu
-                , lastMouseLeftUp = Just ( model.time, mousePosition )
             }
                 |> (\m ->
                         if isSmallDistance2 then

@@ -7,7 +7,6 @@ import Dict exposing (Dict)
 import Grid
 import GridCell
 import Id exposing (CowId, EventId, Id, UserId)
-import IdDict exposing (IdDict)
 import Point2d exposing (Point2d)
 import Time
 import Units exposing (CellUnit, WorldUnit)
@@ -24,8 +23,6 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | LocalHideUser (Id UserId) (Coord WorldUnit)
-    | LocalUnhideUser (Id UserId)
     | PickupCow (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
     | DropCow (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)

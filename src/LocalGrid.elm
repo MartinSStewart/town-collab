@@ -15,9 +15,7 @@ import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
-import Cursor
 import Dict exposing (Dict)
-import EverySet exposing (EverySet)
 import Grid exposing (Grid, GridData)
 import GridCell
 import Id exposing (CowId, Id, UserId)
@@ -43,8 +41,6 @@ type alias LocalGrid_ =
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , user : Id UserId
-    , hiddenUsers : EverySet (Id UserId)
-    , adminHiddenUsers : EverySet (Id UserId)
     , viewBounds : Bounds CellUnit
     , undoCurrent : Dict RawCellCoord Int
     , cows : IdDict CowId Cow
@@ -68,8 +64,6 @@ init :
     { a
         | user : Id UserId
         , grid : GridData
-        , hiddenUsers : EverySet (Id UserId)
-        , adminHiddenUsers : EverySet (Id UserId)
         , undoHistory : List (Dict RawCellCoord Int)
         , redoHistory : List (Dict RawCellCoord Int)
         , undoCurrent : Dict RawCellCoord Int
@@ -79,14 +73,12 @@ init :
         , handColors : IdDict UserId Colors
     }
     -> LocalModel Change LocalGrid
-init { grid, undoHistory, redoHistory, undoCurrent, user, hiddenUsers, adminHiddenUsers, viewBounds, cows, cursors, handColors } =
+init { grid, undoHistory, redoHistory, undoCurrent, user, viewBounds, cows, cursors, handColors } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , user = user
         , undoHistory = undoHistory
         , redoHistory = redoHistory
-        , hiddenUsers = hiddenUsers
-        , adminHiddenUsers = adminHiddenUsers
         , viewBounds = viewBounds
         , undoCurrent = undoCurrent
         , cows = cows
@@ -181,30 +173,6 @@ updateLocalChange localChange model =
 
         LocalAddUndo ->
             ( Undo.add model, NoOutMsg )
-
-        LocalHideUser userId_ _ ->
-            ( { model
-                | hiddenUsers =
-                    if userId_ == model.user then
-                        model.hiddenUsers
-
-                    else
-                        EverySet.insert userId_ model.hiddenUsers
-              }
-            , NoOutMsg
-            )
-
-        LocalUnhideUser userId_ ->
-            ( { model
-                | hiddenUsers =
-                    if userId_ == model.user then
-                        model.hiddenUsers
-
-                    else
-                        EverySet.remove userId_ model.hiddenUsers
-              }
-            , NoOutMsg
-            )
 
         InvalidChange ->
             ( model, NoOutMsg )
