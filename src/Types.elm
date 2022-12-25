@@ -35,7 +35,6 @@ import Cursor exposing (CursorMeshes)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import EmailAddress exposing (EmailAddress)
-import EverySet exposing (EverySet)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
@@ -44,7 +43,7 @@ import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty exposing (Nonempty)
-import LocalGrid exposing (Cursor, LocalGrid)
+import LocalGrid exposing (Cursor, LocalGrid, UserStatus)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
 import PingData exposing (PingData)
@@ -289,15 +288,11 @@ type EmailEvent
 
 
 type alias LoadingData_ =
-    { user : Id UserId
-    , grid : GridData
-    , undoHistory : List (Dict RawCellCoord Int)
-    , redoHistory : List (Dict RawCellCoord Int)
-    , undoCurrent : Dict RawCellCoord Int
+    { grid : GridData
+    , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
     , trains : AssocList.Dict (Id TrainId) Train
     , mail : AssocList.Dict (Id MailId) FrontendMail
-    , mailEditor : MailEditorData
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
     , handColors : IdDict UserId Colors

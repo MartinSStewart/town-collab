@@ -39,7 +39,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_)
+import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_, UserStatus(..))
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -299,27 +299,32 @@ audioLoaded audioData model =
     , playSound PopSound (Duration.addTo model.startTime (Duration.milliseconds 100))
         -- Increase the volume on this sound effect to compensate for the volume fade in at the start of the game
         |> Audio.scaleVolume 2
-    , case IdDict.get localModel.user localModel.cursors of
-        Just cursor ->
-            case cursor.holdingCow of
-                Just { pickupTime } ->
-                    playSound
-                        (Random.step
-                            (Random.weighted
-                                ( 1 / 6, Moo0 )
-                                [ ( 1 / 6, Moo1 )
-                                , ( 1 / 12, Moo2 )
-                                , ( 1 / 12, Moo3 )
-                                , ( 1 / 6, Moo4 )
-                                , ( 1 / 6, Moo5 )
-                                , ( 1 / 6, Moo6 )
-                                ]
-                            )
-                            (Random.initialSeed (Time.posixToMillis pickupTime))
-                            |> Tuple.first
-                        )
-                        pickupTime
-                        |> Audio.scaleVolume 0.5
+    , case currentUserId model of
+        Just userId ->
+            case IdDict.get userId localModel.cursors of
+                Just cursor ->
+                    case cursor.holdingCow of
+                        Just { pickupTime } ->
+                            playSound
+                                (Random.step
+                                    (Random.weighted
+                                        ( 1 / 6, Moo0 )
+                                        [ ( 1 / 6, Moo1 )
+                                        , ( 1 / 12, Moo2 )
+                                        , ( 1 / 12, Moo3 )
+                                        , ( 1 / 6, Moo4 )
+                                        , ( 1 / 6, Moo5 )
+                                        , ( 1 / 6, Moo6 )
+                                        ]
+                                    )
+                                    (Random.initialSeed (Time.posixToMillis pickupTime))
+                                    |> Tuple.first
+                                )
+                                pickupTime
+                                |> Audio.scaleVolume 0.5
+
+                        Nothing ->
+                            Audio.silence
 
                 Nothing ->
                     Audio.silence
@@ -466,10 +471,21 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadingData.mail
-            , mailEditor = MailEditor.initEditor loadingData.mailEditor
+            , mailEditor =
+                MailEditor.initEditor
+                    (case loadingData.userStatus of
+                        LoggedIn loggedIn ->
+                            loggedIn.mailEditor
+
+                        NotLoggedIn ->
+                            { to = ""
+                            , content = []
+                            , currentImage = MailEditor.BlueStamp
+                            }
+                    )
             , currentTool = currentTile
             , lastTileRotation = []
-            , userIdMesh = createInfoMesh Nothing loadingData.user
+            , userIdMesh = createInfoMesh Nothing (currentUserId { localModel = localModel })
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
             , toolbarMesh = Shaders.triangleFan []
@@ -1182,7 +1198,7 @@ updateLoaded audioData msg model =
             ( model, Cmd.none )
 
         ToggleAdminEnabledPressed ->
-            ( if Just (currentUserId model) == Env.adminUserId then
+            ( if currentUserId model == Env.adminUserId then
                 { model | adminEnabled = not model.adminEnabled }
 
               else
@@ -1838,7 +1854,7 @@ isHoldingCow model =
         localGrid =
             LocalGrid.localModel model.localModel
     in
-    case IdDict.get localGrid.user localGrid.cursors of
+    case IdDict.get localGrid.userId localGrid.cursors of
         Just cursor ->
             cursor.holdingCow
 
@@ -2691,7 +2707,7 @@ updateMeshes forceUpdate oldModel newModel =
                             newCurrentTile
                     )
                     coord
-                    localModel.user
+                    localModel.userId
                     (GridCell.flatten newCell)
             , background =
                 case backgroundMesh of
@@ -3138,9 +3154,14 @@ view audioData model =
     }
 
 
-currentUserId : FrontendLoaded -> Id UserId
-currentUserId =
-    .localModel >> LocalGrid.localModel >> .user
+currentUserId : { a | localModel : LocalModel Change LocalGrid } -> Maybe (Id UserId)
+currentUserId model =
+    case LocalGrid.localModel model.localModel |> .userStatus of
+        LoggedIn loggedIn ->
+            Just loggedIn.userId
+
+        NotLoggedIn ->
+            Nothing
 
 
 findPixelPerfectSize :
@@ -3402,13 +3423,18 @@ startButtonHighlightMesh =
         |> Sprite.toMesh
 
 
-currentTool : { a | pressedKeys : List Keyboard.Key, currentTool : Tool } -> Tool
+currentTool : FrontendLoaded -> Tool
 currentTool model =
-    if ctrlOrMeta model then
-        TilePickerTool
+    case currentUserId model of
+        Just _ ->
+            if ctrlOrMeta model then
+                TilePickerTool
 
-    else
-        model.currentTool
+            else
+                model.currentTool
+
+        Nothing ->
+            HandTool
 
 
 cursorSprite : Hover -> FrontendLoaded -> CursorType
@@ -4280,8 +4306,8 @@ receivingMailFlagMesh frame =
         ]
 
 
-createInfoMesh : Maybe PingData -> Id UserId -> WebGL.Mesh Vertex
-createInfoMesh maybePingData userId =
+createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> WebGL.Mesh Vertex
+createInfoMesh maybePingData maybeUserId =
     let
         durationToString duration =
             Duration.inMilliseconds duration |> round |> String.fromInt
@@ -4292,7 +4318,13 @@ createInfoMesh maybePingData userId =
                 2
                 ("Warning! Game is in alpha. The world is reset often.\n"
                     ++ "User ID: "
-                    ++ String.fromInt (Id.toInt userId)
+                    ++ (case maybeUserId of
+                            Just userId ->
+                                String.fromInt (Id.toInt userId)
+
+                            Nothing ->
+                                "Not logged in"
+                       )
                     ++ "\n"
                     ++ (case maybePingData of
                             Just pingData ->

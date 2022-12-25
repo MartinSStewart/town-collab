@@ -3,6 +3,7 @@ module LocalGrid exposing
     , LocalGrid
     , LocalGrid_
     , OutMsg(..)
+    , UserStatus(..)
     , addCows
     , incrementUndoCurrent
     , init
@@ -22,6 +23,7 @@ import Id exposing (CowId, Id, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
+import MailEditor exposing (MailEditorData)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -38,15 +40,23 @@ type LocalGrid
 
 type alias LocalGrid_ =
     { grid : Grid
-    , undoHistory : List (Dict RawCellCoord Int)
-    , redoHistory : List (Dict RawCellCoord Int)
-    , user : Id UserId
+    , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
-    , undoCurrent : Dict RawCellCoord Int
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
     , handColors : IdDict UserId Colors
     }
+
+
+type UserStatus
+    = LoggedIn
+        { userId : Id UserId
+        , undoHistory : List (Dict RawCellCoord Int)
+        , redoHistory : List (Dict RawCellCoord Int)
+        , undoCurrent : Dict RawCellCoord Int
+        , mailEditor : MailEditorData
+        }
+    | NotLoggedIn
 
 
 type alias Cursor =
@@ -62,10 +72,8 @@ localModel localModel_ =
 
 init :
     { a
-        | user : Id UserId
+        | userStatus : UserStatus
         , grid : GridData
-        , undoHistory : List (Dict RawCellCoord Int)
-        , redoHistory : List (Dict RawCellCoord Int)
         , undoCurrent : Dict RawCellCoord Int
         , viewBounds : Bounds CellUnit
         , cows : IdDict CowId Cow
@@ -73,14 +81,11 @@ init :
         , handColors : IdDict UserId Colors
     }
     -> LocalModel Change LocalGrid
-init { grid, undoHistory, redoHistory, undoCurrent, user, viewBounds, cows, cursors, handColors } =
+init { grid, userStatus, viewBounds, cows, cursors, handColors } =
     LocalGrid
         { grid = Grid.dataToGrid grid
-        , user = user
-        , undoHistory = undoHistory
-        , redoHistory = redoHistory
+        , userStatus = userStatus
         , viewBounds = viewBounds
-        , undoCurrent = undoCurrent
         , cows = cows
         , cursors = cursors
         , handColors = handColors
@@ -130,66 +135,122 @@ updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateLocalChange localChange model =
     case localChange of
         LocalGridChange gridChange ->
-            let
-                ( cellPosition, localPosition ) =
-                    Grid.worldToCellAndLocalCoord gridChange.position
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    let
+                        ( cellPosition, localPosition ) =
+                            Grid.worldToCellAndLocalCoord gridChange.position
 
-                change =
-                    Grid.addChange (Grid.localChangeToChange model.user gridChange) model.grid
-            in
-            ( { model
-                | redoHistory = []
-                , grid =
-                    if Bounds.contains cellPosition model.viewBounds then
-                        change.grid
+                        change =
+                            Grid.addChange (Grid.localChangeToChange loggedIn.userId gridChange) model.grid
+                    in
+                    ( { model
+                        | userStatus =
+                            { loggedIn
+                                | redoHistory = []
+                                , undoCurrent = incrementUndoCurrent cellPosition localPosition loggedIn.undoCurrent
+                            }
+                                |> LoggedIn
+                        , grid =
+                            if Bounds.contains cellPosition model.viewBounds then
+                                change.grid
 
-                    else
-                        model.grid
-                , undoCurrent = incrementUndoCurrent cellPosition localPosition model.undoCurrent
-              }
-                |> addCows change.newCells
-            , TilesRemoved change.removed
-            )
+                            else
+                                model.grid
+                      }
+                        |> addCows change.newCells
+                    , TilesRemoved change.removed
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
 
         LocalRedo ->
-            ( case Undo.redo model of
-                Just newModel ->
-                    { newModel | grid = Grid.moveUndoPoint model.user newModel.undoCurrent model.grid }
+            ( case model.userStatus of
+                LoggedIn loggedIn ->
+                    case Undo.redo loggedIn of
+                        Just newLoggedIn ->
+                            { model
+                                | userStatus = LoggedIn newLoggedIn
+                                , grid = Grid.moveUndoPoint loggedIn.userId newLoggedIn.undoCurrent model.grid
+                            }
 
-                Nothing ->
+                        Nothing ->
+                            model
+
+                NotLoggedIn ->
                     model
             , NoOutMsg
             )
 
         LocalUndo ->
-            ( case Undo.undo model of
-                Just newModel ->
-                    { newModel | grid = Grid.moveUndoPoint model.user (Dict.map (\_ a -> -a) model.undoCurrent) model.grid }
+            ( case model.userStatus of
+                LoggedIn loggedIn ->
+                    case Undo.undo loggedIn of
+                        Just newLoggedIn ->
+                            { model
+                                | userStatus = LoggedIn newLoggedIn
+                                , grid =
+                                    Grid.moveUndoPoint
+                                        loggedIn.userId
+                                        (Dict.map (\_ a -> -a) loggedIn.undoCurrent)
+                                        model.grid
+                            }
 
-                Nothing ->
+                        Nothing ->
+                            model
+
+                NotLoggedIn ->
                     model
             , NoOutMsg
             )
 
         LocalAddUndo ->
-            ( Undo.add model, NoOutMsg )
+            ( case model.userStatus of
+                LoggedIn loggedIn ->
+                    { model | userStatus = Undo.add loggedIn |> LoggedIn }
+
+                NotLoggedIn ->
+                    model
+            , NoOutMsg
+            )
 
         InvalidChange ->
             ( model, NoOutMsg )
 
         PickupCow cowId position time ->
-            pickupCow model.user cowId position time model
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    pickupCow loggedIn.userId cowId position time model
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
 
         DropCow cowId position time ->
-            dropCow model.user cowId position model
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    dropCow loggedIn.userId cowId position model
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
 
         MoveCursor position ->
-            moveCursor model.user position model
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    moveCursor loggedIn.userId position model
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
 
         ChangeHandColor colors ->
-            ( { model | handColors = IdDict.insert model.user colors model.handColors }
-            , HandColorChanged
-            )
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model | handColors = IdDict.insert loggedIn.userId colors model.handColors }
+                    , HandColorChanged
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
 
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )

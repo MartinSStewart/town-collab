@@ -25,7 +25,7 @@ import Id exposing (EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera exposing (ClientId, SessionId)
 import List.Nonempty as Nonempty exposing (Nonempty(..))
-import LocalGrid
+import LocalGrid exposing (UserStatus(..))
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Quantity exposing (Quantity(..))
 import SendGrid exposing (Email)
@@ -804,54 +804,42 @@ hiddenUsers userId model =
 requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 requestDataUpdate sessionId clientId viewBounds model =
     let
-        ( userId2, newModel2, userData2 ) =
+        userStatus =
             case getUserFromSessionId sessionId model of
                 Just ( userId, user ) ->
-                    ( userId
-                    , { model
-                        | userSessions =
-                            Dict.update sessionId
-                                (\maybeSession ->
-                                    case maybeSession of
-                                        Just session ->
-                                            Just { session | clientIds = Dict.insert clientId viewBounds session.clientIds }
-
-                                        Nothing ->
-                                            Nothing
-                                )
-                                model.userSessions
-                      }
-                    , user
-                    )
+                    LoggedIn
+                        { userId = userId
+                        , undoCurrent = user.undoCurrent
+                        , undoHistory = user.undoHistory
+                        , redoHistory = user.redoHistory
+                        , mailEditor = user.mailEditor
+                        }
 
                 Nothing ->
-                    let
-                        userId =
-                            IdDict.size model.users |> Id.fromInt
+                    NotLoggedIn
 
-                        ( newModel, userData ) =
-                            { model
-                                | userSessions =
-                                    Dict.insert
-                                        sessionId
-                                        { clientIds = Dict.singleton clientId viewBounds, userId = userId }
-                                        model.userSessions
-                            }
-                                |> createUser userId
-                    in
-                    ( userId, newModel, userData )
+        newModel2 =
+            { model
+                | userSessions =
+                    Dict.update sessionId
+                        (\maybeSession ->
+                            case maybeSession of
+                                Just session ->
+                                    Just { session | clientIds = Dict.insert clientId viewBounds session.clientIds }
+
+                                Nothing ->
+                                    Nothing
+                        )
+                        model.userSessions
+            }
 
         loadingData : LoadingData_
         loadingData =
-            { user = userId2
-            , grid = Grid.region viewBounds newModel2.grid
-            , undoHistory = userData2.undoHistory
-            , redoHistory = userData2.redoHistory
-            , undoCurrent = userData2.undoCurrent
+            { grid = Grid.region viewBounds newModel2.grid
+            , userStatus = userStatus
             , viewBounds = viewBounds
             , trains = newModel2.trains
             , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) newModel2.mail
-            , mailEditor = userData2.mailEditor
             , cows = newModel2.cows
             , cursors = IdDict.filterMap (\_ a -> a.cursor) newModel2.users
             , handColors = IdDict.map (\_ a -> a.handColor) newModel2.users
@@ -860,19 +848,24 @@ requestDataUpdate sessionId clientId viewBounds model =
     ( newModel2
     , Cmd.batch
         [ Lamdera.sendToFrontend clientId (LoadingData loadingData)
-        , broadcast
-            (\_ clientId2 ->
-                if clientId2 == clientId then
-                    Nothing
+        , case userStatus of
+            LoggedIn loggedIn ->
+                broadcast
+                    (\_ clientId2 ->
+                        if clientId2 == clientId then
+                            Nothing
 
-                else
-                    ServerUserConnected userId2 Cursor.defaultColors
-                        |> Change.ServerChange
-                        |> Nonempty.singleton
-                        |> ChangeBroadcast
-                        |> Just
-            )
-            model
+                        else
+                            ServerUserConnected loggedIn.userId Cursor.defaultColors
+                                |> Change.ServerChange
+                                |> Nonempty.singleton
+                                |> ChangeBroadcast
+                                |> Just
+                    )
+                    model
+
+            NotLoggedIn ->
+                Cmd.none
         ]
     )
 
