@@ -900,73 +900,79 @@ hiddenUsers userId model =
 requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 requestDataUpdate sessionId clientId viewBounds model =
     let
-        loadingData : ( Id UserId, BackendUserData ) -> LoadingData_
-        loadingData ( userId, user ) =
-            { user = userId
-            , grid = Grid.region viewBounds model.grid
-            , hiddenUsers = user.hiddenUsers
-            , adminHiddenUsers = hiddenUsers (Just userId) model
-            , undoHistory = user.undoHistory
-            , redoHistory = user.redoHistory
-            , undoCurrent = user.undoCurrent
+        ( userId2, newModel2, userData2 ) =
+            case getUserFromSessionId sessionId model of
+                Just ( userId, user ) ->
+                    ( userId
+                    , { model
+                        | userSessions =
+                            Dict.update sessionId
+                                (\maybeSession ->
+                                    case maybeSession of
+                                        Just session ->
+                                            Just { session | clientIds = Dict.insert clientId viewBounds session.clientIds }
+
+                                        Nothing ->
+                                            Nothing
+                                )
+                                model.userSessions
+                      }
+                    , user
+                    )
+
+                Nothing ->
+                    let
+                        userId =
+                            IdDict.size model.users |> Id.fromInt
+
+                        ( newModel, userData ) =
+                            { model
+                                | userSessions =
+                                    Dict.insert
+                                        sessionId
+                                        { clientIds = Dict.singleton clientId viewBounds, userId = userId }
+                                        model.userSessions
+                            }
+                                |> createUser userId
+                    in
+                    ( userId, newModel, userData )
+
+        loadingData : LoadingData_
+        loadingData =
+            { user = userId2
+            , grid = Grid.region viewBounds newModel2.grid
+            , hiddenUsers = userData2.hiddenUsers
+            , adminHiddenUsers = hiddenUsers (Just userId2) newModel2
+            , undoHistory = userData2.undoHistory
+            , redoHistory = userData2.redoHistory
+            , undoCurrent = userData2.undoCurrent
             , viewBounds = viewBounds
-            , trains = model.trains
-            , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model.mail
-            , mailEditor = user.mailEditor
-            , cows = model.cows
-            , cursors = IdDict.filterMap (\_ a -> a.cursor) model.users
-            , handColors = IdDict.map (\_ a -> a.handColor) model.users
+            , trains = newModel2.trains
+            , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) newModel2.mail
+            , mailEditor = userData2.mailEditor
+            , cows = newModel2.cows
+            , cursors = IdDict.filterMap (\_ a -> a.cursor) newModel2.users
+            , handColors = IdDict.map (\_ a -> a.handColor) newModel2.users
             }
     in
-    case getUserFromSessionId sessionId model of
-        Just ( userId, user ) ->
-            ( { model
-                | userSessions =
-                    Dict.update sessionId
-                        (\maybeSession ->
-                            case maybeSession of
-                                Just session ->
-                                    Just { session | clientIds = Dict.insert clientId viewBounds session.clientIds }
+    ( newModel2
+    , Cmd.batch
+        [ Lamdera.sendToFrontend clientId (LoadingData loadingData)
+        , broadcast
+            (\_ clientId2 ->
+                if clientId2 == clientId then
+                    Nothing
 
-                                Nothing ->
-                                    Nothing
-                        )
-                        model.userSessions
-              }
-            , Lamdera.sendToFrontend clientId (LoadingData (loadingData ( userId, user )))
+                else
+                    ServerUserConnected userId2 Cursor.defaultColors
+                        |> Change.ServerChange
+                        |> Nonempty.singleton
+                        |> ChangeBroadcast
+                        |> Just
             )
-
-        Nothing ->
-            let
-                userId =
-                    IdDict.size model.users |> Id.fromInt
-
-                ( newModel, userData ) =
-                    { model
-                        | userSessions =
-                            Dict.insert
-                                sessionId
-                                { clientIds = Dict.singleton clientId viewBounds, userId = userId }
-                                model.userSessions
-                    }
-                        |> createUser userId
-            in
-            ( newModel
-            , Cmd.batch
-                [ Lamdera.sendToFrontend
-                    clientId
-                    (LoadingData (loadingData ( userId, userData )))
-                , broadcast
-                    (\_ _ ->
-                        ServerUserConnected userId Cursor.defaultColors
-                            |> Change.ServerChange
-                            |> Nonempty.singleton
-                            |> ChangeBroadcast
-                            |> Just
-                    )
-                    model
-                ]
-            )
+            model
+        ]
+    )
 
 
 createUser : Id UserId -> BackendModel -> ( BackendModel, BackendUserData )
