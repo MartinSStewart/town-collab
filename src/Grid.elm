@@ -437,10 +437,10 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
 foregroundMesh :
     Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
-    -> Id UserId
+    -> Maybe (Id UserId)
     -> List GridCell.Value
     -> WebGL.Mesh Vertex
-foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
+foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId tiles =
     let
         list :
             List
@@ -488,7 +488,7 @@ foregroundMesh maybeCurrentTile cellPosition currentUserId tiles =
             )
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
-                            if value == PostOffice && userId /= currentUserId then
+                            if value == PostOffice && Just userId /= maybeCurrentUserId then
                                 tileMeshHelper opacity colors True position (Coord.xy 4 35) data.size
 
                             else

@@ -747,56 +747,63 @@ updateLoaded audioData msg model =
             ( { model | pressedKeys = Keyboard.update keyMsg model.pressedKeys }, Cmd.none )
 
         KeyDown rawKey ->
-            case Keyboard.anyKeyOriginal rawKey of
-                Just key ->
-                    if MailEditor.isOpen model.mailEditor then
-                        ( { model
-                            | mailEditor =
-                                MailEditor.handleKeyDown model (ctrlOrMeta model) key model.mailEditor
-                          }
-                        , Cmd.none
-                        )
-
-                    else
-                        case ( model.focus, model.currentTool, key ) of
-                            ( _, _, Keyboard.Tab ) ->
-                                ( setFocus
-                                    (if keyDown Keyboard.Shift model then
-                                        previousFocus model
-
-                                     else
-                                        nextFocus model
-                                    )
-                                    model
+            case currentUserId model of
+                Just userId ->
+                    case Keyboard.anyKeyOriginal rawKey of
+                        Just key ->
+                            if MailEditor.isOpen model.mailEditor then
+                                ( { model
+                                    | mailEditor =
+                                        MailEditor.handleKeyDown model (ctrlOrMeta model) key model.mailEditor
+                                  }
                                 , Cmd.none
                                 )
 
-                            ( PrimaryColorInput, _, Keyboard.Escape ) ->
-                                ( setFocus MapHover model, Cmd.none )
+                            else
+                                case ( model.focus, model.currentTool, key ) of
+                                    ( _, _, Keyboard.Tab ) ->
+                                        ( setFocus
+                                            (if keyDown Keyboard.Shift model then
+                                                previousFocus model
 
-                            ( SecondaryColorInput, _, Keyboard.Escape ) ->
-                                ( setFocus MapHover model, Cmd.none )
+                                             else
+                                                nextFocus model
+                                            )
+                                            model
+                                        , Cmd.none
+                                        )
 
-                            ( PrimaryColorInput, tool, _ ) ->
-                                handleKeyDownColorInput
-                                    (\a b -> { b | primaryColorTextInput = a })
-                                    (\color a -> { a | primaryColor = color })
-                                    tool
-                                    key
-                                    model
-                                    model.primaryColorTextInput
+                                    ( PrimaryColorInput, _, Keyboard.Escape ) ->
+                                        ( setFocus MapHover model, Cmd.none )
 
-                            ( SecondaryColorInput, tool, _ ) ->
-                                handleKeyDownColorInput
-                                    (\a b -> { b | secondaryColorTextInput = a })
-                                    (\color a -> { a | secondaryColor = color })
-                                    tool
-                                    key
-                                    model
-                                    model.secondaryColorTextInput
+                                    ( SecondaryColorInput, _, Keyboard.Escape ) ->
+                                        ( setFocus MapHover model, Cmd.none )
 
-                            _ ->
-                                keyMsgCanvasUpdate key model
+                                    ( PrimaryColorInput, tool, _ ) ->
+                                        handleKeyDownColorInput
+                                            userId
+                                            (\a b -> { b | primaryColorTextInput = a })
+                                            (\color a -> { a | primaryColor = color })
+                                            tool
+                                            key
+                                            model
+                                            model.primaryColorTextInput
+
+                                    ( SecondaryColorInput, tool, _ ) ->
+                                        handleKeyDownColorInput
+                                            userId
+                                            (\a b -> { b | secondaryColorTextInput = a })
+                                            (\color a -> { a | secondaryColor = color })
+                                            tool
+                                            key
+                                            model
+                                            model.secondaryColorTextInput
+
+                                    _ ->
+                                        keyMsgCanvasUpdate key model
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -1346,22 +1353,34 @@ updateLoaded audioData msg model =
                     ( model, Cmd.none )
 
                 PrimaryColorInput ->
-                    TextInput.paste text model.primaryColorTextInput
-                        |> colorTextInputAdjustText
-                        |> handleKeyDownColorInputHelper
-                            (\a b -> { b | primaryColorTextInput = a })
-                            (\a b -> { b | primaryColor = a })
-                            model.currentTool
-                            model
+                    case currentUserId model of
+                        Just userId ->
+                            TextInput.paste text model.primaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    userId
+                                    (\a b -> { b | primaryColorTextInput = a })
+                                    (\a b -> { b | primaryColor = a })
+                                    model.currentTool
+                                    model
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
                 SecondaryColorInput ->
-                    TextInput.paste text model.secondaryColorTextInput
-                        |> colorTextInputAdjustText
-                        |> handleKeyDownColorInputHelper
-                            (\a b -> { b | secondaryColorTextInput = a })
-                            (\a b -> { b | secondaryColor = a })
-                            model.currentTool
-                            model
+                    case currentUserId model of
+                        Just userId ->
+                            TextInput.paste text model.secondaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    userId
+                                    (\a b -> { b | secondaryColorTextInput = a })
+                                    (\a b -> { b | secondaryColor = a })
+                                    model.currentTool
+                                    model
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
                 CowHover _ ->
                     ( model, Cmd.none )
@@ -1453,14 +1472,15 @@ colorTextInputAdjustText model =
 
 
 handleKeyDownColorInput :
-    (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
+    Id UserId
+    -> (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
     -> (Color -> Colors -> Colors)
     -> Tool
     -> Keyboard.Key
     -> FrontendLoaded
     -> TextInput.Model
     -> ( FrontendLoaded, Cmd FrontendMsg_ )
-handleKeyDownColorInput setTextInputModel updateColor tileGroup key model textInput =
+handleKeyDownColorInput userId setTextInputModel updateColor tileGroup key model textInput =
     let
         ( newTextInput, cmd ) =
             TextInput.keyMsg
@@ -1483,19 +1503,20 @@ handleKeyDownColorInput setTextInputModel updateColor tileGroup key model textIn
                    )
 
         ( model2, cmd2 ) =
-            handleKeyDownColorInputHelper setTextInputModel updateColor tileGroup model newTextInput
+            handleKeyDownColorInputHelper userId setTextInputModel updateColor tileGroup model newTextInput
     in
     ( model2, Cmd.batch [ cmd, cmd2 ] )
 
 
 handleKeyDownColorInputHelper :
-    (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
+    Id UserId
+    -> (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
     -> (Color -> Colors -> Colors)
     -> Tool
     -> FrontendLoaded
     -> TextInput.Model
     -> ( FrontendLoaded, Cmd FrontendMsg_ )
-handleKeyDownColorInputHelper setTextInputModel updateColor tool model newTextInput =
+handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model newTextInput =
     let
         maybeNewColor : Maybe Color
         maybeNewColor =
@@ -1536,7 +1557,7 @@ handleKeyDownColorInputHelper setTextInputModel updateColor tool model newTextIn
                     let
                         ( model2, outMsg ) =
                             updateLocalModel
-                                (updateColor color (getHandColor (currentUserId model) model)
+                                (updateColor color (getHandColor userId model)
                                     |> Change.ChangeHandColor
                                 )
                                 model
@@ -1808,7 +1829,12 @@ setCurrentTool tool model =
                     getTileColor tileGroup model
 
                 HandToolButton ->
-                    getHandColor (currentUserId model) model
+                    case currentUserId model of
+                        Just userId ->
+                            getHandColor userId model
+
+                        Nothing ->
+                            Cursor.defaultColors
 
                 TilePickerToolButton ->
                     { primaryColor = Color.white, secondaryColor = Color.black }
@@ -1854,9 +1880,14 @@ isHoldingCow model =
         localGrid =
             LocalGrid.localModel model.localModel
     in
-    case IdDict.get localGrid.userId localGrid.cursors of
-        Just cursor ->
-            cursor.holdingCow
+    case currentUserId model of
+        Just userId ->
+            case IdDict.get userId localGrid.cursors of
+                Just cursor ->
+                    cursor.holdingCow
+
+                Nothing ->
+                    Nothing
 
         Nothing ->
             Nothing
@@ -1870,10 +1901,11 @@ isSmallDistance previousMouseState mousePosition =
 
 
 tileInteraction :
-    { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
+    Id UserId
+    -> { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     -> FrontendLoaded
     -> Maybe (() -> ( FrontendLoaded, Cmd FrontendMsg_ ))
-tileInteraction { tile, userId, position } model2 =
+tileInteraction currentUserId2 { tile, userId, position } model2 =
     let
         handleTrainHouse : Maybe (() -> ( FrontendLoaded, Cmd frontendMsg ))
         handleTrainHouse =
@@ -1894,7 +1926,7 @@ tileInteraction { tile, userId, position } model2 =
     in
     case tile of
         PostOffice ->
-            if userId == currentUserId model2 && canOpenMailEditor model2 then
+            if userId == currentUserId2 && canOpenMailEditor model2 then
                 (\() ->
                     ( { model2
                         | mailEditor =
@@ -2002,44 +2034,37 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( setCurrentTool tool model2, Cmd.none )
 
                     TileHover data ->
-                        let
-                            tilePickerToolHelper () =
-                                ( case hoverAt2 of
-                                    TileHover { tile, colors } ->
-                                        case Tile.tileToTileGroup tile of
-                                            Just tileGroup ->
-                                                setCurrentToolWithColors (TilePlacerToolButton tileGroup) colors model2
+                        case currentUserId model2 of
+                            Just userId ->
+                                case currentTool model2 of
+                                    HandTool ->
+                                        case tileInteraction userId data model2 of
+                                            Just func ->
+                                                func ()
 
                                             Nothing ->
+                                                ( model2, Cmd.none )
+
+                                    TilePickerTool ->
+                                        ( case hoverAt2 of
+                                            TileHover { tile, colors } ->
+                                                case Tile.tileToTileGroup tile of
+                                                    Just tileGroup ->
+                                                        setCurrentToolWithColors (TilePlacerToolButton tileGroup) colors model2
+
+                                                    Nothing ->
+                                                        model2
+
+                                            _ ->
                                                 model2
+                                        , Cmd.none
+                                        )
 
-                                    _ ->
-                                        model2
-                                , Cmd.none
-                                )
-                        in
-                        case model2.currentTool of
-                            HandTool ->
-                                if ctrlOrMeta model2 then
-                                    tilePickerToolHelper ()
+                                    TilePlacerTool _ ->
+                                        ( model2, Cmd.none )
 
-                                else
-                                    case tileInteraction data model2 of
-                                        Just func ->
-                                            func ()
-
-                                        Nothing ->
-                                            ( model2, Cmd.none )
-
-                            TilePickerTool ->
-                                tilePickerToolHelper ()
-
-                            TilePlacerTool _ ->
-                                if ctrlOrMeta model2 then
-                                    tilePickerToolHelper ()
-
-                                else
-                                    ( model2, Cmd.none )
+                            Nothing ->
+                                ( model2, Cmd.none )
 
                     TrainHover { trainId, train } ->
                         case Train.status model.time train of
@@ -2108,45 +2133,55 @@ setFocus newFocus model =
     { model
         | focus = newFocus
         , primaryColorTextInput =
-            if model.focus == PrimaryColorInput && newFocus /= PrimaryColorInput then
-                case model.currentTool of
-                    TilePlacerTool { tileGroup } ->
+            case currentUserId model of
+                Just userId ->
+                    if model.focus == PrimaryColorInput && newFocus /= PrimaryColorInput then
+                        case model.currentTool of
+                            TilePlacerTool { tileGroup } ->
+                                model.primaryColorTextInput
+                                    |> TextInput.withText (Color.toHexCode (getTileColor tileGroup model).primaryColor)
+
+                            TilePickerTool ->
+                                model.primaryColorTextInput
+
+                            HandTool ->
+                                TextInput.withText
+                                    (Color.toHexCode (getHandColor userId model).primaryColor)
+                                    model.primaryColorTextInput
+
+                    else if model.focus /= PrimaryColorInput && newFocus == PrimaryColorInput then
+                        TextInput.selectAll model.primaryColorTextInput
+
+                    else
                         model.primaryColorTextInput
-                            |> TextInput.withText (Color.toHexCode (getTileColor tileGroup model).primaryColor)
 
-                    TilePickerTool ->
-                        model.primaryColorTextInput
-
-                    HandTool ->
-                        TextInput.withText
-                            (Color.toHexCode (getHandColor (currentUserId model) model).primaryColor)
-                            model.primaryColorTextInput
-
-            else if model.focus /= PrimaryColorInput && newFocus == PrimaryColorInput then
-                TextInput.selectAll model.primaryColorTextInput
-
-            else
-                model.primaryColorTextInput
+                Nothing ->
+                    model.primaryColorTextInput
         , secondaryColorTextInput =
-            if model.focus == SecondaryColorInput && newFocus /= SecondaryColorInput then
-                case model.currentTool of
-                    TilePlacerTool { tileGroup } ->
+            case currentUserId model of
+                Just userId ->
+                    if model.focus == SecondaryColorInput && newFocus /= SecondaryColorInput then
+                        case model.currentTool of
+                            TilePlacerTool { tileGroup } ->
+                                model.secondaryColorTextInput
+                                    |> TextInput.withText (Color.toHexCode (getTileColor tileGroup model).secondaryColor)
+
+                            TilePickerTool ->
+                                model.secondaryColorTextInput
+
+                            HandTool ->
+                                TextInput.withText
+                                    (Color.toHexCode (getHandColor userId model).secondaryColor)
+                                    model.secondaryColorTextInput
+
+                    else if model.focus /= SecondaryColorInput && newFocus == SecondaryColorInput then
+                        TextInput.selectAll model.secondaryColorTextInput
+
+                    else
                         model.secondaryColorTextInput
-                            |> TextInput.withText (Color.toHexCode (getTileColor tileGroup model).secondaryColor)
 
-                    TilePickerTool ->
-                        model.secondaryColorTextInput
-
-                    HandTool ->
-                        TextInput.withText
-                            (Color.toHexCode (getHandColor (currentUserId model) model).secondaryColor)
-                            model.secondaryColorTextInput
-
-            else if model.focus /= SecondaryColorInput && newFocus == SecondaryColorInput then
-                TextInput.selectAll model.secondaryColorTextInput
-
-            else
-                model.secondaryColorTextInput
+                Nothing ->
+                    model.secondaryColorTextInput
     }
 
 
@@ -2333,160 +2368,161 @@ cursorPosition tileData model =
 
 placeTile : Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
 placeTile isDragPlacement tileGroup index model =
-    let
-        tile =
-            Toolbar.getTileGroupTile tileGroup index
+    case currentUserId model of
+        Just userId ->
+            let
+                tile =
+                    Toolbar.getTileGroupTile tileGroup index
 
-        tileData =
-            Tile.getData tile
+                tileData =
+                    Tile.getData tile
 
-        cursorPosition_ : Coord WorldUnit
-        cursorPosition_ =
-            cursorPosition tileData model
+                cursorPosition_ : Coord WorldUnit
+                cursorPosition_ =
+                    cursorPosition tileData model
 
-        hasCollision : Bool
-        hasCollision =
-            case model.lastTilePlaced of
-                Just lastPlaced ->
-                    Tile.hasCollision cursorPosition_ tile lastPlaced.position lastPlaced.tile
-
-                Nothing ->
-                    False
-
-        userId : Id UserId
-        userId =
-            currentUserId model
-
-        colors =
-            getTileColor tileGroup model
-
-        change =
-            { position = cursorPosition_
-            , change = tile
-            , userId = userId
-            , colors = colors
-            }
-
-        grid : Grid
-        grid =
-            LocalGrid.localModel model.localModel |> .grid
-    in
-    if isDragPlacement && hasCollision then
-        model
-
-    else if not (canPlaceTile model.time change model.trains grid) then
-        if tile == EmptyTile then
-            { model
-                | lastTilePlaced =
-                    Just
-                        { time =
-                            case model.lastTilePlaced of
-                                Just lastTilePlaced ->
-                                    if
-                                        Duration.from lastTilePlaced.time model.time
-                                            |> Quantity.lessThan (Duration.milliseconds 100)
-                                    then
-                                        lastTilePlaced.time
-
-                                    else
-                                        model.time
-
-                                Nothing ->
-                                    model.time
-                        , overwroteTiles = False
-                        , tile = tile
-                        , position = cursorPosition_
-                        }
-            }
-
-        else
-            { model
-                | lastPlacementError =
-                    case model.lastPlacementError of
-                        Just time ->
-                            if Duration.from time model.time |> Quantity.lessThan (Duration.milliseconds 150) then
-                                model.lastPlacementError
-
-                            else
-                                Just model.time
+                hasCollision : Bool
+                hasCollision =
+                    case model.lastTilePlaced of
+                        Just lastPlaced ->
+                            Tile.hasCollision cursorPosition_ tile lastPlaced.position lastPlaced.tile
 
                         Nothing ->
-                            Just model.time
-            }
+                            False
 
-    else
-        let
-            model2 =
-                if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
-                    updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time } |> Tuple.first
+                colors =
+                    getTileColor tileGroup model
+
+                change =
+                    { position = cursorPosition_
+                    , change = tile
+                    , userId = userId
+                    , colors = colors
+                    }
+
+                grid : Grid
+                grid =
+                    LocalGrid.localModel model.localModel |> .grid
+            in
+            if isDragPlacement && hasCollision then
+                model
+
+            else if not (canPlaceTile model.time change model.trains grid) then
+                if tile == EmptyTile then
+                    { model
+                        | lastTilePlaced =
+                            Just
+                                { time =
+                                    case model.lastTilePlaced of
+                                        Just lastTilePlaced ->
+                                            if
+                                                Duration.from lastTilePlaced.time model.time
+                                                    |> Quantity.lessThan (Duration.milliseconds 100)
+                                            then
+                                                lastTilePlaced.time
+
+                                            else
+                                                model.time
+
+                                        Nothing ->
+                                            model.time
+                                , overwroteTiles = False
+                                , tile = tile
+                                , position = cursorPosition_
+                                }
+                    }
 
                 else
-                    model
+                    { model
+                        | lastPlacementError =
+                            case model.lastPlacementError of
+                                Just time ->
+                                    if Duration.from time model.time |> Quantity.lessThan (Duration.milliseconds 150) then
+                                        model.lastPlacementError
 
-            ( model3, outMsg ) =
-                updateLocalModel
-                    (Change.LocalGridChange
-                        { position = cursorPosition_
-                        , change = tile
-                        , colors = colors
-                        }
-                    )
-                    model2
+                                    else
+                                        Just model.time
 
-            removedTiles : List RemovedTileParticle
-            removedTiles =
-                case outMsg of
-                    LocalGrid.NoOutMsg ->
-                        []
+                                Nothing ->
+                                    Just model.time
+                    }
 
-                    LocalGrid.TilesRemoved tiles ->
-                        List.map
-                            (\removedTile ->
-                                { tile = removedTile.tile
-                                , time = model.time
-                                , position = removedTile.position
-                                , colors = removedTile.colors
+            else
+                let
+                    model2 =
+                        if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
+                            updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time } |> Tuple.first
+
+                        else
+                            model
+
+                    ( model3, outMsg ) =
+                        updateLocalModel
+                            (Change.LocalGridChange
+                                { position = cursorPosition_
+                                , change = tile
+                                , colors = colors
                                 }
                             )
-                            tiles
+                            model2
 
-                    LocalGrid.OtherUserCursorMoved _ ->
-                        []
+                    removedTiles : List RemovedTileParticle
+                    removedTiles =
+                        case outMsg of
+                            LocalGrid.NoOutMsg ->
+                                []
 
-                    LocalGrid.HandColorChanged ->
-                        []
-        in
-        { model3
-            | lastTilePlaced =
-                Just
-                    { time =
-                        case model.lastTilePlaced of
-                            Just lastTilePlaced ->
-                                if
-                                    Duration.from lastTilePlaced.time model.time
-                                        |> Quantity.lessThan (Duration.milliseconds 100)
-                                then
-                                    lastTilePlaced.time
+                            LocalGrid.TilesRemoved tiles ->
+                                List.map
+                                    (\removedTile ->
+                                        { tile = removedTile.tile
+                                        , time = model.time
+                                        , position = removedTile.position
+                                        , colors = removedTile.colors
+                                        }
+                                    )
+                                    tiles
 
-                                else
-                                    model.time
+                            LocalGrid.OtherUserCursorMoved _ ->
+                                []
+
+                            LocalGrid.HandColorChanged ->
+                                []
+                in
+                { model3
+                    | lastTilePlaced =
+                        Just
+                            { time =
+                                case model.lastTilePlaced of
+                                    Just lastTilePlaced ->
+                                        if
+                                            Duration.from lastTilePlaced.time model.time
+                                                |> Quantity.lessThan (Duration.milliseconds 100)
+                                        then
+                                            lastTilePlaced.time
+
+                                        else
+                                            model.time
+
+                                    Nothing ->
+                                        model.time
+                            , overwroteTiles = List.isEmpty removedTiles |> not
+                            , tile = tile
+                            , position = cursorPosition_
+                            }
+                    , removedTileParticles = removedTiles ++ model3.removedTileParticles
+                    , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
+                    , trains =
+                        case Train.handleAddingTrain model3.trains userId tile cursorPosition_ of
+                            Just ( trainId, train ) ->
+                                AssocList.insert trainId train model.trains
 
                             Nothing ->
-                                model.time
-                    , overwroteTiles = List.isEmpty removedTiles |> not
-                    , tile = tile
-                    , position = cursorPosition_
-                    }
-            , removedTileParticles = removedTiles ++ model3.removedTileParticles
-            , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
-            , trains =
-                case Train.handleAddingTrain model3.trains userId tile cursorPosition_ of
-                    Just ( trainId, train ) ->
-                        AssocList.insert trainId train model.trains
+                                model.trains
+                }
 
-                    Nothing ->
-                        model.trains
-        }
+        Nothing ->
+            model
 
 
 canPlaceTile : Time.Posix -> Grid.GridChange -> AssocList.Dict (Id TrainId) Train -> Grid -> Bool
@@ -2676,6 +2712,9 @@ updateMeshes forceUpdate oldModel newModel =
         currentTileUnchanged =
             oldCurrentTile == newCurrentTile
 
+        maybeUserId =
+            currentUserId newModel
+
         newMesh : Maybe (WebGL.Mesh Vertex) -> GridCell.Cell -> ( Int, Int ) -> { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
         newMesh backgroundMesh newCell rawCoord =
             let
@@ -2685,12 +2724,12 @@ updateMeshes forceUpdate oldModel newModel =
             in
             { foreground =
                 Grid.foregroundMesh
-                    (case newCurrentTile of
-                        Just newCurrentTile_ ->
+                    (case ( newCurrentTile, maybeUserId ) of
+                        ( Just newCurrentTile_, Just userId ) ->
                             if
                                 canPlaceTile
                                     newModel.time
-                                    { userId = currentUserId newModel
+                                    { userId = userId
                                     , position = newCurrentTile_.position
                                     , change = newCurrentTile_.tile
                                     , colors = newCurrentTile_.colors
@@ -2703,8 +2742,8 @@ updateMeshes forceUpdate oldModel newModel =
                             else
                                 Nothing
 
-                        Nothing ->
-                            newCurrentTile
+                        _ ->
+                            Nothing
                     )
                     coord
                     localModel.userId
@@ -2768,23 +2807,28 @@ updateMeshes forceUpdate oldModel newModel =
                     && (newModel.tileHotkeys == oldModel.tileHotkeys)
                     && (newModel.focus == oldModel.focus)
                     && (currentTileGroup newModel == currentTileGroup oldModel)
-                    && (getHandColor (currentUserId newModel) newModel
-                            == getHandColor (currentUserId oldModel) oldModel
+                    && (Maybe.map (\userId -> getHandColor userId newModel) (currentUserId newModel)
+                            == Maybe.map (\userId -> getHandColor userId oldModel) (currentUserId oldModel)
                        )
                     && not forceUpdate
             then
                 newModel.toolbarMesh
 
             else
-                Toolbar.mesh
-                    newModel.hasCmdKey
-                    (getHandColor (currentUserId newModel) newModel)
-                    newModel.primaryColorTextInput
-                    newModel.secondaryColorTextInput
-                    newModel.tileColors
-                    newModel.tileHotkeys
-                    newModel.focus
-                    newModel.currentTool
+                case currentUserId newModel of
+                    Just userId ->
+                        Toolbar.mesh
+                            newModel.hasCmdKey
+                            (getHandColor userId newModel)
+                            newModel.primaryColorTextInput
+                            newModel.secondaryColorTextInput
+                            newModel.tileColors
+                            newModel.tileHotkeys
+                            newModel.focus
+                            newModel.currentTool
+
+                    Nothing ->
+                        Shaders.triangleFan []
     }
 
 
@@ -3439,118 +3483,123 @@ currentTool model =
 
 cursorSprite : Hover -> FrontendLoaded -> CursorType
 cursorSprite hover model =
-    let
-        helper () =
-            if MailEditor.isOpen model.mailEditor then
-                DefaultCursor
+    case currentUserId model of
+        Just _ ->
+            let
+                helper () =
+                    if MailEditor.isOpen model.mailEditor then
+                        DefaultCursor
 
-            else if isHoldingCow model /= Nothing then
-                CursorSprite PinchSpriteCursor
+                    else if isHoldingCow model /= Nothing then
+                        CursorSprite PinchSpriteCursor
 
-            else
-                case currentTool model of
-                    TilePlacerTool _ ->
-                        case hover of
-                            ToolButtonHover _ ->
-                                PointerCursor
+                    else
+                        case currentTool model of
+                            TilePlacerTool _ ->
+                                case hover of
+                                    ToolButtonHover _ ->
+                                        PointerCursor
 
-                            ToolbarHover ->
-                                DefaultCursor
+                                    ToolbarHover ->
+                                        DefaultCursor
 
-                            TileHover _ ->
-                                NoCursor
+                                    TileHover _ ->
+                                        NoCursor
 
-                            TrainHover _ ->
-                                NoCursor
+                                    TrainHover _ ->
+                                        NoCursor
 
-                            MapHover ->
-                                NoCursor
+                                    MapHover ->
+                                        NoCursor
 
-                            MailEditorHover _ ->
-                                DefaultCursor
+                                    MailEditorHover _ ->
+                                        DefaultCursor
 
-                            PrimaryColorInput ->
-                                PointerCursor
+                                    PrimaryColorInput ->
+                                        PointerCursor
 
-                            SecondaryColorInput ->
-                                PointerCursor
+                                    SecondaryColorInput ->
+                                        PointerCursor
 
-                            CowHover _ ->
-                                NoCursor
+                                    CowHover _ ->
+                                        NoCursor
 
-                    HandTool ->
-                        case hover of
-                            ToolButtonHover _ ->
-                                PointerCursor
+                            HandTool ->
+                                case hover of
+                                    ToolButtonHover _ ->
+                                        PointerCursor
 
-                            ToolbarHover ->
-                                DefaultCursor
+                                    ToolbarHover ->
+                                        DefaultCursor
 
-                            TileHover data ->
-                                case tileInteraction data model of
-                                    Just _ ->
+                                    TileHover data ->
+                                        case tileInteraction data model of
+                                            Just _ ->
+                                                CursorSprite PointerSpriteCursor
+
+                                            Nothing ->
+                                                CursorSprite DefaultSpriteCursor
+
+                                    TrainHover _ ->
                                         CursorSprite PointerSpriteCursor
 
-                                    Nothing ->
+                                    MapHover ->
                                         CursorSprite DefaultSpriteCursor
 
-                            TrainHover _ ->
-                                CursorSprite PointerSpriteCursor
+                                    MailEditorHover _ ->
+                                        DefaultCursor
 
-                            MapHover ->
-                                CursorSprite DefaultSpriteCursor
+                                    PrimaryColorInput ->
+                                        PointerCursor
 
-                            MailEditorHover _ ->
-                                DefaultCursor
+                                    SecondaryColorInput ->
+                                        PointerCursor
 
-                            PrimaryColorInput ->
-                                PointerCursor
+                                    CowHover _ ->
+                                        CursorSprite PointerSpriteCursor
 
-                            SecondaryColorInput ->
-                                PointerCursor
+                            TilePickerTool ->
+                                case hover of
+                                    ToolButtonHover _ ->
+                                        PointerCursor
 
-                            CowHover _ ->
-                                CursorSprite PointerSpriteCursor
+                                    ToolbarHover ->
+                                        DefaultCursor
 
-                    TilePickerTool ->
-                        case hover of
-                            ToolButtonHover _ ->
-                                PointerCursor
+                                    TileHover _ ->
+                                        CursorSprite EyeDropperSpriteCursor
 
-                            ToolbarHover ->
-                                DefaultCursor
+                                    TrainHover _ ->
+                                        CursorSprite EyeDropperSpriteCursor
 
-                            TileHover _ ->
-                                CursorSprite EyeDropperSpriteCursor
+                                    MapHover ->
+                                        CursorSprite EyeDropperSpriteCursor
 
-                            TrainHover _ ->
-                                CursorSprite EyeDropperSpriteCursor
+                                    MailEditorHover _ ->
+                                        DefaultCursor
 
-                            MapHover ->
-                                CursorSprite EyeDropperSpriteCursor
+                                    PrimaryColorInput ->
+                                        PointerCursor
 
-                            MailEditorHover _ ->
-                                DefaultCursor
+                                    SecondaryColorInput ->
+                                        PointerCursor
 
-                            PrimaryColorInput ->
-                                PointerCursor
+                                    CowHover _ ->
+                                        CursorSprite EyeDropperSpriteCursor
+            in
+            case isDraggingView hover model of
+                Just mouse ->
+                    if isSmallDistance mouse (mouseScreenPosition model) then
+                        helper ()
 
-                            SecondaryColorInput ->
-                                PointerCursor
+                    else
+                        CursorSprite DragScreenSpriteCursor
 
-                            CowHover _ ->
-                                CursorSprite EyeDropperSpriteCursor
-    in
-    case isDraggingView hover model of
-        Just mouse ->
-            if isSmallDistance mouse (mouseScreenPosition model) then
-                helper ()
-
-            else
-                CursorSprite DragScreenSpriteCursor
+                Nothing ->
+                    helper ()
 
         Nothing ->
-            helper ()
+            DefaultCursor
 
 
 isDraggingView :
