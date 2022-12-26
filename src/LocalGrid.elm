@@ -74,7 +74,6 @@ init :
     { a
         | userStatus : UserStatus
         , grid : GridData
-        , undoCurrent : Dict RawCellCoord Int
         , viewBounds : Bounds CellUnit
         , cows : IdDict CowId Cow
         , cursors : IdDict UserId Cursor

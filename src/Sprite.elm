@@ -3,6 +3,7 @@ module Sprite exposing
     , getIndices
     , getQuadIndices
     , nineSlice
+    , rectangle
     , shiverText
     , sprite
     , spriteWithColor
@@ -38,10 +39,7 @@ nineSlice :
     , position : Coord b
     , size : Coord b
     }
-    ->
-        { primaryColor : Color
-        , secondaryColor : Color
-        }
+    -> Colors
     -> List Vertex
 nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bottomRight, cornerSize, position, size } colors =
     let
@@ -111,6 +109,11 @@ nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bot
             cornerSize
             bottomRight
             (Coord.changeUnit cornerSize)
+
+
+rectangle : Color -> Coord unit -> Coord unit -> List Vertex
+rectangle color topLeft size =
+    spriteWithColor color topLeft size (Coord.xy 508 28) (Coord.xy 1 1)
 
 
 sprite : Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex

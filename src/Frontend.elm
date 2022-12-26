@@ -489,6 +489,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
             , toolbarMesh = Shaders.triangleFan []
+            , loginMesh = Shaders.triangleFan []
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
@@ -504,6 +505,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , previousCursorPositions = IdDict.empty
             , handMeshes = AssocList.empty
             , hasCmdKey = loading.hasCmdKey
+            , loginTextInput = TextInput.init
             }
                 |> setCurrentTool HandToolButton
                 |> handleOutMsg LocalGrid.HandColorChanged
@@ -2712,8 +2714,11 @@ updateMeshes forceUpdate oldModel newModel =
         currentTileUnchanged =
             oldCurrentTile == newCurrentTile
 
-        maybeUserId =
+        newMaybeUserId =
             currentUserId newModel
+
+        oldMaybeUserId =
+            currentUserId oldModel
 
         newMesh : Maybe (WebGL.Mesh Vertex) -> GridCell.Cell -> ( Int, Int ) -> { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
         newMesh backgroundMesh newCell rawCoord =
@@ -2724,7 +2729,7 @@ updateMeshes forceUpdate oldModel newModel =
             in
             { foreground =
                 Grid.foregroundMesh
-                    (case ( newCurrentTile, maybeUserId ) of
+                    (case ( newCurrentTile, newMaybeUserId ) of
                         ( Just newCurrentTile_, Just userId ) ->
                             if
                                 canPlaceTile
@@ -2746,7 +2751,7 @@ updateMeshes forceUpdate oldModel newModel =
                             Nothing
                     )
                     coord
-                    localModel.userId
+                    newMaybeUserId
                     (GridCell.flatten newCell)
             , background =
                 case backgroundMesh of
@@ -2806,16 +2811,16 @@ updateMeshes forceUpdate oldModel newModel =
                     && (newModel.tileColors == oldModel.tileColors)
                     && (newModel.tileHotkeys == oldModel.tileHotkeys)
                     && (newModel.focus == oldModel.focus)
-                    && (currentTileGroup newModel == currentTileGroup oldModel)
-                    && (Maybe.map (\userId -> getHandColor userId newModel) (currentUserId newModel)
-                            == Maybe.map (\userId -> getHandColor userId oldModel) (currentUserId oldModel)
+                    && (newMaybeUserId == oldMaybeUserId)
+                    && (Maybe.map (\userId -> getHandColor userId newModel) newMaybeUserId
+                            == Maybe.map (\userId -> getHandColor userId oldModel) oldMaybeUserId
                        )
                     && not forceUpdate
             then
                 newModel.toolbarMesh
 
             else
-                case currentUserId newModel of
+                case newMaybeUserId of
                     Just userId ->
                         Toolbar.mesh
                             newModel.hasCmdKey
@@ -2829,6 +2834,21 @@ updateMeshes forceUpdate oldModel newModel =
 
                     Nothing ->
                         Shaders.triangleFan []
+        , loginMesh =
+            if
+                (newMaybeUserId == oldMaybeUserId)
+                    && (newModel.loginTextInput == oldModel.loginTextInput)
+                    && not forceUpdate
+            then
+                newModel.loginMesh
+
+            else
+                case newMaybeUserId of
+                    Just _ ->
+                        Shaders.triangleFan []
+
+                    Nothing ->
+                        Toolbar.loginToolbar newModel.loginTextInput
     }
 
 
@@ -3484,7 +3504,7 @@ currentTool model =
 cursorSprite : Hover -> FrontendLoaded -> CursorType
 cursorSprite hover model =
     case currentUserId model of
-        Just _ ->
+        Just userId ->
             let
                 helper () =
                     if MailEditor.isOpen model.mailEditor then
@@ -3533,7 +3553,7 @@ cursorSprite hover model =
                                         DefaultCursor
 
                                     TileHover data ->
-                                        case tileInteraction data model of
+                                        case tileInteraction userId data model of
                                             Just _ ->
                                                 CursorSprite PointerSpriteCursor
 
@@ -3817,14 +3837,20 @@ canvasView audioData model =
                             , color = Vec4.vec4 1 1 1 1
                             }
                        ]
-                    ++ (IdDict.remove (currentUserId model) localGrid.cursors
+                    ++ ((case currentUserId model of
+                            Just userId ->
+                                IdDict.remove userId localGrid.cursors
+
+                            Nothing ->
+                                localGrid.cursors
+                        )
                             |> IdDict.toList
                             |> List.filterMap
                                 (\( userId, cursor ) ->
                                     let
                                         point : { x : Float, y : Float }
                                         point =
-                                            cursorActualPosition userId cursor model |> Point2d.unwrap
+                                            cursorActualPosition False userId cursor model |> Point2d.unwrap
                                     in
                                     case getCursorMesh userId model of
                                         Just mesh ->
@@ -3907,116 +3933,112 @@ canvasView audioData model =
                                     Nothing
                         )
                         (getSpeechBubbles model)
-                    ++ (case ( hoverAt model mouseScreenPosition_, model.currentTool ) of
-                            ( MapHover, TilePlacerTool currentTile ) ->
-                                if ctrlOrMeta model then
-                                    []
+                    ++ (case ( hoverAt model mouseScreenPosition_, currentTool model, currentUserId model ) of
+                            ( MapHover, TilePlacerTool currentTile, Just userId ) ->
+                                let
+                                    currentTile2 : Tile
+                                    currentTile2 =
+                                        Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index
 
-                                else
-                                    let
-                                        currentTile2 : Tile
-                                        currentTile2 =
-                                            Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index
+                                    mousePosition : Coord WorldUnit
+                                    mousePosition =
+                                        mouseWorldPosition model
+                                            |> Coord.floorPoint
+                                            |> Coord.minus (tileSize |> Coord.divide (Coord.tuple ( 2, 2 )))
 
-                                        mousePosition : Coord WorldUnit
-                                        mousePosition =
-                                            mouseWorldPosition model
-                                                |> Coord.floorPoint
-                                                |> Coord.minus (tileSize |> Coord.divide (Coord.tuple ( 2, 2 )))
+                                    ( mouseX, mouseY ) =
+                                        Coord.toTuple mousePosition
 
-                                        ( mouseX, mouseY ) =
-                                            Coord.toTuple mousePosition
+                                    tileSize =
+                                        Tile.getData currentTile2 |> .size
 
-                                        tileSize =
-                                            Tile.getData currentTile2 |> .size
+                                    lastPlacementOffset : () -> Float
+                                    lastPlacementOffset () =
+                                        case model.lastPlacementError of
+                                            Just time ->
+                                                let
+                                                    timeElapsed =
+                                                        Duration.from time model.time
+                                                in
+                                                if
+                                                    timeElapsed
+                                                        |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
+                                                then
+                                                    timeElapsed
+                                                        |> Duration.inSeconds
+                                                        |> (*) 40
+                                                        |> cos
+                                                        |> (*) 2
 
-                                        lastPlacementOffset : () -> Float
-                                        lastPlacementOffset () =
-                                            case model.lastPlacementError of
-                                                Just time ->
-                                                    let
-                                                        timeElapsed =
-                                                            Duration.from time model.time
-                                                    in
-                                                    if
-                                                        timeElapsed
-                                                            |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
-                                                    then
-                                                        timeElapsed
-                                                            |> Duration.inSeconds
-                                                            |> (*) 40
-                                                            |> cos
-                                                            |> (*) 2
-
-                                                    else
-                                                        0
-
-                                                Nothing ->
+                                                else
                                                     0
 
-                                        offsetX : Float
-                                        offsetX =
-                                            case model.lastTilePlaced of
-                                                Just { tile, time } ->
-                                                    let
-                                                        timeElapsed =
-                                                            Duration.from time model.time
-                                                    in
-                                                    if
-                                                        (timeElapsed
-                                                            |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
-                                                        )
-                                                            && (tile == EmptyTile)
-                                                    then
-                                                        timeElapsed
-                                                            |> Duration.inSeconds
-                                                            |> (*) 40
-                                                            |> cos
-                                                            |> (*) 2
+                                            Nothing ->
+                                                0
 
-                                                    else
-                                                        lastPlacementOffset ()
+                                    offsetX : Float
+                                    offsetX =
+                                        case model.lastTilePlaced of
+                                            Just { tile, time } ->
+                                                let
+                                                    timeElapsed =
+                                                        Duration.from time model.time
+                                                in
+                                                if
+                                                    (timeElapsed
+                                                        |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
+                                                    )
+                                                        && (tile == EmptyTile)
+                                                then
+                                                    timeElapsed
+                                                        |> Duration.inSeconds
+                                                        |> (*) 40
+                                                        |> cos
+                                                        |> (*) 2
 
-                                                Nothing ->
+                                                else
                                                     lastPlacementOffset ()
-                                    in
-                                    [ WebGL.entityWith
-                                        [ Shaders.blend ]
-                                        Shaders.vertexShader
-                                        Shaders.fragmentShader
-                                        currentTile.mesh
-                                        { view =
-                                            viewMatrix
-                                                |> Mat4.translate3
-                                                    (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
-                                                    (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
-                                                    0
-                                        , texture = model.texture
-                                        , textureSize = textureSize
-                                        , color =
-                                            if currentTile.tileGroup == EmptyTileGroup then
-                                                Vec4.vec4 1 1 1 1
 
-                                            else if
-                                                canPlaceTile
-                                                    model.time
-                                                    { position = mousePosition
-                                                    , change = currentTile2
-                                                    , userId = currentUserId model
-                                                    , colors =
-                                                        { primaryColor = Color.rgb255 0 0 0
-                                                        , secondaryColor = Color.rgb255 255 255 255
-                                                        }
+                                            Nothing ->
+                                                lastPlacementOffset ()
+                                in
+                                [ WebGL.entityWith
+                                    [ Shaders.blend ]
+                                    Shaders.vertexShader
+                                    Shaders.fragmentShader
+                                    currentTile.mesh
+                                    { view =
+                                        viewMatrix
+                                            |> Mat4.translate3
+                                                (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
+                                                (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
+                                                0
+                                    , texture = model.texture
+                                    , textureSize = textureSize
+                                    , color =
+                                        if currentTile.tileGroup == EmptyTileGroup then
+                                            Vec4.vec4 1 1 1 1
+
+                                        else if
+                                            canPlaceTile
+                                                model.time
+                                                { position = mousePosition
+                                                , change = currentTile2
+                                                , userId = userId
+                                                , colors =
+                                                    { primaryColor = Color.rgb255 0 0 0
+                                                    , secondaryColor = Color.rgb255 255 255 255
                                                     }
-                                                    model.trains
-                                                    (LocalGrid.localModel model.localModel |> .grid)
-                                            then
-                                                Vec4.vec4 1 1 1 0.5
+                                                }
+                                                model.trains
+                                                (LocalGrid.localModel model.localModel |> .grid)
+                                        then
+                                            Vec4.vec4 1 1 1 0.5
 
-                                            else
-                                                Vec4.vec4 1 0 0 0.5
-                                        }
-                                    ]
+                                        else
+                                            Vec4.vec4 1 0 0 0.5
+                                    }
+                                ]
 
                             _ ->
                                 []
@@ -4054,6 +4076,23 @@ canvasView audioData model =
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1
                             }
+                       , WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            model.loginMesh
+                            { view =
+                                Mat4.makeScale3
+                                    (2 / toFloat windowWidth)
+                                    (-2 / toFloat windowHeight)
+                                    1
+                                    |> Coord.translateMat4
+                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                                    |> Coord.translateMat4 (Toolbar.position model.devicePixelRatio model.windowSize)
+                            , texture = model.texture
+                            , textureSize = textureSize
+                            , color = Vec4.vec4 1 1 1 1
+                            }
                        ]
                     ++ MailEditor.drawMail
                         model.texture
@@ -4069,44 +4108,49 @@ canvasView audioData model =
                         model
                         (actualViewPoint model)
                         model.mailEditor
-                    ++ (case IdDict.get (currentUserId model) localGrid.cursors of
-                            Just cursor ->
-                                case showMousePointer of
-                                    CursorSprite mousePointer ->
-                                        let
-                                            point =
-                                                cursorActualPosition (currentUserId model) cursor model
-                                                    |> Point2d.unwrap
-                                        in
-                                        case getCursorMesh (currentUserId model) model of
-                                            Just mesh ->
-                                                [ WebGL.entityWith
-                                                    [ Shaders.blend ]
-                                                    Shaders.vertexShader
-                                                    Shaders.fragmentShader
-                                                    (Cursor.getSpriteMesh mousePointer mesh)
-                                                    { view =
-                                                        Mat4.makeTranslate3
-                                                            (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                                |> toFloat
-                                                                |> (*) (1 / toFloat model.zoomFactor)
-                                                            )
-                                                            (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                                |> toFloat
-                                                                |> (*) (1 / toFloat model.zoomFactor)
-                                                            )
-                                                            0
-                                                            |> Mat4.mul viewMatrix
-                                                    , texture = model.texture
-                                                    , textureSize = textureSize
-                                                    , color = Vec4.vec4 1 1 1 1
-                                                    }
-                                                ]
+                    ++ (case currentUserId model of
+                            Just userId ->
+                                case IdDict.get userId localGrid.cursors of
+                                    Just cursor ->
+                                        case showMousePointer of
+                                            CursorSprite mousePointer ->
+                                                let
+                                                    point =
+                                                        cursorActualPosition True userId cursor model
+                                                            |> Point2d.unwrap
+                                                in
+                                                case getCursorMesh userId model of
+                                                    Just mesh ->
+                                                        [ WebGL.entityWith
+                                                            [ Shaders.blend ]
+                                                            Shaders.vertexShader
+                                                            Shaders.fragmentShader
+                                                            (Cursor.getSpriteMesh mousePointer mesh)
+                                                            { view =
+                                                                Mat4.makeTranslate3
+                                                                    (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                                        |> toFloat
+                                                                        |> (*) (1 / toFloat model.zoomFactor)
+                                                                    )
+                                                                    (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                                                        |> toFloat
+                                                                        |> (*) (1 / toFloat model.zoomFactor)
+                                                                    )
+                                                                    0
+                                                                    |> Mat4.mul viewMatrix
+                                                            , texture = model.texture
+                                                            , textureSize = textureSize
+                                                            , color = Vec4.vec4 1 1 1 1
+                                                            }
+                                                        ]
 
-                                            Nothing ->
+                                                    Nothing ->
+                                                        []
+
+                                            _ ->
                                                 []
 
-                                    _ ->
+                                    Nothing ->
                                         []
 
                             Nothing ->
@@ -4118,9 +4162,9 @@ canvasView audioData model =
         )
 
 
-cursorActualPosition : Id UserId -> Cursor -> FrontendLoaded -> Point2d WorldUnit WorldUnit
-cursorActualPosition userId cursor model =
-    if userId == currentUserId model then
+cursorActualPosition : Bool -> Id UserId -> Cursor -> FrontendLoaded -> Point2d WorldUnit WorldUnit
+cursorActualPosition isCurrentUser userId cursor model =
+    if isCurrentUser then
         cursor.position
 
     else
@@ -4575,7 +4619,7 @@ cowActualPosition cowId model =
     of
         Just ( userId, cursor ) ->
             { position =
-                cursorActualPosition userId cursor model
+                cursorActualPosition (Just userId == currentUserId model) userId cursor model
                     |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 })
             , isHeld = True
             }

@@ -145,6 +145,7 @@ type alias FrontendLoaded =
     , lastPlacementError : Maybe Time.Posix
     , tileHotkeys : Dict String TileGroup
     , toolbarMesh : WebGL.Mesh Vertex
+    , loginMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe TileGroup
     , lastHouseClick : Maybe Time.Posix
     , eventIdCounter : Id EventId
@@ -160,6 +161,7 @@ type alias FrontendLoaded =
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Time.Posix }
     , handMeshes : AssocList.Dict Colors CursorMeshes
     , hasCmdKey : Bool
+    , loginTextInput : TextInput.Model
     }
 
 

@@ -406,7 +406,7 @@ charScale =
 
 padding : Coord units
 padding =
-    Coord.xy 2 2
+    Coord.xy 4 4
 
 
 size : Quantity Int units -> Coord units
