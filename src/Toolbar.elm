@@ -34,31 +34,32 @@ import WebGL
 
 loginToolbar : TextInput.Model -> WebGL.Mesh Vertex
 loginToolbar emailTextInput =
-    Sprite.rectangle outlineColor Coord.origin toolbarSize
-        ++ Sprite.rectangle fillColor (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4))
+    Sprite.rectangle Color.outlineColor Coord.origin toolbarSize
+        ++ Sprite.rectangle Color.fillColor (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4))
         ++ Sprite.text Color.black 2 "Enter your email address and we'll send a login link." (Coord.xy 20 10)
-        ++ TextInput.view (Coord.xy 20 60) (Quantity 400) False (\_ -> True) emailTextInput
+        ++ TextInput.view (Coord.xy 20 60) (Quantity 780) False (\_ -> True) emailTextInput
+        ++ button (Coord.xy 820 60) (Coord.xy 260 44) "Send email"
+        ++ Sprite.text
+            Color.black
+            2
+            "If you don't have an account you'll need to be\ninvited by an existing player."
+            (Coord.xy 20 166)
         |> Sprite.toMesh
 
 
-outlineColor : Color
-outlineColor =
-    Color.rgb255 157 143 134
-
-
-fillColor : Color
-fillColor =
-    Color.rgb255 199 185 175
-
-
-highlightColor : Color
-highlightColor =
-    Color.rgb255 241 231 223
-
-
-button : Coord unit -> Coord unit -> List Vertex
-button offset size =
-    Sprite.rectangle outlineColor offset size
+button : Coord unit -> Coord unit -> String -> List Vertex
+button offset size text =
+    Sprite.rectangle Color.outlineColor offset size
+        ++ Sprite.rectangle Color.fillColor (offset |> Coord.plus (Coord.xy 2 2)) (size |> Coord.minus (Coord.xy 4 4))
+        ++ Sprite.text
+            Color.black
+            2
+            text
+            (size
+                |> Coord.minus (Coord.multiply (Coord.xy (2 * String.length text) 2) Sprite.charSize)
+                |> Coord.divide (Coord.xy 2 2)
+                |> Coord.plus offset
+            )
 
 
 mesh :
@@ -88,8 +89,8 @@ mesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors ho
                 HandTool ->
                     HandToolButton
     in
-    Sprite.rectangle outlineColor Coord.origin toolbarSize
-        ++ Sprite.rectangle fillColor (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4))
+    Sprite.rectangle Color.outlineColor Coord.origin toolbarSize
+        ++ Sprite.rectangle Color.fillColor (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4))
         ++ (List.indexedMap
                 (\index tool ->
                     let
@@ -406,19 +407,19 @@ tileButton mesh2 maybeHotkey highlight offset =
     in
     Sprite.rectangle
         (if highlight then
-            highlightColor
+            Color.highlightColor
 
          else
-            outlineColor
+            Color.outlineColor
         )
         offset
         buttonSize
         ++ Sprite.rectangle
             (if highlight then
-                highlightColor
+                Color.highlightColor
 
              else
-                fillColor
+                Color.fillColor
             )
             (offset |> Coord.plus (Coord.xy 2 2))
             (buttonSize |> Coord.minus (Coord.xy 4 4))

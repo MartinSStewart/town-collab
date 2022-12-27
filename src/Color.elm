@@ -3,8 +3,11 @@ module Color exposing
     , Colors
     , black
     , blue
+    , fillColor
     , fromHexCode
     , green
+    , highlightColor
+    , outlineColor
     , red
     , rgb255
     , toHexCode
@@ -57,6 +60,21 @@ black =
 white : Color
 white =
     rgb255 255 255 255
+
+
+outlineColor : Color
+outlineColor =
+    rgb255 157 143 134
+
+
+fillColor : Color
+fillColor =
+    rgb255 199 185 175
+
+
+highlightColor : Color
+highlightColor =
+    rgb255 241 231 223
 
 
 toInt : Color -> Int
