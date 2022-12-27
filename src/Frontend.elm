@@ -1111,6 +1111,9 @@ updateLoaded audioData msg model =
                                     CowHover _ ->
                                         placeTileHelper model2
 
+                                    LoginMenuHover loginMenuHover ->
+                                        model2
+
                             _ ->
                                 model2
                    )
@@ -1270,6 +1273,9 @@ updateLoaded audioData msg model =
                         CowHover _ ->
                             True
 
+                        LoginMenuHover _ ->
+                            True
+
                 model2 =
                     { model
                         | time = time
@@ -1387,6 +1393,9 @@ updateLoaded audioData msg model =
                 CowHover _ ->
                     ( model, Cmd.none )
 
+                LoginMenuHover loginMenuHover ->
+                    ( model, Cmd.none )
+
         GotUserAgent _ ->
             ( model, Cmd.none )
 
@@ -1458,6 +1467,9 @@ nextFocus model =
             model.focus
 
         CowHover record ->
+            model.focus
+
+        LoginMenuHover loginMenuHover ->
             model.focus
 
 
@@ -2125,6 +2137,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 updateLocalModel (Change.PickupCow cowId (mouseWorldPosition model2) model2.time) model2
                         in
                         ( model3, Cmd.none )
+
+                    LoginMenuHover loginMenuHover ->
+                        ( model2, Cmd.none )
 
     else
         ( model2, Cmd.none )
@@ -2919,6 +2934,9 @@ canDragView hover =
         CowHover _ ->
             True
 
+        LoginMenuHover loginMenuHover ->
+            False
+
 
 offsetViewPoint :
     FrontendLoaded
@@ -3544,6 +3562,9 @@ cursorSprite hover model =
                                     CowHover _ ->
                                         NoCursor
 
+                                    LoginMenuHover loginMenuHover ->
+                                        PointerCursor
+
                             HandTool ->
                                 case hover of
                                     ToolButtonHover _ ->
@@ -3578,6 +3599,9 @@ cursorSprite hover model =
                                     CowHover _ ->
                                         CursorSprite PointerSpriteCursor
 
+                                    LoginMenuHover loginMenuHover ->
+                                        PointerCursor
+
                             TilePickerTool ->
                                 case hover of
                                     ToolButtonHover _ ->
@@ -3606,6 +3630,9 @@ cursorSprite hover model =
 
                                     CowHover _ ->
                                         CursorSprite EyeDropperSpriteCursor
+
+                                    LoginMenuHover loginMenuHover ->
+                                        PointerCursor
             in
             case isDraggingView hover model of
                 Just mouse ->

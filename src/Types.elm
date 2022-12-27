@@ -13,6 +13,7 @@ module Types exposing
     , Hover(..)
     , LoadingData_
     , LoadingLocalModel(..)
+    , LoginMenuHover(..)
     , MouseButtonState(..)
     , RemovedTileParticle
     , ToBackend(..)
@@ -193,6 +194,12 @@ type Hover
     | PrimaryColorInput
     | SecondaryColorInput
     | CowHover { cowId : Id CowId, cow : Cow }
+    | LoginMenuHover LoginMenuHover
+
+
+type LoginMenuHover
+    = EmailAddressTextInputHover
+    | SendEmailButtonHover
 
 
 type alias BackendModel =
