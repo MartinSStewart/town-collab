@@ -16,6 +16,7 @@ module Sprite exposing
 
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import Dict exposing (Dict)
 import List.Extra as List
 import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
@@ -207,7 +208,7 @@ charSize =
 
 charTexturePosition : Char -> Coord unit
 charTexturePosition char =
-    case List.findIndex ((==) char) asciiChars of
+    case Dict.get char charTexturePositionHelper of
         Just index ->
             Coord.xy
                 (768 + modBy charsPerRow index * Coord.xRaw charSize)
@@ -215,6 +216,12 @@ charTexturePosition char =
 
         Nothing ->
             Coord.xy 0 0
+
+
+charTexturePositionHelper : Dict Char Int
+charTexturePositionHelper =
+    List.indexedMap (\index char -> ( char, index )) asciiChars
+        |> Dict.fromList
 
 
 text : Color -> Int -> String -> Coord unit -> List Vertex
@@ -236,13 +243,13 @@ text color charScale string position =
                     { offsetX = state.offsetX + Coord.xRaw charSize_
                     , offsetY = state.offsetY
                     , vertices =
-                        state.vertices
-                            ++ spriteWithColor
-                                color
-                                (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
-                                charSize_
-                                (charTexturePosition char)
-                                charSize
+                        spriteWithColor
+                            color
+                            (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
+                            charSize_
+                            (charTexturePosition char)
+                            charSize
+                            ++ state.vertices
                     }
             )
             { offsetX = 0, offsetY = 0, vertices = [] }

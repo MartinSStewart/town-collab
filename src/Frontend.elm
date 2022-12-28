@@ -21,6 +21,7 @@ import Coord exposing (Coord)
 import Cursor exposing (CursorMeshes, CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import Duration exposing (Duration)
+import EmailAddress
 import Env
 import EverySet
 import Grid exposing (Grid)
@@ -64,6 +65,7 @@ import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Ui
 import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
+import Untrusted
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
 import UrlHelper
@@ -506,6 +508,7 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , handMeshes = AssocList.empty
             , hasCmdKey = loading.hasCmdKey
             , loginTextInput = TextInput.init
+            , pressedSubmitEmail = NotSubmitted { pressedSubmit = False }
             }
                 |> setCurrentTool HandToolButton
                 |> handleOutMsg LocalGrid.HandColorChanged
@@ -1682,7 +1685,7 @@ hoverAt model mousePosition =
         MailEditor.hoverAt model.mailEditor |> MailEditorHover
 
     else
-        case Ui.hover mousePosition2 (Toolbar.view model.devicePixelRatio model.windowSize model.loginTextInput) of
+        case Ui.hover mousePosition2 (Toolbar.view model) of
             Ui.InputHover data ->
                 UiHover data.id { position = data.position }
 
@@ -2205,7 +2208,16 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 ( model2, Cmd.none )
 
                             SendEmailButtonHover ->
-                                Debug.todo ""
+                                case EmailAddress.fromString model2.loginTextInput.current.text of
+                                    Just emailAddress ->
+                                        ( { model2 | pressedSubmitEmail = Submitting }
+                                        , Untrusted.untrust emailAddress |> SendLoginEmailRequest |> Lamdera.sendToBackend
+                                        )
+
+                                    Nothing ->
+                                        ( { model2 | pressedSubmitEmail = NotSubmitted { pressedSubmit = True } }
+                                        , Cmd.none
+                                        )
 
     else
         ( model2, Cmd.none )
@@ -2932,11 +2944,7 @@ updateMeshes forceUpdate oldModel newModel =
                         Shaders.triangleFan []
 
                     Nothing ->
-                        Toolbar.view
-                            newModel.devicePixelRatio
-                            newModel.windowSize
-                            newModel.loginTextInput
-                            |> Ui.view (getUiHover newModel.focus)
+                        Toolbar.view newModel |> Ui.view (getUiHover newModel.focus)
     }
 
 
@@ -3288,6 +3296,22 @@ updateLoadedFromBackend msg model =
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        SendLoginEmailResponse emailAddress ->
+            ( { model
+                | pressedSubmitEmail =
+                    case model.pressedSubmitEmail of
+                        Submitting ->
+                            Submitted emailAddress
+
+                        NotSubmitted _ ->
+                            model.pressedSubmitEmail
+
+                        Submitted _ ->
+                            model.pressedSubmitEmail
+              }
+            , Cmd.none
+            )
 
 
 actualTime : FrontendLoaded -> Time.Posix

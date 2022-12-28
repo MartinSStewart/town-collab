@@ -2,13 +2,13 @@ module Color exposing
     ( Color
     , Colors
     , black
-    , blue
     , fillColor
     , fromHexCode
-    , green
+    , getBlue
+    , getGreen
+    , getRed
     , highlightColor
     , outlineColor
-    , red
     , rgb255
     , toHexCode
     , toInt
@@ -37,18 +37,18 @@ rgb255 red2 green2 blue2 =
         |> Color
 
 
-red : Color -> Int
-red (Color color) =
+getRed : Color -> Int
+getRed (Color color) =
     Bitwise.shiftRightZfBy 16 color |> Bitwise.and 255
 
 
-green : Color -> Int
-green (Color color) =
+getGreen : Color -> Int
+getGreen (Color color) =
     Bitwise.shiftRightZfBy 8 color |> Bitwise.and 255
 
 
-blue : Color -> Int
-blue (Color color) =
+getBlue : Color -> Int
+getBlue (Color color) =
     Bitwise.and 255 color
 
 
@@ -85,9 +85,9 @@ toInt (Color color) =
 toVec3 : Color -> Vec3
 toVec3 color =
     Vec3.vec3
-        (red color |> toFloat |> (*) (1 / 255))
-        (green color |> toFloat |> (*) (1 / 255))
-        (blue color |> toFloat |> (*) (1 / 255))
+        (getRed color |> toFloat |> (*) (1 / 255))
+        (getGreen color |> toFloat |> (*) (1 / 255))
+        (getBlue color |> toFloat |> (*) (1 / 255))
 
 
 fromHexCode : String -> Maybe Color

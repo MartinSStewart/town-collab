@@ -4,6 +4,7 @@ module Ui exposing
     , HoverType(..)
     , Padding
     , button
+    , colorText
     , column
     , element
     , hover
@@ -35,7 +36,7 @@ type alias RowColumn units =
 
 type Element id units
     = Text { color : Color, scale : Int, text : String }
-    | TextInput { id : id, width : Quantity Int units } TextInput.Model
+    | TextInput { id : id, width : Quantity Int units, isValid : Bool } TextInput.Model
     | Button { id : id, size : Coord units, label : String }
     | Row (RowColumn units) (List (Element id units))
     | Column (RowColumn units) (List (Element id units))
@@ -64,7 +65,12 @@ text text2 =
     Text { color = Color.black, scale = 2, text = text2 }
 
 
-textInput : { id : id, width : Quantity Int units } -> TextInput.Model -> Element id units
+colorText : Color -> String -> Element id units
+colorText color text2 =
+    Text { color = color, scale = 2, text = text2 }
+
+
+textInput : { id : id, width : Quantity Int units, isValid : Bool } -> TextInput.Model -> Element id units
 textInput =
     TextInput
 
@@ -215,7 +221,7 @@ viewHelper focus position vertices element2 =
                 position
                 data.width
                 (focus == Just data.id)
-                (\_ -> True)
+                data.isValid
                 model
                 ++ vertices
 

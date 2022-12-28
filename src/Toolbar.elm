@@ -19,6 +19,7 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
 import Dict exposing (Dict)
+import EmailAddress exposing (EmailAddress)
 import List.Extra as List
 import List.Nonempty
 import Pixels exposing (Pixels)
@@ -27,20 +28,27 @@ import Shaders exposing (Vertex)
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (Hover(..), Tool(..), ToolButton(..), UiHover(..))
+import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), UiHover(..))
 import Ui exposing (BorderAndBackground(..))
 import Units
 import WebGL
 
 
-view : Float -> Coord units -> TextInput.Model -> Ui.Element UiHover units
-view devicePixelRatio windowSize emailTextInput =
+view :
+    { a
+        | devicePixelRatio : Float
+        , windowSize : Coord units
+        , pressedSubmitEmail : SubmitStatus EmailAddress
+        , loginTextInput : TextInput.Model
+    }
+    -> Ui.Element UiHover units
+view { devicePixelRatio, windowSize, pressedSubmitEmail, loginTextInput } =
     let
         ( windowWidth, windowHeight ) =
             Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio ) windowSize |> Coord.toTuple
 
         loginUi =
-            loginToolbarUi emailTextInput
+            loginToolbarUi pressedSubmitEmail loginTextInput
 
         ( loginUiWidth, loginUiHeight ) =
             Ui.size loginUi |> Coord.toTuple
@@ -55,12 +63,17 @@ view devicePixelRatio windowSize emailTextInput =
         loginUi
 
 
+loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover units
+loginToolbarUi pressedSubmitEmail emailTextInput =
+    let
+        pressedSubmit2 =
+            case pressedSubmitEmail of
+                NotSubmitted { pressedSubmit } ->
+                    pressedSubmit
 
---loginUi
-
-
-loginToolbarUi : TextInput.Model -> Ui.Element UiHover units
-loginToolbarUi emailTextInput =
+                _ ->
+                    False
+    in
     Ui.column
         { spacing = Quantity 10
         , padding = Ui.paddingXY 20 10
@@ -72,23 +85,41 @@ loginToolbarUi emailTextInput =
                 }
         }
         [ Ui.text "Enter your email address and we'll send a login link"
-        , Ui.row
-            { spacing = Quantity 10
+        , Ui.column
+            { spacing = Quantity 6
             , padding = Ui.noPadding
             , borderAndBackground = NoBorderOrBackground
             }
-            [ Ui.textInput
-                { id = EmailAddressTextInputHover
-                , width = Quantity 780
+            [ Ui.row
+                { spacing = Quantity 10
+                , padding = Ui.noPadding
+                , borderAndBackground = NoBorderOrBackground
                 }
-                emailTextInput
-            , Ui.button
-                { id = SendEmailButtonHover
-                , size = Coord.xy 260 44
-                , label = "Send email"
-                }
+                [ Ui.textInput
+                    { id = EmailAddressTextInputHover
+                    , width = Quantity 780
+                    , isValid =
+                        if pressedSubmit2 then
+                            EmailAddress.fromString emailTextInput.current.text /= Nothing
+
+                        else
+                            True
+                    }
+                    emailTextInput
+                , Ui.button
+                    { id = SendEmailButtonHover
+                    , size = Coord.xy 260 44
+                    , label = "Send email"
+                    }
+                ]
+            , case ( pressedSubmit2, EmailAddress.fromString emailTextInput.current.text ) of
+                ( True, Nothing ) ->
+                    Ui.colorText (Color.rgb255 245 0 0) "Invalid email address"
+
+                _ ->
+                    Ui.text ""
             ]
-        , Ui.text "\nIf you don't have an account you'll need to be\ninvited by an existing player."
+        , Ui.text "If you don't have an account you'll need to be\ninvited by an existing player."
         ]
 
 
@@ -181,7 +212,7 @@ mesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors ho
                     primaryColorInputPosition
                     primaryColorInputWidth
                     (focus == PrimaryColorInput)
-                    (Color.fromHexCode >> (/=) Nothing)
+                    (Color.fromHexCode primaryColorTextInput.current.text |> (/=) Nothing)
                     primaryColorTextInput
 
             else
@@ -192,7 +223,7 @@ mesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors ho
                     secondaryColorInputPosition
                     secondaryColorInputWidth
                     (focus == SecondaryColorInput)
-                    (Color.fromHexCode >> (/=) Nothing)
+                    (Color.fromHexCode secondaryColorTextInput.current.text |> (/=) Nothing)
                     secondaryColorTextInput
 
             else
@@ -272,7 +303,7 @@ mesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors ho
         |> Sprite.toMesh
 
 
-colorTextInputView : Coord units -> Quantity Int units -> Bool -> (String -> Bool) -> TextInput.Model -> List Vertex
+colorTextInputView : Coord units -> Quantity Int units -> Bool -> Bool -> TextInput.Model -> List Vertex
 colorTextInputView position2 width hasFocus isValid model =
     TextInput.view position2 width hasFocus isValid model
 

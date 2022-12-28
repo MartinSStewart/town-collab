@@ -15,6 +15,7 @@ module Types exposing
     , LoadingLocalModel(..)
     , MouseButtonState(..)
     , RemovedTileParticle
+    , SubmitStatus(..)
     , ToBackend(..)
     , ToFrontend(..)
     , Tool(..)
@@ -57,6 +58,7 @@ import Tile exposing (Tile, TileGroup)
 import Time
 import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
+import Untrusted exposing (Untrusted)
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
 import WebGL
@@ -161,7 +163,14 @@ type alias FrontendLoaded =
     , handMeshes : AssocList.Dict Colors CursorMeshes
     , hasCmdKey : Bool
     , loginTextInput : TextInput.Model
+    , pressedSubmitEmail : SubmitStatus EmailAddress
     }
+
+
+type SubmitStatus a
+    = NotSubmitted { pressedSubmit : Bool }
+    | Submitting
+    | Submitted a
 
 
 type alias RemovedTileParticle =
@@ -261,6 +270,7 @@ type ToBackend
     | CancelTeleportHomeTrainRequest (Id TrainId)
     | LeaveHomeTrainRequest (Id TrainId)
     | PingRequest
+    | SendLoginEmailRequest (Untrusted EmailAddress)
 
 
 type BackendMsg
@@ -279,6 +289,7 @@ type ToFrontend
     | MailEditorToFrontend MailEditor.ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Time.Posix
+    | SendLoginEmailResponse EmailAddress
 
 
 type EmailEvent

@@ -146,6 +146,9 @@ keyMsg ctrlDown shiftDown key model =
         ( False, _, Keyboard.Character string ) ->
             ( pushState (insertText string) model, NoOutMsg )
 
+        ( False, _, Keyboard.Spacebar ) ->
+            ( pushState (insertText " ") model, NoOutMsg )
+
         ( True, False, Keyboard.ArrowLeft ) ->
             ( replaceState
                 (\state ->
@@ -414,14 +417,15 @@ size width =
     ( width, Coord.yRaw Sprite.charSize * charScale + Coord.yRaw padding * 2 |> Quantity )
 
 
-view : Coord units -> Quantity Int units -> Bool -> (String -> Bool) -> Model -> List Vertex
+view : Coord units -> Quantity Int units -> Bool -> Bool -> Model -> List Vertex
 view offset width hasFocus isValid model =
     let
+        current : State
         current =
             model.current
     in
     Sprite.spriteWithColor
-        (if not (isValid current.text) then
+        (if not isValid then
             Color.rgb255 255 0 0
 
          else if hasFocus then
@@ -455,7 +459,10 @@ view offset width hasFocus isValid model =
                     (Color.rgb255 120 170 255)
                     (offset
                         |> Coord.plus
-                            (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
+                            (Coord.xy
+                                (current.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding)
+                                (Coord.yRaw padding)
+                            )
                     )
                     (Coord.xy
                         (Coord.xRaw Sprite.charSize * charScale * current.cursorSize)

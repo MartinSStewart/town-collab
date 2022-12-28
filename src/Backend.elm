@@ -37,6 +37,7 @@ import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
+import Untrusted exposing (Validation(..))
 
 
 app =
@@ -464,6 +465,14 @@ updateFromFrontend currentTime sessionId clientId msg model =
 
         PingRequest ->
             ( model, PingResponse currentTime |> Lamdera.sendToFrontend clientId )
+
+        SendLoginEmailRequest a ->
+            case Untrusted.emailAddress a of
+                Valid emailAddress ->
+                    ( model, SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId )
+
+                Invalid ->
+                    ( model, Cmd.none )
 
 
 {-| Allow a client to say when something happened but restrict how far it can be away from the current time.
