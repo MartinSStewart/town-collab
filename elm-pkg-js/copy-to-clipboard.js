@@ -11,7 +11,12 @@ exports.init = async function(app) {
     });
 
   app.ports.supermario_read_from_clipboard_to_js.subscribe(function() {
-    navigator.clipboard.readText().then((clipText) => app.ports.supermario_read_from_clipboard_from_js.send(clipText));
+    try {
+        navigator.clipboard.readText().then((clipText) => app.ports.supermario_read_from_clipboard_from_js.send(clipText));
+    }
+    catch {
+    }
+
   })
 
   app.ports.supermario_copy_to_clipboard_to_js.subscribe(function(text) {

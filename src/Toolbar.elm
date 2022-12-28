@@ -2,7 +2,6 @@ module Toolbar exposing
     ( ToolbarUnit
     , getTileGroupTile
     , hoverAt
-    , loginToolbar
     , mesh
     , position
     , primaryColorInputPosition
@@ -11,6 +10,7 @@ module Toolbar exposing
     , toolbarSize
     , toolbarTileButtonPosition
     , toolbarToPixel
+    , view
     )
 
 import AssocList
@@ -27,60 +27,69 @@ import Shaders exposing (Vertex)
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (Hover(..), LoginMenuHover(..), Tool(..), ToolButton(..))
+import Types exposing (Hover(..), Tool(..), ToolButton(..), UiHover(..))
 import Ui exposing (BorderAndBackground(..))
 import Units
 import WebGL
 
 
-loginToolbar : TextInput.Model -> WebGL.Mesh Vertex
-loginToolbar emailTextInput =
-    Ui.view
-        MapHover
-        (Ui.column
-            { spacing = Quantity 10
-            , padding = { topLeft = Coord.xy 20 10, bottomRight = Coord.xy 20 10 }
-            , borderAndBackground =
-                BorderAndBackground
-                    { borderWidth = Quantity 2
-                    , borderColor = Color.outlineColor
-                    , backgroundColor = Color.fillColor
-                    }
+view : Float -> Coord units -> TextInput.Model -> Ui.Element UiHover units
+view devicePixelRatio windowSize emailTextInput =
+    let
+        ( windowWidth, windowHeight ) =
+            Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio ) windowSize |> Coord.toTuple
+
+        loginUi =
+            loginToolbarUi emailTextInput
+
+        ( loginUiWidth, loginUiHeight ) =
+            Ui.size loginUi |> Coord.toTuple
+    in
+    Ui.element
+        { padding =
+            { topLeft = Coord.xy ((windowWidth - loginUiWidth) // 2) (windowHeight - loginUiHeight)
+            , bottomRight = Coord.xy ((windowWidth - loginUiWidth) // 2) 0
             }
-            [ Ui.text "Enter your email address and we'll send a login link"
-            , Ui.row
-                { spacing = Quantity 10
-                , padding = { topLeft = Coord.origin, bottomRight = Coord.origin }
-                , borderAndBackground = NoBorderOrBackground
+        , borderAndBackground = NoBorderOrBackground
+        }
+        loginUi
+
+
+
+--loginUi
+
+
+loginToolbarUi : TextInput.Model -> Ui.Element UiHover units
+loginToolbarUi emailTextInput =
+    Ui.column
+        { spacing = Quantity 10
+        , padding = Ui.paddingXY 20 10
+        , borderAndBackground =
+            BorderAndBackground
+                { borderWidth = Quantity 2
+                , borderColor = Color.outlineColor
+                , backgroundColor = Color.fillColor
                 }
-                [ Ui.textInput
-                    { id = LoginMenuHover EmailAddressTextInputHover
-                    , width = Quantity 780
-                    }
-                , Ui.button
-                    { id = LoginMenuHover SendEmailButtonHover
-                    , size = Coord.xy 260 44
-                    , label = "Send email"
-                    }
-                ]
-            , Ui.text "\nIf you don't have an account you'll need to be\ninvited by an existing player."
+        }
+        [ Ui.text "Enter your email address and we'll send a login link"
+        , Ui.row
+            { spacing = Quantity 10
+            , padding = Ui.noPadding
+            , borderAndBackground = NoBorderOrBackground
+            }
+            [ Ui.textInput
+                { id = EmailAddressTextInputHover
+                , width = Quantity 780
+                }
+                emailTextInput
+            , Ui.button
+                { id = SendEmailButtonHover
+                , size = Coord.xy 260 44
+                , label = "Send email"
+                }
             ]
-        )
-        |> Sprite.toMesh
-
-
-
---Sprite.rectangle Color.outlineColor Coord.origin toolbarSize
---    ++ Sprite.rectangle Color.fillColor (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4))
---    ++ Sprite.text Color.black 2 "Enter your email address and we'll send a login link." (Coord.xy 20 10)
---    ++ TextInput.view (Coord.xy 20 60) (Quantity 780) False (\_ -> True) emailTextInput
---    ++ button (Coord.xy 820 60) (Coord.xy 260 44) "Send email"
---    ++ Sprite.text
---        Color.black
---        2
---        "If you don't have an account you'll need to be\ninvited by an existing player."
---        (Coord.xy 20 166)
---    |> Sprite.toMesh
+        , Ui.text "\nIf you don't have an account you'll need to be\ninvited by an existing player."
+        ]
 
 
 mesh :

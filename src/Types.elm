@@ -13,14 +13,13 @@ module Types exposing
     , Hover(..)
     , LoadingData_
     , LoadingLocalModel(..)
-    , LoginMenuHover(..)
     , MouseButtonState(..)
     , RemovedTileParticle
     , ToBackend(..)
     , ToFrontend(..)
     , Tool(..)
     , ToolButton(..)
-    , ToolType(..)
+    , UiHover(..)
     , ViewPoint(..)
     )
 
@@ -126,7 +125,6 @@ type alias FrontendLoaded =
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
     , pendingChanges : List ( Id EventId, Change.LocalChange )
-    , tool : ToolType
     , undoAddLast : Time.Posix
     , time : Time.Posix
     , startTime : Time.Posix
@@ -170,10 +168,6 @@ type alias RemovedTileParticle =
     { time : Time.Posix, position : Coord WorldUnit, tile : Tile, colors : Colors }
 
 
-type ToolType
-    = DragTool
-
-
 type MouseButtonState
     = MouseButtonUp { current : Point2d Pixels Pixels }
     | MouseButtonDown
@@ -194,10 +188,10 @@ type Hover
     | PrimaryColorInput
     | SecondaryColorInput
     | CowHover { cowId : Id CowId, cow : Cow }
-    | LoginMenuHover LoginMenuHover
+    | UiHover UiHover { position : Coord Pixels }
 
 
-type LoginMenuHover
+type UiHover
     = EmailAddressTextInputHover
     | SendEmailButtonHover
 
@@ -250,11 +244,6 @@ type FrontendMsg_
     | MouseWheel Html.Events.Extra.Wheel.Event
     | ShortIntervalElapsed Time.Posix
     | ZoomFactorPressed Int
-    | SelectToolPressed ToolType
-    | UndoPressed
-    | RedoPressed
-    | CopyPressed
-    | CutPressed
     | ToggleAdminEnabledPressed
     | AnimationFrame Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)

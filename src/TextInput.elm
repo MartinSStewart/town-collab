@@ -469,7 +469,7 @@ view offset width hasFocus isValid model =
                 Sprite.sprite
                     (offset
                         |> Coord.plus
-                            (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) charScale)
+                            (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * charScale + Coord.xRaw padding) (Coord.yRaw padding))
                     )
                     (Coord.xy
                         charScale
