@@ -16,17 +16,21 @@ import Cursor
 import Dict
 import Duration exposing (Duration)
 import Email.Html
+import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
 import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
+import Http
 import Id exposing (EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera exposing (ClientId, SessionId)
+import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (UserStatus(..))
 import MailEditor exposing (BackendMail, MailStatus(..))
+import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
 import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
@@ -79,22 +83,31 @@ notifyAdminWait =
     String.toFloat Env.notifyAdminWaitInHours |> Maybe.map Duration.hours |> Maybe.withDefault (Duration.hours 3)
 
 
-sendEmail msg subject content to =
-    SendGrid.sendEmail msg Env.sendGridKey (asciiCollabEmail subject content to)
+sendEmail :
+    (Result Http.Error PostmarkSendResponse -> msg)
+    -> NonemptyString
+    -> String
+    -> Email.Html.Html
+    -> EmailAddress
+    -> Cmd msg
+sendEmail msg subject contentString content to =
+    Postmark.sendEmail msg Env.postmarkApiKey (townCollabEmail subject contentString content to)
 
 
-asciiCollabEmail : NonemptyString -> Email.Html.Html -> EmailAddress -> Email
-asciiCollabEmail subject content to =
-    SendGrid.htmlEmail
-        { subject = subject
-        , content = content
-        , to = Nonempty.fromElement to
-        , nameOfSender = "ascii-collab"
-        , emailAddressOfSender =
+townCollabEmail : NonemptyString -> String -> Email.Html.Html -> EmailAddress -> PostmarkSend
+townCollabEmail subject contentString content to =
+    { from =
+        { name = "town-collab"
+        , email =
             EmailAddress.fromString "no-reply@ascii-collab.app"
                 -- This should never happen
                 |> Maybe.withDefault to
         }
+    , to = Nonempty.fromElement { name = "", email = to }
+    , subject = subject
+    , body = Postmark.BodyBoth content contentString
+    , messageStream = "outbound"
+    }
 
 
 update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
@@ -130,13 +143,17 @@ update msg model =
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend time sessionId clientId toBackendMsg model
 
-        ChangeEmailSent time email result ->
+        SentLoginEmail time emailAddress result ->
+            let
+                _ =
+                    Debug.log "result" result
+            in
             case result of
                 Ok _ ->
                     ( model, Cmd.none )
 
                 Err error ->
-                    ( addError time (SendGridError email error) model, Cmd.none )
+                    ( addError time (PostmarkError emailAddress error) model, Cmd.none )
 
         WorldUpdateTimeElapsed time ->
             case model.lastWorldUpdate of
@@ -469,7 +486,50 @@ updateFromFrontend currentTime sessionId clientId msg model =
         SendLoginEmailRequest a ->
             case Untrusted.emailAddress a of
                 Valid emailAddress ->
-                    ( model, SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId )
+                    let
+                        ( SecretKey secretKey, model2 ) =
+                            generateKey currentTime model
+
+                        loginEmailUrl : String
+                        loginEmailUrl =
+                            Env.domain ++ "/?login-token=" ++ secretKey
+                    in
+                    ( model2
+                    , Cmd.batch
+                        [ SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId
+                        , case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
+                            Just _ ->
+                                sendEmail
+                                    (SentLoginEmail currentTime emailAddress)
+                                    (NonemptyString 'L' "ogin Email")
+                                    ("DO NOT click the following link if you didn't request this email.\n"
+                                        ++ "\n"
+                                        ++ "If you did, click the following link to login to town-collab\n"
+                                        ++ loginEmailUrl
+                                    )
+                                    (Email.Html.div
+                                        []
+                                        [ Email.Html.div
+                                            []
+                                            [ Email.Html.b [] [ Email.Html.text "Do not" ]
+                                            , Email.Html.text " click the following link if you didn't request this email."
+                                            ]
+                                        , Email.Html.div
+                                            []
+                                            [ Email.Html.text "If you did,"
+                                            , Email.Html.a
+                                                [ Email.Html.Attributes.href loginEmailUrl ]
+                                                [ Email.Html.text "click here" ]
+                                            , Email.Html.text " to login to town-collab"
+                                            ]
+                                        ]
+                                    )
+                                    emailAddress
+
+                            Nothing ->
+                                Cmd.none
+                        ]
+                    )
 
                 Invalid ->
                     ( model, Cmd.none )
@@ -491,12 +551,15 @@ sendConfirmationEmailRateLimit =
     Duration.seconds 10
 
 
-generateKey : (String -> keyType) -> { a | secretLinkCounter : Int } -> ( keyType, { a | secretLinkCounter : Int } )
-generateKey keyType model =
+generateKey : Time.Posix -> { a | secretLinkCounter : Int } -> ( SecretKey, { a | secretLinkCounter : Int } )
+generateKey currentTime model =
     ( Env.confirmationEmailKey
+        ++ "_"
+        ++ String.fromInt (Time.posixToMillis currentTime)
+        ++ "_"
         ++ String.fromInt model.secretLinkCounter
         |> Crypto.Hash.sha256
-        |> keyType
+        |> SecretKey
     , { model | secretLinkCounter = model.secretLinkCounter + 1 }
     )
 
@@ -879,8 +942,8 @@ requestDataUpdate sessionId clientId viewBounds model =
     )
 
 
-createUser : Id UserId -> BackendModel -> ( BackendModel, BackendUserData )
-createUser userId model =
+createUser : Id UserId -> EmailAddress -> BackendModel -> ( BackendModel, BackendUserData )
+createUser userId emailAddress model =
     let
         userBackendData : BackendUserData
         userBackendData =
@@ -890,6 +953,7 @@ createUser userId model =
             , mailEditor = MailEditor.init
             , cursor = Nothing
             , handColor = Cursor.defaultColors
+            , emailAddress = emailAddress
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

@@ -15,6 +15,7 @@ module Types exposing
     , LoadingLocalModel(..)
     , MouseButtonState(..)
     , RemovedTileParticle
+    , SecretKey(..)
     , SubmitStatus(..)
     , ToBackend(..)
     , ToFrontend(..)
@@ -39,6 +40,7 @@ import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
+import Http
 import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
@@ -50,6 +52,7 @@ import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, Sh
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
+import Postmark exposing (PostmarkSendResponse)
 import SendGrid
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
@@ -220,7 +223,7 @@ type alias BackendModel =
 
 
 type BackendError
-    = SendGridError EmailAddress SendGrid.Error
+    = PostmarkError EmailAddress Http.Error
 
 
 type alias BackendUserData =
@@ -230,6 +233,7 @@ type alias BackendUserData =
     , mailEditor : MailEditorData
     , cursor : Maybe Cursor
     , handColor : Colors
+    , emailAddress : EmailAddress
     }
 
 
@@ -273,10 +277,14 @@ type ToBackend
     | SendLoginEmailRequest (Untrusted EmailAddress)
 
 
+type SecretKey
+    = SecretKey String
+
+
 type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminEmailSent
-    | ChangeEmailSent Time.Posix EmailAddress (Result SendGrid.Error ())
+    | SentLoginEmail Time.Posix EmailAddress (Result Http.Error PostmarkSendResponse)
     | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
     | WorldUpdateTimeElapsed Time.Posix
 

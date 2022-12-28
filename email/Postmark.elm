@@ -1,15 +1,26 @@
-module Postmark exposing (ApiKey, PostmarkEmailBody, PostmarkSend, PostmarkSendResponse, PostmarkTemplateSendResponse, apiKey, sendEmail, sendEmailTask, sendTemplateEmail)
+module Postmark exposing
+    ( ApiKey
+    , PostmarkEmailBody(..)
+    , PostmarkSend
+    , PostmarkSendResponse
+    , PostmarkTemplateSendResponse
+    , apiKey
+    , sendEmail
+    , sendEmailTask
+    , sendTemplateEmail
+    )
 
 import Email.Html
 import EmailAddress exposing (EmailAddress)
 import Http
 import Json.Decode as D
 import Json.Encode as E
-import List.Nonempty
+import List.Nonempty exposing (Nonempty)
 import String.Nonempty exposing (NonemptyString)
 import Task exposing (Task)
 
 
+endpoint : String
 endpoint =
     "https://api.postmarkapp.com"
 
@@ -39,7 +50,7 @@ type PostmarkEmailBody
 
 type alias PostmarkSend =
     { from : { name : String, email : EmailAddress }
-    , to : List.Nonempty.Nonempty { name : String, email : EmailAddress }
+    , to : Nonempty { name : String, email : EmailAddress }
     , subject : NonemptyString
     , body : PostmarkEmailBody
     , messageStream : String

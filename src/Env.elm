@@ -5,7 +5,7 @@ module Env exposing (..)
 
 import EmailAddress exposing (EmailAddress)
 import Id exposing (Id, UserId)
-import SendGrid
+import Postmark
 
 
 adminUserId_ : String
@@ -46,14 +46,13 @@ adminEmail =
     EmailAddress.fromString adminEmail_
 
 
-sendGridKey_ : String
-sendGridKey_ =
+postmarkApiKey_ : String
+postmarkApiKey_ =
     ""
 
 
-sendGridKey : SendGrid.ApiKey
-sendGridKey =
-    SendGrid.apiKey sendGridKey_
+postmarkApiKey =
+    Postmark.apiKey postmarkApiKey_
 
 
 domain : String

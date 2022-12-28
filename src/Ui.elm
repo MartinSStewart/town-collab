@@ -10,6 +10,7 @@ module Ui exposing
     , hover
     , noPadding
     , paddingXY
+    , paddingXY2
     , row
     , size
     , text
@@ -58,6 +59,10 @@ noPadding =
 
 paddingXY x y =
     { topLeft = Coord.xy x y, bottomRight = Coord.xy x y }
+
+
+paddingXY2 coord =
+    { topLeft = coord, bottomRight = coord }
 
 
 text : String -> Element id units

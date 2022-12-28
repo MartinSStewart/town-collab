@@ -73,54 +73,88 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
 
                 _ ->
                     False
-    in
-    Ui.column
-        { spacing = Quantity 10
-        , padding = Ui.paddingXY 20 10
-        , borderAndBackground =
+
+        borderAndBackground =
             BorderAndBackground
                 { borderWidth = Quantity 2
                 , borderColor = Color.outlineColor
                 , backgroundColor = Color.fillColor
                 }
-        }
-        [ Ui.text "Enter your email address and we'll send a login link"
-        , Ui.column
-            { spacing = Quantity 6
-            , padding = Ui.noPadding
-            , borderAndBackground = NoBorderOrBackground
-            }
-            [ Ui.row
+
+        loginUi =
+            Ui.column
                 { spacing = Quantity 10
-                , padding = Ui.noPadding
-                , borderAndBackground = NoBorderOrBackground
+                , padding = Ui.paddingXY 20 10
+                , borderAndBackground = borderAndBackground
                 }
-                [ Ui.textInput
-                    { id = EmailAddressTextInputHover
-                    , width = Quantity 780
-                    , isValid =
-                        if pressedSubmit2 then
-                            EmailAddress.fromString emailTextInput.current.text /= Nothing
+                [ Ui.text "Enter your email address and we'll send a login link"
+                , Ui.column
+                    { spacing = Quantity 6
+                    , padding = Ui.noPadding
+                    , borderAndBackground = NoBorderOrBackground
+                    }
+                    [ Ui.row
+                        { spacing = Quantity 10
+                        , padding = Ui.noPadding
+                        , borderAndBackground = NoBorderOrBackground
+                        }
+                        [ Ui.textInput
+                            { id = EmailAddressTextInputHover
+                            , width = Quantity 780
+                            , isValid =
+                                if pressedSubmit2 then
+                                    EmailAddress.fromString emailTextInput.current.text /= Nothing
 
-                        else
-                            True
-                    }
-                    emailTextInput
-                , Ui.button
-                    { id = SendEmailButtonHover
-                    , size = Coord.xy 260 44
-                    , label = "Send email"
-                    }
+                                else
+                                    True
+                            }
+                            emailTextInput
+                        , Ui.button
+                            { id = SendEmailButtonHover
+                            , size = Coord.xy 260 44
+                            , label = "Send email"
+                            }
+                        ]
+                    , case pressedSubmitEmail of
+                        NotSubmitted { pressedSubmit } ->
+                            if pressedSubmit then
+                                case EmailAddress.fromString emailTextInput.current.text of
+                                    Just _ ->
+                                        Ui.text ""
+
+                                    Nothing ->
+                                        Ui.colorText (Color.rgb255 245 0 0) "Invalid email address"
+
+                            else
+                                Ui.text ""
+
+                        Submitting ->
+                            Ui.text "Sending..."
+
+                        Submitted _ ->
+                            Ui.text ""
+                    ]
+                , Ui.text "If you don't have an account you'll need to be\ninvited by an existing player."
                 ]
-            , case ( pressedSubmit2, EmailAddress.fromString emailTextInput.current.text ) of
-                ( True, Nothing ) ->
-                    Ui.colorText (Color.rgb255 245 0 0) "Invalid email address"
+    in
+    case pressedSubmitEmail of
+        Submitted emailAddress ->
+            let
+                submittedText =
+                    "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.text
+            in
+            Ui.element
+                { padding =
+                    Ui.size loginUi
+                        |> Coord.minus (Ui.size submittedText)
+                        |> Coord.divide (Coord.xy 2 2)
+                        |> Ui.paddingXY2
+                , borderAndBackground = borderAndBackground
+                }
+                submittedText
 
-                _ ->
-                    Ui.text ""
-            ]
-        , Ui.text "If you don't have an account you'll need to be\ninvited by an existing player."
-        ]
+        _ ->
+            loginUi
 
 
 mesh :

@@ -3851,7 +3851,6 @@ canvasView audioData model =
     in
     WebGL.toHtmlWith
         [ WebGL.alpha False
-        , WebGL.antialias
         , WebGL.clearColor 1 1 1 1
         , WebGL.depth 1
         ]
