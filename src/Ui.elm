@@ -10,6 +10,7 @@ module Ui exposing
     , colorText
     , column
     , el
+    , empty
     , hover
     , noPadding
     , outlinedText
@@ -62,6 +63,7 @@ type Element id units
     | Row (RowColumn units) (List (Element id units))
     | Column (RowColumn units) (List (Element id units))
     | Quads { size : Coord units, vertices : Coord units -> List Vertex }
+    | Empty
 
 
 type BorderAndBackground units
@@ -113,6 +115,11 @@ outlinedText data =
 textInput : { id : id, width : Quantity Int units, isValid : Bool } -> TextInput.Model -> Element id units
 textInput =
     TextInput
+
+
+empty : Element id units
+empty =
+    Empty
 
 
 button :
@@ -290,6 +297,9 @@ hoverHelper point elementPosition element2 =
         Quads _ ->
             NoHover
 
+        Empty ->
+            NoHover
+
 
 hoverRowColumnHelper :
     Bool
@@ -432,6 +442,9 @@ viewHelper focus position vertices element2 =
         Quads data ->
             data.vertices position ++ vertices
 
+        Empty ->
+            vertices
+
 
 borderAndBackgroundView :
     Coord unit
@@ -474,6 +487,9 @@ size element2 =
 
         Quads data ->
             data.size
+
+        Empty ->
+            Coord.origin
 
 
 rowSize : { a | spacing : Quantity Int units, padding : Padding units } -> List (Element id units) -> Coord units
