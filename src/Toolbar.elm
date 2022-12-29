@@ -47,6 +47,7 @@ view { devicePixelRatio, windowSize, pressedSubmitEmail, loginTextInput } =
         ( windowWidth, windowHeight ) =
             Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio ) windowSize |> Coord.toTuple
 
+        loginUi : Ui.Element UiHover units
         loginUi =
             loginToolbarUi pressedSubmitEmail loginTextInput
 
@@ -66,6 +67,7 @@ view { devicePixelRatio, windowSize, pressedSubmitEmail, loginTextInput } =
 loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover units
 loginToolbarUi pressedSubmitEmail emailTextInput =
     let
+        pressedSubmit2 : Bool
         pressedSubmit2 =
             case pressedSubmitEmail of
                 NotSubmitted { pressedSubmit } ->

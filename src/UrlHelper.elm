@@ -1,11 +1,25 @@
-module UrlHelper exposing (ConfirmEmailKey(..), InternalRoute(..), UnsubscribeEmailKey(..), coordQueryParser, encodeUrl, internalRoute, notifyMe, startPointAt, urlParser)
+module UrlHelper exposing
+    ( ConfirmEmailKey(..)
+    , InternalRoute(..)
+    , LoginToken(..)
+    , UnsubscribeEmailKey(..)
+    , coordQueryParser
+    , encodeUrl
+    , internalRoute
+    , notifyMe
+    , startPointAt
+    , urlParser
+    )
 
 import Coord exposing (Coord)
-import Env
 import Units exposing (WorldUnit)
 import Url.Builder
 import Url.Parser exposing ((</>), (<?>))
 import Url.Parser.Query
+
+
+type LoginToken
+    = LoginToken String
 
 
 startPointAt : Coord WorldUnit
@@ -13,31 +27,26 @@ startPointAt =
     Coord.tuple ( 0, 0 )
 
 
-coordQueryParser : Url.Parser.Query.Parser (Coord WorldUnit)
+coordQueryParser : Url.Parser.Query.Parser InternalRoute
 coordQueryParser =
-    Url.Parser.Query.map2
-        (\maybeX maybeY ->
-            ( Maybe.withDefault (Tuple.first startPointAt) (Maybe.map Units.tileUnit maybeX)
-            , Maybe.withDefault (Tuple.second startPointAt) (Maybe.map Units.tileUnit maybeY)
-            )
+    Url.Parser.Query.map3
+        (\maybeX maybeY loginToken2 ->
+            InternalRoute
+                { viewPoint =
+                    ( Maybe.withDefault (Tuple.first startPointAt) (Maybe.map Units.tileUnit maybeX)
+                    , Maybe.withDefault (Tuple.second startPointAt) (Maybe.map Units.tileUnit maybeY)
+                    )
+                , loginToken = Maybe.map LoginToken loginToken2
+                }
         )
         (Url.Parser.Query.int "x")
         (Url.Parser.Query.int "y")
+        (Url.Parser.Query.string loginToken)
 
 
 urlParser : Url.Parser.Parser (InternalRoute -> b) b
 urlParser =
-    Url.Parser.oneOf
-        [ Url.Parser.top
-            <?> coordQueryParser
-            |> Url.Parser.map internalRoute
-        , Url.Parser.s notifyMeConfirmation
-            </> Url.Parser.string
-            |> Url.Parser.map (ConfirmEmailKey >> EmailConfirmationRoute)
-        , Url.Parser.s unsubscribe
-            </> Url.Parser.string
-            |> Url.Parser.map (UnsubscribeEmailKey >> EmailUnsubscribeRoute)
-        ]
+    Url.Parser.top <?> coordQueryParser
 
 
 encodeUrl : InternalRoute -> String
@@ -48,15 +57,22 @@ encodeUrl route =
                 ( x, y ) =
                     Coord.toTuple internalRoute_.viewPoint
             in
-            Url.Builder.relative
-                [ "/" ]
-                [ Url.Builder.int "x" x, Url.Builder.int "y" y ]
+            Url.Builder.absolute
+                []
+                (Url.Builder.int "x" x
+                    :: Url.Builder.int "y" y
+                    :: (case internalRoute_.loginToken of
+                            Just (LoginToken loginToken2) ->
+                                [ Url.Builder.string loginToken loginToken2 ]
 
-        EmailConfirmationRoute (ConfirmEmailKey key) ->
-            Url.Builder.relative [ notifyMeConfirmation, key ] []
+                            Nothing ->
+                                []
+                       )
+                )
 
-        EmailUnsubscribeRoute (UnsubscribeEmailKey key) ->
-            Url.Builder.relative [ unsubscribe, key ] []
+
+loginToken =
+    "login-token"
 
 
 notifyMe : String
@@ -75,9 +91,7 @@ unsubscribe =
 
 
 type InternalRoute
-    = InternalRoute { viewPoint : Coord WorldUnit }
-    | EmailConfirmationRoute ConfirmEmailKey
-    | EmailUnsubscribeRoute UnsubscribeEmailKey
+    = InternalRoute { viewPoint : Coord WorldUnit, loginToken : Maybe LoginToken }
 
 
 type ConfirmEmailKey
@@ -90,4 +104,4 @@ type UnsubscribeEmailKey
 
 internalRoute : Coord WorldUnit -> InternalRoute
 internalRoute viewPoint =
-    InternalRoute { viewPoint = viewPoint }
+    InternalRoute { viewPoint = viewPoint, loginToken = Nothing }

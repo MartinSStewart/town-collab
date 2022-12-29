@@ -232,7 +232,15 @@ viewHelper focus position vertices element2 =
 
         Button data ->
             Sprite.rectangle Color.outlineColor position data.size
-                ++ Sprite.rectangle Color.fillColor (position |> Coord.plus (Coord.xy 2 2)) (data.size |> Coord.minus (Coord.xy 4 4))
+                ++ Sprite.rectangle
+                    (if Just data.id == focus then
+                        Color.highlightColor
+
+                     else
+                        Color.fillColor
+                    )
+                    (position |> Coord.plus (Coord.xy 2 2))
+                    (data.size |> Coord.minus (Coord.xy 4 4))
                 ++ Sprite.text
                     Color.black
                     2

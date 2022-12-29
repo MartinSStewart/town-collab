@@ -63,7 +63,7 @@ import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
-import UrlHelper exposing (ConfirmEmailKey, UnsubscribeEmailKey)
+import UrlHelper exposing (ConfirmEmailKey, LoginToken, UnsubscribeEmailKey)
 import WebGL
 import WebGL.Texture exposing (Texture)
 
@@ -219,11 +219,13 @@ type alias BackendModel =
     , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
+    , pendingLoginTokens : AssocList.Dict LoginToken { requestTime : Time.Posix, userId : Id UserId, requestedBy : SessionId }
     }
 
 
 type BackendError
     = PostmarkError EmailAddress Http.Error
+    | UserNotFoundWhenLoggingIn (Id UserId)
 
 
 type alias BackendUserData =
@@ -266,7 +268,7 @@ type FrontendMsg_
 
 
 type ToBackend
-    = ConnectToBackend (Bounds CellUnit)
+    = ConnectToBackend (Bounds CellUnit) (Maybe LoginToken)
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
     | MailEditorToBackend MailEditor.ToBackend
@@ -275,10 +277,6 @@ type ToBackend
     | LeaveHomeTrainRequest (Id TrainId)
     | PingRequest
     | SendLoginEmailRequest (Untrusted EmailAddress)
-
-
-type SecretKey
-    = SecretKey String
 
 
 type BackendMsg

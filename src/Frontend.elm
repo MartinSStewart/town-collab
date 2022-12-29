@@ -535,40 +535,30 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
 init : Url -> Browser.Navigation.Key -> ( FrontendModel_, Cmd FrontendMsg_, AudioCmd FrontendMsg_ )
 init url key =
     let
-        { viewPoint, cmd } =
+        { data, cmd } =
             let
                 defaultRoute =
                     UrlHelper.internalRoute UrlHelper.startPointAt
             in
             case Url.Parser.parse UrlHelper.urlParser url of
                 Just (UrlHelper.InternalRoute a) ->
-                    { viewPoint = a.viewPoint
+                    { data = a
                     , cmd = Cmd.none
                     }
 
-                Just (UrlHelper.EmailConfirmationRoute _) ->
-                    { viewPoint = UrlHelper.startPointAt
-                    , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
-                    }
-
-                Just (UrlHelper.EmailUnsubscribeRoute _) ->
-                    { viewPoint = UrlHelper.startPointAt
-                    , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
-                    }
-
                 Nothing ->
-                    { viewPoint = UrlHelper.startPointAt
+                    { data = { viewPoint = UrlHelper.startPointAt, loginToken = Nothing }
                     , cmd = Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
                     }
 
         -- We only load in a portion of the grid since we don't know the window size yet. The rest will get loaded in later anyway.
         bounds =
             Bounds.bounds
-                (Grid.worldToCellAndLocalCoord viewPoint
+                (Grid.worldToCellAndLocalCoord data.viewPoint
                     |> Tuple.first
                     |> Coord.plus ( Units.cellUnit -2, Units.cellUnit -2 )
                 )
-                (Grid.worldToCellAndLocalCoord viewPoint
+                (Grid.worldToCellAndLocalCoord data.viewPoint
                     |> Tuple.first
                     |> Coord.plus ( Units.cellUnit 2, Units.cellUnit 2 )
                 )
@@ -579,7 +569,7 @@ init url key =
         , devicePixelRatio = Nothing
         , zoomFactor = 2
         , time = Nothing
-        , viewPoint = viewPoint
+        , viewPoint = data.viewPoint
         , mousePosition = Point2d.origin
         , sounds = AssocList.empty
         , texture = Nothing
@@ -587,7 +577,7 @@ init url key =
         , hasCmdKey = False
         }
     , Cmd.batch
-        [ Lamdera.sendToBackend (ConnectToBackend bounds)
+        [ Lamdera.sendToBackend (ConnectToBackend bounds data.loginToken)
         , user_agent_to_js ()
         , Task.perform
             (\{ viewport } ->
@@ -2208,16 +2198,24 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 ( model2, Cmd.none )
 
                             SendEmailButtonHover ->
-                                case EmailAddress.fromString model2.loginTextInput.current.text of
-                                    Just emailAddress ->
-                                        ( { model2 | pressedSubmitEmail = Submitting }
-                                        , Untrusted.untrust emailAddress |> SendLoginEmailRequest |> Lamdera.sendToBackend
-                                        )
+                                case model2.pressedSubmitEmail of
+                                    NotSubmitted _ ->
+                                        case EmailAddress.fromString model2.loginTextInput.current.text of
+                                            Just emailAddress ->
+                                                ( { model2 | pressedSubmitEmail = Submitting }
+                                                , Untrusted.untrust emailAddress |> SendLoginEmailRequest |> Lamdera.sendToBackend
+                                                )
 
-                                    Nothing ->
-                                        ( { model2 | pressedSubmitEmail = NotSubmitted { pressedSubmit = True } }
-                                        , Cmd.none
-                                        )
+                                            Nothing ->
+                                                ( { model2 | pressedSubmitEmail = NotSubmitted { pressedSubmit = True } }
+                                                , Cmd.none
+                                                )
+
+                                    Submitting ->
+                                        ( model2, Cmd.none )
+
+                                    Submitted _ ->
+                                        ( model2, Cmd.none )
 
     else
         ( model2, Cmd.none )
@@ -2933,6 +2931,7 @@ updateMeshes forceUpdate oldModel newModel =
                     && (newModel.loginTextInput == oldModel.loginTextInput)
                     && (newModel.windowSize == oldModel.windowSize)
                     && (newModel.devicePixelRatio == oldModel.devicePixelRatio)
+                    && (newModel.pressedSubmitEmail == oldModel.pressedSubmitEmail)
                     && (getUiHover newModel.focus == getUiHover oldModel.focus)
                     && not forceUpdate
             then

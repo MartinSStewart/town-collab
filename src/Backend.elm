@@ -32,7 +32,6 @@ import LocalGrid exposing (UserStatus(..))
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
-import SendGrid exposing (Email)
 import String.Nonempty exposing (NonemptyString(..))
 import Task
 import Tile exposing (RailPathType(..), Tile(..))
@@ -42,6 +41,7 @@ import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
+import UrlHelper exposing (InternalRoute(..), LoginToken(..))
 
 
 app =
@@ -65,17 +65,28 @@ subscriptions _ =
 
 init : BackendModel
 init =
-    { grid = Grid.empty
-    , userSessions = Dict.empty
-    , users = IdDict.empty
-    , secretLinkCounter = 0
-    , errors = []
-    , trains = AssocList.empty
-    , cows = IdDict.empty
-    , lastWorldUpdateTrains = AssocList.empty
-    , lastWorldUpdate = Nothing
-    , mail = AssocList.empty
-    }
+    let
+        model : BackendModel
+        model =
+            { grid = Grid.empty
+            , userSessions = Dict.empty
+            , users = IdDict.empty
+            , secretLinkCounter = 0
+            , errors = []
+            , trains = AssocList.empty
+            , cows = IdDict.empty
+            , lastWorldUpdateTrains = AssocList.empty
+            , lastWorldUpdate = Nothing
+            , mail = AssocList.empty
+            , pendingLoginTokens = AssocList.empty
+            }
+    in
+    case Env.adminEmail of
+        Just adminEmail ->
+            createUser (Id.fromInt 0) adminEmail model |> Tuple.first
+
+        Nothing ->
+            model
 
 
 notifyAdminWait : Duration
@@ -99,7 +110,7 @@ townCollabEmail subject contentString content to =
     { from =
         { name = "town-collab"
         , email =
-            EmailAddress.fromString "no-reply@ascii-collab.app"
+            EmailAddress.fromString "no-reply@town-collab.app"
                 -- This should never happen
                 |> Maybe.withDefault to
         }
@@ -146,7 +157,7 @@ update msg model =
         SentLoginEmail time emailAddress result ->
             let
                 _ =
-                    Debug.log "result" result
+                    Debug.log "a" result
             in
             case result of
                 Ok _ ->
@@ -361,8 +372,8 @@ updateFromFrontend :
     -> ( BackendModel, Cmd BackendMsg )
 updateFromFrontend currentTime sessionId clientId msg model =
     case msg of
-        ConnectToBackend requestData ->
-            requestDataUpdate sessionId clientId requestData model
+        ConnectToBackend requestData maybeLoginToken ->
+            requestDataUpdate currentTime sessionId clientId requestData maybeLoginToken model
 
         GridChange changes ->
             case getUserFromSessionId sessionId model of
@@ -487,19 +498,19 @@ updateFromFrontend currentTime sessionId clientId msg model =
             case Untrusted.emailAddress a of
                 Valid emailAddress ->
                     let
-                        ( SecretKey secretKey, model2 ) =
+                        ( loginToken, model2 ) =
                             generateKey currentTime model
 
                         loginEmailUrl : String
                         loginEmailUrl =
-                            Env.domain ++ "/?login-token=" ++ secretKey
+                            Env.domain ++ UrlHelper.encodeUrl (InternalRoute { loginToken = Just loginToken, viewPoint = Coord.origin })
                     in
-                    ( model2
-                    , Cmd.batch
-                        [ SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId
-                        , case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
-                            Just _ ->
-                                sendEmail
+                    case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
+                        Just ( userId, _ ) ->
+                            ( { model2 | pendingLoginTokens = AssocList.insert loginToken { requestTime = currentTime, userId = userId, requestedBy = sessionId } }
+                            , Cmd.batch
+                                [ SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId
+                                , sendEmail
                                     (SentLoginEmail currentTime emailAddress)
                                     (NonemptyString 'L' "ogin Email")
                                     ("DO NOT click the following link if you didn't request this email.\n"
@@ -525,11 +536,11 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                         ]
                                     )
                                     emailAddress
+                                ]
+                            )
 
-                            Nothing ->
-                                Cmd.none
-                        ]
-                    )
+                        Nothing ->
+                            ( model2, Cmd.none )
 
                 Invalid ->
                     ( model, Cmd.none )
@@ -551,7 +562,7 @@ sendConfirmationEmailRateLimit =
     Duration.seconds 10
 
 
-generateKey : Time.Posix -> { a | secretLinkCounter : Int } -> ( SecretKey, { a | secretLinkCounter : Int } )
+generateKey : Time.Posix -> { a | secretLinkCounter : Int } -> ( LoginToken, { a | secretLinkCounter : Int } )
 generateKey currentTime model =
     ( Env.confirmationEmailKey
         ++ "_"
@@ -559,7 +570,7 @@ generateKey currentTime model =
         ++ "_"
         ++ String.fromInt model.secretLinkCounter
         |> Crypto.Hash.sha256
-        |> SecretKey
+        |> LoginToken
     , { model | secretLinkCounter = model.secretLinkCounter + 1 }
     )
 
@@ -873,25 +884,51 @@ hiddenUsers userId model =
         |> EverySet.fromList
 
 
-requestDataUpdate : SessionId -> ClientId -> Bounds CellUnit -> BackendModel -> ( BackendModel, Cmd BackendMsg )
-requestDataUpdate sessionId clientId viewBounds model =
+requestDataUpdate : Time.Posix -> SessionId -> ClientId -> Bounds CellUnit -> Maybe LoginToken -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken model =
     let
-        userStatus =
-            case getUserFromSessionId sessionId model of
-                Just ( userId, user ) ->
-                    LoggedIn
-                        { userId = userId
-                        , undoCurrent = user.undoCurrent
-                        , undoHistory = user.undoHistory
-                        , redoHistory = user.redoHistory
-                        , mailEditor = user.mailEditor
-                        }
+        ( userStatus, model2 ) =
+            case maybeLoginToken of
+                Just loginToken ->
+                    case AssocList.get loginToken model.pendingLoginTokens of
+                        Just data ->
+                            case IdDict.get data.userId model.users of
+                                Just user ->
+                                    ( LoggedIn
+                                        { userId = data.userId
+                                        , undoCurrent = user.undoCurrent
+                                        , undoHistory = user.undoHistory
+                                        , redoHistory = user.redoHistory
+                                        , mailEditor = user.mailEditor
+                                        }
+                                    , model
+                                    )
+
+                                Nothing ->
+                                    ( NotLoggedIn, addError currentTime (UserNotFoundWhenLoggingIn data.userId) model )
+
+                        Nothing ->
+                            ( NotLoggedIn, model )
 
                 Nothing ->
-                    NotLoggedIn
+                    ( case getUserFromSessionId sessionId model of
+                        Just ( userId, user ) ->
+                            LoggedIn
+                                { userId = userId
+                                , undoCurrent = user.undoCurrent
+                                , undoHistory = user.undoHistory
+                                , redoHistory = user.redoHistory
+                                , mailEditor = user.mailEditor
+                                }
 
-        newModel2 =
-            { model
+                        Nothing ->
+                            NotLoggedIn
+                    , model
+                    )
+
+        model3 : BackendModel
+        model3 =
+            { model2
                 | userSessions =
                     Dict.update sessionId
                         (\maybeSession ->
@@ -902,22 +939,22 @@ requestDataUpdate sessionId clientId viewBounds model =
                                 Nothing ->
                                     Nothing
                         )
-                        model.userSessions
+                        model2.userSessions
             }
 
         loadingData : LoadingData_
         loadingData =
-            { grid = Grid.region viewBounds newModel2.grid
+            { grid = Grid.region viewBounds model3.grid
             , userStatus = userStatus
             , viewBounds = viewBounds
-            , trains = newModel2.trains
-            , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) newModel2.mail
-            , cows = newModel2.cows
-            , cursors = IdDict.filterMap (\_ a -> a.cursor) newModel2.users
-            , handColors = IdDict.map (\_ a -> a.handColor) newModel2.users
+            , trains = model3.trains
+            , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
+            , cows = model3.cows
+            , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
+            , handColors = IdDict.map (\_ a -> a.handColor) model3.users
             }
     in
-    ( newModel2
+    ( model3
     , Cmd.batch
         [ Lamdera.sendToFrontend clientId (LoadingData loadingData)
         , case userStatus of
@@ -934,7 +971,7 @@ requestDataUpdate sessionId clientId viewBounds model =
                                 |> ChangeBroadcast
                                 |> Just
                     )
-                    model
+                    model2
 
             NotLoggedIn ->
                 Cmd.none
