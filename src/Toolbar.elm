@@ -6,25 +6,20 @@ module Toolbar exposing
     )
 
 import AssocList
-import Bounds
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
 import Dict exposing (Dict)
 import EmailAddress exposing (EmailAddress)
-import Id exposing (Id, UserId)
 import List.Extra as List
 import List.Nonempty
-import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
-import Shaders exposing (Vertex)
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), UiHover(..))
 import Ui exposing (BorderAndBackground(..))
 import Units
-import WebGL
 
 
 type alias ViewData units =
@@ -75,7 +70,7 @@ view data =
         ( toolbarWidth, toolbarHeight ) =
             Ui.size currentToolbar |> Coord.toTuple
     in
-    Ui.element
+    Ui.el
         { padding =
             { topLeft = Coord.xy ((windowWidth - toolbarWidth) // 2) (windowHeight - toolbarHeight)
             , bottomRight = Coord.xy ((windowWidth - toolbarWidth) // 2) 0
@@ -136,10 +131,8 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                             }
                             emailTextInput
                         , Ui.button
-                            { id = SendEmailButtonHover
-                            , padding = Ui.paddingXY 30 4
-                            , label = Ui.text "Send email"
-                            }
+                            { id = SendEmailButtonHover, padding = Ui.paddingXY 30 4, inFront = [] }
+                            (Ui.text "Send email")
                         ]
                     , case pressedSubmitEmail of
                         NotSubmitted { pressedSubmit } ->
@@ -169,7 +162,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                 submittedText =
                     "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.text
             in
-            Ui.element
+            Ui.el
                 { padding =
                     Ui.size loginUi
                         |> Coord.minus (Ui.size submittedText)
@@ -210,10 +203,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                     HandToolButton
     in
     Ui.row
-        { spacing = Quantity 10
-        , padding = Ui.paddingXY 20 10
-        , borderAndBackground = borderAndBackground
-        }
+        { spacing = Quantity 10, padding = Ui.paddingXY 20 10, borderAndBackground = borderAndBackground }
         [ List.map
             (\tool ->
                 let
@@ -233,6 +223,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                             TilePickerToolButton ->
                                 Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
 
+                    hotkeyText : Maybe String
                     hotkeyText =
                         case tool of
                             TilePlacerToolButton tileGroup ->
@@ -263,8 +254,21 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                 Ui.button
                     { id = ToolButtonHover tool
                     , padding = Ui.noPadding
-                    , label = label
+                    , inFront =
+                        case hotkeyText of
+                            Just hotkey ->
+                                [ Ui.outlinedText { outline = Color.black, color = Color.white, text = hotkey }
+                                    |> Ui.el
+                                        { padding = { topLeft = Coord.xy 4 0, bottomRight = Coord.xy 0 0 }
+                                        , borderAndBackground = NoBorderOrBackground
+                                        }
+                                    |> Ui.bottomLeft { size = buttonSize }
+                                ]
+
+                            Nothing ->
+                                []
                     }
+                    (Ui.center { size = buttonSize } label)
             )
             buttonTiles
             |> List.greedyGroupsOf 3
@@ -272,8 +276,8 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                 (\column ->
                     Ui.column
                         { spacing = Quantity 2
-                        , padding = Ui.paddingXY 4 4
-                        , borderAndBackground = BackgroundOnly (Color.rgb255 100 100 100)
+                        , padding = Ui.noPadding
+                        , borderAndBackground = NoBorderOrBackground
                         }
                         column
                 )
@@ -504,22 +508,6 @@ buttonTiles =
     ]
 
 
-
---
---
---type ToolbarUnit
---    = ToolbarUnit Never
---
---
---toolbarTileButtonPosition : Int -> Coord ToolbarUnit
---toolbarTileButtonPosition index =
---    Coord.xy
---        ((Coord.xRaw buttonSize + 2) * (index // toolbarRowCount) + 6)
---        ((Coord.yRaw buttonSize + 2) * modBy toolbarRowCount index + 6)
---
---
-
-
 toolbarRowCount : number
 toolbarRowCount =
     3
@@ -542,50 +530,56 @@ tileMesh colors tile =
 
             else
                 size
-
-        position3 =
-            Coord.origin
-                |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize)
-                |> Coord.plus (Coord.divide (Coord.xy 2 2) buttonSize)
     in
-    if tile == EmptyTile then
-        Ui.sprite
-            { size = Coord.tuple ( 28 * 2, 27 * 2 )
-            , texturePosition = Coord.xy 504 42
-            , textureSize = Coord.xy 28 27
-            }
+    Ui.quads
+        { size =
+            if tile == EmptyTile then
+                Coord.tuple ( 28 * 2, 27 * 2 )
 
-    else
-        case data.texturePosition of
-            Just texturePosition ->
-                Ui.colorSprite
-                    { colors = colors
-                    , size = spriteSize
-                    , texturePosition = Coord.multiply Units.tileSize texturePosition
-                    , textureSize = size
-                    }
+            else
+                spriteSize
+        , vertices =
+            \position3 ->
+                if tile == EmptyTile then
+                    Sprite.sprite
+                        position3
+                        (Coord.tuple ( 28 * 2, 27 * 2 ))
+                        (Coord.xy 504 42)
+                        (Coord.xy 28 27)
 
-            Nothing ->
-                Ui.text ""
+                else
+                    (case data.texturePosition of
+                        Just texturePosition ->
+                            Sprite.spriteWithTwoColors
+                                colors
+                                position3
+                                spriteSize
+                                (Coord.multiply Units.tileSize texturePosition)
+                                size
+
+                        Nothing ->
+                            []
+                    )
+                        ++ (case data.texturePositionTopLayer of
+                                Just topLayer ->
+                                    let
+                                        texturePosition2 =
+                                            Coord.multiply Units.tileSize topLayer.texturePosition
+                                    in
+                                    Sprite.spriteWithTwoColors
+                                        colors
+                                        position3
+                                        spriteSize
+                                        texturePosition2
+                                        size
+
+                                Nothing ->
+                                    []
+                           )
+        }
 
 
 
---++ (case data.texturePositionTopLayer of
---        Just topLayer ->
---            let
---                texturePosition2 =
---                    Coord.multiply Units.tileSize topLayer.texturePosition
---            in
---            Sprite.spriteWithTwoColors
---                colors
---                position3
---                spriteSize
---                texturePosition2
---                size
---
---        Nothing ->
---            []
---   )
 --
 --toolbarSize : Coord Pixels
 --toolbarSize =

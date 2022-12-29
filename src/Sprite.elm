@@ -3,6 +3,7 @@ module Sprite exposing
     , getIndices
     , getQuadIndices
     , nineSlice
+    , outlinedText
     , rectangle
     , shiverText
     , sprite
@@ -17,7 +18,6 @@ module Sprite exposing
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
-import List.Extra as List
 import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
 import Random
@@ -254,6 +254,15 @@ text color charScale string position =
             )
             { offsetX = 0, offsetY = 0, vertices = [] }
         |> .vertices
+
+
+outlinedText : Color -> Color -> Int -> String -> Coord unit -> List Vertex
+outlinedText outlineColor color charScale string position =
+    text outlineColor charScale string (Coord.plus (Coord.xy 0 charScale) position)
+        ++ text outlineColor charScale string (Coord.plus (Coord.xy charScale 0) position)
+        ++ text outlineColor charScale string (Coord.plus (Coord.xy 0 -charScale) position)
+        ++ text outlineColor charScale string (Coord.plus (Coord.xy -charScale 0) position)
+        ++ text color charScale string position
 
 
 shiverText : Int -> Int -> String -> Coord unit -> List Vertex
