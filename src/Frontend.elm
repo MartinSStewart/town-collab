@@ -60,7 +60,7 @@ import Task
 import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
 import Time
-import Toolbar exposing (ToolbarUnit)
+import Toolbar exposing (ToolbarUnit, ViewData)
 import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Ui
@@ -1662,6 +1662,27 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
             )
 
 
+getViewModel : FrontendLoaded -> ViewData Pixels
+getViewModel model =
+    let
+        maybeUserId =
+            currentUserId model
+    in
+    { devicePixelRatio = model.devicePixelRatio
+    , windowSize = model.windowSize
+    , pressedSubmitEmail = model.pressedSubmitEmail
+    , loginTextInput = model.loginTextInput
+    , hasCmdKey = model.hasCmdKey
+    , userId = maybeUserId
+    , handColor = Maybe.map (\userId -> getHandColor userId model) maybeUserId
+    , primaryColorTextInput = model.primaryColorTextInput
+    , secondaryColorTextInput = model.secondaryColorTextInput
+    , tileColors = model.tileColors
+    , tileHotkeys = model.tileHotkeys
+    , currentTool = model.currentTool
+    }
+
+
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
 hoverAt model mousePosition =
     let
@@ -1675,7 +1696,7 @@ hoverAt model mousePosition =
         MailEditor.hoverAt model.mailEditor |> MailEditorHover
 
     else
-        case Ui.hover mousePosition2 (Toolbar.view model) of
+        case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
             Ui.InputHover data ->
                 UiHover data.id { position = data.position }
 
@@ -2852,6 +2873,9 @@ updateMeshes forceUpdate oldModel newModel =
                     Nothing ->
                         Grid.backgroundMesh coord
             }
+
+        viewModel =
+            getViewModel newModel
     in
     { newModel
         | meshes =
@@ -2926,15 +2950,7 @@ updateMeshes forceUpdate oldModel newModel =
                     Nothing ->
                         Shaders.triangleFan []
         , loginMesh =
-            if
-                (newMaybeUserId == oldMaybeUserId)
-                    && (newModel.loginTextInput == oldModel.loginTextInput)
-                    && (newModel.windowSize == oldModel.windowSize)
-                    && (newModel.devicePixelRatio == oldModel.devicePixelRatio)
-                    && (newModel.pressedSubmitEmail == oldModel.pressedSubmitEmail)
-                    && (getUiHover newModel.focus == getUiHover oldModel.focus)
-                    && not forceUpdate
-            then
+            if (viewModel == getViewModel oldModel) && newModel.focus == oldModel.focus && not forceUpdate then
                 newModel.loginMesh
 
             else
@@ -2943,7 +2959,7 @@ updateMeshes forceUpdate oldModel newModel =
                         Shaders.triangleFan []
 
                     Nothing ->
-                        Toolbar.view newModel |> Ui.view (getUiHover newModel.focus)
+                        Toolbar.view viewModel |> Ui.view (getUiHover newModel.focus)
     }
 
 

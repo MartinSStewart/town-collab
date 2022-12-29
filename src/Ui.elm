@@ -19,8 +19,9 @@ module Ui exposing
     )
 
 import Bounds
-import Color exposing (Color)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import Pixels exposing (Pixels)
 import Quantity exposing (Quantity)
 import Shaders exposing (Vertex)
 import Sprite
@@ -38,9 +39,10 @@ type alias RowColumn units =
 type Element id units
     = Text { color : Color, scale : Int, text : String }
     | TextInput { id : id, width : Quantity Int units, isValid : Bool } TextInput.Model
-    | Button { id : id, size : Coord units, label : String }
+    | Button { id : id, padding : Padding units, label : Element id units }
     | Row (RowColumn units) (List (Element id units))
     | Column (RowColumn units) (List (Element id units))
+    | Sprite { colors : Colors, size : Coord units, texturePosition : Coord Pixels, textureSize : Coord Pixels }
 
 
 type BorderAndBackground units
@@ -80,17 +82,29 @@ textInput =
     TextInput
 
 
-button : { id : id, size : Coord units, label : String } -> Element id units
+button : { id : id, padding : Padding units, label : Element id units } -> Element id units
 button =
     Button
 
 
-row : RowColumn units -> List (Element id units) -> Element id units
+row :
+    { spacing : Quantity Int units
+    , padding : Padding units
+    , borderAndBackground : BorderAndBackground units
+    }
+    -> List (Element id units)
+    -> Element id units
 row =
     Row
 
 
-column : RowColumn units -> List (Element id units) -> Element id units
+column :
+    { spacing : Quantity Int units
+    , padding : Padding units
+    , borderAndBackground : BorderAndBackground units
+    }
+    -> List (Element id units)
+    -> Element id units
 column =
     Column
 
@@ -135,7 +149,7 @@ hoverHelper point elementPosition element2 =
                 NoHover
 
         Button data ->
-            if Bounds.fromCoordAndSize elementPosition data.size |> Bounds.contains point then
+            if Bounds.fromCoordAndSize elementPosition (size (Button data)) |> Bounds.contains point then
                 InputHover { id = data.id, position = elementPosition }
 
             else
@@ -146,6 +160,9 @@ hoverHelper point elementPosition element2 =
 
         Column data children ->
             hoverRowColumnHelper False point elementPosition data children
+
+        Sprite _ ->
+            NoHover
 
 
 hoverRowColumnHelper :
@@ -231,7 +248,11 @@ viewHelper focus position vertices element2 =
                 ++ vertices
 
         Button data ->
-            Sprite.rectangle Color.outlineColor position data.size
+            let
+                size2 =
+                    size (Button data)
+            in
+            Sprite.rectangle Color.outlineColor position size2
                 ++ Sprite.rectangle
                     (if Just data.id == focus then
                         Color.highlightColor
@@ -240,17 +261,8 @@ viewHelper focus position vertices element2 =
                         Color.fillColor
                     )
                     (position |> Coord.plus (Coord.xy 2 2))
-                    (data.size |> Coord.minus (Coord.xy 4 4))
-                ++ Sprite.text
-                    Color.black
-                    2
-                    data.label
-                    (data.size
-                        |> Coord.minus (Coord.multiply (Coord.xy (2 * String.length data.label) 2) Sprite.charSize)
-                        |> Coord.divide (Coord.xy 2 2)
-                        |> Coord.plus position
-                    )
-                ++ vertices
+                    (size2 |> Coord.minus (Coord.xy 4 4))
+                ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices data.label
 
         Row data children ->
             List.foldl
@@ -284,6 +296,9 @@ viewHelper focus position vertices element2 =
                 |> .vertices
                 |> (++) (borderAndBackgroundView position data (size element2))
 
+        Sprite data ->
+            Sprite.spriteWithTwoColors data.colors position data.size data.texturePosition data.textureSize
+
 
 borderAndBackgroundView :
     Coord unit
@@ -316,7 +331,9 @@ size element2 =
             TextInput.size data.width
 
         Button data ->
-            data.size
+            Coord.plus
+                (Coord.plus data.padding.topLeft data.padding.bottomRight)
+                (size data.label)
 
         Row data children ->
             List.foldl
@@ -349,3 +366,6 @@ size element2 =
                 children
                 |> Coord.tuple
                 |> Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight)
+
+        Sprite data ->
+            data.size

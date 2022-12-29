@@ -15,7 +15,6 @@ module Types exposing
     , LoadingLocalModel(..)
     , MouseButtonState(..)
     , RemovedTileParticle
-    , SecretKey(..)
     , SubmitStatus(..)
     , ToBackend(..)
     , ToFrontend(..)

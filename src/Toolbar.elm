@@ -1,5 +1,6 @@
 module Toolbar exposing
     ( ToolbarUnit
+    , ViewData
     , getTileGroupTile
     , hoverAt
     , mesh
@@ -20,6 +21,7 @@ import Coord exposing (Coord)
 import Cursor
 import Dict exposing (Dict)
 import EmailAddress exposing (EmailAddress)
+import Id exposing (Id, UserId)
 import List.Extra as List
 import List.Nonempty
 import Pixels exposing (Pixels)
@@ -34,34 +36,57 @@ import Units
 import WebGL
 
 
-view :
-    { a
-        | devicePixelRatio : Float
-        , windowSize : Coord units
-        , pressedSubmitEmail : SubmitStatus EmailAddress
-        , loginTextInput : TextInput.Model
+type alias ViewData units =
+    { devicePixelRatio : Float
+    , windowSize : Coord units
+    , pressedSubmitEmail : SubmitStatus EmailAddress
+    , loginTextInput : TextInput.Model
+    , hasCmdKey : Bool
+    , userId : Maybe (Id UserId)
+    , handColor : Maybe Colors
+    , primaryColorTextInput : TextInput.Model
+    , secondaryColorTextInput : TextInput.Model
+    , tileColors : AssocList.Dict TileGroup Colors
+    , tileHotkeys : Dict String TileGroup
+    , currentTool : Tool
     }
-    -> Ui.Element UiHover units
-view { devicePixelRatio, windowSize, pressedSubmitEmail, loginTextInput } =
+
+
+view : ViewData units -> Ui.Element UiHover units
+view data =
     let
         ( windowWidth, windowHeight ) =
-            Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio ) windowSize |> Coord.toTuple
+            Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize |> Coord.toTuple
 
-        loginUi : Ui.Element UiHover units
-        loginUi =
-            loginToolbarUi pressedSubmitEmail loginTextInput
+        currentToolbar : Ui.Element UiHover units
+        currentToolbar =
+            case data.userId of
+                Just userId ->
+                    toolbarUi userId data
 
-        ( loginUiWidth, loginUiHeight ) =
-            Ui.size loginUi |> Coord.toTuple
+                Nothing ->
+                    loginToolbarUi data.pressedSubmitEmail data.loginTextInput
+
+        ( toolbarWidth, toolbarHeight ) =
+            Ui.size currentToolbar |> Coord.toTuple
     in
     Ui.element
         { padding =
-            { topLeft = Coord.xy ((windowWidth - loginUiWidth) // 2) (windowHeight - loginUiHeight)
-            , bottomRight = Coord.xy ((windowWidth - loginUiWidth) // 2) 0
+            { topLeft = Coord.xy ((windowWidth - toolbarWidth) // 2) (windowHeight - toolbarHeight)
+            , bottomRight = Coord.xy ((windowWidth - toolbarWidth) // 2) 0
             }
         , borderAndBackground = NoBorderOrBackground
         }
-        loginUi
+        currentToolbar
+
+
+borderAndBackground : BorderAndBackground units
+borderAndBackground =
+    BorderAndBackground
+        { borderWidth = Quantity 2
+        , borderColor = Color.outlineColor
+        , backgroundColor = Color.fillColor
+        }
 
 
 loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover units
@@ -76,13 +101,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                 _ ->
                     False
 
-        borderAndBackground =
-            BorderAndBackground
-                { borderWidth = Quantity 2
-                , borderColor = Color.outlineColor
-                , backgroundColor = Color.fillColor
-                }
-
+        loginUi : Ui.Element UiHover units
         loginUi =
             Ui.column
                 { spacing = Quantity 10
@@ -113,8 +132,8 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                             emailTextInput
                         , Ui.button
                             { id = SendEmailButtonHover
-                            , size = Coord.xy 260 44
-                            , label = "Send email"
+                            , padding = Ui.paddingXY 30 4
+                            , label = Ui.text "Send email"
                             }
                         ]
                     , case pressedSubmitEmail of
@@ -157,6 +176,16 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
 
         _ ->
             loginUi
+
+
+toolbarUi : Id UserId -> ViewData units -> Ui.Element id units
+toolbarUi userId data =
+    Ui.row
+        { spacing = Quantity 10
+        , padding = Ui.paddingXY 20 10
+        , borderAndBackground = borderAndBackground
+        }
+        []
 
 
 mesh :

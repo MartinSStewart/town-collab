@@ -31,6 +31,7 @@ import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (UserStatus(..))
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
+import Process
 import Quantity exposing (Quantity(..))
 import String.Nonempty exposing (NonemptyString(..))
 import Task
@@ -102,7 +103,21 @@ sendEmail :
     -> EmailAddress
     -> Cmd msg
 sendEmail msg subject contentString content to =
-    Postmark.sendEmail msg Env.postmarkApiKey (townCollabEmail subject contentString content to)
+    if Env.isProduction then
+        Postmark.sendEmail msg Env.postmarkApiKey (townCollabEmail subject contentString content to)
+
+    else
+        Process.sleep 100
+            |> Task.map
+                (\_ ->
+                    { to = EmailAddress.toString to
+                    , submittedAt = ""
+                    , messageId = ""
+                    , errorCode = 0
+                    , message = ""
+                    }
+                )
+            |> Task.attempt msg
 
 
 townCollabEmail : NonemptyString -> String -> Email.Html.Html -> EmailAddress -> PostmarkSend
@@ -507,7 +522,17 @@ updateFromFrontend currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            ( { model2 | pendingLoginTokens = AssocList.insert loginToken { requestTime = currentTime, userId = userId, requestedBy = sessionId } }
+                            let
+                                _ =
+                                    Debug.log "loginUrl" loginEmailUrl
+                            in
+                            ( { model2
+                                | pendingLoginTokens =
+                                    AssocList.insert
+                                        loginToken
+                                        { requestTime = currentTime, userId = userId, requestedBy = sessionId }
+                                        model2.pendingLoginTokens
+                              }
                             , Cmd.batch
                                 [ SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId
                                 , sendEmail
@@ -530,7 +555,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                             [ Email.Html.text "If you did,"
                                             , Email.Html.a
                                                 [ Email.Html.Attributes.href loginEmailUrl ]
-                                                [ Email.Html.text "click here" ]
+                                                [ Email.Html.text " click here" ]
                                             , Email.Html.text " to login to town-collab"
                                             ]
                                         ]
