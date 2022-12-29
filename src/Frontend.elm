@@ -60,7 +60,7 @@ import Task
 import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
 import Time
-import Toolbar exposing (ToolbarUnit, ViewData)
+import Toolbar exposing (ViewData)
 import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Ui
@@ -490,7 +490,6 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , userIdMesh = createInfoMesh Nothing (currentUserId { localModel = localModel })
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
-            , toolbarMesh = Shaders.triangleFan []
             , loginMesh = Shaders.triangleFan []
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
@@ -766,16 +765,16 @@ updateLoaded audioData msg model =
                                 , Cmd.none
                                 )
 
-                            ( PrimaryColorInput, _, Keyboard.Escape ) ->
+                            ( UiHover PrimaryColorInput _, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Cmd.none )
 
-                            ( SecondaryColorInput, _, Keyboard.Escape ) ->
+                            ( UiHover SecondaryColorInput _, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Cmd.none )
 
                             ( UiHover EmailAddressTextInputHover _, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Cmd.none )
 
-                            ( PrimaryColorInput, tool, _ ) ->
+                            ( UiHover PrimaryColorInput _, tool, _ ) ->
                                 case currentUserId model of
                                     Just userId ->
                                         handleKeyDownColorInput
@@ -790,7 +789,7 @@ updateLoaded audioData msg model =
                                     Nothing ->
                                         ( model, Cmd.none )
 
-                            ( SecondaryColorInput, tool, _ ) ->
+                            ( UiHover SecondaryColorInput _, tool, _ ) ->
                                 case currentUserId model of
                                     Just userId ->
                                         handleKeyDownColorInput
@@ -904,33 +903,25 @@ updateLoaded audioData msg model =
                                         ( TilePlacerTool { tileGroup, index }, MapHover ) ->
                                             placeTile False tileGroup index model2
 
-                                        ( _, PrimaryColorInput ) ->
+                                        ( _, UiHover PrimaryColorInput data ) ->
                                             { model2
                                                 | primaryColorTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
-                                                        (Toolbar.toolbarToPixel
-                                                            model2.devicePixelRatio
-                                                            model2.windowSize
-                                                            Toolbar.primaryColorInputPosition
-                                                        )
+                                                        data.position
                                                         model2.primaryColorTextInput
                                             }
-                                                |> setFocus PrimaryColorInput
+                                                |> setFocus (UiHover PrimaryColorInput data)
 
-                                        ( _, SecondaryColorInput ) ->
+                                        ( _, UiHover SecondaryColorInput data ) ->
                                             { model2
                                                 | secondaryColorTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
-                                                        (Toolbar.toolbarToPixel
-                                                            model2.devicePixelRatio
-                                                            model2.windowSize
-                                                            Toolbar.secondaryColorInputPosition
-                                                        )
+                                                        data.position
                                                         model2.secondaryColorTextInput
                                             }
-                                                |> setFocus SecondaryColorInput
+                                                |> setFocus (UiHover SecondaryColorInput data)
 
                                         ( _, UiHover EmailAddressTextInputHover data ) ->
                                             { model2
@@ -1052,7 +1043,7 @@ updateLoaded audioData msg model =
             let
                 tileHover_ =
                     case hoverAt model mousePosition of
-                        ToolButtonHover (TilePlacerToolButton tile) ->
+                        UiHover (ToolButtonHover (TilePlacerToolButton tile)) _ ->
                             Just tile
 
                         _ ->
@@ -1096,10 +1087,7 @@ updateLoaded audioData msg model =
                         case model2.mouseLeft of
                             MouseButtonDown { hover } ->
                                 case hover of
-                                    ToolbarHover ->
-                                        model2
-
-                                    ToolButtonHover _ ->
+                                    UiBackgroundHover ->
                                         model2
 
                                     TileHover _ ->
@@ -1114,34 +1102,26 @@ updateLoaded audioData msg model =
                                     MailEditorHover _ ->
                                         model2
 
-                                    PrimaryColorInput ->
-                                        { model2
-                                            | primaryColorTextInput =
-                                                TextInput.mouseDownMove
-                                                    mousePosition2
-                                                    (Toolbar.toolbarToPixel
-                                                        model2.devicePixelRatio
-                                                        model2.windowSize
-                                                        Toolbar.primaryColorInputPosition
-                                                    )
-                                                    model2.primaryColorTextInput
-                                        }
-
-                                    SecondaryColorInput ->
-                                        { model2
-                                            | secondaryColorTextInput =
-                                                TextInput.mouseDownMove
-                                                    mousePosition2
-                                                    (Toolbar.toolbarToPixel
-                                                        model2.devicePixelRatio
-                                                        model2.windowSize
-                                                        Toolbar.secondaryColorInputPosition
-                                                    )
-                                                    model2.secondaryColorTextInput
-                                        }
-
                                     UiHover uiHover data ->
                                         case uiHover of
+                                            PrimaryColorInput ->
+                                                { model2
+                                                    | primaryColorTextInput =
+                                                        TextInput.mouseDownMove
+                                                            mousePosition2
+                                                            data.position
+                                                            model2.primaryColorTextInput
+                                                }
+
+                                            SecondaryColorInput ->
+                                                { model2
+                                                    | secondaryColorTextInput =
+                                                        TextInput.mouseDownMove
+                                                            mousePosition2
+                                                            data.position
+                                                            model2.secondaryColorTextInput
+                                                }
+
                                             EmailAddressTextInputHover ->
                                                 { model2
                                                     | loginTextInput =
@@ -1152,6 +1132,9 @@ updateLoaded audioData msg model =
                                                 }
 
                                             SendEmailButtonHover ->
+                                                model2
+
+                                            ToolButtonHover _ ->
                                                 model2
 
                                     CowHover _ ->
@@ -1272,18 +1255,6 @@ updateLoaded audioData msg model =
                 canMoveWithArrowKeys : Bool
                 canMoveWithArrowKeys =
                     case model.focus of
-                        PrimaryColorInput ->
-                            False
-
-                        SecondaryColorInput ->
-                            False
-
-                        ToolButtonHover _ ->
-                            True
-
-                        ToolbarHover ->
-                            True
-
                         TileHover _ ->
                             True
 
@@ -1305,6 +1276,15 @@ updateLoaded audioData msg model =
                                     False
 
                                 SendEmailButtonHover ->
+                                    True
+
+                                PrimaryColorInput ->
+                                    False
+
+                                SecondaryColorInput ->
+                                    False
+
+                                ToolButtonHover _ ->
                                     True
 
                 model2 =
@@ -1373,12 +1353,6 @@ updateLoaded audioData msg model =
 
         PastedText text ->
             case model.focus of
-                ToolButtonHover _ ->
-                    ( model, Cmd.none )
-
-                ToolbarHover ->
-                    ( model, Cmd.none )
-
                 TileHover _ ->
                     ( model, Cmd.none )
 
@@ -1391,37 +1365,10 @@ updateLoaded audioData msg model =
                 MailEditorHover _ ->
                     ( model, Cmd.none )
 
-                PrimaryColorInput ->
-                    case currentUserId model of
-                        Just userId ->
-                            TextInput.paste text model.primaryColorTextInput
-                                |> colorTextInputAdjustText
-                                |> handleKeyDownColorInputHelper
-                                    userId
-                                    (\a b -> { b | primaryColorTextInput = a })
-                                    (\a b -> { b | primaryColor = a })
-                                    model.currentTool
-                                    model
-
-                        Nothing ->
-                            ( model, Cmd.none )
-
-                SecondaryColorInput ->
-                    case currentUserId model of
-                        Just userId ->
-                            TextInput.paste text model.secondaryColorTextInput
-                                |> colorTextInputAdjustText
-                                |> handleKeyDownColorInputHelper
-                                    userId
-                                    (\a b -> { b | secondaryColorTextInput = a })
-                                    (\a b -> { b | secondaryColor = a })
-                                    model.currentTool
-                                    model
-
-                        Nothing ->
-                            ( model, Cmd.none )
-
                 CowHover _ ->
+                    ( model, Cmd.none )
+
+                UiBackgroundHover ->
                     ( model, Cmd.none )
 
                 UiHover uiHover _ ->
@@ -1432,6 +1379,39 @@ updateLoaded audioData msg model =
                             )
 
                         SendEmailButtonHover ->
+                            ( model, Cmd.none )
+
+                        PrimaryColorInput ->
+                            case currentUserId model of
+                                Just userId ->
+                                    TextInput.paste text model.primaryColorTextInput
+                                        |> colorTextInputAdjustText
+                                        |> handleKeyDownColorInputHelper
+                                            userId
+                                            (\a b -> { b | primaryColorTextInput = a })
+                                            (\a b -> { b | primaryColor = a })
+                                            model.currentTool
+                                            model
+
+                                Nothing ->
+                                    ( model, Cmd.none )
+
+                        SecondaryColorInput ->
+                            case currentUserId model of
+                                Just userId ->
+                                    TextInput.paste text model.secondaryColorTextInput
+                                        |> colorTextInputAdjustText
+                                        |> handleKeyDownColorInputHelper
+                                            userId
+                                            (\a b -> { b | secondaryColorTextInput = a })
+                                            (\a b -> { b | secondaryColor = a })
+                                            model.currentTool
+                                            model
+
+                                Nothing ->
+                                    ( model, Cmd.none )
+
+                        ToolButtonHover toolButton ->
                             ( model, Cmd.none )
 
         GotUserAgent _ ->
@@ -1472,26 +1452,6 @@ currentTileGroup model =
 nextFocus : FrontendLoaded -> Hover
 nextFocus model =
     case model.focus of
-        PrimaryColorInput ->
-            if Toolbar.showColorTextInputs model.currentTool |> .showSecondaryColorTextInput then
-                SecondaryColorInput
-
-            else
-                PrimaryColorInput
-
-        SecondaryColorInput ->
-            if Toolbar.showColorTextInputs model.currentTool |> .showPrimaryColorTextInput then
-                PrimaryColorInput
-
-            else
-                SecondaryColorInput
-
-        ToolButtonHover _ ->
-            model.focus
-
-        ToolbarHover ->
-            model.focus
-
         TileHover _ ->
             model.focus
 
@@ -1507,6 +1467,9 @@ nextFocus model =
         CowHover _ ->
             model.focus
 
+        UiBackgroundHover ->
+            model.focus
+
         UiHover uiHover _ ->
             UiHover
                 (case uiHover of
@@ -1515,6 +1478,23 @@ nextFocus model =
 
                     SendEmailButtonHover ->
                         EmailAddressTextInputHover
+
+                    PrimaryColorInput ->
+                        if Toolbar.showColorTextInputs model.currentTool |> .showSecondaryColorTextInput then
+                            SecondaryColorInput
+
+                        else
+                            PrimaryColorInput
+
+                    SecondaryColorInput ->
+                        if Toolbar.showColorTextInputs model.currentTool |> .showPrimaryColorTextInput then
+                            PrimaryColorInput
+
+                        else
+                            SecondaryColorInput
+
+                    ToolButtonHover toolButton ->
+                        ToolButtonHover toolButton
                 )
                 { position = Coord.origin }
 
@@ -1664,17 +1644,12 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
 
 getViewModel : FrontendLoaded -> ViewData Pixels
 getViewModel model =
-    let
-        maybeUserId =
-            currentUserId model
-    in
     { devicePixelRatio = model.devicePixelRatio
     , windowSize = model.windowSize
     , pressedSubmitEmail = model.pressedSubmitEmail
     , loginTextInput = model.loginTextInput
     , hasCmdKey = model.hasCmdKey
-    , userId = maybeUserId
-    , handColor = Maybe.map (\userId -> getHandColor userId model) maybeUserId
+    , handColor = Maybe.map (\userId -> getHandColor userId model) (currentUserId model)
     , primaryColorTextInput = model.primaryColorTextInput
     , secondaryColorTextInput = model.secondaryColorTextInput
     , tileColors = model.tileColors
@@ -1701,116 +1676,111 @@ hoverAt model mousePosition =
                 UiHover data.id { position = data.position }
 
             Ui.BackgroundHover ->
-                ToolbarHover
+                UiBackgroundHover
 
             Ui.NoHover ->
-                case Toolbar.hoverAt model.devicePixelRatio model.windowSize mousePosition2 model.currentTool of
-                    Just hover ->
-                        hover
+                let
+                    mouseWorldPosition_ : Point2d WorldUnit WorldUnit
+                    mouseWorldPosition_ =
+                        screenToWorld model mousePosition
 
-                    Nothing ->
+                    tileHover : Maybe Hover
+                    tileHover =
                         let
-                            mouseWorldPosition_ : Point2d WorldUnit WorldUnit
-                            mouseWorldPosition_ =
-                                screenToWorld model mousePosition
-
-                            tileHover : Maybe Hover
-                            tileHover =
-                                let
-                                    localModel : LocalGrid_
-                                    localModel =
-                                        LocalGrid.localModel model.localModel
-                                in
-                                case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
-                                    Just tile ->
-                                        case model.currentTool of
-                                            HandTool ->
-                                                TileHover tile |> Just
-
-                                            TilePickerTool ->
-                                                TileHover tile |> Just
-
-                                            TilePlacerTool _ ->
-                                                if ctrlOrMeta model then
-                                                    TileHover tile |> Just
-
-                                                else
-                                                    Nothing
-
-                                    Nothing ->
-                                        Nothing
-
-                            trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
-                            trainHovers =
-                                case model.currentTool of
-                                    TilePlacerTool _ ->
-                                        Nothing
-
-                                    TilePickerTool ->
-                                        Nothing
-
-                                    HandTool ->
-                                        AssocList.toList model.trains
-                                            |> List.filterMap
-                                                (\( trainId, train ) ->
-                                                    let
-                                                        distance =
-                                                            Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                                    in
-                                                    if distance |> Quantity.lessThan (Quantity 0.9) then
-                                                        Just ( { trainId = trainId, train = train }, distance )
-
-                                                    else
-                                                        Nothing
-                                                )
-                                            |> Quantity.minimumBy Tuple.second
-
-                            localGrid : LocalGrid_
-                            localGrid =
+                            localModel : LocalGrid_
+                            localModel =
                                 LocalGrid.localModel model.localModel
-
-                            cowHovers : Maybe ( Id CowId, Cow )
-                            cowHovers =
+                        in
+                        case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
+                            Just tile ->
                                 case model.currentTool of
-                                    TilePlacerTool _ ->
-                                        Nothing
+                                    HandTool ->
+                                        TileHover tile |> Just
 
                                     TilePickerTool ->
-                                        Nothing
+                                        TileHover tile |> Just
 
-                                    HandTool ->
-                                        IdDict.toList localGrid.cows
-                                            |> List.filter
-                                                (\( cowId, _ ) ->
-                                                    case cowActualPosition cowId model of
-                                                        Just a ->
-                                                            if a.isHeld then
-                                                                False
+                                    TilePlacerTool _ ->
+                                        if ctrlOrMeta model then
+                                            TileHover tile |> Just
 
-                                                            else
-                                                                insideCow mouseWorldPosition_ a.position
-
-                                                        Nothing ->
-                                                            False
-                                                )
-                                            |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
-                        in
-                        case trainHovers of
-                            Just ( train, _ ) ->
-                                TrainHover train
+                                        else
+                                            Nothing
 
                             Nothing ->
-                                case cowHovers of
-                                    Just ( cowId, cow ) ->
-                                        CowHover { cowId = cowId, cow = cow }
+                                Nothing
+
+                    trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
+                    trainHovers =
+                        case model.currentTool of
+                            TilePlacerTool _ ->
+                                Nothing
+
+                            TilePickerTool ->
+                                Nothing
+
+                            HandTool ->
+                                AssocList.toList model.trains
+                                    |> List.filterMap
+                                        (\( trainId, train ) ->
+                                            let
+                                                distance =
+                                                    Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                                            in
+                                            if distance |> Quantity.lessThan (Quantity 0.9) then
+                                                Just ( { trainId = trainId, train = train }, distance )
+
+                                            else
+                                                Nothing
+                                        )
+                                    |> Quantity.minimumBy Tuple.second
+
+                    localGrid : LocalGrid_
+                    localGrid =
+                        LocalGrid.localModel model.localModel
+
+                    cowHovers : Maybe ( Id CowId, Cow )
+                    cowHovers =
+                        case model.currentTool of
+                            TilePlacerTool _ ->
+                                Nothing
+
+                            TilePickerTool ->
+                                Nothing
+
+                            HandTool ->
+                                IdDict.toList localGrid.cows
+                                    |> List.filter
+                                        (\( cowId, _ ) ->
+                                            case cowActualPosition cowId model of
+                                                Just a ->
+                                                    if a.isHeld then
+                                                        False
+
+                                                    else
+                                                        insideCow mouseWorldPosition_ a.position
+
+                                                Nothing ->
+                                                    False
+                                        )
+                                    |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+                in
+                case trainHovers of
+                    Just ( train, _ ) ->
+                        TrainHover train
+
+                    Nothing ->
+                        case cowHovers of
+                            Just ( cowId, cow ) ->
+                                CowHover { cowId = cowId, cow = cow }
+
+                            Nothing ->
+                                case tileHover of
+                                    Just hover ->
+                                        hover
 
                                     Nothing ->
-                                        case tileHover of
-                                            Just hover ->
-                                                hover
-
-                                            Nothing ->
-                                                MapHover
+                                        MapHover
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
@@ -2119,8 +2089,8 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
             Nothing ->
                 case hoverAt2 of
-                    ToolButtonHover tool ->
-                        ( setCurrentTool tool model2, Cmd.none )
+                    UiBackgroundHover ->
+                        ( model2, Cmd.none )
 
                     TileHover data ->
                         case currentUserId model2 of
@@ -2184,9 +2154,6 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                     Nothing ->
                                         ( setTrainViewPoint trainId model2, Cmd.none )
 
-                    ToolbarHover ->
-                        ( model2, Cmd.none )
-
                     MapHover ->
                         ( case previousMouseState.hover of
                             TrainHover { trainId, train } ->
@@ -2200,12 +2167,6 @@ mainMouseButtonUp mousePosition previousMouseState model =
                     MailEditorHover _ ->
                         ( model2, Cmd.none )
 
-                    PrimaryColorInput ->
-                        ( model2, Cmd.none )
-
-                    SecondaryColorInput ->
-                        ( model2, Cmd.none )
-
                     CowHover { cowId } ->
                         let
                             ( model3, _ ) =
@@ -2215,6 +2176,15 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                     UiHover uiHover _ ->
                         case uiHover of
+                            PrimaryColorInput ->
+                                ( model2, Cmd.none )
+
+                            SecondaryColorInput ->
+                                ( model2, Cmd.none )
+
+                            ToolButtonHover tool ->
+                                ( setCurrentTool tool model2, Cmd.none )
+
                             EmailAddressTextInputHover ->
                                 ( model2, Cmd.none )
 
@@ -2242,6 +2212,26 @@ mainMouseButtonUp mousePosition previousMouseState model =
         ( model2, Cmd.none )
 
 
+isPrimaryColorInput : Hover -> Bool
+isPrimaryColorInput hover =
+    case hover of
+        UiHover PrimaryColorInput _ ->
+            True
+
+        _ ->
+            False
+
+
+isSecondaryColorInput : Hover -> Bool
+isSecondaryColorInput hover =
+    case hover of
+        UiHover PrimaryColorInput _ ->
+            True
+
+        _ ->
+            False
+
+
 setFocus : Hover -> FrontendLoaded -> FrontendLoaded
 setFocus newFocus model =
     { model
@@ -2249,7 +2239,7 @@ setFocus newFocus model =
         , primaryColorTextInput =
             case currentUserId model of
                 Just userId ->
-                    if model.focus == PrimaryColorInput && newFocus /= PrimaryColorInput then
+                    if isPrimaryColorInput model.focus && not (isPrimaryColorInput newFocus) then
                         case model.currentTool of
                             TilePlacerTool { tileGroup } ->
                                 model.primaryColorTextInput
@@ -2263,7 +2253,7 @@ setFocus newFocus model =
                                     (Color.toHexCode (getHandColor userId model).primaryColor)
                                     model.primaryColorTextInput
 
-                    else if model.focus /= PrimaryColorInput && newFocus == PrimaryColorInput then
+                    else if not (isPrimaryColorInput model.focus) && isPrimaryColorInput newFocus then
                         TextInput.selectAll model.primaryColorTextInput
 
                     else
@@ -2274,7 +2264,7 @@ setFocus newFocus model =
         , secondaryColorTextInput =
             case currentUserId model of
                 Just userId ->
-                    if model.focus == SecondaryColorInput && newFocus /= SecondaryColorInput then
+                    if isSecondaryColorInput model.focus && not (isSecondaryColorInput newFocus) then
                         case model.currentTool of
                             TilePlacerTool { tileGroup } ->
                                 model.secondaryColorTextInput
@@ -2288,7 +2278,7 @@ setFocus newFocus model =
                                     (Color.toHexCode (getHandColor userId model).secondaryColor)
                                     model.secondaryColorTextInput
 
-                    else if model.focus /= SecondaryColorInput && newFocus == SecondaryColorInput then
+                    else if not (isSecondaryColorInput model.focus) && isSecondaryColorInput newFocus then
                         TextInput.selectAll model.secondaryColorTextInput
 
                     else
@@ -2919,36 +2909,6 @@ updateMeshes forceUpdate oldModel newModel =
 
             else
                 createInfoMesh newModel.pingData (currentUserId newModel)
-        , toolbarMesh =
-            if
-                (newModel.primaryColorTextInput == oldModel.primaryColorTextInput)
-                    && (newModel.secondaryColorTextInput == oldModel.secondaryColorTextInput)
-                    && (newModel.tileColors == oldModel.tileColors)
-                    && (newModel.tileHotkeys == oldModel.tileHotkeys)
-                    && (newModel.focus == oldModel.focus)
-                    && (newMaybeUserId == oldMaybeUserId)
-                    && (Maybe.map (\userId -> getHandColor userId newModel) newMaybeUserId
-                            == Maybe.map (\userId -> getHandColor userId oldModel) oldMaybeUserId
-                       )
-                    && not forceUpdate
-            then
-                newModel.toolbarMesh
-
-            else
-                case newMaybeUserId of
-                    Just userId ->
-                        Toolbar.mesh
-                            newModel.hasCmdKey
-                            (getHandColor userId newModel)
-                            newModel.primaryColorTextInput
-                            newModel.secondaryColorTextInput
-                            newModel.tileColors
-                            newModel.tileHotkeys
-                            newModel.focus
-                            newModel.currentTool
-
-                    Nothing ->
-                        Shaders.triangleFan []
         , loginMesh =
             if (viewModel == getViewModel oldModel) && newModel.focus == oldModel.focus && not forceUpdate then
                 newModel.loginMesh
@@ -3019,22 +2979,13 @@ canDragView hover =
         TrainHover _ ->
             True
 
-        ToolbarHover ->
-            False
-
-        ToolButtonHover _ ->
+        UiBackgroundHover ->
             False
 
         MapHover ->
             True
 
         MailEditorHover _ ->
-            False
-
-        PrimaryColorInput ->
-            False
-
-        SecondaryColorInput ->
             False
 
         CowHover _ ->
@@ -3657,10 +3608,7 @@ cursorSprite hover model =
                         case currentTool model of
                             TilePlacerTool _ ->
                                 case hover of
-                                    ToolButtonHover _ ->
-                                        PointerCursor
-
-                                    ToolbarHover ->
+                                    UiBackgroundHover ->
                                         DefaultCursor
 
                                     TileHover _ ->
@@ -3675,12 +3623,6 @@ cursorSprite hover model =
                                     MailEditorHover _ ->
                                         DefaultCursor
 
-                                    PrimaryColorInput ->
-                                        PointerCursor
-
-                                    SecondaryColorInput ->
-                                        PointerCursor
-
                                     CowHover _ ->
                                         NoCursor
 
@@ -3689,10 +3631,7 @@ cursorSprite hover model =
 
                             HandTool ->
                                 case hover of
-                                    ToolButtonHover _ ->
-                                        PointerCursor
-
-                                    ToolbarHover ->
+                                    UiBackgroundHover ->
                                         DefaultCursor
 
                                     TileHover data ->
@@ -3712,12 +3651,6 @@ cursorSprite hover model =
                                     MailEditorHover _ ->
                                         DefaultCursor
 
-                                    PrimaryColorInput ->
-                                        PointerCursor
-
-                                    SecondaryColorInput ->
-                                        PointerCursor
-
                                     CowHover _ ->
                                         CursorSprite PointerSpriteCursor
 
@@ -3726,10 +3659,7 @@ cursorSprite hover model =
 
                             TilePickerTool ->
                                 case hover of
-                                    ToolButtonHover _ ->
-                                        PointerCursor
-
-                                    ToolbarHover ->
+                                    UiBackgroundHover ->
                                         DefaultCursor
 
                                     TileHover _ ->
@@ -3743,12 +3673,6 @@ cursorSprite hover model =
 
                                     MailEditorHover _ ->
                                         DefaultCursor
-
-                                    PrimaryColorInput ->
-                                        PointerCursor
-
-                                    SecondaryColorInput ->
-                                        PointerCursor
 
                                     CowHover _ ->
                                         CursorSprite EyeDropperSpriteCursor
@@ -4208,23 +4132,6 @@ canvasView audioData model =
                                     1
                                     |> Coord.translateMat4
                                         (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                            , texture = model.texture
-                            , textureSize = textureSize
-                            , color = Vec4.vec4 1 1 1 1
-                            }
-                       , WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.vertexShader
-                            Shaders.fragmentShader
-                            model.toolbarMesh
-                            { view =
-                                Mat4.makeScale3
-                                    (2 / toFloat windowWidth)
-                                    (-2 / toFloat windowHeight)
-                                    1
-                                    |> Coord.translateMat4
-                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                    |> Coord.translateMat4 (Toolbar.position model.devicePixelRatio model.windowSize)
                             , texture = model.texture
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1

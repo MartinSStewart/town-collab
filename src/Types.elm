@@ -147,7 +147,6 @@ type alias FrontendLoaded =
     , userIdMesh : WebGL.Mesh Vertex
     , lastPlacementError : Maybe Time.Posix
     , tileHotkeys : Dict String TileGroup
-    , toolbarMesh : WebGL.Mesh Vertex
     , loginMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe TileGroup
     , lastHouseClick : Maybe Time.Posix
@@ -190,21 +189,21 @@ type MouseButtonState
 
 
 type Hover
-    = ToolButtonHover ToolButton
-    | ToolbarHover
-    | TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
+    = TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
     | MailEditorHover MailEditor.Hover
-    | PrimaryColorInput
-    | SecondaryColorInput
     | CowHover { cowId : Id CowId, cow : Cow }
+    | UiBackgroundHover
     | UiHover UiHover { position : Coord Pixels }
 
 
 type UiHover
     = EmailAddressTextInputHover
     | SendEmailButtonHover
+    | ToolButtonHover ToolButton
+    | PrimaryColorInput
+    | SecondaryColorInput
 
 
 type alias BackendModel =
