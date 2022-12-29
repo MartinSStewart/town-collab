@@ -191,7 +191,7 @@ toolbarUi :
     -> AssocList.Dict TileGroup Colors
     -> Dict String TileGroup
     -> Tool
-    -> Ui.Element id units
+    -> Ui.Element UiHover units
 toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys currentTile =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
@@ -248,19 +248,23 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                                 else
                                     Just "Ctrl"
 
-                    innerMesh =
-                        \offset ->
-                            case tool of
-                                TilePlacerToolButton tileGroup ->
-                                    tileMesh tileColors offset (getTileGroupTile tileGroup 0)
+                    label : Ui.Element UiHover units
+                    label =
+                        case tool of
+                            TilePlacerToolButton tileGroup ->
+                                tileMesh tileColors (getTileGroupTile tileGroup 0)
 
-                                HandToolButton ->
-                                    Cursor.defaultCursorMesh2 handColor offset
+                            HandToolButton ->
+                                Cursor.defaultCursorMesh2 handColor
 
-                                TilePickerToolButton ->
-                                    Cursor.eyeDropperCursor2 offset
+                            TilePickerToolButton ->
+                                Cursor.eyeDropperCursor2
                 in
-                tileButton tool innerMesh hotkeyText (tool == currentTool2)
+                Ui.button
+                    { id = ToolButtonHover tool
+                    , padding = Ui.noPadding
+                    , label = label
+                    }
             )
             buttonTiles
             |> List.greedyGroupsOf 3
@@ -268,8 +272,8 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                 (\column ->
                     Ui.column
                         { spacing = Quantity 2
-                        , padding = Ui.noPadding
-                        , borderAndBackground = NoBorderOrBackground
+                        , padding = Ui.paddingXY 4 4
+                        , borderAndBackground = BackgroundOnly (Color.rgb255 100 100 100)
                         }
                         column
                 )
@@ -521,68 +525,67 @@ toolbarRowCount =
     3
 
 
+tileMesh : Colors -> Tile -> Ui.Element id units
+tileMesh colors tile =
+    let
+        data : TileData b
+        data =
+            Tile.getData tile
 
---
---
---tileMesh : Colors -> Coord unit -> Tile -> List Vertex
---tileMesh colors position2 tile =
---    let
---        data : TileData b
---        data =
---            Tile.getData tile
---
---        size : Coord units
---        size =
---            Coord.multiply Units.tileSize data.size
---                |> Coord.minimum buttonSize
---
---        spriteSize =
---            if data.size == Coord.xy 1 1 then
---                Coord.multiplyTuple ( 2, 2 ) size
---
---            else
+        size =
+            Coord.multiply Units.tileSize data.size
+                |> Coord.minimum buttonSize
+
+        spriteSize =
+            if data.size == Coord.xy 1 1 then
+                Coord.multiplyTuple ( 2, 2 ) size
+
+            else
+                size
+
+        position3 =
+            Coord.origin
+                |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize)
+                |> Coord.plus (Coord.divide (Coord.xy 2 2) buttonSize)
+    in
+    if tile == EmptyTile then
+        Ui.sprite
+            { size = Coord.tuple ( 28 * 2, 27 * 2 )
+            , texturePosition = Coord.xy 504 42
+            , textureSize = Coord.xy 28 27
+            }
+
+    else
+        case data.texturePosition of
+            Just texturePosition ->
+                Ui.colorSprite
+                    { colors = colors
+                    , size = spriteSize
+                    , texturePosition = Coord.multiply Units.tileSize texturePosition
+                    , textureSize = size
+                    }
+
+            Nothing ->
+                Ui.text ""
+
+
+
+--++ (case data.texturePositionTopLayer of
+--        Just topLayer ->
+--            let
+--                texturePosition2 =
+--                    Coord.multiply Units.tileSize topLayer.texturePosition
+--            in
+--            Sprite.spriteWithTwoColors
+--                colors
+--                position3
+--                spriteSize
+--                texturePosition2
 --                size
 --
---        position3 =
---            position2 |> Coord.minus (Coord.divide (Coord.xy 2 2) spriteSize) |> Coord.plus (Coord.divide (Coord.xy 2 2) buttonSize)
---    in
---    if tile == EmptyTile then
---        Sprite.sprite
---            (Coord.plus (Coord.xy 10 12) position2)
---            (Coord.tuple ( 28 * 2, 27 * 2 ))
---            (Coord.xy 504 42)
---            (Coord.xy 28 27)
---
---    else
---        (case data.texturePosition of
---            Just texturePosition ->
---                Sprite.spriteWithTwoColors
---                    colors
---                    position3
---                    spriteSize
---                    (Coord.multiply Units.tileSize texturePosition)
---                    size
---
---            Nothing ->
---                []
---        )
---            ++ (case data.texturePositionTopLayer of
---                    Just topLayer ->
---                        let
---                            texturePosition2 =
---                                Coord.multiply Units.tileSize topLayer.texturePosition
---                        in
---                        Sprite.spriteWithTwoColors
---                            colors
---                            position3
---                            spriteSize
---                            texturePosition2
---                            size
---
---                    Nothing ->
---                        []
---               )
---
+--        Nothing ->
+--            []
+--   )
 --
 --toolbarSize : Coord Pixels
 --toolbarSize =
@@ -618,31 +621,15 @@ toolbarRowCount =
 --    primaryColorInputWidth
 --
 --
---buttonSize : Coord units
---buttonSize =
---    Coord.xy 80 80
+
+
+buttonSize : Coord units
+buttonSize =
+    Coord.xy 80 80
+
+
+
 --
---
-
-
-tileButton :
-    ToolButton
-    -> (Coord ToolbarUnit -> List Vertex)
-    -> Maybe String
-    -> Bool
-    -> Ui.Element id units
-tileButton tool mesh2 maybeHotkey highlight =
-    let
-        charSize : Coord unit
-        charSize =
-            Sprite.charSize |> Coord.multiplyTuple ( 2, 2 )
-    in
-    Ui.button
-        { id = ToolButtonHover tool
-        }
-
-
-
 --
 --
 ----Sprite.rectangle

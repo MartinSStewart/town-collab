@@ -1270,6 +1270,9 @@ updateLoaded audioData msg model =
                         CowHover _ ->
                             True
 
+                        UiBackgroundHover ->
+                            True
+
                         UiHover uiHover _ ->
                             case uiHover of
                                 EmailAddressTextInputHover ->

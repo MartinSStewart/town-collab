@@ -4,6 +4,7 @@ module Ui exposing
     , HoverType(..)
     , Padding
     , button
+    , colorSprite
     , colorText
     , column
     , element
@@ -13,6 +14,7 @@ module Ui exposing
     , paddingXY2
     , row
     , size
+    , sprite
     , text
     , textInput
     , view
@@ -122,6 +124,23 @@ element { padding, borderAndBackground } element2 =
         , spacing = Quantity.zero
         }
         [ element2 ]
+
+
+sprite : { size : Coord units, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id units
+sprite data =
+    Sprite
+        { colors = { primaryColor = Color.black, secondaryColor = Color.white }
+        , size = data.size
+        , texturePosition = data.texturePosition
+        , textureSize = data.textureSize
+        }
+
+
+colorSprite :
+    { colors : Colors, size : Coord units, texturePosition : Coord Pixels, textureSize : Coord Pixels }
+    -> Element id units
+colorSprite =
+    Sprite
 
 
 type HoverType id units
@@ -298,6 +317,7 @@ viewHelper focus position vertices element2 =
 
         Sprite data ->
             Sprite.spriteWithTwoColors data.colors position data.size data.texturePosition data.textureSize
+                ++ vertices
 
 
 borderAndBackgroundView :

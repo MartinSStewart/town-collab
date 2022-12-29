@@ -20,6 +20,7 @@ import Html
 import Html.Attributes
 import Shaders exposing (Vertex)
 import Sprite
+import Ui
 import WebGL
 
 
@@ -136,14 +137,14 @@ defaultCursorMesh colors =
         |> Sprite.toMesh
 
 
-defaultCursorMesh2 : Colors -> Coord unit -> List Vertex
-defaultCursorMesh2 colors offset =
-    Sprite.spriteWithTwoColors
-        colors
-        (Coord.plus (Coord.xy 12 16) offset)
-        (Coord.multiply (Coord.xy 2 2) handSize)
-        (Coord.xy 533 28)
-        handSize
+defaultCursorMesh2 : Colors -> Ui.Element id units
+defaultCursorMesh2 colors =
+    Ui.colorSprite
+        { colors = colors
+        , size = Coord.multiply (Coord.xy 2 2) handSize
+        , texturePosition = Coord.xy 533 28
+        , textureSize = handSize
+        }
 
 
 eyeDropperCursorMesh : WebGL.Mesh Vertex
@@ -156,17 +157,18 @@ eyeDropperCursorMesh =
         |> Sprite.toMesh
 
 
+eyeDropperSize : Coord units
 eyeDropperSize =
     Coord.xy 19 19
 
 
-eyeDropperCursor2 : Coord unit -> List Vertex
-eyeDropperCursor2 offset =
-    Sprite.sprite
-        (Coord.plus (Coord.xy 20 12) offset)
-        (Coord.multiply (Coord.xy 2 2) eyeDropperSize)
-        (Coord.xy 534 78)
-        eyeDropperSize
+eyeDropperCursor2 : Ui.Element id units
+eyeDropperCursor2 =
+    Ui.sprite
+        { size = Coord.multiply (Coord.xy 2 2) eyeDropperSize
+        , texturePosition = Coord.xy 534 78
+        , textureSize = eyeDropperSize
+        }
 
 
 handPointerSize : Coord units
