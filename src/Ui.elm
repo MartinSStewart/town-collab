@@ -37,9 +37,8 @@ import WebGL
 
 
 type alias RowColumn units =
-    { spacing : Quantity Int units
+    { spacing : Int
     , padding : Padding units
-    , borderAndBackground : BorderAndBackground units
     , cachedSize : Coord units
     }
 
@@ -62,6 +61,13 @@ type Element id units
         (Element id units)
     | Row (RowColumn units) (List (Element id units))
     | Column (RowColumn units) (List (Element id units))
+    | Single
+        { padding : Padding units
+        , borderAndBackground : BorderAndBackground units
+        , inFront : List (Element id units)
+        , cachedSize : Coord units
+        }
+        (Element id units)
     | Quads { size : Coord units, vertices : Coord units -> List Vertex }
     | Empty
 
@@ -140,26 +146,21 @@ button data child =
 
 
 row :
-    { spacing : Quantity Int units
-    , padding : Padding units
-    , borderAndBackground : BorderAndBackground units
-    }
+    { spacing : Int, padding : Padding units }
     -> List (Element id units)
     -> Element id units
 row data children =
     Row
         { spacing = data.spacing
         , padding = data.padding
-        , borderAndBackground = data.borderAndBackground
         , cachedSize = rowSize data children
         }
         children
 
 
 column :
-    { spacing : Quantity Int units
+    { spacing : Int
     , padding : Padding units
-    , borderAndBackground : BorderAndBackground units
     }
     -> List (Element id units)
     -> Element id units
@@ -167,7 +168,6 @@ column data children =
     Column
         { spacing = data.spacing
         , padding = data.padding
-        , borderAndBackground = data.borderAndBackground
         , cachedSize = columnSize data children
         }
         children
@@ -178,16 +178,16 @@ el :
     -> Element id units
     -> Element id units
 el data element2 =
-    Row
+    Single
         { padding = data.padding
         , borderAndBackground = data.borderAndBackground
-        , spacing = Quantity.zero
+        , inFront = []
         , cachedSize =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
                 (size element2)
         }
-        [ element2 ]
+        element2
 
 
 center : { size : Coord units } -> Element id units -> Element id units
@@ -201,16 +201,16 @@ center data element2 =
         topLeft =
             data.size |> Coord.minus size2 |> Coord.divide (Coord.xy 2 2)
     in
-    Row
+    Single
         { padding =
             { topLeft = topLeft
             , bottomRight = data.size |> Coord.minus size2 |> Coord.minus topLeft
             }
+        , inFront = []
         , borderAndBackground = NoBorderOrBackground
-        , spacing = Quantity.zero
         , cachedSize = data.size
         }
-        [ element2 ]
+        element2
 
 
 bottomLeft : { size : Coord units } -> Element id units -> Element id units
@@ -222,16 +222,16 @@ bottomLeft data element2 =
         ( childSizeX, childSizeY ) =
             Coord.toTuple (size element2)
     in
-    Row
+    Single
         { padding =
             { topLeft = Coord.xy 0 (sizeY - childSizeY)
             , bottomRight = Coord.xy (sizeX - childSizeX) 0
             }
+        , inFront = []
         , borderAndBackground = NoBorderOrBackground
-        , spacing = Quantity.zero
         , cachedSize = data.size
         }
-        [ element2 ]
+        element2
 
 
 sprite : { size : Coord units, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id units
@@ -294,6 +294,22 @@ hoverHelper point elementPosition element2 =
         Column data children ->
             hoverRowColumnHelper False point elementPosition data children
 
+        Single data child ->
+            let
+                hover2 =
+                    hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
+            in
+            case ( data.borderAndBackground, hover2 ) of
+                ( BorderAndBackground _, NoHover ) ->
+                    if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
+                        BackgroundHover
+
+                    else
+                        NoHover
+
+                _ ->
+                    hover2
+
         Quads _ ->
             NoHover
 
@@ -309,58 +325,32 @@ hoverRowColumnHelper :
     -> List (Element id units)
     -> HoverType id units
 hoverRowColumnHelper isRow point elementPosition data children =
-    let
-        hover2 : HoverType id units
-        hover2 =
-            List.foldl
-                (\child state ->
-                    case state.hover of
-                        NoHover ->
-                            let
-                                ( sizeX, sizeY ) =
-                                    size child |> Coord.toTuple
-                            in
-                            { elementPosition =
-                                state.elementPosition
-                                    |> Coord.plus
-                                        (if isRow then
-                                            Coord.xy (sizeX + Quantity.unwrap data.spacing) 0
+    List.foldl
+        (\child state ->
+            case state.hover of
+                NoHover ->
+                    let
+                        ( sizeX, sizeY ) =
+                            size child |> Coord.toTuple
+                    in
+                    { elementPosition =
+                        state.elementPosition
+                            |> Coord.plus
+                                (if isRow then
+                                    Coord.xy (sizeX + data.spacing) 0
 
-                                         else
-                                            Coord.xy 0 (sizeY + Quantity.unwrap data.spacing)
-                                        )
-                            , hover = hoverHelper point state.elementPosition child
-                            }
+                                 else
+                                    Coord.xy 0 (sizeY + data.spacing)
+                                )
+                    , hover = hoverHelper point state.elementPosition child
+                    }
 
-                        _ ->
-                            state
-                )
-                { elementPosition = elementPosition |> Coord.plus data.padding.topLeft, hover = NoHover }
-                children
-                |> .hover
-    in
-    case ( data.borderAndBackground, hover2 ) of
-        ( BorderAndBackground _, NoHover ) ->
-            if
-                Bounds.fromCoordAndSize
-                    elementPosition
-                    (size
-                        (if isRow then
-                            Row data children
-
-                         else
-                            Column data children
-                        )
-                    )
-                    |> Bounds.contains point
-            then
-                BackgroundHover
-
-            else
-                NoHover
-
-        _ ->
-            hover2
+                _ ->
+                    state
+        )
+        { elementPosition = elementPosition |> Coord.plus data.padding.topLeft, hover = NoHover }
+        children
+        |> .hover
 
 
 view : Maybe id -> Element id units -> WebGL.Mesh Vertex
@@ -412,7 +402,7 @@ viewHelper focus position vertices element2 =
                 (\child state ->
                     { vertices = viewHelper focus state.position state.vertices child
                     , position =
-                        Coord.xy (Coord.xRaw (size child) + Quantity.unwrap data.spacing) 0
+                        Coord.xy (Coord.xRaw (size child) + data.spacing) 0
                             |> Coord.plus state.position
                     }
                 )
@@ -421,14 +411,13 @@ viewHelper focus position vertices element2 =
                 }
                 children
                 |> .vertices
-                |> (++) (borderAndBackgroundView position data (size element2))
 
         Column data children ->
             List.foldl
                 (\child state ->
                     { vertices = viewHelper focus state.position state.vertices child
                     , position =
-                        Coord.xy 0 (Coord.yRaw (size child) + Quantity.unwrap data.spacing)
+                        Coord.xy 0 (Coord.yRaw (size child) + data.spacing)
                             |> Coord.plus state.position
                     }
                 )
@@ -437,7 +426,10 @@ viewHelper focus position vertices element2 =
                 }
                 children
                 |> .vertices
-                |> (++) (borderAndBackgroundView position data (size element2))
+
+        Single data child ->
+            borderAndBackgroundView position data (size element2)
+                ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices child
 
         Quads data ->
             data.vertices position ++ vertices
@@ -485,6 +477,9 @@ size element2 =
         Column data _ ->
             data.cachedSize
 
+        Single data _ ->
+            data.cachedSize
+
         Quads data ->
             data.size
 
@@ -492,7 +487,7 @@ size element2 =
             Coord.origin
 
 
-rowSize : { a | spacing : Quantity Int units, padding : Padding units } -> List (Element id units) -> Coord units
+rowSize : { a | spacing : Int, padding : Padding units } -> List (Element id units) -> Coord units
 rowSize data children =
     List.foldl
         (\child ( x, y ) ->
@@ -500,7 +495,7 @@ rowSize data children =
                 size2 =
                     size child
             in
-            ( Coord.xRaw size2 + Quantity.unwrap data.spacing + x
+            ( Coord.xRaw size2 + data.spacing + x
             , max (Coord.yRaw size2) y
             )
         )
@@ -508,9 +503,15 @@ rowSize data children =
         children
         |> Coord.tuple
         |> Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight)
+        |> (if List.isEmpty children then
+                identity
+
+            else
+                Coord.minus (Coord.xy data.spacing 0)
+           )
 
 
-columnSize : { a | spacing : Quantity Int units, padding : Padding units } -> List (Element id units) -> Coord units
+columnSize : { a | spacing : Int, padding : Padding units } -> List (Element id units) -> Coord units
 columnSize data children =
     List.foldl
         (\child ( x, y ) ->
@@ -519,10 +520,16 @@ columnSize data children =
                     size child
             in
             ( max (Coord.xRaw size2) x
-            , Coord.yRaw size2 + Quantity.unwrap data.spacing + y
+            , Coord.yRaw size2 + data.spacing + y
             )
         )
         ( 0, 0 )
         children
         |> Coord.tuple
         |> Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight)
+        |> (if List.isEmpty children then
+                identity
+
+            else
+                Coord.minus (Coord.xy 0 data.spacing)
+           )

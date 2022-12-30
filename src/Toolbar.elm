@@ -77,7 +77,7 @@ view data =
             }
         , borderAndBackground = NoBorderOrBackground
         }
-        currentToolbar
+        (Ui.el { padding = Ui.noPadding, borderAndBackground = borderAndBackground } currentToolbar)
 
 
 borderAndBackground : BorderAndBackground units
@@ -104,21 +104,12 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
         loginUi : Ui.Element UiHover units
         loginUi =
             Ui.column
-                { spacing = Quantity 10
-                , padding = Ui.paddingXY 20 10
-                , borderAndBackground = borderAndBackground
-                }
+                { spacing = 10, padding = Ui.paddingXY 20 10 }
                 [ Ui.text "Enter your email address and we'll send a login link"
                 , Ui.column
-                    { spacing = Quantity 6
-                    , padding = Ui.noPadding
-                    , borderAndBackground = NoBorderOrBackground
-                    }
+                    { spacing = 6, padding = Ui.noPadding }
                     [ Ui.row
-                        { spacing = Quantity 10
-                        , padding = Ui.noPadding
-                        , borderAndBackground = NoBorderOrBackground
-                        }
+                        { spacing = 10, padding = Ui.noPadding }
                         [ Ui.textInput
                             { id = EmailAddressTextInputHover
                             , width = Quantity 780
@@ -191,19 +182,16 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
             showColorTextInputs currentTile
     in
     Ui.row
-        { spacing = Quantity 10, padding = Ui.paddingXY 20 10, borderAndBackground = borderAndBackground }
+        { spacing = 0, padding = Ui.noPadding }
         [ List.map (toolButtonUi hasCmdKey handColor colors hotkeys) buttonTiles
             |> List.greedyGroupsOf 3
             |> List.map
-                (Ui.column { spacing = Quantity 2, padding = Ui.noPadding, borderAndBackground = NoBorderOrBackground })
-            |> Ui.row { spacing = Quantity 2, padding = Ui.noPadding, borderAndBackground = NoBorderOrBackground }
+                (Ui.column { spacing = 2, padding = Ui.noPadding })
+            |> Ui.row { spacing = 2, padding = Ui.noPadding }
         , Ui.row
-            { spacing = Quantity 10
-            , padding = Ui.noPadding
-            , borderAndBackground = NoBorderOrBackground
-            }
+            { spacing = 10, padding = Ui.paddingXY 12 8 }
             [ Ui.column
-                { spacing = Quantity 10, padding = Ui.noPadding, borderAndBackground = NoBorderOrBackground }
+                { spacing = 10, padding = Ui.noPadding }
                 [ if showPrimaryColorTextInput then
                     Ui.textInput
                         { id = PrimaryColorInput, width = primaryColorInputWidth, isValid = True }
