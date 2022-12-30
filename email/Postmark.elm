@@ -10,14 +10,15 @@ module Postmark exposing
     , sendTemplateEmail
     )
 
+import Effect.Command as Command exposing (Command)
+import Effect.Http
+import Effect.Task exposing (Task)
 import Email.Html
 import EmailAddress exposing (EmailAddress)
-import Http
 import Json.Decode as D
 import Json.Encode as E
 import List.Nonempty exposing (Nonempty)
 import String.Nonempty exposing (NonemptyString)
-import Task exposing (Task)
 
 
 endpoint : String
@@ -57,11 +58,11 @@ type alias PostmarkSend =
     }
 
 
-sendEmailTask : ApiKey -> PostmarkSend -> Task Http.Error PostmarkSendResponse
+sendEmailTask : ApiKey -> PostmarkSend -> Effect.Task.Task restriction Effect.Http.Error PostmarkSendResponse
 sendEmailTask (ApiKey token) d =
     let
         httpBody =
-            Http.jsonBody <|
+            Effect.Http.jsonBody <|
                 E.object <|
                     [ ( "From", E.string <| emailToString d.from )
                     , ( "To", E.string <| emailsToString d.to )
@@ -70,9 +71,9 @@ sendEmailTask (ApiKey token) d =
                     ]
                         ++ bodyToJsonValues d.body
     in
-    Http.task
+    Effect.Http.task
         { method = "POST"
-        , headers = [ Http.header "X-Postmark-Server-Token" token ]
+        , headers = [ Effect.Http.header "X-Postmark-Server-Token" token ]
         , url = endpoint ++ "/email"
         , body = httpBody
         , resolver = jsonResolver decodePostmarkSendResponse
@@ -81,12 +82,12 @@ sendEmailTask (ApiKey token) d =
 
 
 sendEmail :
-    (Result Http.Error PostmarkSendResponse -> msg)
+    (Result Effect.Http.Error PostmarkSendResponse -> msg)
     -> ApiKey
     -> PostmarkSend
-    -> Cmd msg
+    -> Command restriction toMsg msg
 sendEmail msg token d =
-    sendEmailTask token d |> Task.attempt msg
+    sendEmailTask token d |> Effect.Task.attempt msg
 
 
 emailsToString : List.Nonempty.Nonempty { name : String, email : EmailAddress } -> String
@@ -139,11 +140,11 @@ type alias PostmarkTemplateSend =
     }
 
 
-sendTemplateEmail : PostmarkTemplateSend -> Task Http.Error PostmarkTemplateSendResponse
+sendTemplateEmail : PostmarkTemplateSend -> Effect.Task.Task restriction Effect.Http.Error PostmarkTemplateSendResponse
 sendTemplateEmail d =
     let
         httpBody =
-            Http.jsonBody <|
+            Effect.Http.jsonBody <|
                 E.object <|
                     [ ( "From", E.string d.from )
                     , ( "To", E.string d.to )
@@ -152,9 +153,9 @@ sendTemplateEmail d =
                     , ( "TemplateModel", d.templateModel )
                     ]
     in
-    Http.task
+    Effect.Http.task
         { method = "POST"
-        , headers = [ Http.header "X-Postmark-Server-Token" d.token ]
+        , headers = [ Effect.Http.header "X-Postmark-Server-Token" d.token ]
         , url = endpoint ++ "/email/withTemplate"
         , body = httpBody
         , resolver = jsonResolver decodePostmarkTemplateSendResponse
@@ -199,24 +200,24 @@ bodyToJsonValues body =
             ]
 
 
-jsonResolver : D.Decoder a -> Http.Resolver Http.Error a
+jsonResolver : D.Decoder a -> Effect.Http.Resolver restriction Effect.Http.Error a
 jsonResolver decoder =
-    Http.stringResolver <|
+    Effect.Http.stringResolver <|
         \response ->
             case response of
-                Http.GoodStatus_ _ body ->
+                Effect.Http.GoodStatus_ _ body ->
                     D.decodeString decoder body
                         |> Result.mapError D.errorToString
-                        |> Result.mapError Http.BadBody
+                        |> Result.mapError Effect.Http.BadBody
 
-                Http.BadUrl_ message ->
-                    Err (Http.BadUrl message)
+                Effect.Http.BadUrl_ message ->
+                    Err (Effect.Http.BadUrl message)
 
-                Http.Timeout_ ->
-                    Err Http.Timeout
+                Effect.Http.Timeout_ ->
+                    Err Effect.Http.Timeout
 
-                Http.NetworkError_ ->
-                    Err Http.NetworkError
+                Effect.Http.NetworkError_ ->
+                    Err Effect.Http.NetworkError
 
-                Http.BadStatus_ metadata _ ->
-                    Err (Http.BadStatus metadata.statusCode)
+                Effect.Http.BadStatus_ metadata _ ->
+                    Err (Effect.Http.BadStatus metadata.statusCode)

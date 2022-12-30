@@ -14,6 +14,13 @@ import Crypto.Hash
 import Cursor
 import Dict
 import Duration exposing (Duration)
+import Effect.Command as Command exposing (BackendOnly, Command)
+import Effect.Http
+import Effect.Lamdera exposing (ClientId, SessionId)
+import Effect.Process
+import Effect.Subscription as Subscription exposing (Subscription)
+import Effect.Task
+import Effect.Time
 import Email.Html
 import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
@@ -21,21 +28,17 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Http
 import Id exposing (EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
-import Lamdera exposing (ClientId, SessionId)
+import Lamdera
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (UserStatus(..))
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
-import Process
 import Quantity exposing (Quantity(..))
 import String.Nonempty exposing (NonemptyString(..))
-import Task
 import Tile exposing (RailPathType(..), Tile(..))
-import Time
 import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
 import Undo
@@ -45,21 +48,23 @@ import UrlHelper exposing (InternalRoute(..), LoginToken(..))
 
 
 app =
-    Lamdera.backend
-        { init = ( init, Cmd.none )
+    Effect.Lamdera.backend
+        Lamdera.broadcast
+        Lamdera.sendToFrontend
+        { init = ( init, Command.none )
         , update = update
         , updateFromFrontend =
             \sessionId clientId msg model ->
-                ( model, Time.now |> Task.perform (UpdateFromFrontend sessionId clientId msg) )
+                ( model, Effect.Time.now |> Effect.Task.perform (UpdateFromFrontend sessionId clientId msg) )
         , subscriptions = subscriptions
         }
 
 
-subscriptions : BackendModel -> Sub BackendMsg
+subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
 subscriptions _ =
-    Sub.batch
-        [ Lamdera.onDisconnect UserDisconnected
-        , Time.every 1000 WorldUpdateTimeElapsed
+    Subscription.batch
+        [ Effect.Lamdera.onDisconnect UserDisconnected
+        , Effect.Time.every Duration.second WorldUpdateTimeElapsed
         ]
 
 
@@ -95,19 +100,19 @@ notifyAdminWait =
 
 
 sendEmail :
-    (Result Http.Error PostmarkSendResponse -> msg)
+    (Result Effect.Http.Error PostmarkSendResponse -> msg)
     -> NonemptyString
     -> String
     -> Email.Html.Html
     -> EmailAddress
-    -> Cmd msg
+    -> Command BackendOnly ToFrontend msg
 sendEmail msg subject contentString content to =
     if Env.isProduction then
         Postmark.sendEmail msg Env.postmarkApiKey (townCollabEmail subject contentString content to)
 
     else
-        Process.sleep 100
-            |> Task.map
+        Effect.Process.sleep (Duration.milliseconds 100)
+            |> Effect.Task.map
                 (\_ ->
                     { to = EmailAddress.toString to
                     , submittedAt = ""
@@ -116,7 +121,7 @@ sendEmail msg subject contentString content to =
                     , message = ""
                     }
                 )
-            |> Task.attempt msg
+            |> Effect.Task.attempt msg
 
 
 townCollabEmail : NonemptyString -> String -> Email.Html.Html -> EmailAddress -> PostmarkSend
@@ -135,7 +140,7 @@ townCollabEmail subject contentString content to =
     }
 
 
-update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+update : BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 update msg model =
     case msg of
         UserDisconnected sessionId clientId ->
@@ -143,10 +148,11 @@ update msg model =
                 Just ( userId, user ) ->
                     ( { model
                         | userSessions =
-                            Dict.update sessionId
+                            Dict.update
+                                (Effect.Lamdera.sessionIdToString sessionId)
                                 (Maybe.map
                                     (\session ->
-                                        { clientIds = Dict.remove clientId session.clientIds
+                                        { clientIds = AssocList.remove clientId session.clientIds
                                         , userId = session.userId
                                         }
                                     )
@@ -156,14 +162,14 @@ update msg model =
                       }
                     , Nonempty (ServerUserDisconnected userId |> Change.ServerChange) []
                         |> ChangeBroadcast
-                        |> Lamdera.broadcast
+                        |> Effect.Lamdera.broadcast
                     )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Command.none )
 
         NotifyAdminEmailSent ->
-            ( model, Cmd.none )
+            ( model, Command.none )
 
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend time sessionId clientId toBackendMsg model
@@ -175,10 +181,10 @@ update msg model =
             in
             case result of
                 Ok _ ->
-                    ( model, Cmd.none )
+                    ( model, Command.none )
 
                 Err error ->
-                    ( addError time (PostmarkError emailAddress error) model, Cmd.none )
+                    ( addError time (PostmarkError emailAddress error) model, Command.none )
 
         WorldUpdateTimeElapsed time ->
             case model.lastWorldUpdate of
@@ -285,23 +291,23 @@ update msg model =
                         , lastWorldUpdateTrains = model.trains
                         , mail = mergeTrains.mail
                       }
-                    , Cmd.batch
-                        [ WorldUpdateBroadcast mergeTrains.diff |> Lamdera.broadcast
+                    , Command.batch
+                        [ WorldUpdateBroadcast mergeTrains.diff |> Effect.Lamdera.broadcast
                         , if mergeTrains.mailChanged then
                             AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) mergeTrains.mail
                                 |> MailBroadcast
-                                |> Lamdera.broadcast
+                                |> Effect.Lamdera.broadcast
 
                           else
-                            Cmd.none
+                            Command.none
                         ]
                     )
 
                 Nothing ->
-                    ( { model | lastWorldUpdate = Just time }, Cmd.none )
+                    ( { model | lastWorldUpdate = Just time }, Command.none )
 
 
-addError : Time.Posix -> BackendError -> BackendModel -> BackendModel
+addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
 addError time error model =
     { model | errors = ( time, error ) :: model.errors }
 
@@ -313,7 +319,7 @@ backendUserId =
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( Id UserId, BackendUserData )
 getUserFromSessionId sessionId model =
-    case Dict.get sessionId model.userSessions of
+    case Dict.get (Effect.Lamdera.sessionIdToString sessionId) model.userSessions of
         Just { userId } ->
             case userId of
                 Just userId2 ->
@@ -332,11 +338,11 @@ getUserFromSessionId sessionId model =
 
 
 broadcastLocalChange :
-    Time.Posix
+    Effect.Time.Posix
     -> ( Id UserId, BackendUserData )
     -> Nonempty ( Id EventId, Change.LocalChange )
     -> BackendModel
-    -> ( BackendModel, Cmd BackendMsg )
+    -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 broadcastLocalChange time userIdAndUser changes model =
     let
         ( model2, ( eventId, originalChange ), firstMsg ) =
@@ -383,12 +389,12 @@ broadcastLocalChange time userIdAndUser changes model =
 
 
 updateFromFrontend :
-    Time.Posix
+    Effect.Time.Posix
     -> SessionId
     -> ClientId
     -> ToBackend
     -> BackendModel
-    -> ( BackendModel, Cmd BackendMsg )
+    -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 updateFromFrontend currentTime sessionId clientId msg model =
     case msg of
         ConnectToBackend requestData maybeLoginToken ->
@@ -400,12 +406,12 @@ updateFromFrontend currentTime sessionId clientId msg model =
                     broadcastLocalChange currentTime userIdAndUser changes model
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Command.none )
 
         ChangeViewBounds bounds ->
             case
-                Dict.get sessionId model.userSessions
-                    |> Maybe.andThen (\{ clientIds } -> Dict.get clientId clientIds)
+                Dict.get (Effect.Lamdera.sessionIdToString sessionId) model.userSessions
+                    |> Maybe.andThen (\{ clientIds } -> AssocList.get clientId clientIds)
             of
                 Just oldBounds ->
                     let
@@ -431,11 +437,15 @@ updateFromFrontend currentTime sessionId clientId msg model =
                     ( { model
                         | userSessions =
                             Dict.update
-                                sessionId
+                                (Effect.Lamdera.sessionIdToString sessionId)
                                 (Maybe.map
                                     (\session ->
                                         { session
-                                            | clientIds = Dict.update clientId (\_ -> Just bounds) session.clientIds
+                                            | clientIds =
+                                                AssocList.update
+                                                    clientId
+                                                    (\_ -> Just bounds)
+                                                    session.clientIds
                                         }
                                     )
                                 )
@@ -445,11 +455,11 @@ updateFromFrontend currentTime sessionId clientId msg model =
                         |> Change.ClientChange
                         |> Nonempty.fromElement
                         |> ChangeBroadcast
-                        |> Lamdera.sendToFrontend clientId
+                        |> Effect.Lamdera.sendToFrontend clientId
                     )
 
                 Nothing ->
-                    ( model, Cmd.none )
+                    ( model, Command.none )
 
         MailEditorToBackend mailEditorToBackend ->
             case mailEditorToBackend of
@@ -468,26 +478,26 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                         model.mail
                             in
                             ( { model | mail = newMail }
-                            , Cmd.batch
-                                [ MailEditor.SubmitMailResponse |> MailEditorToFrontend |> Lamdera.sendToFrontend clientId
+                            , Command.batch
+                                [ MailEditor.SubmitMailResponse |> MailEditorToFrontend |> Effect.Lamdera.sendToFrontend clientId
                                 , MailBroadcast
                                     (AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) newMail)
-                                    |> Lamdera.broadcast
+                                    |> Effect.Lamdera.broadcast
                                 ]
                             )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            ( model, Command.none )
 
                 MailEditor.UpdateMailEditorRequest mailEditor ->
                     case getUserFromSessionId sessionId model of
                         Just ( userId, _ ) ->
                             ( updateUser userId (\user -> { user | mailEditor = mailEditor }) model
-                            , Cmd.none
+                            , Command.none
                             )
 
                         Nothing ->
-                            ( model, Cmd.none )
+                            ( model, Command.none )
 
         TeleportHomeTrainRequest trainId teleportTime ->
             ( { model
@@ -497,21 +507,21 @@ updateFromFrontend currentTime sessionId clientId msg model =
                         (Maybe.map (Train.startTeleportingHome (adjustEventTime currentTime teleportTime)))
                         model.trains
               }
-            , Cmd.none
+            , Command.none
             )
 
         CancelTeleportHomeTrainRequest trainId ->
             ( { model | trains = AssocList.update trainId (Maybe.map (Train.cancelTeleportingHome currentTime)) model.trains }
-            , Cmd.none
+            , Command.none
             )
 
         LeaveHomeTrainRequest trainId ->
             ( { model | trains = AssocList.update trainId (Maybe.map (Train.leaveHome currentTime)) model.trains }
-            , Cmd.none
+            , Command.none
             )
 
         PingRequest ->
-            ( model, PingResponse currentTime |> Lamdera.sendToFrontend clientId )
+            ( model, PingResponse currentTime |> Effect.Lamdera.sendToFrontend clientId )
 
         SendLoginEmailRequest a ->
             case Untrusted.emailAddress a of
@@ -537,8 +547,8 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                         { requestTime = currentTime, userId = userId, requestedBy = sessionId }
                                         model2.pendingLoginTokens
                               }
-                            , Cmd.batch
-                                [ SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId
+                            , Command.batch
+                                [ SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId
                                 , sendEmail
                                     (SentLoginEmail currentTime emailAddress)
                                     (NonemptyString 'L' "ogin Email")
@@ -551,7 +561,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
                                         []
                                         [ Email.Html.div
                                             []
-                                            [ Email.Html.b [] [ Email.Html.text "Do not" ]
+                                            [ Email.Html.b [] [ Email.Html.text "DO NOT" ]
                                             , Email.Html.text " click the following link if you didn't request this email."
                                             ]
                                         , Email.Html.div
@@ -569,15 +579,15 @@ updateFromFrontend currentTime sessionId clientId msg model =
                             )
 
                         Nothing ->
-                            ( model2, SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId )
+                            ( model2, SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId )
 
                 Invalid ->
-                    ( model, Cmd.none )
+                    ( model, Command.none )
 
 
 {-| Allow a client to say when something happened but restrict how far it can be away from the current time.
 -}
-adjustEventTime : Time.Posix -> Time.Posix -> Time.Posix
+adjustEventTime : Effect.Time.Posix -> Effect.Time.Posix -> Effect.Time.Posix
 adjustEventTime currentTime eventTime =
     if Duration.from currentTime eventTime |> Quantity.abs |> Quantity.lessThan (Duration.seconds 1) then
         eventTime
@@ -586,11 +596,11 @@ adjustEventTime currentTime eventTime =
         currentTime
 
 
-generateKey : Time.Posix -> { a | secretLinkCounter : Int } -> ( LoginToken, { a | secretLinkCounter : Int } )
+generateKey : Effect.Time.Posix -> { a | secretLinkCounter : Int } -> ( LoginToken, { a | secretLinkCounter : Int } )
 generateKey currentTime model =
     ( Env.confirmationEmailKey
         ++ "_"
-        ++ String.fromInt (Time.posixToMillis currentTime)
+        ++ String.fromInt (Effect.Time.posixToMillis currentTime)
         ++ "_"
         ++ String.fromInt model.secretLinkCounter
         |> Crypto.Hash.sha256
@@ -600,7 +610,7 @@ generateKey currentTime model =
 
 
 updateLocalChange :
-    Time.Posix
+    Effect.Time.Posix
     -> ( Id UserId, BackendUserData )
     -> ( Id EventId, Change.LocalChange )
     -> BackendModel
@@ -908,7 +918,7 @@ hiddenUsers userId model =
         |> EverySet.fromList
 
 
-requestDataUpdate : Time.Posix -> SessionId -> ClientId -> Bounds CellUnit -> Maybe LoginToken -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+requestDataUpdate : Effect.Time.Posix -> SessionId -> ClientId -> Bounds CellUnit -> Maybe LoginToken -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken model =
     let
         checkLogin () =
@@ -958,11 +968,11 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
             { model2
                 | userSessions =
                     Dict.update
-                        sessionId
+                        (Effect.Lamdera.sessionIdToString sessionId)
                         (\maybeSession ->
                             (case maybeSession of
                                 Just session ->
-                                    { clientIds = Dict.insert clientId viewBounds session.clientIds
+                                    { clientIds = AssocList.insert clientId viewBounds session.clientIds
                                     , userId =
                                         case userStatus of
                                             LoggedIn loggedIn ->
@@ -973,7 +983,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                                     }
 
                                 Nothing ->
-                                    { clientIds = Dict.singleton clientId viewBounds
+                                    { clientIds = AssocList.singleton clientId viewBounds
                                     , userId =
                                         case userStatus of
                                             LoggedIn loggedIn ->
@@ -1001,8 +1011,8 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
             }
     in
     ( model3
-    , Cmd.batch
-        [ Lamdera.sendToFrontend clientId (LoadingData loadingData)
+    , Command.batch
+        [ Effect.Lamdera.sendToFrontend clientId (LoadingData loadingData)
         , case userStatus of
             LoggedIn loggedIn ->
                 broadcast
@@ -1020,7 +1030,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                     model3
 
             NotLoggedIn ->
-                Cmd.none
+                Command.none
         ]
     )
 
@@ -1042,10 +1052,13 @@ createUser userId emailAddress model =
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )
 
 
-broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Cmd BackendMsg
+broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Command BackendOnly ToFrontend BackendMsg
 broadcast msgFunc model =
     model.userSessions
         |> Dict.toList
-        |> List.concatMap (\( sessionId, { clientIds } ) -> Dict.keys clientIds |> List.map (Tuple.pair sessionId))
-        |> List.filterMap (\( sessionId, clientId ) -> msgFunc sessionId clientId |> Maybe.map (Lamdera.sendToFrontend clientId))
-        |> Cmd.batch
+        |> List.concatMap
+            (\( sessionId, { clientIds } ) ->
+                AssocList.keys clientIds |> List.map (Tuple.pair (Effect.Lamdera.sessionIdFromString sessionId))
+            )
+        |> List.filterMap (\( sessionId, clientId ) -> msgFunc sessionId clientId |> Maybe.map (Effect.Lamdera.sendToFrontend clientId))
+        |> Command.batch

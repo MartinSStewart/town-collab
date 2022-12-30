@@ -10,15 +10,16 @@ import Base64
 import Bytes exposing (Bytes)
 import Dict exposing (Dict)
 import Duration
+import Effect.Command as Command exposing (Command)
+import Effect.Http
+import Effect.Task exposing (Task)
 import Email.Html
 import EmailAddress exposing (EmailAddress)
-import Http
 import Internal
 import Json.Decode as JD
 import Json.Encode as JE
 import List.Nonempty exposing (Nonempty)
 import String.Nonempty exposing (NonemptyString)
-import Task exposing (Task)
 
 
 type Content
@@ -336,66 +337,66 @@ apiKey apiKey_ =
 
 {-| Send an email using the SendGrid API.
 -}
-sendEmail : (Result Error () -> msg) -> ApiKey -> Email -> Cmd msg
+sendEmail : (Result Error () -> msg) -> ApiKey -> Email -> Command restriction toMsg msg
 sendEmail msg (ApiKey apiKey_) email_ =
-    Http.request
+    Effect.Http.request
         { method = "POST"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ apiKey_) ]
+        , headers = [ Effect.Http.header "Authorization" ("Bearer " ++ apiKey_) ]
         , url = sendGridApiUrl
-        , body = encodeSendEmail email_ |> Http.jsonBody
+        , body = encodeSendEmail email_ |> Effect.Http.jsonBody
         , expect =
-            Http.expectStringResponse msg
+            Effect.Http.expectStringResponse msg
                 (\response ->
                     case response of
-                        Http.BadUrl_ url ->
+                        Effect.Http.BadUrl_ url ->
                             BadUrl url |> Err
 
-                        Http.Timeout_ ->
+                        Effect.Http.Timeout_ ->
                             Err Timeout
 
-                        Http.NetworkError_ ->
+                        Effect.Http.NetworkError_ ->
                             Err NetworkError
 
-                        Http.BadStatus_ metadata body ->
+                        Effect.Http.BadStatus_ metadata body ->
                             decodeBadStatus metadata body |> Err
 
-                        Http.GoodStatus_ _ _ ->
+                        Effect.Http.GoodStatus_ _ _ ->
                             Ok ()
                 )
-        , timeout = Just 30000
+        , timeout = Just (Duration.seconds 30)
         , tracker = Nothing
         }
 
 
 {-| Send an email using the SendGrid API. This is the task version of [sendEmail](#sendEmail).
 -}
-sendEmailTask : ApiKey -> Email -> Task Error ()
+sendEmailTask : ApiKey -> Email -> Effect.Task.Task restriction Error ()
 sendEmailTask (ApiKey apiKey_) email_ =
-    Http.task
+    Effect.Http.task
         { method = "POST"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ apiKey_) ]
+        , headers = [ Effect.Http.header "Authorization" ("Bearer " ++ apiKey_) ]
         , url = sendGridApiUrl
-        , body = encodeSendEmail email_ |> Http.jsonBody
+        , body = encodeSendEmail email_ |> Effect.Http.jsonBody
         , resolver =
-            Http.stringResolver
+            Effect.Http.stringResolver
                 (\response ->
                     case response of
-                        Http.BadUrl_ url ->
+                        Effect.Http.BadUrl_ url ->
                             BadUrl url |> Err
 
-                        Http.Timeout_ ->
+                        Effect.Http.Timeout_ ->
                             Err Timeout
 
-                        Http.NetworkError_ ->
+                        Effect.Http.NetworkError_ ->
                             Err NetworkError
 
-                        Http.BadStatus_ metadata body ->
+                        Effect.Http.BadStatus_ metadata body ->
                             decodeBadStatus metadata body |> Err
 
-                        Http.GoodStatus_ _ _ ->
+                        Effect.Http.GoodStatus_ _ _ ->
                             Ok ()
                 )
-        , timeout = Just 30000
+        , timeout = Just (Duration.seconds 30)
         }
 
 
@@ -403,7 +404,7 @@ sendGridApiUrl =
     "https://api.sendgrid.com/v3/mail/send"
 
 
-decodeBadStatus : Http.Metadata -> String -> Error
+decodeBadStatus : Effect.Http.Metadata -> String -> Error
 decodeBadStatus metadata body =
     let
         toErrorCode : (a -> Error) -> Result e a -> Error

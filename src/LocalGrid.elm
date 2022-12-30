@@ -17,6 +17,7 @@ import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), Serv
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
+import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell
 import Id exposing (CowId, Id, UserId)
@@ -29,7 +30,6 @@ import Quantity exposing (Quantity(..))
 import Random
 import Terrain
 import Tile exposing (Tile)
-import Time
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 
@@ -61,7 +61,7 @@ type UserStatus
 
 type alias Cursor =
     { position : Point2d WorldUnit WorldUnit
-    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Time.Posix }
+    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Effect.Time.Posix }
     }
 
 
@@ -300,7 +300,7 @@ updateServerChange serverChange model =
             )
 
 
-pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 pickupCow userId cowId position time model =
     ( { model
         | cursors =

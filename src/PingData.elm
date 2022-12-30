@@ -1,15 +1,15 @@
 module PingData exposing (PingData, pingOffset)
 
 import Duration exposing (Duration)
+import Effect.Time
 import Quantity
-import Time
 
 
 type alias PingData =
     { roundTripTime : Duration
-    , serverTime : Time.Posix
-    , sendTime : Time.Posix
-    , receiveTime : Time.Posix
+    , serverTime : Effect.Time.Posix
+    , sendTime : Effect.Time.Posix
+    , receiveTime : Effect.Time.Posix
     , lowEstimate : Duration
     , highEstimate : Duration
     , pingCount : Int

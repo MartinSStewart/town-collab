@@ -4,11 +4,11 @@ import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
+import Effect.Time
 import Grid
 import GridCell
 import Id exposing (CowId, EventId, Id, UserId)
 import Point2d exposing (Point2d)
-import Time
 import Units exposing (CellUnit, WorldUnit)
 
 
@@ -23,8 +23,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | PickupCow (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
-    | DropCow (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
+    | PickupCow (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | DropCow (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors
@@ -37,7 +37,7 @@ type ClientChange
 type ServerChange
     = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit) }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerPickupCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit) Time.Posix
+    | ServerPickupCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | ServerDropCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)

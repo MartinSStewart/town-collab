@@ -3,6 +3,7 @@ module Tests exposing (..)
 import AssocList
 import Coord exposing (Coord)
 import Duration
+import Effect.Time
 import Expect exposing (Expectation)
 import Grid exposing (Grid)
 import GridCell
@@ -10,7 +11,6 @@ import Id
 import Quantity exposing (Quantity(..))
 import Test exposing (Test, describe, test)
 import Tile exposing (Direction(..), RailPath(..), Tile(..))
-import Time
 import Train exposing (Train)
 import UrlHelper exposing (ConfirmEmailKey(..), UnsubscribeEmailKey(..))
 
@@ -136,8 +136,8 @@ tests =
                 in
                 Train.moveTrain
                     Train.defaultMaxSpeed
-                    (Time.millisToPosix 0)
-                    (Time.millisToPosix 1000)
+                    (Effect.Time.millisToPosix 0)
+                    (Effect.Time.millisToPosix 1000)
                     { grid = grid, mail = AssocList.empty }
                     { position = Coord.tuple ( 0, 0 )
                     , path = Tile.trainHouseLeftRailPath
@@ -180,8 +180,8 @@ tests =
                     train =
                         Train.moveTrain
                             Train.defaultMaxSpeed
-                            (Time.millisToPosix 0)
-                            (Time.millisToPosix 1000)
+                            (Effect.Time.millisToPosix 0)
+                            (Effect.Time.millisToPosix 1000)
                             { grid = grid, mail = AssocList.empty }
                             { position = Coord.tuple ( 0, 0 )
                             , path = Tile.trainHouseLeftRailPath
@@ -229,8 +229,8 @@ tests =
                         train =
                             Train.moveTrain
                                 2
-                                (Time.millisToPosix 0)
-                                (Time.millisToPosix 1000)
+                                (Effect.Time.millisToPosix 0)
+                                (Effect.Time.millisToPosix 1000)
                                 { grid = grid, mail = AssocList.empty }
                                 { position = Coord.tuple ( 0, 0 )
                                 , path = RailPathHorizontal { length = 1, offsetX = 0, offsetY = 0 }
@@ -287,8 +287,8 @@ tests =
                                 (\_ train ->
                                     Train.moveTrain
                                         Train.defaultMaxSpeed
-                                        (Time.millisToPosix 0)
-                                        (Time.millisToPosix (milliseconds // 200))
+                                        (Effect.Time.millisToPosix 0)
+                                        (Effect.Time.millisToPosix (milliseconds // 200))
                                         { grid = grid, mail = AssocList.empty }
                                         train
                                 )
@@ -304,8 +304,8 @@ tests =
                     largeStep =
                         Train.moveTrain
                             Train.defaultMaxSpeed
-                            (Time.millisToPosix 0)
-                            (Time.millisToPosix milliseconds)
+                            (Effect.Time.millisToPosix 0)
+                            (Effect.Time.millisToPosix milliseconds)
                             { grid = grid, mail = AssocList.empty }
                             { position = Coord.tuple ( 0, 0 )
                             , path = Tile.trainHouseLeftRailPath
@@ -339,7 +339,7 @@ unsubscribeKey =
 
 
 time seconds =
-    Time.millisToPosix ((seconds * 1000) + 10000000)
+    Effect.Time.millisToPosix ((seconds * 1000) + 10000000)
 
 
 

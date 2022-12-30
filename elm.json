@@ -3,6 +3,8 @@
     "source-directories": [
         "src",
         "packages/elm-geometry/3.6.0/src",
+        "packages/ohanhi/keyboard/2.0.1/src",
+        "packages/MartinSStewart/elm-audio/4.0.2/src",
         "email"
     ],
     "elm-version": "0.19.1",
@@ -11,7 +13,6 @@
             "Chadtech/elm-vector": "3.0.2",
             "Gizra/elm-all-set": "1.0.1",
             "Herteby/simplex-noise": "1.2.2",
-            "MartinSStewart/elm-audio": "4.0.2",
             "MartinSStewart/elm-nonempty-string": "2.0.0",
             "MartinSStewart/elm-serialize": "1.3.0",
             "danfishgold/base64-bytes": "1.1.0",
@@ -43,11 +44,11 @@
             "ktonon/elm-crypto": "1.1.2",
             "lamdera/codecs": "1.0.0",
             "lamdera/core": "1.0.0",
+            "lamdera/program-test": "2.0.0",
             "mdgriffith/elm-ui": "1.1.8",
             "mgold/elm-nonempty-list": "4.2.0",
             "mpizenberg/elm-pointer-events": "4.0.2",
             "myrho/elm-round": "1.0.5",
-            "ohanhi/keyboard": "2.0.1",
             "pzp1997/assoc-list": "1.0.0",
             "rtfeldman/elm-hex": "1.0.0",
             "tortus/elm-array-2d": "3.0.0"
@@ -60,14 +61,13 @@
             "elm/virtual-dom": "1.0.3",
             "elm-community/random-extra": "3.2.0",
             "folkertdev/elm-flate": "2.0.5",
+            "folkertdev/elm-sha2": "1.0.0",
             "ianmackenzie/elm-geometry": "3.9.1",
             "ktonon/elm-word": "2.1.2"
         }
     },
     "test-dependencies": {
         "direct": {},
-        "indirect": {
-            "folkertdev/elm-sha2": "1.0.0"
-        }
+        "indirect": {}
     }
 }

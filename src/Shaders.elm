@@ -11,36 +11,37 @@ module Shaders exposing
     , vertexShader
     )
 
+import Effect.WebGL exposing (Shader)
+import Effect.WebGL.Settings exposing (Setting)
+import Effect.WebGL.Settings.Blend as Blend
+import Effect.WebGL.Texture exposing (Texture)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Math.Vector4 exposing (Vec4)
-import WebGL exposing (Shader)
-import WebGL.Settings exposing (Setting)
-import WebGL.Settings.Blend as Blend
-import WebGL.Texture exposing (Texture)
+import WebGL.Texture
 
 
 type alias Vertex =
     { position : Vec3, texturePosition : Vec2, opacity : Float, primaryColor : Vec3, secondaryColor : Vec3 }
 
 
-indexedTriangles : List attributes -> List ( Int, Int, Int ) -> WebGL.Mesh attributes
+indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Effect.WebGL.Mesh attributes
 indexedTriangles vertices indices =
     let
         _ =
             Debug.log "new indexedTriangles" ""
     in
-    WebGL.indexedTriangles vertices indices
+    Effect.WebGL.indexedTriangles vertices indices
 
 
-triangleFan : List attributes -> WebGL.Mesh attributes
+triangleFan : List attributes -> Effect.WebGL.Mesh attributes
 triangleFan vertices =
     let
         _ =
             Debug.log "new triangleFan" ""
     in
-    WebGL.triangleFan vertices
+    Effect.WebGL.triangleFan vertices
 
 
 blend : Setting
@@ -84,7 +85,7 @@ void main () {
 fragmentShader :
     Shader
         {}
-        { u | texture : Texture, color : Vec4 }
+        { u | texture : WebGL.Texture.Texture, color : Vec4 }
         { vcoord : Vec2
         , opacity2 : Float
         , primaryColor2 : Vec3

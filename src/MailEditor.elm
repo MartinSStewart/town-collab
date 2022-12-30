@@ -33,6 +33,9 @@ import Bounds
 import Color
 import Coord exposing (Coord)
 import Duration exposing (Duration)
+import Effect.Time
+import Effect.WebGL
+import Effect.WebGL.Texture
 import Frame2d
 import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard exposing (Key(..))
@@ -46,10 +49,8 @@ import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sprite
 import Tile
-import Time
 import Units exposing (MailPixelUnit, WorldUnit)
 import Vector2d
-import WebGL
 import WebGL.Texture
 
 
@@ -120,14 +121,14 @@ type MailStatus
 
 
 type alias Model =
-    { mesh : WebGL.Mesh Vertex
-    , textInputMesh : WebGL.Mesh Vertex
+    { mesh : Effect.WebGL.Mesh Vertex
+    , textInputMesh : Effect.WebGL.Mesh Vertex
     , currentImage : Image
     , undo : List EditorState
     , current : EditorState
     , redo : List EditorState
     , showMailEditor : ShowMailEditor
-    , lastPlacedImage : Maybe Time.Posix
+    , lastPlacedImage : Maybe Effect.Time.Posix
     , submitStatus : SubmitStatus
     , textInputFocused : Bool
     }
@@ -175,8 +176,8 @@ isOpen { showMailEditor } =
 
 type ShowMailEditor
     = MailEditorClosed
-    | MailEditorOpening { startTime : Time.Posix, startPosition : Point2d Pixels Pixels }
-    | MailEditorClosing { startTime : Time.Posix, startPosition : Point2d Pixels Pixels }
+    | MailEditorOpening { startTime : Effect.Time.Posix, startPosition : Point2d Pixels Pixels }
+    | MailEditorClosing { startTime : Effect.Time.Posix, startPosition : Point2d Pixels Pixels }
 
 
 initEditor : MailEditorData -> Model
@@ -229,7 +230,7 @@ getImageData image =
             { textureSize = ( 24, 24 ), texturePosition = ( 556, 0 ) }
 
 
-updateFromBackend : { a | time : Time.Posix } -> ToFrontend -> Model -> Model
+updateFromBackend : { a | time : Effect.Time.Posix } -> ToFrontend -> Model -> Model
 updateFromBackend config toFrontend mailEditor =
     case toFrontend of
         SubmitMailResponse ->
@@ -253,7 +254,7 @@ handleMouseDown :
     -> (ToBackend -> cmd)
     -> Int
     -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Time.Posix }
+    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
     -> Point2d Pixels Pixels
     -> Model
     -> ( Model, cmd )
@@ -335,7 +336,7 @@ toData model =
     }
 
 
-handleKeyDown : { a | time : Time.Posix } -> Bool -> Key -> Model -> Model
+handleKeyDown : { a | time : Effect.Time.Posix } -> Bool -> Key -> Model -> Model
 handleKeyDown config ctrlHeld key model =
     if model.textInputFocused then
         case key of
@@ -415,7 +416,7 @@ addChange_ editorStateFunc model =
     addChange (editorStateFunc model.current) model
 
 
-close : { a | time : Time.Posix } -> Model -> Model
+close : { a | time : Effect.Time.Posix } -> Model -> Model
 close config model =
     { model
         | showMailEditor =
@@ -432,7 +433,7 @@ close config model =
     }
 
 
-open : { a | time : Time.Posix } -> Point2d Pixels Pixels -> Model -> Model
+open : { a | time : Effect.Time.Posix } -> Point2d Pixels Pixels -> Model -> Model
 open config startPosition model =
     { model | showMailEditor = MailEditorOpening { startTime = config.time, startPosition = startPosition } }
 
@@ -597,12 +598,12 @@ drawMail :
         { a
             | windowSize : Coord Pixels
             , devicePixelRatio : Float
-            , time : Time.Posix
+            , time : Effect.Time.Posix
             , zoomFactor : Int
         }
     -> Point2d WorldUnit WorldUnit
     -> Model
-    -> List WebGL.Entity
+    -> List Effect.WebGL.Entity
 drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
     let
         isOpen_ =
@@ -698,7 +699,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                 textureSize =
                     WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
             in
-            WebGL.entityWith
+            Effect.WebGL.entityWith
                 [ Shaders.blend ]
                 Shaders.vertexShader
                 Shaders.fragmentShader
@@ -708,7 +709,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                 , texture = texture
                 , textureSize = textureSize
                 }
-                :: WebGL.entityWith
+                :: Effect.WebGL.entityWith
                     [ Shaders.blend ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
@@ -727,7 +728,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                             |> Mat4.scale3 mailScale mailScale 0
                     , color = Vec4.vec4 1 1 1 1
                     }
-                :: WebGL.entityWith
+                :: Effect.WebGL.entityWith
                     [ Shaders.blend ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
@@ -750,7 +751,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                             |> Coord.translateMat4 textInputPosition
                     , color = Vec4.vec4 1 1 1 1
                     }
-                :: WebGL.entityWith
+                :: Effect.WebGL.entityWith
                     [ Shaders.blend ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
@@ -767,7 +768,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                     }
                 :: (case validateUserId model.current.to of
                         Just _ ->
-                            [ WebGL.entityWith
+                            [ Effect.WebGL.entityWith
                                 [ Shaders.blend ]
                                 Shaders.vertexShader
                                 Shaders.fragmentShader
@@ -797,7 +798,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                    )
 
         --++ (if showHoverImage then
-        --        [ WebGL.entityWith
+        --        [ Effect.WebGL.entityWith
         --            [ Shaders.blend ]
         --            Shaders.vertexShader
         --            Shaders.fragmentShader
@@ -839,7 +840,7 @@ type UiPixelUnit
     = UiPixelUnit Never
 
 
-submitButtonMesh : WebGL.Mesh Vertex
+submitButtonMesh : Effect.WebGL.Mesh Vertex
 submitButtonMesh =
     let
         vertices =
@@ -850,7 +851,7 @@ submitButtonMesh =
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
-submittingButtonMesh : WebGL.Mesh Vertex
+submittingButtonMesh : Effect.WebGL.Mesh Vertex
 submittingButtonMesh =
     let
         vertices =
@@ -861,7 +862,7 @@ submittingButtonMesh =
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
-submitButtonHoverMesh : WebGL.Mesh Vertex
+submitButtonHoverMesh : Effect.WebGL.Mesh Vertex
 submitButtonHoverMesh =
     let
         vertices =
@@ -880,7 +881,7 @@ textInputSize =
     Coord.tuple ( 70, 19 )
 
 
-textInputMesh : WebGL.Mesh Vertex
+textInputMesh : Effect.WebGL.Mesh Vertex
 textInputMesh =
     let
         vertices =
@@ -891,7 +892,7 @@ textInputMesh =
     Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
-textInputHoverMesh : WebGL.Mesh Vertex
+textInputHoverMesh : Effect.WebGL.Mesh Vertex
 textInputHoverMesh =
     let
         vertices =
@@ -949,7 +950,7 @@ imageMesh { position, image } =
     ]
 
 
-square : WebGL.Mesh Vertex
+square : Effect.WebGL.Mesh Vertex
 square =
     Shaders.triangleFan
         [ { position = Vec3.vec3 0 0 0

@@ -27,23 +27,26 @@ module Types exposing
 import AssocList
 import Audio
 import Bounds exposing (Bounds)
-import Browser exposing (UrlRequest)
-import Browser.Navigation
+import Browser
 import Change exposing (Change, Cow, ServerChange)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (CursorMeshes)
 import Dict exposing (Dict)
 import Duration exposing (Duration)
+import Effect.Browser.Navigation
+import Effect.Http
+import Effect.Lamdera exposing (ClientId, SessionId)
+import Effect.Time
+import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Http
 import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
-import Lamdera exposing (ClientId, SessionId)
+import Lamdera
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (Cursor, LocalGrid, UserStatus)
 import LocalModel exposing (LocalModel)
@@ -57,14 +60,12 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput
 import Tile exposing (Tile, TileGroup)
-import Time
 import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
 import UrlHelper exposing (ConfirmEmailKey, LoginToken, UnsubscribeEmailKey)
 import WebGL
-import WebGL.Texture exposing (Texture)
 
 
 type alias FrontendModel =
@@ -77,11 +78,11 @@ type FrontendModel_
 
 
 type alias FrontendLoading =
-    { key : Browser.Navigation.Key
+    { key : Effect.Browser.Navigation.Key
     , windowSize : Coord Pixels
     , devicePixelRatio : Maybe Float
     , zoomFactor : Int
-    , time : Maybe Time.Posix
+    , time : Maybe Effect.Time.Posix
     , viewPoint : Coord WorldUnit
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
@@ -98,7 +99,7 @@ type LoadingLocalModel
 
 type ViewPoint
     = NormalViewPoint (Point2d WorldUnit WorldUnit)
-    | TrainViewPoint { trainId : Id TrainId, startViewPoint : Point2d WorldUnit WorldUnit, startTime : Time.Posix }
+    | TrainViewPoint { trainId : Id TrainId, startViewPoint : Point2d WorldUnit WorldUnit, startTime : Effect.Time.Posix }
 
 
 type ToolButton
@@ -114,7 +115,7 @@ type Tool
 
 
 type alias FrontendLoaded =
-    { key : Browser.Navigation.Key
+    { key : Effect.Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : AssocList.Dict (Id TrainId) Train
     , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
@@ -129,37 +130,37 @@ type alias FrontendLoaded =
     , mouseLeft : MouseButtonState
     , mouseMiddle : MouseButtonState
     , pendingChanges : List ( Id EventId, Change.LocalChange )
-    , undoAddLast : Time.Posix
-    , time : Time.Posix
-    , startTime : Time.Posix
+    , undoAddLast : Effect.Time.Posix
+    , time : Effect.Time.Posix
+    , startTime : Effect.Time.Posix
     , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
-    , lastTilePlaced : Maybe { time : Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
+    , lastTilePlaced : Maybe { time : Effect.Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
-    , lastTrainWhistle : Maybe Time.Posix
+    , lastTrainWhistle : Maybe Effect.Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : Model
     , currentTool : Tool
-    , lastTileRotation : List Time.Posix
-    , lastPlacementError : Maybe Time.Posix
+    , lastTileRotation : List Effect.Time.Posix
+    , lastPlacementError : Maybe Effect.Time.Posix
     , tileHotkeys : Dict String TileGroup
     , uiMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe TileGroup
-    , lastHouseClick : Maybe Time.Posix
+    , lastHouseClick : Maybe Effect.Time.Posix
     , eventIdCounter : Id EventId
     , pingData : Maybe PingData
-    , pingStartTime : Maybe Time.Posix
-    , localTime : Time.Posix
+    , pingStartTime : Maybe Effect.Time.Posix
+    , localTime : Effect.Time.Posix
     , scrollThreshold : Float
     , tileColors : AssocList.Dict TileGroup Colors
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
     , focus : Hover
-    , music : { startTime : Time.Posix, sound : Sound }
-    , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Time.Posix }
+    , music : { startTime : Effect.Time.Posix, sound : Sound }
+    , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
     , handMeshes : AssocList.Dict Colors CursorMeshes
     , hasCmdKey : Bool
     , loginTextInput : TextInput.Model
@@ -174,7 +175,7 @@ type SubmitStatus a
 
 
 type alias RemovedTileParticle =
-    { time : Time.Posix, position : Coord WorldUnit, tile : Tile, colors : Colors }
+    { time : Effect.Time.Posix, position : Coord WorldUnit, tile : Tile, colors : Colors }
 
 
 type MouseButtonState
@@ -209,22 +210,22 @@ type alias BackendModel =
     { grid : Grid
     , userSessions :
         Dict
-            SessionId
-            { clientIds : Dict ClientId (Bounds CellUnit)
+            Lamdera.SessionId
+            { clientIds : AssocList.Dict ClientId (Bounds CellUnit)
             , userId : Maybe (Id UserId)
             }
     , users : IdDict UserId BackendUserData
     , secretLinkCounter : Int
-    , errors : List ( Time.Posix, BackendError )
+    , errors : List ( Effect.Time.Posix, BackendError )
     , trains : AssocList.Dict (Id TrainId) Train
     , cows : IdDict CowId Cow
     , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
-    , lastWorldUpdate : Maybe Time.Posix
+    , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
     , pendingLoginTokens :
         AssocList.Dict
             LoginToken
-            { requestTime : Time.Posix
+            { requestTime : Effect.Time.Posix
             , userId : Id UserId
             , requestedBy : SessionId
             }
@@ -232,7 +233,7 @@ type alias BackendModel =
 
 
 type BackendError
-    = PostmarkError EmailAddress Http.Error
+    = PostmarkError EmailAddress Effect.Http.Error
     | UserNotFoundWhenLoggingIn (Id UserId)
 
 
@@ -252,11 +253,11 @@ type alias FrontendMsg =
 
 
 type FrontendMsg_
-    = UrlClicked UrlRequest
+    = UrlClicked Browser.UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
-    | TextureLoaded (Result WebGL.Texture.Error Texture)
-    | TrainTextureLoaded (Result WebGL.Texture.Error Texture)
+    | TextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | KeyMsg Keyboard.Msg
     | KeyDown Keyboard.RawKey
     | WindowResized (Coord Pixels)
@@ -265,10 +266,10 @@ type FrontendMsg_
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
     | MouseWheel Html.Events.Extra.Wheel.Event
-    | ShortIntervalElapsed Time.Posix
+    | ShortIntervalElapsed Effect.Time.Posix
     | ZoomFactorPressed Int
     | ToggleAdminEnabledPressed
-    | AnimationFrame Time.Posix
+    | AnimationFrame Effect.Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
     | PastedText String
@@ -280,7 +281,7 @@ type ToBackend
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
     | MailEditorToBackend MailEditor.ToBackend
-    | TeleportHomeTrainRequest (Id TrainId) Time.Posix
+    | TeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | CancelTeleportHomeTrainRequest (Id TrainId)
     | LeaveHomeTrainRequest (Id TrainId)
     | PingRequest
@@ -290,9 +291,9 @@ type ToBackend
 type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminEmailSent
-    | SentLoginEmail Time.Posix EmailAddress (Result Http.Error PostmarkSendResponse)
-    | UpdateFromFrontend SessionId ClientId ToBackend Time.Posix
-    | WorldUpdateTimeElapsed Time.Posix
+    | SentLoginEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
+    | UpdateFromFrontend SessionId ClientId ToBackend Effect.Time.Posix
+    | WorldUpdateTimeElapsed Effect.Time.Posix
 
 
 type ToFrontend
@@ -302,7 +303,7 @@ type ToFrontend
     | WorldUpdateBroadcast (AssocList.Dict (Id TrainId) TrainDiff)
     | MailEditorToFrontend MailEditor.ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
-    | PingResponse Time.Posix
+    | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
 
 

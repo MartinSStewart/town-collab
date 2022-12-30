@@ -3,8 +3,8 @@ module Sound exposing (Sound(..), length, load, play, playWithConfig)
 import AssocList as Dict exposing (Dict)
 import Audio exposing (Audio, AudioCmd, AudioData, PlayAudioConfig)
 import Duration exposing (Duration)
+import Effect.Time
 import Quantity
-import Time
 
 
 type Sound
@@ -62,7 +62,7 @@ allSounds =
     ]
 
 
-play : Dict Sound (Result Audio.LoadError Audio.Source) -> Sound -> Time.Posix -> Audio
+play : Dict Sound (Result Audio.LoadError Audio.Source) -> Sound -> Effect.Time.Posix -> Audio
 play dict sound startTime =
     case Dict.get sound dict of
         Just (Ok audio) ->
@@ -77,7 +77,7 @@ playWithConfig :
     -> Dict Sound (Result Audio.LoadError Audio.Source)
     -> (Duration -> PlayAudioConfig)
     -> Sound
-    -> Time.Posix
+    -> Effect.Time.Posix
     -> Audio
 playWithConfig audioData dict config sound startTime =
     case Dict.get sound dict of

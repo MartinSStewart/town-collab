@@ -32,6 +32,10 @@ import AssocList
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import Duration exposing (Duration, Seconds)
+import Effect.Time
+import Effect.WebGL
+import Effect.WebGL.Settings.DepthTest
+import Effect.WebGL.Texture exposing (Texture)
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, MailId, TrainId, UserId)
@@ -46,18 +50,15 @@ import Quantity exposing (Quantity(..), Rate)
 import Random
 import Shaders exposing (Vertex)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
-import Time
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
-import WebGL
-import WebGL.Settings.DepthTest
-import WebGL.Texture exposing (Texture)
+import WebGL.Texture
 
 
 type Status
     = WaitingAtHome
-    | TeleportingHome Time.Posix
+    | TeleportingHome Effect.Time.Posix
     | Travelling
-    | StoppedAtPostOffice { time : Time.Posix, userId : Id UserId }
+    | StoppedAtPostOffice { time : Effect.Time.Posix, userId : Id UserId }
 
 
 type Train
@@ -69,7 +70,7 @@ type Train
         , speed : Quantity Float (Rate TileLocalUnit Seconds)
         , home : Coord WorldUnit
         , homePath : RailPath
-        , isStuck : Maybe Time.Posix
+        , isStuck : Maybe Effect.Time.Posix
         , status : Status
         , owner : Id UserId
         }
@@ -86,7 +87,7 @@ type TrainDiff
                 , t : Float
                 , speed : Quantity Float (Rate TileLocalUnit Seconds)
                 }
-        , isStuck : FieldChanged (Maybe Time.Posix)
+        , isStuck : FieldChanged (Maybe Effect.Time.Posix)
         , status : FieldChanged Status
         }
 
@@ -180,7 +181,7 @@ type alias TrainData =
     , path : RailPath
     , t : Float
     , speed : Quantity Float (Rate TileLocalUnit Seconds)
-    , stoppedAtPostOffice : Maybe { time : Time.Posix, userId : Id UserId }
+    , stoppedAtPostOffice : Maybe { time : Effect.Time.Posix, userId : Id UserId }
     }
 
 
@@ -221,7 +222,7 @@ getCoach (Train train) =
     }
 
 
-trainPosition : Time.Posix -> Train -> Point2d WorldUnit WorldUnit
+trainPosition : Effect.Time.Posix -> Train -> Point2d WorldUnit WorldUnit
 trainPosition time (Train train) =
     case status time (Train train) of
         Travelling ->
@@ -258,7 +259,7 @@ coachPosition coach =
     Grid.localTilePointPlusWorld coach.position (railData.path coach.t)
 
 
-status : Time.Posix -> Train -> Status
+status : Effect.Time.Posix -> Train -> Status
 status time (Train train) =
     case train.status of
         WaitingAtHome ->
@@ -278,7 +279,7 @@ status time (Train train) =
             StoppedAtPostOffice stoppedAtPostOffice
 
 
-speed : Time.Posix -> Train -> Quantity Float (Rate TileLocalUnit Seconds)
+speed : Effect.Time.Posix -> Train -> Quantity Float (Rate TileLocalUnit Seconds)
 speed time (Train train) =
     case status time (Train train) of
         WaitingAtHome ->
@@ -306,8 +307,8 @@ defaultMaxSpeed =
 moveTrain :
     Id TrainId
     -> Float
-    -> Time.Posix
-    -> Time.Posix
+    -> Effect.Time.Posix
+    -> Effect.Time.Posix
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
@@ -359,8 +360,8 @@ moveTrain trainId maxSpeed startTime endTime state (Train train) =
 
 moveTrainHelper :
     Id TrainId
-    -> Time.Posix
-    -> Time.Posix
+    -> Effect.Time.Posix
+    -> Effect.Time.Posix
     -> Quantity Float TileLocalUnit
     -> Quantity Float TileLocalUnit
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
@@ -528,7 +529,7 @@ owner (Train train) =
     train.owner
 
 
-isStuck : Time.Posix -> Train -> Maybe Time.Posix
+isStuck : Effect.Time.Posix -> Train -> Maybe Effect.Time.Posix
 isStuck time (Train train) =
     case status time (Train train) of
         Travelling ->
@@ -619,7 +620,7 @@ moveCoachHelper distanceLeft pathIsReversed coach =
 
 findNextTile :
     Id TrainId
-    -> Time.Posix
+    -> Effect.Time.Posix
     -> Point2d WorldUnit WorldUnit
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Quantity Float (Rate TileLocalUnit Seconds)
@@ -657,7 +658,7 @@ findNextTile trainId time position state speed_ direction list =
 
 findNextTileHelper :
     Id TrainId
-    -> Time.Posix
+    -> Effect.Time.Posix
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
@@ -688,7 +689,7 @@ findNextTileHelper trainId time neighborCellPos position speed_ direction state 
                         firstPath :: restOfPaths ->
                             Random.step
                                 (Random.uniform firstPath restOfPaths)
-                                (Time.posixToMillis time + Id.toInt trainId |> Random.initialSeed)
+                                (Effect.Time.posixToMillis time + Id.toInt trainId |> Random.initialSeed)
                                 |> Tuple.first
                                 |> Just
 
@@ -708,7 +709,7 @@ findNextTileHelper trainId time neighborCellPos position speed_ direction state 
 
 checkPath :
     Id TrainId
-    -> Time.Posix
+    -> Effect.Time.Posix
     -> GridCell.Value
     -> AssocList.Dict (Id MailId) { a | status : MailStatus, from : Id UserId, to : Id UserId }
     -> Coord CellUnit
@@ -793,7 +794,7 @@ teleportLength =
     Duration.seconds 1
 
 
-path : Time.Posix -> Train -> RailPath
+path : Effect.Time.Posix -> Train -> RailPath
 path time (Train train) =
     case status time (Train train) of
         WaitingAtHome ->
@@ -809,7 +810,7 @@ path time (Train train) =
             train.path
 
 
-trainT : Time.Posix -> Train -> Float
+trainT : Effect.Time.Posix -> Train -> Float
 trainT time (Train train) =
     case status time (Train train) of
         WaitingAtHome ->
@@ -819,7 +820,13 @@ trainT time (Train train) =
             train.t
 
 
-draw : Time.Posix -> AssocList.Dict (Id MailId) FrontendMail -> AssocList.Dict (Id TrainId) Train -> Mat4 -> Texture -> List WebGL.Entity
+draw :
+    Effect.Time.Posix
+    -> AssocList.Dict (Id MailId) FrontendMail
+    -> AssocList.Dict (Id TrainId) Train
+    -> Mat4
+    -> WebGL.Texture.Texture
+    -> List Effect.WebGL.Entity
 draw time mail trains viewMatrix trainTexture =
     List.concatMap
         (\( trainId, train ) ->
@@ -848,7 +855,7 @@ draw time mail trains viewMatrix trainTexture =
                         |> round
                         |> modBy trainFrames
 
-                trainMesh : List WebGL.Entity
+                trainMesh : List Effect.WebGL.Entity
                 trainMesh =
                     case status time train of
                         TeleportingHome teleportTime ->
@@ -977,7 +984,7 @@ draw time mail trains viewMatrix trainTexture =
         (AssocList.toList trains)
 
 
-startTeleportingHome : Time.Posix -> Train -> Train
+startTeleportingHome : Effect.Time.Posix -> Train -> Train
 startTeleportingHome time (Train train) =
     Train
         { train
@@ -997,7 +1004,7 @@ startTeleportingHome time (Train train) =
         }
 
 
-cancelTeleportingHome : Time.Posix -> Train -> Train
+cancelTeleportingHome : Effect.Time.Posix -> Train -> Train
 cancelTeleportingHome time (Train train) =
     Train
         { train
@@ -1017,7 +1024,7 @@ cancelTeleportingHome time (Train train) =
         }
 
 
-leaveHome : Time.Posix -> Train -> Train
+leaveHome : Effect.Time.Posix -> Train -> Train
 leaveHome time (Train train) =
     case status time (Train train) of
         Travelling ->
@@ -1041,10 +1048,10 @@ leaveHome time (Train train) =
             Train train
 
 
-trainEntity : Texture -> WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> WebGL.Entity
+trainEntity : WebGL.Texture.Texture -> Effect.WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> Effect.WebGL.Entity
 trainEntity trainTexture trainMesh viewMatrix x y =
-    WebGL.entityWith
-        [ WebGL.Settings.DepthTest.default, Shaders.blend ]
+    Effect.WebGL.entityWith
+        [ Effect.WebGL.Settings.DepthTest.default, Shaders.blend ]
         Shaders.vertexShader
         Shaders.fragmentShader
         trainMesh
@@ -1081,21 +1088,21 @@ trainFrames =
     32
 
 
-trainEngineMeshes : Array (WebGL.Mesh Vertex)
+trainEngineMeshes : Array (Effect.WebGL.Mesh Vertex)
 trainEngineMeshes =
     List.range 0 (trainFrames - 1)
         |> List.map (trainEngineMesh 0)
         |> Array.fromList
 
 
-trainCoachMeshes : Array (WebGL.Mesh Vertex)
+trainCoachMeshes : Array (Effect.WebGL.Mesh Vertex)
 trainCoachMeshes =
     List.range 0 (trainFrames - 1)
         |> List.map (trainCoachMesh 0)
         |> Array.fromList
 
 
-trainEngineMesh : Float -> Int -> WebGL.Mesh Vertex
+trainEngineMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
 trainEngineMesh teleportAmount frame =
     let
         offsetX =
@@ -1147,7 +1154,7 @@ trainEngineMesh teleportAmount frame =
         ]
 
 
-trainCoachMesh : Float -> Int -> WebGL.Mesh Vertex
+trainCoachMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
 trainCoachMesh teleportAmount frame =
     let
         offsetX =
@@ -1230,7 +1237,7 @@ handleAddingTrain trains owner_ tile position =
         Nothing
 
 
-canRemoveTiles : Time.Posix -> List { a | tile : Tile, position : Coord WorldUnit } -> AssocList.Dict (Id TrainId) Train -> Result (List ( Id TrainId, Train )) (List ( Id TrainId, Train ))
+canRemoveTiles : Effect.Time.Posix -> List { a | tile : Tile, position : Coord WorldUnit } -> AssocList.Dict (Id TrainId) Train -> Result (List ( Id TrainId, Train )) (List ( Id TrainId, Train ))
 canRemoveTiles time removed trains =
     let
         trainsToRemove : List ( Id TrainId, Train )
