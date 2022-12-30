@@ -129,14 +129,15 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                         Submitted _ ->
                             Ui.text ""
                     ]
-                , Ui.text "If you don't have an account you'll need to be\ninvited by an existing player."
+                , Ui.wrappedText 1000 "If you don't have an account you'll need to be invited by an existing player."
                 ]
     in
     case pressedSubmitEmail of
         Submitted emailAddress ->
             let
+                submittedText : Ui.Element id units
                 submittedText =
-                    "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.text
+                    "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.wrappedText 1000
             in
             Ui.el
                 { padding =

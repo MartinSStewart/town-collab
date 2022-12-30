@@ -2384,11 +2384,6 @@ screenToWorld model =
         >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
 
 
-screenToWorldVector : FrontendLoaded -> Vector2d Pixels Pixels -> Vector2d WorldUnit WorldUnit
-screenToWorldVector model vector =
-    vector2dAt2 (scaleForScreenToWorld model) vector |> Vector2d.unwrap |> Vector2d.unsafe
-
-
 worldToScreen : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Point2d Pixels Pixels
 worldToScreen model =
     let

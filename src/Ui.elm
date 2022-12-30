@@ -24,6 +24,7 @@ module Ui exposing
     , text
     , textInput
     , view
+    , wrappedText
     )
 
 import Bounds
@@ -100,12 +101,24 @@ paddingXY2 coord =
 
 text : String -> Element id units
 text text2 =
-    Text { outline = Nothing, color = Color.black, scale = 2, text = text2, cachedSize = Sprite.textSize 2 text2 }
+    Text
+        { outline = Nothing
+        , color = Color.black
+        , scale = defaultCharScale
+        , text = text2
+        , cachedSize = Sprite.textSize defaultCharScale text2
+        }
 
 
 colorText : Color -> String -> Element id units
 colorText color text2 =
-    Text { outline = Nothing, color = color, scale = 2, text = text2, cachedSize = Sprite.textSize 2 text2 }
+    Text
+        { outline = Nothing
+        , color = color
+        , scale = defaultCharScale
+        , text = text2
+        , cachedSize = Sprite.textSize defaultCharScale text2
+        }
 
 
 outlinedText : { outline : Color, color : Color, text : String } -> Element id units
@@ -113,9 +126,87 @@ outlinedText data =
     Text
         { outline = Just data.outline
         , color = data.color
-        , scale = 2
+        , scale = defaultCharScale
         , text = data.text
-        , cachedSize = Sprite.textSize 2 data.text
+        , cachedSize = Sprite.textSize defaultCharScale data.text
+        }
+
+
+defaultCharScale =
+    2
+
+
+addLineBreaks : Int -> Int -> List String -> String -> List String
+addLineBreaks charWidth maxWidth list text2 =
+    let
+        charCount : Int
+        charCount =
+            String.length text2
+
+        width : Int
+        width =
+            charWidth * charCount
+
+        index : Int
+        index =
+            1 + maxWidth // charWidth
+
+        left =
+            String.left index text2
+
+        ( left2, right ) =
+            if String.contains " " left then
+                String.foldr
+                    (\char ( continue, index3 ) ->
+                        if continue then
+                            if char == ' ' then
+                                ( False, index3 - 1 )
+
+                            else
+                                ( True, index3 - 1 )
+
+                        else
+                            ( False, index3 )
+                    )
+                    ( True, index )
+                    left
+                    |> Tuple.second
+                    |> (\index4 -> ( String.left index4 text2, String.dropLeft (index4 + 1) text2 ))
+
+            else
+                ( left, String.dropLeft index text2 )
+    in
+    if width > maxWidth then
+        addLineBreaks
+            charWidth
+            maxWidth
+            (left2 :: list)
+            right
+
+    else
+        text2 :: list
+
+
+wrappedText : Int -> String -> Element id units
+wrappedText maxWidth text2 =
+    let
+        charWidth : Int
+        charWidth =
+            Coord.xRaw Sprite.charSize * defaultCharScale
+
+        text3 : String
+        text3 =
+            List.concatMap
+                (addLineBreaks charWidth maxWidth [] >> List.reverse)
+                (String.split "\n" text2)
+                |> String.join "\n"
+    in
+    Text
+        { outline = Nothing
+        , color = Color.black
+        , scale = defaultCharScale
+        , text = text3
+        , cachedSize = Sprite.textSize defaultCharScale text3
         }
 
 

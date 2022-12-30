@@ -207,7 +207,12 @@ type UiHover
 
 type alias BackendModel =
     { grid : Grid
-    , userSessions : Dict SessionId { clientIds : Dict ClientId (Bounds CellUnit), userId : Id UserId }
+    , userSessions :
+        Dict
+            SessionId
+            { clientIds : Dict ClientId (Bounds CellUnit)
+            , userId : Maybe (Id UserId)
+            }
     , users : IdDict UserId BackendUserData
     , secretLinkCounter : Int
     , errors : List ( Time.Posix, BackendError )
@@ -216,7 +221,13 @@ type alias BackendModel =
     , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
     , lastWorldUpdate : Maybe Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
-    , pendingLoginTokens : AssocList.Dict LoginToken { requestTime : Time.Posix, userId : Id UserId, requestedBy : SessionId }
+    , pendingLoginTokens :
+        AssocList.Dict
+            LoginToken
+            { requestTime : Time.Posix
+            , userId : Id UserId
+            , requestedBy : SessionId
+            }
     }
 
 

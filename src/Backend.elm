@@ -2,7 +2,6 @@ module Backend exposing
     ( app
     , init
     , notifyAdminWait
-    , sendConfirmationEmailRateLimit
     , update
     , updateFromFrontend
     )
@@ -316,9 +315,14 @@ getUserFromSessionId : SessionId -> BackendModel -> Maybe ( Id UserId, BackendUs
 getUserFromSessionId sessionId model =
     case Dict.get sessionId model.userSessions of
         Just { userId } ->
-            case IdDict.get userId model.users of
-                Just user ->
-                    Just ( userId, user )
+            case userId of
+                Just userId2 ->
+                    case IdDict.get userId2 model.users of
+                        Just user ->
+                            Just ( userId2, user )
+
+                        Nothing ->
+                            Nothing
 
                 Nothing ->
                     Nothing
@@ -565,7 +569,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
                             )
 
                         Nothing ->
-                            ( model2, Cmd.none )
+                            ( model2, SendLoginEmailResponse emailAddress |> Lamdera.sendToFrontend clientId )
 
                 Invalid ->
                     ( model, Cmd.none )
@@ -580,11 +584,6 @@ adjustEventTime currentTime eventTime =
 
     else
         currentTime
-
-
-sendConfirmationEmailRateLimit : Duration
-sendConfirmationEmailRateLimit =
-    Duration.seconds 10
 
 
 generateKey : Time.Posix -> { a | secretLinkCounter : Int } -> ( LoginToken, { a | secretLinkCounter : Int } )
@@ -912,6 +911,22 @@ hiddenUsers userId model =
 requestDataUpdate : Time.Posix -> SessionId -> ClientId -> Bounds CellUnit -> Maybe LoginToken -> BackendModel -> ( BackendModel, Cmd BackendMsg )
 requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken model =
     let
+        checkLogin () =
+            ( case getUserFromSessionId sessionId model of
+                Just ( userId, user ) ->
+                    LoggedIn
+                        { userId = userId
+                        , undoCurrent = user.undoCurrent
+                        , undoHistory = user.undoHistory
+                        , redoHistory = user.redoHistory
+                        , mailEditor = user.mailEditor
+                        }
+
+                Nothing ->
+                    NotLoggedIn
+            , model
+            )
+
         ( userStatus, model2 ) =
             case maybeLoginToken of
                 Just loginToken ->
@@ -926,43 +941,49 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                                         , redoHistory = user.redoHistory
                                         , mailEditor = user.mailEditor
                                         }
-                                    , model
+                                    , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                     )
 
                                 Nothing ->
                                     ( NotLoggedIn, addError currentTime (UserNotFoundWhenLoggingIn data.userId) model )
 
                         Nothing ->
-                            ( NotLoggedIn, model )
+                            checkLogin ()
 
                 Nothing ->
-                    ( case getUserFromSessionId sessionId model of
-                        Just ( userId, user ) ->
-                            LoggedIn
-                                { userId = userId
-                                , undoCurrent = user.undoCurrent
-                                , undoHistory = user.undoHistory
-                                , redoHistory = user.redoHistory
-                                , mailEditor = user.mailEditor
-                                }
-
-                        Nothing ->
-                            NotLoggedIn
-                    , model
-                    )
+                    checkLogin ()
 
         model3 : BackendModel
         model3 =
             { model2
                 | userSessions =
-                    Dict.update sessionId
+                    Dict.update
+                        sessionId
                         (\maybeSession ->
-                            case maybeSession of
+                            (case maybeSession of
                                 Just session ->
-                                    Just { session | clientIds = Dict.insert clientId viewBounds session.clientIds }
+                                    { clientIds = Dict.insert clientId viewBounds session.clientIds
+                                    , userId =
+                                        case userStatus of
+                                            LoggedIn loggedIn ->
+                                                Just loggedIn.userId
+
+                                            NotLoggedIn ->
+                                                Nothing
+                                    }
 
                                 Nothing ->
-                                    Nothing
+                                    { clientIds = Dict.singleton clientId viewBounds
+                                    , userId =
+                                        case userStatus of
+                                            LoggedIn loggedIn ->
+                                                Just loggedIn.userId
+
+                                            NotLoggedIn ->
+                                                Nothing
+                                    }
+                            )
+                                |> Just
                         )
                         model2.userSessions
             }
@@ -996,7 +1017,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                                 |> ChangeBroadcast
                                 |> Just
                     )
-                    model2
+                    model3
 
             NotLoggedIn ->
                 Cmd.none
