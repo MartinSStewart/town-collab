@@ -3,6 +3,7 @@ module Ui exposing
     , Element
     , HoverType(..)
     , Padding
+    , bottomCenter
     , bottomLeft
     , button
     , center
@@ -159,9 +160,7 @@ row data children =
 
 
 column :
-    { spacing : Int
-    , padding : Padding units
-    }
+    { spacing : Int, padding : Padding units }
     -> List (Element id units)
     -> Element id units
 column data children =
@@ -174,18 +173,15 @@ column data children =
 
 
 el :
-    { padding : Padding units, borderAndBackground : BorderAndBackground units }
+    { padding : Padding units, inFront : List (Element id units), borderAndBackground : BorderAndBackground units }
     -> Element id units
     -> Element id units
 el data element2 =
     Single
         { padding = data.padding
         , borderAndBackground = data.borderAndBackground
-        , inFront = []
-        , cachedSize =
-            Coord.plus
-                (Coord.plus data.padding.topLeft data.padding.bottomRight)
-                (size element2)
+        , inFront = data.inFront
+        , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
         }
         element2
 
@@ -226,6 +222,30 @@ bottomLeft data element2 =
         { padding =
             { topLeft = Coord.xy 0 (sizeY - childSizeY)
             , bottomRight = Coord.xy (sizeX - childSizeX) 0
+            }
+        , inFront = []
+        , borderAndBackground = NoBorderOrBackground
+        , cachedSize = data.size
+        }
+        element2
+
+
+bottomCenter : { size : Coord units } -> Element id units -> Element id units
+bottomCenter data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+
+        left =
+            (sizeX - childSizeX) // 2
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy left (sizeY - childSizeY)
+            , bottomRight = Coord.xy (sizeX - childSizeX) (sizeX - childSizeX - left)
             }
         , inFront = []
         , borderAndBackground = NoBorderOrBackground
@@ -428,8 +448,18 @@ viewHelper focus position vertices element2 =
                 |> .vertices
 
         Single data child ->
+            let
+                vertices2 : List Vertex
+                vertices2 =
+                    List.foldl
+                        (\inFront vertices3 ->
+                            viewHelper focus position vertices3 inFront
+                        )
+                        vertices
+                        data.inFront
+            in
             borderAndBackgroundView position data (size element2)
-                ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices child
+                ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Quads data ->
             data.vertices position ++ vertices

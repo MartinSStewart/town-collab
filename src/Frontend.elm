@@ -487,10 +487,9 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
                     )
             , currentTool = currentTile
             , lastTileRotation = []
-            , userIdMesh = createInfoMesh Nothing (currentUserId { localModel = localModel })
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
-            , loginMesh = Shaders.triangleFan []
+            , uiMesh = Shaders.triangleFan []
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
             , eventIdCounter = Id.fromInt 0
@@ -764,6 +763,12 @@ updateLoaded audioData msg model =
                                     model
                                 , Cmd.none
                                 )
+
+                            ( UiHover EmailAddressTextInputHover _, _, Keyboard.Enter ) ->
+                                sendEmail model
+
+                            ( UiHover SendEmailButtonHover _, _, Keyboard.Enter ) ->
+                                sendEmail model
 
                             ( UiHover PrimaryColorInput _, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Cmd.none )
@@ -1414,7 +1419,7 @@ updateLoaded audioData msg model =
                                 Nothing ->
                                     ( model, Cmd.none )
 
-                        ToolButtonHover toolButton ->
+                        ToolButtonHover _ ->
                             ( model, Cmd.none )
 
         GotUserAgent _ ->
@@ -1658,6 +1663,8 @@ getViewModel model =
     , tileColors = model.tileColors
     , tileHotkeys = model.tileHotkeys
     , currentTool = model.currentTool
+    , pingData = model.pingData
+    , userId = currentUserId model
     }
 
 
@@ -2192,27 +2199,32 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 ( model2, Cmd.none )
 
                             SendEmailButtonHover ->
-                                case model2.pressedSubmitEmail of
-                                    NotSubmitted _ ->
-                                        case EmailAddress.fromString model2.loginTextInput.current.text of
-                                            Just emailAddress ->
-                                                ( { model2 | pressedSubmitEmail = Submitting }
-                                                , Untrusted.untrust emailAddress |> SendLoginEmailRequest |> Lamdera.sendToBackend
-                                                )
-
-                                            Nothing ->
-                                                ( { model2 | pressedSubmitEmail = NotSubmitted { pressedSubmit = True } }
-                                                , Cmd.none
-                                                )
-
-                                    Submitting ->
-                                        ( model2, Cmd.none )
-
-                                    Submitted _ ->
-                                        ( model2, Cmd.none )
+                                sendEmail model2
 
     else
         ( model2, Cmd.none )
+
+
+sendEmail : FrontendLoaded -> ( FrontendLoaded, Cmd FrontendMsg_ )
+sendEmail model2 =
+    case model2.pressedSubmitEmail of
+        NotSubmitted _ ->
+            case EmailAddress.fromString model2.loginTextInput.current.text of
+                Just emailAddress ->
+                    ( { model2 | pressedSubmitEmail = Submitting }
+                    , Untrusted.untrust emailAddress |> SendLoginEmailRequest |> Lamdera.sendToBackend
+                    )
+
+                Nothing ->
+                    ( { model2 | pressedSubmitEmail = NotSubmitted { pressedSubmit = True } }
+                    , Cmd.none
+                    )
+
+        Submitting ->
+            ( model2, Cmd.none )
+
+        Submitted _ ->
+            ( model2, Cmd.none )
 
 
 isPrimaryColorInput : Hover -> Bool
@@ -2822,9 +2834,6 @@ updateMeshes forceUpdate oldModel newModel =
         newMaybeUserId =
             currentUserId newModel
 
-        oldMaybeUserId =
-            currentUserId oldModel
-
         newMesh : Maybe (WebGL.Mesh Vertex) -> GridCell.Cell -> ( Int, Int ) -> { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
         newMesh backgroundMesh newCell rawCoord =
             let
@@ -2906,23 +2915,12 @@ updateMeshes forceUpdate oldModel newModel =
                             newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
                 )
                 newCells
-        , userIdMesh =
-            if oldModel.pingData == newModel.pingData then
-                newModel.userIdMesh
-
-            else
-                createInfoMesh newModel.pingData (currentUserId newModel)
-        , loginMesh =
+        , uiMesh =
             if (viewModel == getViewModel oldModel) && newModel.focus == oldModel.focus && not forceUpdate then
-                newModel.loginMesh
+                newModel.uiMesh
 
             else
-                case newMaybeUserId of
-                    Just _ ->
-                        Shaders.triangleFan []
-
-                    Nothing ->
-                        Toolbar.view viewModel |> Ui.view (getUiHover newModel.focus)
+                Toolbar.view viewModel |> Ui.view (getUiHover newModel.focus)
     }
 
 
@@ -4127,23 +4125,7 @@ canvasView audioData model =
                             [ Shaders.blend ]
                             Shaders.vertexShader
                             Shaders.fragmentShader
-                            model.userIdMesh
-                            { view =
-                                Mat4.makeScale3
-                                    (2 / toFloat windowWidth)
-                                    (-2 / toFloat windowHeight)
-                                    1
-                                    |> Coord.translateMat4
-                                        (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                            , texture = model.texture
-                            , textureSize = textureSize
-                            , color = Vec4.vec4 1 1 1 1
-                            }
-                       , WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.vertexShader
-                            Shaders.fragmentShader
-                            model.loginMesh
+                            model.uiMesh
                             { view =
                                 Mat4.makeScale3
                                     (2 / toFloat windowWidth)
@@ -4458,40 +4440,6 @@ receivingMailFlagMesh frame =
           , secondaryColor = Vec3.vec3 0 0 0
           }
         ]
-
-
-createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> WebGL.Mesh Vertex
-createInfoMesh maybePingData maybeUserId =
-    let
-        durationToString duration =
-            Duration.inMilliseconds duration |> round |> String.fromInt
-
-        vertices =
-            Sprite.text
-                Color.black
-                2
-                ("Warning! Game is in alpha. The world is reset often.\n"
-                    ++ "User ID: "
-                    ++ (case maybeUserId of
-                            Just userId ->
-                                String.fromInt (Id.toInt userId)
-
-                            Nothing ->
-                                "Not logged in"
-                       )
-                    ++ "\n"
-                    ++ (case maybePingData of
-                            Just pingData ->
-                                ("RTT: " ++ durationToString pingData.roundTripTime ++ "ms\n")
-                                    ++ ("Server offset: " ++ durationToString (PingData.pingOffset { pingData = maybePingData }) ++ "ms")
-
-                            Nothing ->
-                                ""
-                       )
-                )
-                (Coord.xy 2 2)
-    in
-    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
 
 
 shortDelayDuration : Duration

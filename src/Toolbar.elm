@@ -10,9 +10,12 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
 import Dict exposing (Dict)
+import Duration
 import EmailAddress exposing (EmailAddress)
+import Id exposing (Id, UserId)
 import List.Extra as List
 import List.Nonempty
+import PingData exposing (PingData)
 import Quantity exposing (Quantity(..))
 import Sprite
 import TextInput
@@ -34,50 +37,32 @@ type alias ViewData units =
     , tileColors : AssocList.Dict TileGroup Colors
     , tileHotkeys : Dict String TileGroup
     , currentTool : Tool
+    , pingData : Maybe PingData
+    , userId : Maybe (Id UserId)
     }
 
 
 view : ViewData units -> Ui.Element UiHover units
 view data =
-    let
-        ( windowWidth, windowHeight ) =
-            Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize |> Coord.toTuple
+    Ui.bottomCenter
+        { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize }
+        (Ui.el
+            { padding = Ui.noPadding, inFront = [], borderAndBackground = borderAndBackground }
+            (case data.handColor of
+                Just handColor ->
+                    toolbarUi
+                        data.hasCmdKey
+                        handColor
+                        data.primaryColorTextInput
+                        data.secondaryColorTextInput
+                        data.tileColors
+                        data.tileHotkeys
+                        data.currentTool
 
-        currentToolbar : Ui.Element UiHover units
-        currentToolbar =
-            toolbarUi
-                data.hasCmdKey
-                { primaryColor = Color.black, secondaryColor = Color.white }
-                data.primaryColorTextInput
-                data.secondaryColorTextInput
-                data.tileColors
-                data.tileHotkeys
-                data.currentTool
-
-        --case data.handColor of
-        --    Just handColor ->
-        --        toolbarUi
-        --            data.hasCmdKey
-        --            handColor
-        --            data.primaryColorTextInput
-        --            data.secondaryColorTextInput
-        --            data.tileColors
-        --            data.tileHotkeys
-        --            data.currentTool
-        --
-        --    Nothing ->
-        --        loginToolbarUi data.pressedSubmitEmail data.loginTextInput
-        ( toolbarWidth, toolbarHeight ) =
-            Ui.size currentToolbar |> Coord.toTuple
-    in
-    Ui.el
-        { padding =
-            { topLeft = Coord.xy ((windowWidth - toolbarWidth) // 2) (windowHeight - toolbarHeight)
-            , bottomRight = Coord.xy ((windowWidth - toolbarWidth) // 2) 0
-            }
-        , borderAndBackground = NoBorderOrBackground
-        }
-        (Ui.el { padding = Ui.noPadding, borderAndBackground = borderAndBackground } currentToolbar)
+                Nothing ->
+                    loginToolbarUi data.pressedSubmitEmail data.loginTextInput
+            )
+        )
 
 
 borderAndBackground : BorderAndBackground units
@@ -159,6 +144,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                         |> Coord.minus (Ui.size submittedText)
                         |> Coord.divide (Coord.xy 2 2)
                         |> Ui.paddingXY2
+                , inFront = []
                 , borderAndBackground = borderAndBackground
                 }
                 submittedText
@@ -185,8 +171,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
         { spacing = 0, padding = Ui.noPadding }
         [ List.map (toolButtonUi hasCmdKey handColor colors hotkeys) buttonTiles
             |> List.greedyGroupsOf 3
-            |> List.map
-                (Ui.column { spacing = 2, padding = Ui.noPadding })
+            |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
         , Ui.row
             { spacing = 10, padding = Ui.paddingXY 12 8 }
@@ -211,6 +196,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                         { topLeft = Coord.xy (Quantity.unwrap primaryColorInputWidth) 0
                         , bottomRight = Coord.xy 0 0
                         }
+                    , inFront = []
                     , borderAndBackground = NoBorderOrBackground
                     }
                     Ui.empty
@@ -300,6 +286,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys tool =
                     [ Ui.outlinedText { outline = Color.black, color = Color.white, text = hotkey }
                         |> Ui.el
                             { padding = { topLeft = Coord.xy 4 0, bottomRight = Coord.xy 0 0 }
+                            , inFront = []
                             , borderAndBackground = NoBorderOrBackground
                             }
                         |> Ui.bottomLeft { size = buttonSize }
@@ -309,194 +296,6 @@ toolButtonUi hasCmdKey handColor colors hotkeys tool =
                     []
         }
         (Ui.center { size = buttonSize } label)
-
-
-
---
---mesh :
---    Bool
---    -> Colors
---    -> TextInput.Model
---    -> TextInput.Model
---    -> AssocList.Dict TileGroup Colors
---    -> Dict String TileGroup
---    -> Hover
---    -> Tool
---    -> WebGL.Mesh Vertex
---mesh hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys focus currentTile =
---    let
---        { showPrimaryColorTextInput, showSecondaryColorTextInput } =
---            showColorTextInputs currentTile
---
---        currentTool2 : ToolButton
---        currentTool2 =
---            case currentTile of
---                TilePlacerTool { tileGroup } ->
---                    TilePlacerToolButton tileGroup
---
---                TilePickerTool ->
---                    TilePickerToolButton
---
---                HandTool ->
---                    HandToolButton
---    in
---    Sprite.rectangle Color.outlineColor Coord.origin toolbarSize
---        ++ Sprite.rectangle Color.fillColor (Coord.xy 2 2) (toolbarSize |> Coord.minus (Coord.xy 4 4))
---        ++ (List.indexedMap
---                (\index tool ->
---                    let
---                        tileColors =
---                            case tool of
---                                TilePlacerToolButton tileGroup ->
---                                    case AssocList.get tileGroup colors of
---                                        Just a ->
---                                            a
---
---                                        Nothing ->
---                                            Tile.getTileGroupData tileGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
---
---                                HandToolButton ->
---                                    handColor
---
---                                TilePickerToolButton ->
---                                    Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
---
---                        hotkeyText =
---                            case tool of
---                                TilePlacerToolButton tileGroup ->
---                                    Dict.toList hotkeys |> List.find (Tuple.second >> (==) tileGroup) |> Maybe.map Tuple.first
---
---                                HandToolButton ->
---                                    Just "Esc"
---
---                                TilePickerToolButton ->
---                                    if hasCmdKey then
---                                        Just "Cmd"
---
---                                    else
---                                        Just "Ctrl"
---
---                        innerMesh =
---                            \offset ->
---                                case tool of
---                                    TilePlacerToolButton tileGroup ->
---                                        tileMesh tileColors offset (getTileGroupTile tileGroup 0)
---
---                                    HandToolButton ->
---                                        Cursor.defaultCursorMesh2 handColor offset
---
---                                    TilePickerToolButton ->
---                                        Cursor.eyeDropperCursor2 offset
---                    in
---                    tileButton
---                        innerMesh
---                        hotkeyText
---                        (tool == currentTool2)
---                        (toolbarTileButtonPosition index)
---                )
---                buttonTiles
---                |> List.concat
---           )
---        ++ (if showPrimaryColorTextInput then
---                colorTextInputView
---                    primaryColorInputPosition
---                    primaryColorInputWidth
---                    (focus == PrimaryColorInput)
---                    (Color.fromHexCode primaryColorTextInput.current.text |> (/=) Nothing)
---                    primaryColorTextInput
---
---            else
---                []
---           )
---        ++ (if showSecondaryColorTextInput then
---                colorTextInputView
---                    secondaryColorInputPosition
---                    secondaryColorInputWidth
---                    (focus == SecondaryColorInput)
---                    (Color.fromHexCode secondaryColorTextInput.current.text |> (/=) Nothing)
---                    secondaryColorTextInput
---
---            else
---                []
---           )
---        ++ (case currentTile of
---                HandTool ->
---                    primaryColorInputPosition
---                        |> Coord.plus ( secondaryColorInputWidth, Quantity.zero )
---                        |> Coord.plus (Coord.xy 4 0)
---                        |> Cursor.defaultCursorMesh2 handColor
---
---                TilePickerTool ->
---                    []
---
---                TilePlacerTool { tileGroup } ->
---                    let
---                        primaryAndSecondaryColors : Colors
---                        primaryAndSecondaryColors =
---                            case AssocList.get tileGroup colors of
---                                Just a ->
---                                    a
---
---                                Nothing ->
---                                    Tile.getTileGroupData tileGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
---
---                        tile =
---                            getTileGroupTile tileGroup 0
---
---                        data : TileData unit
---                        data =
---                            Tile.getData tile
---
---                        size : Coord unit
---                        size =
---                            Coord.multiply Units.tileSize data.size
---
---                        spriteSize : Coord unit
---                        spriteSize =
---                            size |> Coord.multiply (Coord.xy 2 2)
---
---                        position2 : Coord ToolbarUnit
---                        position2 =
---                            primaryColorInputPosition
---                                |> Coord.plus ( secondaryColorInputWidth, Quantity.zero )
---                                |> Coord.plus (Coord.xy 4 0)
---                    in
---                    (case data.texturePosition of
---                        Just texturePosition ->
---                            Sprite.spriteWithTwoColors
---                                primaryAndSecondaryColors
---                                position2
---                                spriteSize
---                                (Coord.multiply Units.tileSize texturePosition)
---                                size
---
---                        Nothing ->
---                            []
---                    )
---                        ++ (case data.texturePositionTopLayer of
---                                Just topLayer ->
---                                    let
---                                        texturePosition2 =
---                                            Coord.multiply Units.tileSize topLayer.texturePosition
---                                    in
---                                    Sprite.spriteWithTwoColors
---                                        primaryAndSecondaryColors
---                                        position2
---                                        spriteSize
---                                        texturePosition2
---                                        size
---
---                                Nothing ->
---                                    []
---                           )
---           )
---        |> Sprite.toMesh
---
---
---colorTextInputView : Coord units -> Quantity Int units -> Bool -> Bool -> TextInput.Model -> List Vertex
---colorTextInputView position2 width hasFocus isValid model =
---    TextInput.view position2 width hasFocus isValid model
---
 
 
 buttonTiles : List ToolButton
@@ -640,3 +439,31 @@ showColorTextInputs tool =
 getTileGroupTile : TileGroup -> Int -> Tile
 getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
+
+
+createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id units
+createInfoMesh maybePingData maybeUserId =
+    let
+        durationToString duration =
+            Duration.inMilliseconds duration |> round |> String.fromInt
+    in
+    "Warning! Game is in alpha. The world is reset often.\n"
+        ++ "User ID: "
+        ++ (case maybeUserId of
+                Just userId ->
+                    String.fromInt (Id.toInt userId)
+
+                Nothing ->
+                    "Not logged in"
+           )
+        ++ "\n"
+        ++ (case maybePingData of
+                Just pingData ->
+                    ("RTT: " ++ durationToString pingData.roundTripTime ++ "ms\n")
+                        ++ ("Server offset: " ++ durationToString (PingData.pingOffset { pingData = maybePingData }) ++ "ms")
+
+                Nothing ->
+                    ""
+           )
+        |> Ui.text
+        |> Ui.el { padding = Ui.paddingXY 8 4, inFront = [], borderAndBackground = NoBorderOrBackground }

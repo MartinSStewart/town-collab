@@ -144,10 +144,9 @@ type alias FrontendLoaded =
     , mailEditor : Model
     , currentTool : Tool
     , lastTileRotation : List Time.Posix
-    , userIdMesh : WebGL.Mesh Vertex
     , lastPlacementError : Maybe Time.Posix
     , tileHotkeys : Dict String TileGroup
-    , loginMesh : WebGL.Mesh Vertex
+    , uiMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe TileGroup
     , lastHouseClick : Maybe Time.Posix
     , eventIdCounter : Id EventId

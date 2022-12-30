@@ -38,7 +38,7 @@ isProduction =
 
 adminEmail_ : String
 adminEmail_ =
-    ""
+    "a@a.se"
 
 
 adminEmail : Maybe EmailAddress
