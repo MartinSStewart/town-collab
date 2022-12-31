@@ -14,7 +14,6 @@ module Shaders exposing
 import Effect.WebGL exposing (Shader)
 import Effect.WebGL.Settings exposing (Setting)
 import Effect.WebGL.Settings.Blend as Blend
-import Effect.WebGL.Texture exposing (Texture)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -28,19 +27,19 @@ type alias Vertex =
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Effect.WebGL.Mesh attributes
 indexedTriangles vertices indices =
-    let
-        _ =
-            Debug.log "new indexedTriangles" ""
-    in
+    --let
+    --    _ =
+    --        Debug.log "new indexedTriangles" ""
+    --in
     Effect.WebGL.indexedTriangles vertices indices
 
 
 triangleFan : List attributes -> Effect.WebGL.Mesh attributes
 triangleFan vertices =
-    let
-        _ =
-            Debug.log "new triangleFan" ""
-    in
+    --let
+    --    _ =
+    --        Debug.log "new triangleFan" ""
+    --in
     Effect.WebGL.triangleFan vertices
 
 

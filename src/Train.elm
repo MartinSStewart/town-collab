@@ -1,7 +1,7 @@
 module Train exposing
     ( FieldChanged(..)
     , Status(..)
-    , Train
+    , Train(..)
     , TrainDiff(..)
     , applyDiff
     , canRemoveTiles

@@ -1,10 +1,4 @@
-module Backend exposing
-    ( app
-    , init
-    , notifyAdminWait
-    , update
-    , updateFromFrontend
-    )
+module Backend exposing (app, app_)
 
 import AssocList
 import Bounds exposing (Bounds)
@@ -51,13 +45,17 @@ app =
     Effect.Lamdera.backend
         Lamdera.broadcast
         Lamdera.sendToFrontend
-        { init = ( init, Command.none )
-        , update = update
-        , updateFromFrontend =
-            \sessionId clientId msg model ->
-                ( model, Effect.Time.now |> Effect.Task.perform (UpdateFromFrontend sessionId clientId msg) )
-        , subscriptions = subscriptions
-        }
+        (app_ Env.isProduction)
+
+
+app_ isProduction =
+    { init = ( init, Command.none )
+    , update = update isProduction
+    , updateFromFrontend =
+        \sessionId clientId msg model ->
+            ( model, Effect.Time.now |> Effect.Task.perform (UpdateFromFrontend sessionId clientId msg) )
+    , subscriptions = subscriptions
+    }
 
 
 subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
@@ -94,20 +92,16 @@ init =
             model
 
 
-notifyAdminWait : Duration
-notifyAdminWait =
-    String.toFloat Env.notifyAdminWaitInHours |> Maybe.map Duration.hours |> Maybe.withDefault (Duration.hours 3)
-
-
 sendEmail :
-    (Result Effect.Http.Error PostmarkSendResponse -> msg)
+    Bool
+    -> (Result Effect.Http.Error PostmarkSendResponse -> msg)
     -> NonemptyString
     -> String
     -> Email.Html.Html
     -> EmailAddress
     -> Command BackendOnly ToFrontend msg
-sendEmail msg subject contentString content to =
-    if Env.isProduction then
+sendEmail isProduction msg subject contentString content to =
+    if isProduction then
         Postmark.sendEmail msg Env.postmarkApiKey (townCollabEmail subject contentString content to)
 
     else
@@ -140,8 +134,8 @@ townCollabEmail subject contentString content to =
     }
 
 
-update : BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-update msg model =
+update : Bool -> BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+update isProduction msg model =
     case msg of
         UserDisconnected sessionId clientId ->
             case getUserFromSessionId sessionId model of
@@ -172,7 +166,7 @@ update msg model =
             ( model, Command.none )
 
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
-            updateFromFrontend time sessionId clientId toBackendMsg model
+            updateFromFrontend isProduction time sessionId clientId toBackendMsg model
 
         SentLoginEmail time emailAddress result ->
             let
@@ -389,13 +383,14 @@ broadcastLocalChange time userIdAndUser changes model =
 
 
 updateFromFrontend :
-    Effect.Time.Posix
+    Bool
+    -> Effect.Time.Posix
     -> SessionId
     -> ClientId
     -> ToBackend
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-updateFromFrontend currentTime sessionId clientId msg model =
+updateFromFrontend isProduction currentTime sessionId clientId msg model =
     case msg of
         ConnectToBackend requestData maybeLoginToken ->
             requestDataUpdate currentTime sessionId clientId requestData maybeLoginToken model
@@ -550,6 +545,7 @@ updateFromFrontend currentTime sessionId clientId msg model =
                             , Command.batch
                                 [ SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId
                                 , sendEmail
+                                    isProduction
                                     (SentLoginEmail currentTime emailAddress)
                                     (NonemptyString 'L' "ogin Email")
                                     ("DO NOT click the following link if you didn't request this email.\n"
