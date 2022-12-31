@@ -1,10 +1,11 @@
-module UrlHelper exposing
+module Route exposing
     ( ConfirmEmailKey(..)
-    , InternalRoute(..)
     , LoginToken(..)
+    , Route(..)
     , UnsubscribeEmailKey(..)
     , coordQueryParser
-    , encodeUrl
+    , decode
+    , encode
     , internalRoute
     , notifyMe
     , startPointAt
@@ -13,6 +14,7 @@ module UrlHelper exposing
 
 import Coord exposing (Coord)
 import Units exposing (WorldUnit)
+import Url exposing (Url)
 import Url.Builder
 import Url.Parser exposing ((</>), (<?>))
 import Url.Parser.Query
@@ -27,7 +29,7 @@ startPointAt =
     Coord.tuple ( 0, 0 )
 
 
-coordQueryParser : Url.Parser.Query.Parser InternalRoute
+coordQueryParser : Url.Parser.Query.Parser Route
 coordQueryParser =
     Url.Parser.Query.map3
         (\maybeX maybeY loginToken2 ->
@@ -44,13 +46,18 @@ coordQueryParser =
         (Url.Parser.Query.string loginToken)
 
 
-urlParser : Url.Parser.Parser (InternalRoute -> b) b
+urlParser : Url.Parser.Parser (Route -> b) b
 urlParser =
     Url.Parser.top <?> coordQueryParser
 
 
-encodeUrl : InternalRoute -> String
-encodeUrl route =
+decode : Url -> Maybe Route
+decode =
+    Url.Parser.parse urlParser
+
+
+encode : Route -> String
+encode route =
     case route of
         InternalRoute internalRoute_ ->
             let
@@ -90,7 +97,7 @@ unsubscribe =
     "b"
 
 
-type InternalRoute
+type Route
     = InternalRoute { viewPoint : Coord WorldUnit, loginToken : Maybe LoginToken }
 
 
@@ -102,6 +109,6 @@ type UnsubscribeEmailKey
     = UnsubscribeEmailKey String
 
 
-internalRoute : Coord WorldUnit -> InternalRoute
+internalRoute : Coord WorldUnit -> Route
 internalRoute viewPoint =
     InternalRoute { viewPoint = viewPoint, loginToken = Nothing }

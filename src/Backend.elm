@@ -31,6 +31,7 @@ import LocalGrid exposing (UserStatus(..))
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
+import Route exposing (LoginToken(..), Route(..))
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..), Tile(..))
 import Train exposing (Status(..), Train, TrainDiff)
@@ -38,7 +39,6 @@ import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
-import UrlHelper exposing (InternalRoute(..), LoginToken(..))
 
 
 app =
@@ -527,7 +527,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                         loginEmailUrl : String
                         loginEmailUrl =
-                            Env.domain ++ UrlHelper.encodeUrl (InternalRoute { loginToken = Just loginToken, viewPoint = Coord.origin })
+                            Env.domain ++ Route.encode (InternalRoute { loginToken = Just loginToken, viewPoint = Coord.origin })
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->

@@ -62,6 +62,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
+import Route
 import Set exposing (Set)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
@@ -76,7 +77,6 @@ import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
 import Untrusted
 import Url exposing (Url)
 import Url.Parser exposing ((<?>))
-import UrlHelper
 import Vector2d exposing (Vector2d)
 import WebGL.Texture
 
@@ -578,17 +578,17 @@ init url key =
         { data, cmd } =
             let
                 defaultRoute =
-                    UrlHelper.internalRoute UrlHelper.startPointAt
+                    Route.internalRoute Route.startPointAt
             in
-            case Url.Parser.parse UrlHelper.urlParser url of
-                Just (UrlHelper.InternalRoute a) ->
+            case Route.decode url of
+                Just (Route.InternalRoute a) ->
                     { data = a
                     , cmd = Command.none
                     }
 
                 Nothing ->
-                    { data = { viewPoint = UrlHelper.startPointAt, loginToken = Nothing }
-                    , cmd = Effect.Browser.Navigation.replaceUrl key (UrlHelper.encodeUrl defaultRoute)
+                    { data = { viewPoint = Route.startPointAt, loginToken = Nothing }
+                    , cmd = Effect.Browser.Navigation.replaceUrl key (Route.encode defaultRoute)
                     }
 
         -- We only load in a portion of the grid since we don't know the window size yet. The rest will get loaded in later anyway.
@@ -763,8 +763,8 @@ updateLoaded audioData msg model =
                 { model | ignoreNextUrlChanged = False }
 
               else
-                case Url.Parser.parse UrlHelper.urlParser url of
-                    Just (UrlHelper.InternalRoute { viewPoint }) ->
+                case Url.Parser.parse Route.urlParser url of
+                    Just (Route.InternalRoute { viewPoint }) ->
                         { model | viewPoint = Coord.toPoint2d viewPoint |> NormalViewPoint }
 
                     _ ->
@@ -1205,8 +1205,8 @@ updateLoaded audioData msg model =
                     if actualViewPoint_ /= model.viewPointLastInterval then
                         actualViewPoint_
                             |> Coord.floorPoint
-                            |> UrlHelper.internalRoute
-                            |> UrlHelper.encodeUrl
+                            |> Route.internalRoute
+                            |> Route.encode
                             |> (\a -> replaceUrl a model2)
 
                     else

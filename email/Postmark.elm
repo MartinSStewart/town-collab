@@ -5,6 +5,7 @@ module Postmark exposing
     , PostmarkSendResponse
     , PostmarkTemplateSendResponse
     , apiKey
+    , endpoint
     , sendEmail
     , sendEmailTask
     , sendTemplateEmail

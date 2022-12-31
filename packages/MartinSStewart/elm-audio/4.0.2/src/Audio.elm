@@ -1,5 +1,5 @@
 module Audio exposing
-    ( Model, Msg, AudioData
+    ( Model(..), Msg, AudioData
     , AudioCmd, loadAudio, LoadError(..), Source, cmdMap, cmdBatch, cmdNone
     , Audio, audio, group, silence, length, audioWithConfig, audioDefaultConfig, PlayAudioConfig, LoopConfig
     , scaleVolume, scaleVolumeAt, offsetBy
