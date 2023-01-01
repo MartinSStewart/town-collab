@@ -208,15 +208,29 @@ endToEndTests =
             url
             { width = 1920, height = 1080 }
             (\( state, frontend0 ) ->
-                let
-                    toBackend0 =
-                        Effect.Test.sendToBackend sessionId0 frontend0.clientId
-                in
                 state
-                    --|> toBackend0
-                    --    (ConnectToBackend (Bounds.fromCoordAndSize Coord.origin (Coord.xy 1 1)) Nothing)
                     |> Effect.Test.simulateTime (Duration.milliseconds 50)
-                    |> toBackend0 (SendLoginEmailRequest (Untrusted.untrust email))
+                    |> checkFrontend
+                        frontend0.clientId
+                        (\model ->
+                            case model of
+                                Loading loading ->
+                                    case loading.localModel of
+                                        LoadedLocalModel _ loadingData ->
+                                            case loadingData.userStatus of
+                                                LoggedIn _ ->
+                                                    Err "Shouldn't be logged in"
+
+                                                NotLoggedIn ->
+                                                    Ok ()
+
+                                        LoadingLocalModel _ ->
+                                            Err "Local model not loaded"
+
+                                Loaded _ ->
+                                    Debug.todo "Check loaded case"
+                        )
+                    |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
                     |> Effect.Test.simulateTime (Duration.milliseconds 50)
                     |> Effect.Test.andThen
                         (\state2 ->
@@ -231,17 +245,7 @@ endToEndTests =
                                             )
                                             { width = 1920, height = 1080 }
                                             (\( state3, frontend1 ) ->
-                                                let
-                                                    toBackend1 =
-                                                        Effect.Test.sendToBackend sessionId1 frontend1.clientId
-                                                in
                                                 state3
-                                                    --|> Effect.Test.simulateTime (Duration.milliseconds 50)
-                                                    --|> toBackend1
-                                                    --    (ConnectToBackend
-                                                    --        (Bounds.fromCoordAndSize Coord.origin (Coord.xy 1 1))
-                                                    --        (Just loginEmail.loginToken)
-                                                    --    )
                                                     |> Effect.Test.simulateTime (Duration.milliseconds 50)
                                                     |> checkFrontend
                                                         frontend1.clientId
@@ -264,9 +268,57 @@ endToEndTests =
                                                                     Debug.todo "Check loaded case"
                                                         )
                                             )
+                                        |> Effect.Test.connectFrontend
+                                            sessionId1
+                                            url
+                                            { width = 1920, height = 1080 }
+                                            (\( state5, frontend2 ) ->
+                                                state5
+                                                    |> Effect.Test.simulateTime (Duration.milliseconds 50)
+                                                    |> checkFrontend
+                                                        frontend2.clientId
+                                                        (\model ->
+                                                            case model of
+                                                                Loading loading ->
+                                                                    case loading.localModel of
+                                                                        LoadedLocalModel _ loadingData ->
+                                                                            case loadingData.userStatus of
+                                                                                LoggedIn loggedIn ->
+                                                                                    Ok ()
+
+                                                                                NotLoggedIn ->
+                                                                                    Err "Not logged in"
+
+                                                                        LoadingLocalModel _ ->
+                                                                            Err "Local model not loaded"
+
+                                                                Loaded _ ->
+                                                                    Debug.todo "Check loaded case"
+                                                        )
+                                            )
 
                                 _ ->
                                     Effect.Test.continueWith state2 |> Effect.Test.checkState (\_ -> Err "Login email not found")
+                        )
+                    |> checkFrontend
+                        frontend0.clientId
+                        (\model ->
+                            case model of
+                                Loading loading ->
+                                    case loading.localModel of
+                                        LoadedLocalModel _ loadingData ->
+                                            case loadingData.userStatus of
+                                                LoggedIn _ ->
+                                                    Ok ()
+
+                                                NotLoggedIn ->
+                                                    Err "Original session not logged in"
+
+                                        LoadingLocalModel _ ->
+                                            Err "Local model not loaded"
+
+                                Loaded _ ->
+                                    Debug.todo "Check loaded case"
                         )
             )
         |> Effect.Test.toTest

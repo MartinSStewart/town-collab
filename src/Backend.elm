@@ -931,27 +931,33 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                 Nothing ->
                     NotLoggedIn
             , model
+            , Command.none
             )
 
-        ( userStatus, model2 ) =
+        ( userStatus, model2, cmd ) =
             case maybeLoginToken of
                 Just loginToken ->
                     case AssocList.get loginToken model.pendingLoginTokens of
                         Just data ->
-                            case IdDict.get data.userId model.users of
-                                Just user ->
-                                    ( LoggedIn
-                                        { userId = data.userId
-                                        , undoCurrent = user.undoCurrent
-                                        , undoHistory = user.undoHistory
-                                        , redoHistory = user.redoHistory
-                                        , mailEditor = user.mailEditor
-                                        }
-                                    , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
-                                    )
+                            if Duration.from data.requestTime currentTime |> Quantity.lessThan (Duration.minutes 10) then
+                                case IdDict.get data.userId model.users of
+                                    Just user ->
+                                        ( LoggedIn
+                                            { userId = data.userId
+                                            , undoCurrent = user.undoCurrent
+                                            , undoHistory = user.undoHistory
+                                            , redoHistory = user.redoHistory
+                                            , mailEditor = user.mailEditor
+                                            }
+                                        , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
+                                        , Effect.Lamdera.sendToFrontends ()
+                                        )
 
-                                Nothing ->
-                                    ( NotLoggedIn, addError currentTime (UserNotFoundWhenLoggingIn data.userId) model )
+                                    Nothing ->
+                                        ( NotLoggedIn, addError currentTime (UserNotFoundWhenLoggingIn data.userId) model, Command.none )
+
+                            else
+                                checkLogin ()
 
                         Nothing ->
                             checkLogin ()
@@ -961,38 +967,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
 
         model3 : BackendModel
         model3 =
-            { model2
-                | userSessions =
-                    Dict.update
-                        (Effect.Lamdera.sessionIdToString sessionId)
-                        (\maybeSession ->
-                            (case maybeSession of
-                                Just session ->
-                                    { clientIds = AssocList.insert clientId viewBounds session.clientIds
-                                    , userId =
-                                        case userStatus of
-                                            LoggedIn loggedIn ->
-                                                Just loggedIn.userId
-
-                                            NotLoggedIn ->
-                                                Nothing
-                                    }
-
-                                Nothing ->
-                                    { clientIds = AssocList.singleton clientId viewBounds
-                                    , userId =
-                                        case userStatus of
-                                            LoggedIn loggedIn ->
-                                                Just loggedIn.userId
-
-                                            NotLoggedIn ->
-                                                Nothing
-                                    }
-                            )
-                                |> Just
-                        )
-                        model2.userSessions
-            }
+            addSession sessionId clientId viewBounds userStatus model2
 
         loadingData : LoadingData_
         loadingData =
@@ -1009,6 +984,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
     ( model3
     , Command.batch
         [ Effect.Lamdera.sendToFrontend clientId (LoadingData loadingData)
+        , cmd
         , case userStatus of
             LoggedIn loggedIn ->
                 broadcast
@@ -1029,6 +1005,41 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                 Command.none
         ]
     )
+
+
+addSession sessionId clientId viewBounds userStatus model =
+    { model
+        | userSessions =
+            Dict.update
+                (Effect.Lamdera.sessionIdToString sessionId)
+                (\maybeSession ->
+                    (case maybeSession of
+                        Just session ->
+                            { clientIds = AssocList.insert clientId viewBounds session.clientIds
+                            , userId =
+                                case userStatus of
+                                    LoggedIn loggedIn ->
+                                        Just loggedIn.userId
+
+                                    NotLoggedIn ->
+                                        Nothing
+                            }
+
+                        Nothing ->
+                            { clientIds = AssocList.singleton clientId viewBounds
+                            , userId =
+                                case userStatus of
+                                    LoggedIn loggedIn ->
+                                        Just loggedIn.userId
+
+                                    NotLoggedIn ->
+                                        Nothing
+                            }
+                    )
+                        |> Just
+                )
+                model.userSessions
+    }
 
 
 createUser : Id UserId -> EmailAddress -> BackendModel -> ( BackendModel, BackendUserData )
