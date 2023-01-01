@@ -1,6 +1,24 @@
-module Id exposing (CowId, EventId, Id, MailId, TrainId, UserId, fromInt, increment, nextId, toInt)
+module Id exposing
+    ( CowId
+    , EventId
+    , Id
+    , MailId
+    , SecretId
+    , TrainId
+    , UserId
+    , fromInt
+    , increment
+    , nextId
+    , secretFromString
+    , secretToString
+    , toInt
+    )
 
 import AssocList
+
+
+type SecretId a
+    = SecretId String
 
 
 type Id a
@@ -50,3 +68,13 @@ nextId ids =
         |> Maybe.withDefault 0
         |> (+) 1
         |> fromInt
+
+
+secretToString : SecretId a -> String
+secretToString (SecretId secretId) =
+    secretId
+
+
+secretFromString : String -> SecretId a
+secretFromString =
+    SecretId

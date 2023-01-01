@@ -23,7 +23,7 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Id exposing (EventId, Id, MailId, TrainId, UserId)
+import Id exposing (EventId, Id, MailId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
 import List.Extra as List
@@ -51,16 +51,7 @@ app =
 
 app_ isProduction =
     { init = ( init, Command.none )
-    , update =
-        \msg model ->
-            update isProduction msg model
-                |> (\( model2, cmd ) ->
-                        let
-                            _ =
-                                Debug.log "cmd" cmd
-                        in
-                        ( model2, cmd )
-                   )
+    , update = update isProduction
     , updateFromFrontend =
         \sessionId clientId msg model ->
             ( model, Effect.Time.now |> Effect.Task.perform (UpdateFromFrontend sessionId clientId msg) )
@@ -92,6 +83,7 @@ init =
             , lastWorldUpdate = Nothing
             , mail = AssocList.empty
             , pendingLoginTokens = AssocList.empty
+            , invites = []
             }
     in
     case Env.adminEmail of
@@ -388,6 +380,19 @@ broadcastLocalChange time userIdAndUser changes model =
     )
 
 
+generateSecretId : Effect.Time.Posix -> { a | secretLinkCounter : Int } -> ( SecretId b, { a | secretLinkCounter : Int } )
+generateSecretId currentTime model =
+    ( Env.confirmationEmailKey
+        ++ "_"
+        ++ String.fromInt (Effect.Time.posixToMillis currentTime)
+        ++ "_"
+        ++ String.fromInt model.secretLinkCounter
+        |> Crypto.Hash.sha256
+        |> Id.secretFromString
+    , { model | secretLinkCounter = model.secretLinkCounter + 1 }
+    )
+
+
 updateFromFrontend :
     Bool
     -> Effect.Time.Posix
@@ -529,7 +534,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                 Valid emailAddress ->
                     let
                         ( loginToken, model2 ) =
-                            generateKey currentTime model
+                            generateSecretId currentTime model
 
                         loginEmailUrl : String
                         loginEmailUrl =
@@ -596,19 +601,6 @@ adjustEventTime currentTime eventTime =
 
     else
         currentTime
-
-
-generateKey : Effect.Time.Posix -> { a | secretLinkCounter : Int } -> ( LoginToken, { a | secretLinkCounter : Int } )
-generateKey currentTime model =
-    ( Env.confirmationEmailKey
-        ++ "_"
-        ++ String.fromInt (Effect.Time.posixToMillis currentTime)
-        ++ "_"
-        ++ String.fromInt model.secretLinkCounter
-        |> Crypto.Hash.sha256
-        |> LoginToken
-    , { model | secretLinkCounter = model.secretLinkCounter + 1 }
-    )
 
 
 updateLocalChange :
@@ -920,7 +912,14 @@ hiddenUsers userId model =
         |> EverySet.fromList
 
 
-requestDataUpdate : Effect.Time.Posix -> SessionId -> ClientId -> Bounds CellUnit -> Maybe LoginToken -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+requestDataUpdate :
+    Effect.Time.Posix
+    -> SessionId
+    -> ClientId
+    -> Bounds CellUnit
+    -> Maybe (SecretId LoginToken)
+    -> BackendModel
+    -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken model =
     let
         checkLogin () =
@@ -1023,10 +1022,6 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                             Nothing
 
                         else if sessionId2 == sessionId || Just sessionId2 == maybeRequestedBy then
-                            let
-                                _ =
-                                    Debug.log "abc" maybeRequestedBy
-                            in
                             ServerYouLoggedIn loggedIn handColor
                                 |> Change.ServerChange
                                 |> Nonempty.singleton

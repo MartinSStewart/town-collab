@@ -3106,10 +3106,6 @@ actualViewPointHelper model =
 
 updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
 updateFromBackend msg model =
-    let
-        _ =
-            Debug.log "frombackend" msg
-    in
     case ( model, msg ) of
         ( Loading loading, LoadingData loadingData ) ->
             ( Loading

@@ -11,6 +11,7 @@ module Types exposing
     , FrontendMsg
     , FrontendMsg_(..)
     , Hover(..)
+    , InviteToken
     , LoadedLocalModel_
     , LoadingData_
     , LoadingLocalModel(..)
@@ -44,7 +45,7 @@ import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
+import Id exposing (CowId, EventId, Id, MailId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
@@ -62,6 +63,7 @@ import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput
 import Tile exposing (Tile, TileGroup)
+import Time
 import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
@@ -232,12 +234,26 @@ type alias BackendModel =
     , mail : AssocList.Dict (Id MailId) BackendMail
     , pendingLoginTokens :
         AssocList.Dict
-            LoginToken
+            (SecretId LoginToken)
             { requestTime : Effect.Time.Posix
             , userId : Id UserId
             , requestedBy : SessionId
             }
+    , invites : List Invite
     }
+
+
+type alias Invite =
+    { invitedBy : Id UserId
+    , invitedAt : Time.Posix
+    , invitedEmailAddress : EmailAddress
+    , emailResult : Result Effect.Http.Error Postmark.PostmarkSendResponse
+    , inviteToken : SecretId InviteToken
+    }
+
+
+type InviteToken
+    = InviteToken Never
 
 
 type BackendError
@@ -285,7 +301,7 @@ type FrontendMsg_
 
 
 type ToBackend
-    = ConnectToBackend (Bounds CellUnit) (Maybe LoginToken)
+    = ConnectToBackend (Bounds CellUnit) (Maybe (SecretId LoginToken))
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
     | MailEditorToBackend MailEditor.ToBackend

@@ -1,6 +1,6 @@
 module Route exposing
     ( ConfirmEmailKey(..)
-    , LoginToken(..)
+    , LoginToken
     , Route(..)
     , UnsubscribeEmailKey(..)
     , coordQueryParser
@@ -13,6 +13,7 @@ module Route exposing
     )
 
 import Coord exposing (Coord)
+import Id exposing (SecretId)
 import Units exposing (WorldUnit)
 import Url exposing (Url)
 import Url.Builder
@@ -21,7 +22,7 @@ import Url.Parser.Query
 
 
 type LoginToken
-    = LoginToken String
+    = LoginToken Never
 
 
 startPointAt : Coord WorldUnit
@@ -38,7 +39,7 @@ coordQueryParser =
                     ( Maybe.withDefault (Tuple.first startPointAt) (Maybe.map Units.tileUnit maybeX)
                     , Maybe.withDefault (Tuple.second startPointAt) (Maybe.map Units.tileUnit maybeY)
                     )
-                , loginToken = Maybe.map LoginToken loginToken2
+                , loginToken = Maybe.map Id.secretFromString loginToken2
                 }
         )
         (Url.Parser.Query.int "x")
@@ -69,8 +70,8 @@ encode route =
                 (Url.Builder.int "x" x
                     :: Url.Builder.int "y" y
                     :: (case internalRoute_.loginToken of
-                            Just (LoginToken loginToken2) ->
-                                [ Url.Builder.string loginToken loginToken2 ]
+                            Just loginToken2 ->
+                                [ Url.Builder.string loginToken (Id.secretToString loginToken2) ]
 
                             Nothing ->
                                 []
@@ -98,7 +99,7 @@ unsubscribe =
 
 
 type Route
-    = InternalRoute { viewPoint : Coord WorldUnit, loginToken : Maybe LoginToken }
+    = InternalRoute { viewPoint : Coord WorldUnit, loginToken : Maybe (SecretId LoginToken) }
 
 
 type ConfirmEmailKey

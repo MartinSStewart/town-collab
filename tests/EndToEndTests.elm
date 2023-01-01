@@ -15,6 +15,7 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import Frontend
 import Html.Parser
+import Id exposing (SecretId)
 import Json.Decode
 import Json.Encode
 import LocalGrid
@@ -127,7 +128,7 @@ decodePostmark =
 
 isLoginEmail :
     Effect.Test.HttpRequest
-    -> Maybe { emailAddress : EmailAddress, loginToken : LoginToken }
+    -> Maybe { emailAddress : EmailAddress, loginToken : SecretId LoginToken }
 isLoginEmail httpRequest =
     if String.startsWith (Postmark.endpoint ++ "/email") httpRequest.url then
         case httpRequest.body of
@@ -307,7 +308,7 @@ endToEndTests =
                         (\model ->
                             case model of
                                 Loading loading ->
-                                    case Debug.log "localModel" loading.localModel of
+                                    case loading.localModel of
                                         LoadedLocalModel loadedLocalModel ->
                                             case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
                                                 LoggedIn _ ->
