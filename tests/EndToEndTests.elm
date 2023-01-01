@@ -5,6 +5,7 @@ import Audio
 import Backend
 import Bounds
 import Bytes exposing (Bytes)
+import Change exposing (UserStatus(..))
 import Coord
 import Duration
 import Effect.Http exposing (Response(..))
@@ -16,7 +17,7 @@ import Frontend
 import Html.Parser
 import Json.Decode
 import Json.Encode
-import LocalGrid exposing (UserStatus(..))
+import LocalGrid
 import Postmark
 import Route exposing (LoginToken, Route(..))
 import Test exposing (Test)
@@ -34,10 +35,10 @@ config =
     , handlePortToJs = handlePorts
     , handleFileRequest =
         \request ->
-            let
-                _ =
-                    Debug.log "file request" request
-            in
+            --let
+            --    _ =
+            --        Debug.log "file request" request
+            --in
             Nothing
     , domain = url
     }
@@ -45,19 +46,19 @@ config =
 
 handleRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
 handleRequest { currentRequest } =
-    let
-        _ =
-            Debug.log "request" currentRequest
-    in
+    --let
+    --    _ =
+    --        Debug.log "request" currentRequest
+    --in
     NetworkError_
 
 
 handlePorts : { currentRequest : PortToJs, pastRequests : List PortToJs } -> Maybe ( String, Json.Decode.Value )
 handlePorts { currentRequest } =
-    let
-        _ =
-            Debug.log "port request" currentRequest
-    in
+    --let
+    --    _ =
+    --        Debug.log "port request" currentRequest
+    --in
     case currentRequest.portName of
         "user_agent_to_js" ->
             ( "user_agent_from_js"
@@ -216,8 +217,8 @@ endToEndTests =
                             case model of
                                 Loading loading ->
                                     case loading.localModel of
-                                        LoadedLocalModel _ loadingData ->
-                                            case loadingData.userStatus of
+                                        LoadedLocalModel loadedLocalModel ->
+                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
                                                 LoggedIn _ ->
                                                     Err "Shouldn't be logged in"
 
@@ -253,8 +254,8 @@ endToEndTests =
                                                             case model of
                                                                 Loading loading ->
                                                                     case loading.localModel of
-                                                                        LoadedLocalModel _ loadingData ->
-                                                                            case loadingData.userStatus of
+                                                                        LoadedLocalModel loadedLocalModel ->
+                                                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
                                                                                 LoggedIn loggedIn ->
                                                                                     Ok ()
 
@@ -281,8 +282,8 @@ endToEndTests =
                                                             case model of
                                                                 Loading loading ->
                                                                     case loading.localModel of
-                                                                        LoadedLocalModel _ loadingData ->
-                                                                            case loadingData.userStatus of
+                                                                        LoadedLocalModel loadedLocalModel ->
+                                                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
                                                                                 LoggedIn loggedIn ->
                                                                                     Ok ()
 
@@ -300,14 +301,15 @@ endToEndTests =
                                 _ ->
                                     Effect.Test.continueWith state2 |> Effect.Test.checkState (\_ -> Err "Login email not found")
                         )
+                    |> Effect.Test.simulateTime (Duration.milliseconds 50)
                     |> checkFrontend
                         frontend0.clientId
                         (\model ->
                             case model of
                                 Loading loading ->
-                                    case loading.localModel of
-                                        LoadedLocalModel _ loadingData ->
-                                            case loadingData.userStatus of
+                                    case Debug.log "localModel" loading.localModel of
+                                        LoadedLocalModel loadedLocalModel ->
+                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
                                                 LoggedIn _ ->
                                                     Ok ()
 

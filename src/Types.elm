@@ -11,6 +11,7 @@ module Types exposing
     , FrontendMsg
     , FrontendMsg_(..)
     , Hover(..)
+    , LoadedLocalModel_
     , LoadingData_
     , LoadingLocalModel(..)
     , MouseButtonState(..)
@@ -28,7 +29,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change, Cow, ServerChange)
+import Change exposing (Change, Cow, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (CursorMeshes)
@@ -48,7 +49,7 @@ import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
 import List.Nonempty exposing (Nonempty)
-import LocalGrid exposing (Cursor, LocalGrid, UserStatus)
+import LocalGrid exposing (Cursor, LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
 import PingData exposing (PingData)
@@ -94,7 +95,14 @@ type alias FrontendLoading =
 
 type LoadingLocalModel
     = LoadingLocalModel (List Change)
-    | LoadedLocalModel (LocalModel Change LocalGrid) LoadingData_
+    | LoadedLocalModel LoadedLocalModel_
+
+
+type alias LoadedLocalModel_ =
+    { localModel : LocalModel Change LocalGrid
+    , trains : AssocList.Dict (Id TrainId) Train
+    , mail : AssocList.Dict (Id MailId) FrontendMail
+    }
 
 
 type ViewPoint

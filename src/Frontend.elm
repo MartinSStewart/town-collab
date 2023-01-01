@@ -13,7 +13,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change(..), Cow)
+import Change exposing (Change(..), Cow, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor exposing (CursorMeshes, CursorSprite(..), CursorType(..))
@@ -50,7 +50,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_, UserStatus(..))
+import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -436,10 +436,10 @@ tryLoading frontendLoading =
         LoadingLocalModel _ ->
             Nothing
 
-        LoadedLocalModel localModel loadingData ->
+        LoadedLocalModel loadedLocalModel ->
             Maybe.map3
                 (\time devicePixelRatio texture () ->
-                    loadedInit time devicePixelRatio frontendLoading texture loadingData localModel
+                    loadedInit time devicePixelRatio frontendLoading texture loadedLocalModel
                 )
                 frontendLoading.time
                 frontendLoading.devicePixelRatio
@@ -473,10 +473,9 @@ loadedInit :
     -> Float
     -> FrontendLoading
     -> Texture
-    -> LoadingData_
-    -> LocalModel Change LocalGrid
+    -> LoadedLocalModel_
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
-loadedInit time devicePixelRatio loading texture loadingData localModel =
+loadedInit time devicePixelRatio loading texture loadedLocalModel =
     let
         currentTile =
             HandTool
@@ -490,8 +489,8 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
         model : FrontendLoaded
         model =
             { key = loading.key
-            , localModel = localModel
-            , trains = loadingData.trains
+            , localModel = loadedLocalModel.localModel
+            , trains = loadedLocalModel.trains
             , meshes = Dict.empty
             , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
             , viewPointLastInterval = Point2d.origin
@@ -515,10 +514,10 @@ loadedInit time devicePixelRatio loading texture loadingData localModel =
             , removedTileParticles = []
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
-            , mail = loadingData.mail
+            , mail = loadedLocalModel.mail
             , mailEditor =
                 MailEditor.initEditor
-                    (case loadingData.userStatus of
+                    (case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
                         LoggedIn loggedIn ->
                             loggedIn.mailEditor
 
@@ -3107,6 +3106,10 @@ actualViewPointHelper model =
 
 updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
 updateFromBackend msg model =
+    let
+        _ =
+            Debug.log "frombackend" msg
+    in
     case ( model, msg ) of
         ( Loading loading, LoadingData loadingData ) ->
             ( Loading
@@ -3114,17 +3117,23 @@ updateFromBackend msg model =
                     | localModel =
                         case loading.localModel of
                             LoadingLocalModel [] ->
-                                LoadedLocalModel (LocalGrid.init loadingData) loadingData
+                                LoadedLocalModel
+                                    { localModel = LocalGrid.init loadingData
+                                    , trains = loadingData.trains
+                                    , mail = loadingData.mail
+                                    }
 
                             LoadingLocalModel (first :: rest) ->
                                 LoadedLocalModel
-                                    (LocalGrid.init loadingData
-                                        |> LocalGrid.updateFromBackend (Nonempty first rest)
-                                        |> Tuple.first
-                                    )
-                                    loadingData
+                                    { localModel =
+                                        LocalGrid.init loadingData
+                                            |> LocalGrid.updateFromBackend (Nonempty first rest)
+                                            |> Tuple.first
+                                    , trains = loadingData.trains
+                                    , mail = loadingData.mail
+                                    }
 
-                            LoadedLocalModel _ _ ->
+                            LoadedLocalModel _ ->
                                 loading.localModel
                 }
             , Command.none
@@ -3135,10 +3144,14 @@ updateFromBackend msg model =
                 LoadingLocalModel pendingChanges ->
                     { loading | localModel = pendingChanges ++ List.Nonempty.toList changes |> LoadingLocalModel }
 
-                LoadedLocalModel localModel loadingData ->
+                LoadedLocalModel loadedLocalModel ->
                     { loading
                         | localModel =
-                            LoadedLocalModel (LocalGrid.updateFromBackend changes localModel |> Tuple.first) loadingData
+                            LoadedLocalModel
+                                { localModel = LocalGrid.updateFromBackend changes loadedLocalModel.localModel |> Tuple.first
+                                , trains = loadedLocalModel.trains
+                                , mail = loadedLocalModel.mail
+                                }
                     }
               )
                 |> Loading

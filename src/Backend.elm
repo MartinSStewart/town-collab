@@ -2,7 +2,8 @@ module Backend exposing (app, app_)
 
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (ClientChange(..), LocalChange(..), ServerChange(..))
+import Change exposing (ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
+import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -27,7 +28,7 @@ import IdDict exposing (IdDict)
 import Lamdera
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (UserStatus(..))
+import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
@@ -50,7 +51,16 @@ app =
 
 app_ isProduction =
     { init = ( init, Command.none )
-    , update = update isProduction
+    , update =
+        \msg model ->
+            update isProduction msg model
+                |> (\( model2, cmd ) ->
+                        let
+                            _ =
+                                Debug.log "cmd" cmd
+                        in
+                        ( model2, cmd )
+                   )
     , updateFromFrontend =
         \sessionId clientId msg model ->
             ( model, Effect.Time.now |> Effect.Task.perform (UpdateFromFrontend sessionId clientId msg) )
@@ -169,10 +179,6 @@ update isProduction msg model =
             updateFromFrontend isProduction time sessionId clientId toBackendMsg model
 
         SentLoginEmail time emailAddress result ->
-            let
-                _ =
-                    Debug.log "a" result
-            in
             case result of
                 Ok _ ->
                     ( model, Command.none )
@@ -931,10 +937,10 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                 Nothing ->
                     NotLoggedIn
             , model
-            , Command.none
+            , Nothing
             )
 
-        ( userStatus, model2, cmd ) =
+        ( userStatus, model2, maybeRequestedBy ) =
             case maybeLoginToken of
                 Just loginToken ->
                     case AssocList.get loginToken model.pendingLoginTokens of
@@ -950,11 +956,11 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                                             , mailEditor = user.mailEditor
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
-                                        , Effect.Lamdera.sendToFrontends ()
+                                        , Just data.requestedBy
                                         )
 
                                     Nothing ->
-                                        ( NotLoggedIn, addError currentTime (UserNotFoundWhenLoggingIn data.userId) model, Command.none )
+                                        ( NotLoggedIn, addError currentTime (UserNotFoundWhenLoggingIn data.userId) model, Nothing )
 
                             else
                                 checkLogin ()
@@ -968,6 +974,17 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
         model3 : BackendModel
         model3 =
             addSession sessionId clientId viewBounds userStatus model2
+                |> (case maybeRequestedBy of
+                        Just requestedBy ->
+                            if requestedBy == sessionId then
+                                identity
+
+                            else
+                                addSession requestedBy clientId viewBounds userStatus
+
+                        Nothing ->
+                            identity
+                   )
 
         loadingData : LoadingData_
         loadingData =
@@ -980,20 +997,44 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
             , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
             , handColors = IdDict.map (\_ a -> a.handColor) model3.users
             }
+
+        handColor : Colors
+        handColor =
+            case userStatus of
+                LoggedIn loggedIn ->
+                    case IdDict.get loggedIn.userId model3.users of
+                        Just user ->
+                            user.handColor
+
+                        Nothing ->
+                            Cursor.defaultColors
+
+                NotLoggedIn ->
+                    Cursor.defaultColors
     in
     ( model3
     , Command.batch
         [ Effect.Lamdera.sendToFrontend clientId (LoadingData loadingData)
-        , cmd
-        , case userStatus of
-            LoggedIn loggedIn ->
+        , case ( maybeLoginToken, userStatus ) of
+            ( Just _, LoggedIn loggedIn ) ->
                 broadcast
-                    (\_ clientId2 ->
+                    (\sessionId2 clientId2 ->
                         if clientId2 == clientId then
                             Nothing
 
+                        else if sessionId2 == sessionId || Just sessionId2 == maybeRequestedBy then
+                            let
+                                _ =
+                                    Debug.log "abc" maybeRequestedBy
+                            in
+                            ServerYouLoggedIn loggedIn handColor
+                                |> Change.ServerChange
+                                |> Nonempty.singleton
+                                |> ChangeBroadcast
+                                |> Just
+
                         else
-                            ServerUserConnected loggedIn.userId Cursor.defaultColors
+                            ServerUserConnected loggedIn.userId handColor
                                 |> Change.ServerChange
                                 |> Nonempty.singleton
                                 |> ChangeBroadcast
@@ -1001,12 +1042,13 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
                     )
                     model3
 
-            NotLoggedIn ->
+            _ ->
                 Command.none
         ]
     )
 
 
+addSession : SessionId -> ClientId -> Bounds CellUnit -> UserStatus -> BackendModel -> BackendModel
 addSession sessionId clientId viewBounds userStatus model =
     { model
         | userSessions =

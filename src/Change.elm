@@ -1,4 +1,4 @@
-module Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..))
+module Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), LoggedIn_, ServerChange(..), UserStatus(..))
 
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
@@ -8,6 +8,7 @@ import Effect.Time
 import Grid
 import GridCell
 import Id exposing (CowId, EventId, Id, UserId)
+import MailEditor exposing (MailEditorData)
 import Point2d exposing (Point2d)
 import Units exposing (CellUnit, WorldUnit)
 
@@ -42,9 +43,24 @@ type ServerChange
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected (Id UserId) Colors
+    | ServerYouLoggedIn LoggedIn_ Colors
     | ServerChangeHandColor (Id UserId) Colors
 
 
 type alias Cow =
     { position : Point2d WorldUnit WorldUnit
+    }
+
+
+type UserStatus
+    = LoggedIn LoggedIn_
+    | NotLoggedIn
+
+
+type alias LoggedIn_ =
+    { userId : Id UserId
+    , undoHistory : List (Dict RawCellCoord Int)
+    , redoHistory : List (Dict RawCellCoord Int)
+    , undoCurrent : Dict RawCellCoord Int
+    , mailEditor : MailEditorData
     }

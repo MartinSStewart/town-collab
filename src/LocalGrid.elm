@@ -3,7 +3,6 @@ module LocalGrid exposing
     , LocalGrid
     , LocalGrid_
     , OutMsg(..)
-    , UserStatus(..)
     , addCows
     , incrementUndoCurrent
     , init
@@ -13,7 +12,7 @@ module LocalGrid exposing
     )
 
 import Bounds exposing (Bounds)
-import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..))
+import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
@@ -46,17 +45,6 @@ type alias LocalGrid_ =
     , cursors : IdDict UserId Cursor
     , handColors : IdDict UserId Colors
     }
-
-
-type UserStatus
-    = LoggedIn
-        { userId : Id UserId
-        , undoHistory : List (Dict RawCellCoord Int)
-        , redoHistory : List (Dict RawCellCoord Int)
-        , undoCurrent : Dict RawCellCoord Int
-        , mailEditor : MailEditorData
-        }
-    | NotLoggedIn
 
 
 type alias Cursor =
@@ -296,6 +284,15 @@ updateServerChange serverChange model =
 
         ServerUserConnected userId colors ->
             ( { model | handColors = IdDict.insert userId colors model.handColors }
+            , HandColorChanged
+            )
+
+        ServerYouLoggedIn loggedIn handColor ->
+            let
+                _ =
+                    Debug.log "you logged in" ()
+            in
+            ( { model | userStatus = LoggedIn loggedIn, handColors = IdDict.insert loggedIn.userId handColor model.handColors }
             , HandColorChanged
             )
 
