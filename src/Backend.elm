@@ -382,7 +382,7 @@ broadcastLocalChange time userIdAndUser changes model =
 
 generateSecretId : Effect.Time.Posix -> { a | secretLinkCounter : Int } -> ( SecretId b, { a | secretLinkCounter : Int } )
 generateSecretId currentTime model =
-    ( Env.confirmationEmailKey
+    ( Env.secretKey
         ++ "_"
         ++ String.fromInt (Effect.Time.posixToMillis currentTime)
         ++ "_"

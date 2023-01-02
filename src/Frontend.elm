@@ -428,10 +428,6 @@ maxVolumeDistance =
 
 tryLoading : FrontendLoading -> Maybe (() -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ ))
 tryLoading frontendLoading =
-    let
-        _ =
-            Debug.log "tried loading" ""
-    in
     case frontendLoading.localModel of
         LoadingLocalModel _ ->
             Nothing
@@ -549,6 +545,9 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , hasCmdKey = loading.hasCmdKey
             , loginTextInput = TextInput.init
             , pressedSubmitEmail = NotSubmitted { pressedSubmit = False }
+            , showInvite = False
+            , inviteTextInput = TextInput.init
+            , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
             }
                 |> setCurrentTool HandToolButton
                 |> handleOutMsg LocalGrid.HandColorChanged
@@ -1183,6 +1182,9 @@ updateLoaded audioData msg model =
                                             ToolButtonHover _ ->
                                                 model2
 
+                                            ShowInviteUser ->
+                                                model2
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1336,6 +1338,9 @@ updateLoaded audioData msg model =
                                 ToolButtonHover _ ->
                                     True
 
+                                ShowInviteUser ->
+                                    True
+
                 model2 =
                     { model
                         | time = time
@@ -1463,6 +1468,9 @@ updateLoaded audioData msg model =
                         ToolButtonHover _ ->
                             ( model, Command.none )
 
+                        ShowInviteUser ->
+                            ( model, Command.none )
+
         GotUserAgent _ ->
             ( model, Command.none )
 
@@ -1544,6 +1552,9 @@ nextFocus model =
 
                     ToolButtonHover toolButton ->
                         ToolButtonHover toolButton
+
+                    ShowInviteUser ->
+                        ShowInviteUser
                 )
                 { position = Coord.origin }
 
@@ -1706,6 +1717,9 @@ getViewModel model =
     , currentTool = model.currentTool
     , pingData = model.pingData
     , userId = currentUserId model
+    , showInvite = model.showInvite
+    , inviteTextInput = model.inviteTextInput
+    , inviteSubmitStatus = model.inviteSubmitStatus
     }
 
 
@@ -2241,6 +2255,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                             SendEmailButtonHover ->
                                 sendEmail model2
+
+                            ShowInviteUser ->
+                                ( { model2 | showInvite = True }, Command.none )
 
     else
         ( model2, Command.none )

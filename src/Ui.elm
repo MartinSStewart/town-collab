@@ -10,6 +10,7 @@ module Ui exposing
     , colorSprite
     , colorText
     , column
+    , customButton
     , el
     , empty
     , hover
@@ -57,6 +58,8 @@ type Element id units
     | Button
         { id : id
         , padding : Padding units
+        , borderAndBackground : BorderAndBackground units
+        , borderAndBackgroundFocus : BorderAndBackground units
         , cachedSize : Coord units
         , inFront : List (Element id units)
         }
@@ -77,7 +80,7 @@ type Element id units
 type BorderAndBackground units
     = NoBorderOrBackground
     | BackgroundOnly Color
-    | BorderAndBackground { borderWidth : Quantity Int units, borderColor : Color, backgroundColor : Color }
+    | BorderAndBackground { borderWidth : Int, borderColor : Color, backgroundColor : Color }
 
 
 type alias Padding units =
@@ -229,6 +232,42 @@ button data child =
         { id = data.id
         , padding = data.padding
         , inFront = data.inFront
+        , borderAndBackground =
+            BorderAndBackground
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , backgroundColor = Color.fillColor
+                }
+        , borderAndBackgroundFocus =
+            BorderAndBackground
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , backgroundColor = Color.highlightColor
+                }
+        , cachedSize =
+            Coord.plus
+                (Coord.plus data.padding.topLeft data.padding.bottomRight)
+                (size child)
+        }
+        child
+
+
+customButton :
+    { id : id
+    , padding : Padding units
+    , inFront : List (Element id units)
+    , borderAndBackground : BorderAndBackground units
+    , borderAndBackgroundFocus : BorderAndBackground units
+    }
+    -> Element id units
+    -> Element id units
+customButton data child =
+    Button
+        { id = data.id
+        , padding = data.padding
+        , inFront = data.inFront
+        , borderAndBackground = data.borderAndBackground
+        , borderAndBackgroundFocus = data.borderAndBackgroundFocus
         , cachedSize =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
@@ -321,7 +360,7 @@ bottomLeft data element2 =
         element2
 
 
-bottomCenter : { size : Coord units } -> Element id units -> Element id units
+bottomCenter : { size : Coord units, inFront : List (Element id units) } -> Element id units -> Element id units
 bottomCenter data element2 =
     let
         ( sizeX, sizeY ) =
@@ -338,7 +377,7 @@ bottomCenter data element2 =
             { topLeft = Coord.xy left (sizeY - childSizeY)
             , bottomRight = Coord.xy (sizeX - childSizeX) (sizeX - childSizeX - left)
             }
-        , inFront = []
+        , inFront = data.inFront
         , borderAndBackground = NoBorderOrBackground
         , cachedSize = data.size
         }
@@ -496,16 +535,14 @@ viewHelper focus position vertices element2 =
                         vertices
                         data.inFront
             in
-            Sprite.rectangle Color.outlineColor position data.cachedSize
-                ++ Sprite.rectangle
-                    (if Just data.id == focus then
-                        Color.highlightColor
+            borderAndBackgroundView position
+                (if Just data.id == focus then
+                    data.borderAndBackgroundFocus
 
-                     else
-                        Color.fillColor
-                    )
-                    (position |> Coord.plus (Coord.xy 2 2))
-                    (data.cachedSize |> Coord.minus (Coord.xy 4 4))
+                 else
+                    data.borderAndBackground
+                )
+                data.cachedSize
                 ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Row data children ->
@@ -549,7 +586,7 @@ viewHelper focus position vertices element2 =
                         vertices
                         data.inFront
             in
-            borderAndBackgroundView position data (size element2)
+            borderAndBackgroundView position data.borderAndBackground (size element2)
                 ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Quads data ->
@@ -560,12 +597,12 @@ viewHelper focus position vertices element2 =
 
 
 borderAndBackgroundView :
-    Coord unit
-    -> { a | borderAndBackground : BorderAndBackground unit }
-    -> Coord unit
+    Coord units
+    -> BorderAndBackground units
+    -> Coord units
     -> List Vertex
-borderAndBackgroundView position data size2 =
-    case data.borderAndBackground of
+borderAndBackgroundView position borderAndBackground size2 =
+    case borderAndBackground of
         NoBorderOrBackground ->
             []
 
@@ -576,8 +613,8 @@ borderAndBackgroundView position data size2 =
             Sprite.rectangle borderColor position size2
                 ++ Sprite.rectangle
                     backgroundColor
-                    (Coord.plus ( borderWidth, borderWidth ) position)
-                    (size2 |> Coord.minus (Coord.multiply (Coord.xy 2 2) ( borderWidth, borderWidth )))
+                    (Coord.plus (Coord.xy borderWidth borderWidth) position)
+                    (size2 |> Coord.minus (Coord.multiply (Coord.xy 2 2) (Coord.xy borderWidth borderWidth)))
 
 
 size : Element id units -> Coord units

@@ -175,6 +175,9 @@ type alias FrontendLoaded =
     , hasCmdKey : Bool
     , loginTextInput : TextInput.Model
     , pressedSubmitEmail : SubmitStatus EmailAddress
+    , showInvite : Bool
+    , inviteTextInput : TextInput.Model
+    , inviteSubmitStatus : SubmitStatus EmailAddress
     }
 
 
@@ -214,6 +217,7 @@ type UiHover
     | ToolButtonHover ToolButton
     | PrimaryColorInput
     | SecondaryColorInput
+    | ShowInviteUser
 
 
 type alias BackendModel =

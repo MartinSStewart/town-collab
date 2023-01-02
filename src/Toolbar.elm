@@ -39,15 +39,23 @@ type alias ViewData units =
     , currentTool : Tool
     , pingData : Maybe PingData
     , userId : Maybe (Id UserId)
+    , showInvite : Bool
+    , inviteTextInput : TextInput.Model
+    , inviteSubmitStatus : SubmitStatus EmailAddress
     }
 
 
 view : ViewData units -> Ui.Element UiHover units
 view data =
     Ui.bottomCenter
-        { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize }
+        { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
+        , inFront = [ inviteView data.showInvite ]
+        }
         (Ui.el
-            { padding = Ui.noPadding, inFront = [], borderAndBackground = borderAndBackground }
+            { padding = Ui.noPadding
+            , inFront = []
+            , borderAndBackground = borderAndBackground
+            }
             (case data.handColor of
                 Just handColor ->
                     toolbarUi
@@ -65,10 +73,15 @@ view data =
         )
 
 
+inviteView : Bool -> Ui.Element UiHover units
+inviteView showInvite =
+    Ui.button { id = ShowInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Invite")
+
+
 borderAndBackground : BorderAndBackground units
 borderAndBackground =
     BorderAndBackground
-        { borderWidth = Quantity 2
+        { borderWidth = 2
         , borderColor = Color.outlineColor
         , backgroundColor = Color.fillColor
         }
@@ -163,14 +176,26 @@ toolbarUi :
     -> Dict String TileGroup
     -> Tool
     -> Ui.Element UiHover units
-toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys currentTile =
+toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-            showColorTextInputs currentTile
+            showColorTextInputs currentTool
+
+        currentToolButton : ToolButton
+        currentToolButton =
+            case currentTool of
+                HandTool ->
+                    HandToolButton
+
+                TilePlacerTool { tileGroup } ->
+                    TilePlacerToolButton tileGroup
+
+                TilePickerTool ->
+                    TilePickerToolButton
     in
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
-        [ List.map (toolButtonUi hasCmdKey handColor colors hotkeys) buttonTiles
+        [ List.map (toolButtonUi hasCmdKey handColor colors hotkeys currentToolButton) buttonTiles
             |> List.greedyGroupsOf 3
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
@@ -204,7 +229,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                 ]
             , Ui.center
                 { size = buttonSize }
-                (case currentTile of
+                (case currentTool of
                     TilePlacerTool { tileGroup } ->
                         case AssocList.get tileGroup colors of
                             Just color ->
@@ -231,8 +256,9 @@ toolButtonUi :
     -> AssocList.Dict TileGroup Colors
     -> Dict String TileGroup
     -> ToolButton
+    -> ToolButton
     -> Ui.Element UiHover units
-toolButtonUi hasCmdKey handColor colors hotkeys tool =
+toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     let
         tileColors =
             case tool of
@@ -278,15 +304,15 @@ toolButtonUi hasCmdKey handColor colors hotkeys tool =
                 TilePickerToolButton ->
                     Cursor.eyeDropperCursor2
     in
-    Ui.button
+    Ui.customButton
         { id = ToolButtonHover tool
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of
                 Just hotkey ->
-                    [ Ui.outlinedText { outline = Color.black, color = Color.white, text = hotkey }
+                    [ Ui.outlinedText { outline = Color.outlineColor, color = Color.white, text = hotkey }
                         |> Ui.el
-                            { padding = { topLeft = Coord.xy 4 0, bottomRight = Coord.xy 0 0 }
+                            { padding = { topLeft = Coord.xy 2 0, bottomRight = Coord.xy 0 0 }
                             , inFront = []
                             , borderAndBackground = NoBorderOrBackground
                             }
@@ -295,6 +321,23 @@ toolButtonUi hasCmdKey handColor colors hotkeys tool =
 
                 Nothing ->
                     []
+        , borderAndBackground =
+            BorderAndBackground
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , backgroundColor =
+                    if currentTool == tool then
+                        Color.highlightColor
+
+                    else
+                        Color.fillColor
+                }
+        , borderAndBackgroundFocus =
+            BorderAndBackground
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , backgroundColor = Color.highlightColor
+                }
         }
         (Ui.center { size = buttonSize } label)
 

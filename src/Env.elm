@@ -57,14 +57,9 @@ postmarkApiKey =
 
 domain : String
 domain =
-    "https://localhost:8000"
+    "http://localhost:8000"
 
 
-notifyAdminWaitInHours : String
-notifyAdminWaitInHours =
-    "0.05"
-
-
-confirmationEmailKey : String
-confirmationEmailKey =
+secretKey : String
+secretKey =
     "abc"
