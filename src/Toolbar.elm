@@ -49,7 +49,13 @@ view : ViewData units -> Ui.Element UiHover units
 view data =
     Ui.bottomCenter
         { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
-        , inFront = [ inviteView data.showInvite ]
+        , inFront =
+            case data.handColor of
+                Just _ ->
+                    [ inviteView data.showInvite ]
+
+                Nothing ->
+                    []
         }
         (Ui.el
             { padding = Ui.noPadding
@@ -176,10 +182,10 @@ toolbarUi :
     -> Dict String TileGroup
     -> Tool
     -> Ui.Element UiHover units
-toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colors hotkeys currentTool =
+toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-            showColorTextInputs currentTool
+            showColorTextInputs handColor tileColors currentTool
 
         currentToolButton : ToolButton
         currentToolButton =
@@ -195,7 +201,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
     in
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
-        [ List.map (toolButtonUi hasCmdKey handColor colors hotkeys currentToolButton) buttonTiles
+        [ List.map (toolButtonUi hasCmdKey handColor tileColors hotkeys currentToolButton) buttonTiles
             |> List.greedyGroupsOf 3
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
@@ -203,20 +209,18 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
             { spacing = 10, padding = Ui.paddingXY 12 8 }
             [ Ui.column
                 { spacing = 10, padding = Ui.noPadding }
-                [ if showPrimaryColorTextInput then
-                    Ui.textInput
-                        { id = PrimaryColorInput, width = primaryColorInputWidth, isValid = True }
-                        primaryColorTextInput
+                [ case showPrimaryColorTextInput of
+                    Just color ->
+                        colorTextInput PrimaryColorInput primaryColorTextInput color
 
-                  else
-                    Ui.empty
-                , if showSecondaryColorTextInput then
-                    Ui.textInput
-                        { id = SecondaryColorInput, width = secondaryColorInputWidth, isValid = True }
-                        secondaryColorTextInput
+                    Nothing ->
+                        Ui.empty
+                , case showSecondaryColorTextInput of
+                    Just color ->
+                        colorTextInput SecondaryColorInput secondaryColorTextInput color
 
-                  else
-                    Ui.empty
+                    Nothing ->
+                        Ui.empty
                 , Ui.el
                     { padding =
                         { topLeft = Coord.xy (Quantity.unwrap primaryColorInputWidth) 0
@@ -231,7 +235,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                 { size = buttonSize }
                 (case currentTool of
                     TilePlacerTool { tileGroup } ->
-                        case AssocList.get tileGroup colors of
+                        case AssocList.get tileGroup tileColors of
                             Just color ->
                                 (Tile.getTileGroupData tileGroup).tiles
                                     |> List.Nonempty.head
@@ -247,6 +251,31 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput colo
                         Cursor.defaultCursorMesh2 handColor
                 )
             ]
+        ]
+
+
+colorTextInput : id -> TextInput.Model -> Color -> Ui.Element id units
+colorTextInput id textInput color =
+    let
+        padding =
+            TextInput.size primaryColorInputWidth |> Coord.yRaw |> (\a -> a // 2)
+    in
+    Ui.row
+        { spacing = -2, padding = Ui.noPadding }
+        [ Ui.el
+            { padding = Ui.paddingXY padding padding
+            , inFront = []
+            , borderAndBackground =
+                BorderAndBackground
+                    { borderWidth = 2
+                    , borderColor = Color.outlineColor
+                    , backgroundColor = color
+                    }
+            }
+            Ui.empty
+        , Ui.textInput
+            { id = id, width = primaryColorInputWidth, isValid = True }
+            textInput
         ]
 
 
@@ -459,25 +488,41 @@ buttonSize =
     Coord.xy 80 80
 
 
-showColorTextInputs : Tool -> { showPrimaryColorTextInput : Bool, showSecondaryColorTextInput : Bool }
-showColorTextInputs tool =
+showColorTextInputs :
+    Colors
+    -> AssocList.Dict TileGroup Colors
+    -> Tool
+    -> { showPrimaryColorTextInput : Maybe Color, showSecondaryColorTextInput : Maybe Color }
+showColorTextInputs handColor tileColors tool =
     case tool of
         TilePlacerTool { tileGroup } ->
-            case Tile.getTileGroupData tileGroup |> .defaultColors of
-                ZeroDefaultColors ->
-                    { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
+            case ( AssocList.get tileGroup tileColors, Tile.getTileGroupData tileGroup |> .defaultColors ) of
+                ( _, ZeroDefaultColors ) ->
+                    { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
 
-                OneDefaultColor _ ->
-                    { showPrimaryColorTextInput = True, showSecondaryColorTextInput = False }
+                ( Just colors, OneDefaultColor _ ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor, showSecondaryColorTextInput = Nothing }
 
-                TwoDefaultColors _ _ ->
-                    { showPrimaryColorTextInput = True, showSecondaryColorTextInput = True }
+                ( Nothing, OneDefaultColor color ) ->
+                    { showPrimaryColorTextInput = Just color, showSecondaryColorTextInput = Nothing }
+
+                ( Just colors, TwoDefaultColors _ ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor
+                    , showSecondaryColorTextInput = Just colors.secondaryColor
+                    }
+
+                ( Nothing, TwoDefaultColors colors ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor
+                    , showSecondaryColorTextInput = Just colors.secondaryColor
+                    }
 
         HandTool ->
-            { showPrimaryColorTextInput = True, showSecondaryColorTextInput = True }
+            { showPrimaryColorTextInput = Just handColor.primaryColor
+            , showSecondaryColorTextInput = Just handColor.secondaryColor
+            }
 
         TilePickerTool ->
-            { showPrimaryColorTextInput = False, showSecondaryColorTextInput = False }
+            { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
 
 
 getTileGroupTile : TileGroup -> Int -> Tile

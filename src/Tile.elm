@@ -721,7 +721,7 @@ type alias TileData unit =
 type DefaultColor
     = ZeroDefaultColors
     | OneDefaultColor Color
-    | TwoDefaultColors Color Color
+    | TwoDefaultColors Colors
 
 
 defaultToPrimaryAndSecondary : DefaultColor -> Colors
@@ -733,8 +733,8 @@ defaultToPrimaryAndSecondary defaultColors =
         OneDefaultColor primary ->
             { primaryColor = primary, secondaryColor = Color.black }
 
-        TwoDefaultColors primary secondary ->
-            { primaryColor = primary, secondaryColor = secondary }
+        TwoDefaultColors colors ->
+            colors
 
 
 type RailPathType
@@ -840,12 +840,12 @@ hasCollisionWithCoord positionA positionB tileB =
 
 defaultHouseColors : DefaultColor
 defaultHouseColors =
-    TwoDefaultColors (Color.rgb255 234 100 66) (Color.rgb255 234 168 36)
+    TwoDefaultColors { primaryColor = Color.rgb255 234 100 66, secondaryColor = Color.rgb255 234 168 36 }
 
 
 defaultSidewalkColor : DefaultColor
 defaultSidewalkColor =
-    TwoDefaultColors (Color.rgb255 193 182 162) (Color.rgb255 170 160 140)
+    TwoDefaultColors { primaryColor = Color.rgb255 193 182 162, secondaryColor = Color.rgb255 170 160 140 }
 
 
 defaultFenceColor : DefaultColor
@@ -855,7 +855,7 @@ defaultFenceColor =
 
 defaultTreeColor : DefaultColor
 defaultTreeColor =
-    TwoDefaultColors (Color.rgb255 24 150 65) (Color.rgb255 141 96 65)
+    TwoDefaultColors { primaryColor = Color.rgb255 24 150 65, secondaryColor = Color.rgb255 141 96 65 }
 
 
 defaultPostOfficeColor : DefaultColor
@@ -865,7 +865,7 @@ defaultPostOfficeColor =
 
 defaultLogCabinColor : DefaultColor
 defaultLogCabinColor =
-    TwoDefaultColors (Color.rgb255 220 129 97) (Color.rgb255 236 202 66)
+    TwoDefaultColors { primaryColor = Color.rgb255 220 129 97, secondaryColor = Color.rgb255 236 202 66 }
 
 
 getData : Tile -> TileData unit

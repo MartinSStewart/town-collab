@@ -1537,18 +1537,30 @@ nextFocus model =
                         EmailAddressTextInputHover
 
                     PrimaryColorInput ->
-                        if Toolbar.showColorTextInputs model.currentTool |> .showSecondaryColorTextInput then
-                            SecondaryColorInput
+                        case currentUserId model of
+                            Just userId ->
+                                case Toolbar.showColorTextInputs (getHandColor userId model) model.tileColors model.currentTool |> .showSecondaryColorTextInput of
+                                    Just _ ->
+                                        SecondaryColorInput
 
-                        else
-                            PrimaryColorInput
+                                    Nothing ->
+                                        PrimaryColorInput
+
+                            Nothing ->
+                                PrimaryColorInput
 
                     SecondaryColorInput ->
-                        if Toolbar.showColorTextInputs model.currentTool |> .showPrimaryColorTextInput then
-                            PrimaryColorInput
+                        case currentUserId model of
+                            Just userId ->
+                                case Toolbar.showColorTextInputs (getHandColor userId model) model.tileColors model.currentTool |> .showPrimaryColorTextInput of
+                                    Just _ ->
+                                        PrimaryColorInput
 
-                        else
-                            SecondaryColorInput
+                                    Nothing ->
+                                        SecondaryColorInput
+
+                            Nothing ->
+                                SecondaryColorInput
 
                     ToolButtonHover toolButton ->
                         ToolButtonHover toolButton
@@ -2298,7 +2310,7 @@ isPrimaryColorInput hover =
 isSecondaryColorInput : Hover -> Bool
 isSecondaryColorInput hover =
     case hover of
-        UiHover PrimaryColorInput _ ->
+        UiHover SecondaryColorInput _ ->
             True
 
         _ ->
