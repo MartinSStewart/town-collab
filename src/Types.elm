@@ -23,6 +23,7 @@ module Types exposing
     , Tool(..)
     , ToolButton(..)
     , UiHover(..)
+    , UiMsg(..)
     , ViewPoint(..)
     )
 
@@ -221,6 +222,14 @@ type UiHover
     | CloseInviteUser
     | SubmitInviteUser
     | InviteEmailAddressTextInput
+
+
+type UiMsg
+    = PressedShowInviteUser
+    | PressedCloseInviteUser
+    | PressedSendInviteUser
+    | PressedSendEmail
+    | PressedTool ToolButton
 
 
 type alias BackendModel =

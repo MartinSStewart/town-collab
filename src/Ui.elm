@@ -47,7 +47,7 @@ type alias RowColumn =
     }
 
 
-type Element id
+type Element id msg
     = Text
         { outline : Maybe Color
         , color : Color
@@ -62,18 +62,19 @@ type Element id
         , borderAndFill : BorderAndFill
         , borderAndFillFocus : BorderAndFill
         , cachedSize : Coord Pixels
-        , inFront : List (Element id)
+        , inFront : List (Element id msg)
+        , onPress : msg
         }
-        (Element id)
-    | Row RowColumn (List (Element id))
-    | Column RowColumn (List (Element id))
+        (Element id msg)
+    | Row RowColumn (List (Element id msg))
+    | Column RowColumn (List (Element id msg))
     | Single
         { padding : Padding
         , borderAndFill : BorderAndFill
-        , inFront : List (Element id)
+        , inFront : List (Element id msg)
         , cachedSize : Coord Pixels
         }
-        (Element id)
+        (Element id msg)
     | Quads { size : Coord Pixels, vertices : Coord Pixels -> List Vertex }
     | Empty
 
@@ -103,7 +104,7 @@ paddingXY2 coord =
     { topLeft = coord, bottomRight = coord }
 
 
-text : String -> Element id
+text : String -> Element id msg
 text text2 =
     Text
         { outline = Nothing
@@ -114,7 +115,7 @@ text text2 =
         }
 
 
-colorText : Color -> String -> Element id
+colorText : Color -> String -> Element id msg
 colorText color text2 =
     Text
         { outline = Nothing
@@ -125,7 +126,7 @@ colorText color text2 =
         }
 
 
-outlinedText : { outline : Color, color : Color, text : String } -> Element id
+outlinedText : { outline : Color, color : Color, text : String } -> Element id msg
 outlinedText data =
     Text
         { outline = Just data.outline
@@ -191,7 +192,7 @@ addLineBreaks charWidth maxWidth list text2 =
         text2 :: list
 
 
-wrappedText : Int -> String -> Element id
+wrappedText : Int -> String -> Element id msg
 wrappedText maxWidth text2 =
     let
         charWidth : Int
@@ -214,25 +215,25 @@ wrappedText maxWidth text2 =
         }
 
 
-textInput : { id : id, width : Int, isValid : Bool } -> TextInput.Model -> Element id
+textInput : { id : id, width : Int, isValid : Bool } -> TextInput.Model -> Element id msg
 textInput =
     TextInput
 
 
-empty : Element id
+empty : Element id msg
 empty =
     Empty
 
 
 button :
-    { id : id, padding : Padding, inFront : List (Element id) }
-    -> Element id
-    -> Element id
+    { id : id, padding : Padding, onPress : msg }
+    -> Element id msg
+    -> Element id msg
 button data child =
     Button
         { id = data.id
         , padding = data.padding
-        , inFront = data.inFront
+        , inFront = []
         , borderAndFill =
             BorderAndFill
                 { borderWidth = 2
@@ -249,6 +250,7 @@ button data child =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
                 (size child)
+        , onPress = data.onPress
         }
         child
 
@@ -256,12 +258,13 @@ button data child =
 customButton :
     { id : id
     , padding : Padding
-    , inFront : List (Element id)
+    , inFront : List (Element id msg)
+    , onPress : msg
     , borderAndFill : BorderAndFill
     , borderAndFillFocus : BorderAndFill
     }
-    -> Element id
-    -> Element id
+    -> Element id msg
+    -> Element id msg
 customButton data child =
     Button
         { id = data.id
@@ -273,14 +276,15 @@ customButton data child =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
                 (size child)
+        , onPress = data.onPress
         }
         child
 
 
 row :
     { spacing : Int, padding : Padding }
-    -> List (Element id)
-    -> Element id
+    -> List (Element id msg)
+    -> Element id msg
 row data children =
     Row
         { spacing = data.spacing
@@ -292,8 +296,8 @@ row data children =
 
 column :
     { spacing : Int, padding : Padding }
-    -> List (Element id)
-    -> Element id
+    -> List (Element id msg)
+    -> Element id msg
 column data children =
     Column
         { spacing = data.spacing
@@ -304,9 +308,9 @@ column data children =
 
 
 el :
-    { padding : Padding, inFront : List (Element id), borderAndFill : BorderAndFill }
-    -> Element id
-    -> Element id
+    { padding : Padding, inFront : List (Element id msg), borderAndFill : BorderAndFill }
+    -> Element id msg
+    -> Element id msg
 el data element2 =
     Single
         { padding = data.padding
@@ -317,7 +321,7 @@ el data element2 =
         element2
 
 
-center : { size : Coord Pixels } -> Element id -> Element id
+center : { size : Coord Pixels } -> Element id msg -> Element id msg
 center data element2 =
     let
         size2 : Coord Pixels
@@ -340,7 +344,7 @@ center data element2 =
         element2
 
 
-bottomLeft : { size : Coord Pixels } -> Element id -> Element id
+bottomLeft : { size : Coord Pixels } -> Element id msg -> Element id msg
 bottomLeft data element2 =
     let
         ( sizeX, sizeY ) =
@@ -361,7 +365,7 @@ bottomLeft data element2 =
         element2
 
 
-bottomCenter : { size : Coord Pixels, inFront : List (Element id) } -> Element id -> Element id
+bottomCenter : { size : Coord Pixels, inFront : List (Element id msg) } -> Element id msg -> Element id msg
 bottomCenter data element2 =
     let
         ( sizeX, sizeY ) =
@@ -385,7 +389,7 @@ bottomCenter data element2 =
         element2
 
 
-sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id
+sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id msg
 sprite data =
     Quads
         { size = data.size
@@ -395,7 +399,7 @@ sprite data =
 
 colorSprite :
     { colors : Colors, size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels }
-    -> Element id
+    -> Element id msg
 colorSprite data =
     Quads
         { size = data.size
@@ -403,23 +407,23 @@ colorSprite data =
         }
 
 
-quads : { size : Coord Pixels, vertices : Coord Pixels -> List Vertex } -> Element id
+quads : { size : Coord Pixels, vertices : Coord Pixels -> List Vertex } -> Element id msg
 quads =
     Quads
 
 
-type HoverType id
+type HoverType id msg
     = NoHover
-    | InputHover { id : id, position : Coord Pixels }
+    | InputHover { id : id, position : Coord Pixels, onPress : Maybe msg }
     | BackgroundHover
 
 
-hover : Coord Pixels -> Element id -> HoverType id
+hover : Coord Pixels -> Element id msg -> HoverType id msg
 hover point element2 =
     hoverHelper point Coord.origin element2
 
 
-hoverHelper : Coord Pixels -> Coord Pixels -> Element id -> HoverType id
+hoverHelper : Coord Pixels -> Coord Pixels -> Element id msg -> HoverType id msg
 hoverHelper point elementPosition element2 =
     case element2 of
         Text _ ->
@@ -427,14 +431,14 @@ hoverHelper point elementPosition element2 =
 
         TextInput data _ ->
             if Bounds.fromCoordAndSize elementPosition (TextInput.size (Quantity data.width)) |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition }
+                InputHover { id = data.id, position = elementPosition, onPress = Nothing }
 
             else
                 NoHover
 
         Button data _ ->
             if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition }
+                InputHover { id = data.id, position = elementPosition, onPress = Just data.onPress }
 
             else
                 NoHover
@@ -447,7 +451,7 @@ hoverHelper point elementPosition element2 =
 
         Single data child ->
             let
-                hover2 : HoverType id
+                hover2 : HoverType id msg
                 hover2 =
                     List.foldl
                         (\inFront hover4 ->
@@ -464,7 +468,7 @@ hoverHelper point elementPosition element2 =
                         NoHover
                         data.inFront
 
-                hover3 : HoverType id
+                hover3 : HoverType id msg
                 hover3 =
                     case hover2 of
                         NoHover ->
@@ -499,8 +503,8 @@ hoverRowColumnHelper :
     -> Coord Pixels
     -> Coord Pixels
     -> RowColumn
-    -> List (Element id)
-    -> HoverType id
+    -> List (Element id msg)
+    -> HoverType id msg
 hoverRowColumnHelper isRow point elementPosition data children =
     List.foldl
         (\child state ->
@@ -530,12 +534,12 @@ hoverRowColumnHelper isRow point elementPosition data children =
         |> .hover
 
 
-view : Maybe id -> Element id -> WebGL.Mesh Vertex
+view : Maybe id -> Element id msg -> WebGL.Mesh Vertex
 view focus element2 =
     viewHelper focus Coord.origin [] element2 |> Sprite.toMesh
 
 
-viewHelper : Maybe id -> Coord Pixels -> List Vertex -> Element id -> List Vertex
+viewHelper : Maybe id -> Coord Pixels -> List Vertex -> Element id msg -> List Vertex
 viewHelper focus position vertices element2 =
     case element2 of
         Text data ->
@@ -644,7 +648,7 @@ borderAndFillView position borderAndBackground size2 =
                     (size2 |> Coord.minus (Coord.multiply (Coord.xy 2 2) (Coord.xy borderWidth borderWidth)))
 
 
-size : Element id -> Coord Pixels
+size : Element id msg -> Coord Pixels
 size element2 =
     case element2 of
         Text data ->
@@ -672,7 +676,7 @@ size element2 =
             Coord.origin
 
 
-rowSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
+rowSize : { a | spacing : Int, padding : Padding } -> List (Element id msg) -> Coord Pixels
 rowSize data children =
     List.foldl
         (\child ( x, y ) ->
@@ -696,7 +700,7 @@ rowSize data children =
            )
 
 
-columnSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
+columnSize : { a | spacing : Int, padding : Padding } -> List (Element id msg) -> Coord Pixels
 columnSize data children =
     List.foldl
         (\child ( x, y ) ->

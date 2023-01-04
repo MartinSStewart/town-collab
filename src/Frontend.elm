@@ -908,7 +908,7 @@ updateLoaded audioData msg model =
 
         MouseDown button mousePosition ->
             let
-                hover =
+                ( hover, _ ) =
                     hoverAt model mousePosition
 
                 mousePosition2 : Coord Pixels
@@ -1111,7 +1111,7 @@ updateLoaded audioData msg model =
         MouseMove mousePosition ->
             let
                 tileHover_ =
-                    case hoverAt model mousePosition of
+                    case hoverAt model mousePosition |> Tuple.first of
                         UiHover (ToolButtonHover (TilePlacerToolButton tile)) _ ->
                             Just tile
 
@@ -1801,7 +1801,7 @@ getViewModel model =
     }
 
 
-hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
+hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> ( Hover, Maybe UiMsg )
 hoverAt model mousePosition =
     let
         mousePosition2 : Coord Pixels
@@ -1811,15 +1811,15 @@ hoverAt model mousePosition =
                 |> Coord.roundPoint
     in
     if MailEditor.isOpen model.mailEditor then
-        MailEditor.hoverAt model.mailEditor |> MailEditorHover
+        ( MailEditor.hoverAt model.mailEditor |> MailEditorHover, Nothing )
 
     else
         case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
             Ui.InputHover data ->
-                UiHover data.id { position = data.position }
+                ( UiHover data.id { position = data.position }, data.onPress )
 
             Ui.BackgroundHover ->
-                UiBackgroundHover
+                ( UiBackgroundHover, Nothing )
 
             Ui.NoHover ->
                 let
@@ -1910,20 +1910,20 @@ hoverAt model mousePosition =
                 in
                 case trainHovers of
                     Just ( train, _ ) ->
-                        TrainHover train
+                        ( TrainHover train, Nothing )
 
                     Nothing ->
                         case cowHovers of
                             Just ( cowId, cow ) ->
-                                CowHover { cowId = cowId, cow = cow }
+                                ( CowHover { cowId = cowId, cow = cow }, Nothing )
 
                             Nothing ->
                                 case tileHover of
                                     Just hover ->
-                                        hover
+                                        ( hover, Nothing )
 
                                     Nothing ->
-                                        MapHover
+                                        ( MapHover, Nothing )
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -2180,8 +2180,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
         isSmallDistance2 =
             isSmallDistance previousMouseState mousePosition
 
-        hoverAt2 : Hover
-        hoverAt2 =
+        ( hoverAt2, maybeOnPress ) =
             hoverAt model mousePosition
 
         model2 =
@@ -2317,47 +2316,45 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         in
                         ( model3, Command.none )
 
-                    UiHover uiHover _ ->
-                        case uiHover of
-                            PrimaryColorInput ->
-                                ( model2, Command.none )
+                    UiHover _ _ ->
+                        case maybeOnPress of
+                            Just onPress ->
+                                uiUpdate onPress model
 
-                            SecondaryColorInput ->
-                                ( model2, Command.none )
-
-                            ToolButtonHover tool ->
-                                ( setCurrentTool tool model2, Command.none )
-
-                            EmailAddressTextInputHover ->
-                                ( model2, Command.none )
-
-                            SendEmailButtonHover ->
-                                sendEmail model2
-
-                            ShowInviteUser ->
-                                ( { model2 | showInvite = True }, Command.none )
-
-                            CloseInviteUser ->
-                                ( { model2 | showInvite = False }, Command.none )
-
-                            SubmitInviteUser ->
-                                case model2.inviteSubmitStatus of
-                                    NotSubmitted _ ->
-                                        ( { model2 | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }
-                                        , Command.none
-                                        )
-
-                                    Submitting ->
-                                        ( model2, Command.none )
-
-                                    Submitted _ ->
-                                        ( model2, Command.none )
-
-                            InviteEmailAddressTextInput ->
+                            Nothing ->
                                 ( model2, Command.none )
 
     else
         ( model2, Command.none )
+
+
+uiUpdate : UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+uiUpdate msg model =
+    case msg of
+        PressedCloseInviteUser ->
+            ( { model | showInvite = False }, Command.none )
+
+        PressedShowInviteUser ->
+            ( { model | showInvite = True }, Command.none )
+
+        PressedSendInviteUser ->
+            case model.inviteSubmitStatus of
+                NotSubmitted _ ->
+                    ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }
+                    , Command.none
+                    )
+
+                Submitting ->
+                    ( model, Command.none )
+
+                Submitted _ ->
+                    ( model, Command.none )
+
+        PressedSendEmail ->
+            sendEmail model
+
+        PressedTool tool ->
+            ( setCurrentTool tool model, Command.none )
 
 
 sendEmail : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -3953,7 +3950,7 @@ canvasView audioData model =
                     LocalGrid.localModel model.localModel
 
                 showMousePointer =
-                    cursorSprite (hoverAt model (mouseScreenPosition model)) model
+                    cursorSprite (hoverAt model (mouseScreenPosition model) |> Tuple.first) model
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4177,7 +4174,7 @@ canvasView audioData model =
                                             Nothing
                                 )
                                 (getSpeechBubbles model)
-                            ++ (case ( hoverAt model mouseScreenPosition_, currentTool model, currentUserId model ) of
+                            ++ (case ( hoverAt model mouseScreenPosition_ |> Tuple.first, currentTool model, currentUserId model ) of
                                     ( MapHover, TilePlacerTool currentTile, Just userId ) ->
                                         let
                                             currentTile2 : Tile

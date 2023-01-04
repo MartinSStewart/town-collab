@@ -21,7 +21,7 @@ import Quantity exposing (Quantity(..))
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), UiHover(..))
+import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), UiHover(..), UiMsg(..))
 import Ui exposing (BorderAndFill(..))
 import Units
 
@@ -46,7 +46,7 @@ type alias ViewData =
     }
 
 
-view : ViewData -> Ui.Element UiHover
+view : ViewData -> Ui.Element UiHover UiMsg
 view data =
     Ui.bottomCenter
         { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
@@ -80,14 +80,16 @@ view data =
         )
 
 
-inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
+inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
 inviteView showInvite inviteTextInput inviteSubmitStatus =
     if showInvite then
         Ui.el
             { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = borderAndFill }
             (Ui.column
                 { spacing = 8, padding = Ui.noPadding }
-                [ Ui.button { id = CloseInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Cancel")
+                [ Ui.button
+                    { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                    (Ui.text "Cancel")
                 , Ui.column
                     { spacing = 0, padding = Ui.noPadding }
                     [ Ui.text "Enter email address to send an invite to"
@@ -95,7 +97,9 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                     ]
                 , Ui.row
                     { spacing = 4, padding = Ui.noPadding }
-                    [ Ui.button { id = SubmitInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Send invite")
+                    [ Ui.button
+                        { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
+                        (Ui.text "Send invite")
                     , case ( pressedSubmit inviteSubmitStatus, EmailAddress.fromString inviteTextInput.current.text ) of
                         ( True, Nothing ) ->
                             Ui.el
@@ -109,7 +113,12 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
             )
 
     else
-        Ui.button { id = ShowInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Invite")
+        Ui.button
+            { id = ShowInviteUser
+            , onPress = PressedShowInviteUser
+            , padding = Ui.paddingXY 10 4
+            }
+            (Ui.text "Invite")
 
 
 borderAndFill : BorderAndFill
@@ -131,13 +140,13 @@ pressedSubmit submitStatus =
             False
 
 
-loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover
+loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover UiMsg
 loginToolbarUi pressedSubmitEmail emailTextInput =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
 
-        loginUi : Ui.Element UiHover
+        loginUi : Ui.Element UiHover UiMsg
         loginUi =
             Ui.column
                 { spacing = 10, padding = Ui.paddingXY 20 10 }
@@ -158,7 +167,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                             }
                             emailTextInput
                         , Ui.button
-                            { id = SendEmailButtonHover, padding = Ui.paddingXY 30 4, inFront = [] }
+                            { id = SendEmailButtonHover, onPress = PressedSendEmail, padding = Ui.paddingXY 30 4 }
                             (Ui.text "Send email")
                         ]
                     , case pressedSubmitEmail of
@@ -186,7 +195,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
     case pressedSubmitEmail of
         Submitted emailAddress ->
             let
-                submittedText : Ui.Element id
+                submittedText : Ui.Element id msg
                 submittedText =
                     "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.wrappedText 1000
             in
@@ -213,7 +222,7 @@ toolbarUi :
     -> AssocList.Dict TileGroup Colors
     -> Dict String TileGroup
     -> Tool
-    -> Ui.Element UiHover
+    -> Ui.Element UiHover UiMsg
 toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
@@ -234,7 +243,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
         [ List.map (toolButtonUi hasCmdKey handColor tileColors hotkeys currentToolButton) buttonTiles
-            |> List.greedyGroupsOf 3
+            |> List.greedyGroupsOf toolbarRowCount
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
         , Ui.row
@@ -255,7 +264,10 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
                         Ui.empty
                 , Ui.el
                     { padding =
-                        { topLeft = Coord.xy primaryColorInputWidth 0
+                        { topLeft =
+                            Coord.xy
+                                (colorTextInput PrimaryColorInput primaryColorTextInput Color.black |> Ui.size |> Coord.xRaw)
+                                0
                         , bottomRight = Coord.xy 0 0
                         }
                     , inFront = []
@@ -286,7 +298,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
         ]
 
 
-colorTextInput : id -> TextInput.Model -> Color -> Ui.Element id
+colorTextInput : id -> TextInput.Model -> Color -> Ui.Element id UiMsg
 colorTextInput id textInput color =
     let
         padding =
@@ -318,7 +330,7 @@ toolButtonUi :
     -> Dict String TileGroup
     -> ToolButton
     -> ToolButton
-    -> Ui.Element UiHover
+    -> Ui.Element UiHover UiMsg
 toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     let
         tileColors =
@@ -353,7 +365,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                     else
                         Just "Ctrl"
 
-        label : Ui.Element UiHover
+        label : Ui.Element UiHover UiMsg
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
@@ -367,6 +379,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     in
     Ui.customButton
         { id = ToolButtonHover tool
+        , onPress = PressedTool tool
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of
@@ -439,7 +452,7 @@ toolbarRowCount =
     3
 
 
-tileMesh : Colors -> Tile -> Ui.Element id
+tileMesh : Colors -> Tile -> Ui.Element id msg
 tileMesh colors tile =
     let
         data : TileData b
@@ -557,7 +570,7 @@ getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
 
 
-createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id
+createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id msg
 createInfoMesh maybePingData maybeUserId =
     let
         durationToString duration =
