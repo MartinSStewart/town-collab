@@ -230,6 +230,10 @@ type UiMsg
     | PressedSendInviteUser
     | PressedSendEmail
     | PressedTool ToolButton
+    | ChangedInviteEmailAddressTextInput Bool Bool Keyboard.Key TextInput.Model
+    | KeyDownEmailAddressTextInputHover Bool Bool Keyboard.Key TextInput.Model
+    | ChangedPrimaryColorInput Bool Bool Keyboard.Key TextInput.Model
+    | ChangedSecondaryColorInput Bool Bool Keyboard.Key TextInput.Model
 
 
 type alias BackendModel =

@@ -13,6 +13,7 @@ import Dict exposing (Dict)
 import Duration
 import EmailAddress exposing (EmailAddress)
 import Id exposing (Id, UserId)
+import Keyboard
 import List.Extra as List
 import List.Nonempty
 import PingData exposing (PingData)
@@ -93,7 +94,13 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                 , Ui.column
                     { spacing = 0, padding = Ui.noPadding }
                     [ Ui.text "Enter email address to send an invite to"
-                    , Ui.textInput { id = InviteEmailAddressTextInput, width = 800, isValid = True } inviteTextInput
+                    , Ui.textInput
+                        { id = InviteEmailAddressTextInput
+                        , width = 800
+                        , isValid = True
+                        , onKeyDown = ChangedInviteEmailAddressTextInput
+                        }
+                        inviteTextInput
                     ]
                 , Ui.row
                     { spacing = 4, padding = Ui.noPadding }
@@ -164,6 +171,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
 
                                 else
                                     True
+                            , onKeyDown = KeyDownEmailAddressTextInputHover
                             }
                             emailTextInput
                         , Ui.button
@@ -252,13 +260,13 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
                 { spacing = 10, padding = Ui.noPadding }
                 [ case showPrimaryColorTextInput of
                     Just color ->
-                        colorTextInput PrimaryColorInput primaryColorTextInput color
+                        colorTextInput PrimaryColorInput ChangedPrimaryColorInput primaryColorTextInput color
 
                     Nothing ->
                         Ui.empty
                 , case showSecondaryColorTextInput of
                     Just color ->
-                        colorTextInput SecondaryColorInput secondaryColorTextInput color
+                        colorTextInput SecondaryColorInput ChangedSecondaryColorInput secondaryColorTextInput color
 
                     Nothing ->
                         Ui.empty
@@ -266,7 +274,14 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
                     { padding =
                         { topLeft =
                             Coord.xy
-                                (colorTextInput PrimaryColorInput primaryColorTextInput Color.black |> Ui.size |> Coord.xRaw)
+                                (colorTextInput
+                                    PrimaryColorInput
+                                    ChangedPrimaryColorInput
+                                    primaryColorTextInput
+                                    Color.black
+                                    |> Ui.size
+                                    |> Coord.xRaw
+                                )
                                 0
                         , bottomRight = Coord.xy 0 0
                         }
@@ -298,8 +313,13 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
         ]
 
 
-colorTextInput : id -> TextInput.Model -> Color -> Ui.Element id UiMsg
-colorTextInput id textInput color =
+colorTextInput :
+    id
+    -> (Bool -> Bool -> Keyboard.Key -> TextInput.Model -> UiMsg)
+    -> TextInput.Model
+    -> Color
+    -> Ui.Element id UiMsg
+colorTextInput id onChange textInput color =
     let
         padding =
             TextInput.size (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
@@ -318,7 +338,7 @@ colorTextInput id textInput color =
             }
             Ui.empty
         , Ui.textInput
-            { id = id, width = primaryColorInputWidth, isValid = True }
+            { id = id, width = primaryColorInputWidth, isValid = True, onKeyDown = onChange }
             textInput
         ]
 

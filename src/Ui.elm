@@ -13,6 +13,7 @@ module Ui exposing
     , customButton
     , el
     , empty
+    , handleKeyDown
     , hover
     , noPadding
     , outlinedText
@@ -31,6 +32,7 @@ module Ui exposing
 import Bounds
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import Keyboard
 import List.Extra as List
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
@@ -55,7 +57,13 @@ type Element id msg
         , text : String
         , cachedSize : Coord Pixels
         }
-    | TextInput { id : id, width : Int, isValid : Bool } TextInput.Model
+    | TextInput
+        { id : id
+        , width : Int
+        , isValid : Bool
+        , onKeyDown : Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg
+        }
+        TextInput.Model
     | Button
         { id : id
         , padding : Padding
@@ -215,7 +223,10 @@ wrappedText maxWidth text2 =
         }
 
 
-textInput : { id : id, width : Int, isValid : Bool } -> TextInput.Model -> Element id msg
+textInput :
+    { id : id, width : Int, isValid : Bool, onKeyDown : Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg }
+    -> TextInput.Model
+    -> Element id msg
 textInput =
     TextInput
 
@@ -722,3 +733,59 @@ columnSize data children =
             else
                 Coord.minus (Coord.xy 0 data.spacing)
            )
+
+
+findId : id -> Element id msg -> Maybe ( Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg, TextInput.Model )
+findId id element =
+    case element of
+        Text _ ->
+            Nothing
+
+        TextInput data textInput2 ->
+            if id == data.id then
+                Just ( data.onKeyDown, textInput2 )
+
+            else
+                Nothing
+
+        Button _ _ ->
+            Nothing
+
+        Row _ children ->
+            List.findMap (findId id) children
+
+        Column _ children ->
+            List.findMap (findId id) children
+
+        Single _ child ->
+            findId id child
+
+        Quads _ ->
+            Nothing
+
+        Empty ->
+            Nothing
+
+
+handleKeyDown :
+    (msg -> model -> model2)
+    -> msg
+    -> Element id msg
+    -> Maybe id
+    -> Bool
+    -> Bool
+    -> Keyboard.Key
+    -> model
+    -> model2
+handleKeyDown updateFunc keyUnhandled element maybeFocus ctrlOrMetaDown shiftDown key model =
+    case maybeFocus of
+        Just focus ->
+            case findId focus element of
+                Just ( onKeyDown, textInput2 ) ->
+                    updateFunc (onKeyDown ctrlOrMetaDown shiftDown key textInput2) model
+
+                Nothing ->
+                    updateFunc keyUnhandled model
+
+        Nothing ->
+            updateFunc keyUnhandled model

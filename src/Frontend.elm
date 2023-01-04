@@ -1110,6 +1110,7 @@ updateLoaded audioData msg model =
 
         MouseMove mousePosition ->
             let
+                tileHover_ : Maybe TileGroup
                 tileHover_ =
                     case hoverAt model mousePosition |> Tuple.first of
                         UiHover (ToolButtonHover (TilePlacerToolButton tile)) _ ->
@@ -2355,6 +2356,18 @@ uiUpdate msg model =
 
         PressedTool tool ->
             ( setCurrentTool tool model, Command.none )
+
+        ChangedInviteEmailAddressTextInput ctrlOrMetaDown shiftDown key textInput ->
+            ( { model | inviteTextInput = textInput }, Command.none )
+
+        KeyDownEmailAddressTextInputHover ctrlOrMetaDown shiftDown key textInput ->
+            ( { model | loginTextInput = textInput }, Command.none )
+
+        ChangedPrimaryColorInput ctrlOrMetaDown shiftDown key textInput ->
+            ( { model | primaryColorTextInput = textInput }, Command.none )
+
+        ChangedSecondaryColorInput ctrlOrMetaDown shiftDown key textInput ->
+            ( { model | secondaryColorTextInput = textInput }, Command.none )
 
 
 sendEmail : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
