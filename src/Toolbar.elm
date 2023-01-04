@@ -21,7 +21,7 @@ import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), UiHover(..))
-import Ui exposing (BorderAndBackground(..))
+import Ui exposing (BorderAndFill(..))
 import Units
 
 
@@ -52,7 +52,7 @@ view data =
         , inFront =
             case data.handColor of
                 Just _ ->
-                    [ inviteView data.showInvite ]
+                    [ inviteView data.showInvite data.inviteTextInput data.inviteSubmitStatus ]
 
                 Nothing ->
                     []
@@ -60,7 +60,7 @@ view data =
         (Ui.el
             { padding = Ui.noPadding
             , inFront = []
-            , borderAndBackground = borderAndBackground
+            , borderAndFill = borderAndFill
             }
             (case data.handColor of
                 Just handColor ->
@@ -79,31 +79,62 @@ view data =
         )
 
 
-inviteView : Bool -> Ui.Element UiHover units
-inviteView showInvite =
-    Ui.button { id = ShowInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Invite")
+inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover units
+inviteView showInvite inviteTextInput inviteSubmitStatus =
+    if showInvite then
+        Ui.el
+            { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = borderAndFill }
+            (Ui.column
+                { spacing = 8, padding = Ui.noPadding }
+                [ Ui.button { id = CloseInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Cancel")
+                , Ui.column
+                    { spacing = 0, padding = Ui.noPadding }
+                    [ Ui.text "Enter email address to send an invite to"
+                    , Ui.textInput { id = InviteEmailAddressTextInput, width = 800, isValid = True } inviteTextInput
+                    ]
+                , Ui.row
+                    { spacing = 4, padding = Ui.noPadding }
+                    [ Ui.button { id = SubmitInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Send invite")
+                    , case ( pressedSubmit inviteSubmitStatus, EmailAddress.fromString inviteTextInput.current.text ) of
+                        ( True, Nothing ) ->
+                            Ui.el
+                                { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
+                                (Ui.colorText Color.errorColor "Invalid email")
+
+                        _ ->
+                            Ui.empty
+                    ]
+                ]
+            )
+
+    else
+        Ui.button { id = ShowInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Invite")
 
 
-borderAndBackground : BorderAndBackground units
-borderAndBackground =
-    BorderAndBackground
+borderAndFill : BorderAndFill units
+borderAndFill =
+    BorderAndFill
         { borderWidth = 2
         , borderColor = Color.outlineColor
-        , backgroundColor = Color.fillColor
+        , fillColor = Color.fillColor
         }
+
+
+pressedSubmit : SubmitStatus a -> Bool
+pressedSubmit submitStatus =
+    case submitStatus of
+        NotSubmitted a ->
+            a.pressedSubmit
+
+        _ ->
+            False
 
 
 loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover units
 loginToolbarUi pressedSubmitEmail emailTextInput =
     let
-        pressedSubmit2 : Bool
         pressedSubmit2 =
-            case pressedSubmitEmail of
-                NotSubmitted { pressedSubmit } ->
-                    pressedSubmit
-
-                _ ->
-                    False
+            pressedSubmit pressedSubmitEmail
 
         loginUi : Ui.Element UiHover units
         loginUi =
@@ -116,7 +147,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                         { spacing = 10, padding = Ui.noPadding }
                         [ Ui.textInput
                             { id = EmailAddressTextInputHover
-                            , width = Quantity 780
+                            , width = 780
                             , isValid =
                                 if pressedSubmit2 then
                                     EmailAddress.fromString emailTextInput.current.text /= Nothing
@@ -130,14 +161,14 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                             (Ui.text "Send email")
                         ]
                     , case pressedSubmitEmail of
-                        NotSubmitted { pressedSubmit } ->
-                            if pressedSubmit then
+                        NotSubmitted a ->
+                            if a.pressedSubmit then
                                 case EmailAddress.fromString emailTextInput.current.text of
                                     Just _ ->
                                         Ui.text ""
 
                                     Nothing ->
-                                        Ui.colorText (Color.rgb255 245 0 0) "Invalid email address"
+                                        Ui.colorText Color.errorColor "Invalid email address"
 
                             else
                                 Ui.text ""
@@ -165,7 +196,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                         |> Coord.divide (Coord.xy 2 2)
                         |> Ui.paddingXY2
                 , inFront = []
-                , borderAndBackground = borderAndBackground
+                , borderAndFill = borderAndFill
                 }
                 submittedText
 
@@ -223,11 +254,11 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
                         Ui.empty
                 , Ui.el
                     { padding =
-                        { topLeft = Coord.xy (Quantity.unwrap primaryColorInputWidth) 0
+                        { topLeft = Coord.xy primaryColorInputWidth 0
                         , bottomRight = Coord.xy 0 0
                         }
                     , inFront = []
-                    , borderAndBackground = NoBorderOrBackground
+                    , borderAndFill = NoBorderOrFill
                     }
                     Ui.empty
                 ]
@@ -258,18 +289,18 @@ colorTextInput : id -> TextInput.Model -> Color -> Ui.Element id units
 colorTextInput id textInput color =
     let
         padding =
-            TextInput.size primaryColorInputWidth |> Coord.yRaw |> (\a -> a // 2)
+            TextInput.size (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
     in
     Ui.row
         { spacing = -2, padding = Ui.noPadding }
         [ Ui.el
             { padding = Ui.paddingXY padding padding
             , inFront = []
-            , borderAndBackground =
-                BorderAndBackground
+            , borderAndFill =
+                BorderAndFill
                     { borderWidth = 2
                     , borderColor = Color.outlineColor
-                    , backgroundColor = color
+                    , fillColor = color
                     }
             }
             Ui.empty
@@ -343,29 +374,29 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                         |> Ui.el
                             { padding = { topLeft = Coord.xy 2 0, bottomRight = Coord.xy 0 0 }
                             , inFront = []
-                            , borderAndBackground = NoBorderOrBackground
+                            , borderAndFill = NoBorderOrFill
                             }
                         |> Ui.bottomLeft { size = buttonSize }
                     ]
 
                 Nothing ->
                     []
-        , borderAndBackground =
-            BorderAndBackground
+        , borderAndFill =
+            BorderAndFill
                 { borderWidth = 2
                 , borderColor = Color.outlineColor
-                , backgroundColor =
+                , fillColor =
                     if currentTool == tool then
                         Color.highlightColor
 
                     else
                         Color.fillColor
                 }
-        , borderAndBackgroundFocus =
-            BorderAndBackground
+        , borderAndFillFocus =
+            BorderAndFill
                 { borderWidth = 2
                 , borderColor = Color.outlineColor
-                , backgroundColor = Color.highlightColor
+                , fillColor = Color.highlightColor
                 }
         }
         (Ui.center { size = buttonSize } label)
@@ -473,14 +504,9 @@ tileMesh colors tile =
         }
 
 
-primaryColorInputWidth : Quantity Int units
+primaryColorInputWidth : Int
 primaryColorInputWidth =
-    6 * Coord.xRaw Sprite.charSize * TextInput.charScale + Coord.xRaw TextInput.padding * 2 + 2 |> Quantity
-
-
-secondaryColorInputWidth : Quantity Int units
-secondaryColorInputWidth =
-    primaryColorInputWidth
+    6 * Coord.xRaw Sprite.charSize * TextInput.charScale + Coord.xRaw TextInput.padding * 2 + 2
 
 
 buttonSize : Coord units
@@ -555,4 +581,4 @@ createInfoMesh maybePingData maybeUserId =
                     ""
            )
         |> Ui.text
-        |> Ui.el { padding = Ui.paddingXY 8 4, inFront = [], borderAndBackground = NoBorderOrBackground }
+        |> Ui.el { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }

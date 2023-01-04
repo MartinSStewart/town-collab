@@ -218,6 +218,9 @@ type UiHover
     | PrimaryColorInput
     | SecondaryColorInput
     | ShowInviteUser
+    | CloseInviteUser
+    | SubmitInviteUser
+    | InviteEmailAddressTextInput
 
 
 type alias BackendModel =

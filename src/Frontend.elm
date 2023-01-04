@@ -819,6 +819,9 @@ updateLoaded audioData msg model =
                             ( UiHover EmailAddressTextInputHover _, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Command.none )
 
+                            ( UiHover InviteEmailAddressTextInput _, _, Keyboard.Escape ) ->
+                                ( setFocus MapHover model, Command.none )
+
                             ( UiHover PrimaryColorInput _, tool, _ ) ->
                                 case currentUserId model of
                                     Just userId ->
@@ -859,6 +862,27 @@ updateLoaded audioData msg model =
                                             model.loginTextInput
                                 in
                                 ( { model | loginTextInput = newTextInput }
+                                , case outMsg of
+                                    CopyText text ->
+                                        copyToClipboard text
+
+                                    PasteText ->
+                                        readFromClipboardRequest
+
+                                    NoOutMsg ->
+                                        Command.none
+                                )
+
+                            ( UiHover InviteEmailAddressTextInput _, _, _ ) ->
+                                let
+                                    ( newTextInput, outMsg ) =
+                                        TextInput.keyMsg
+                                            (ctrlOrMeta model)
+                                            (keyDown Keyboard.Shift model)
+                                            key
+                                            model.inviteTextInput
+                                in
+                                ( { model | inviteTextInput = newTextInput }
                                 , case outMsg of
                                     CopyText text ->
                                         copyToClipboard text
@@ -1185,6 +1209,21 @@ updateLoaded audioData msg model =
                                             ShowInviteUser ->
                                                 model2
 
+                                            CloseInviteUser ->
+                                                model2
+
+                                            SubmitInviteUser ->
+                                                model2
+
+                                            InviteEmailAddressTextInput ->
+                                                { model2
+                                                    | inviteTextInput =
+                                                        TextInput.mouseDownMove
+                                                            mousePosition2
+                                                            data.position
+                                                            model2.inviteTextInput
+                                                }
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1341,6 +1380,15 @@ updateLoaded audioData msg model =
                                 ShowInviteUser ->
                                     True
 
+                                CloseInviteUser ->
+                                    True
+
+                                SubmitInviteUser ->
+                                    True
+
+                                InviteEmailAddressTextInput ->
+                                    False
+
                 model2 =
                     { model
                         | time = time
@@ -1471,6 +1519,15 @@ updateLoaded audioData msg model =
                         ShowInviteUser ->
                             ( model, Command.none )
 
+                        CloseInviteUser ->
+                            ( model, Command.none )
+
+                        SubmitInviteUser ->
+                            ( model, Command.none )
+
+                        InviteEmailAddressTextInput ->
+                            ( { model | inviteTextInput = TextInput.paste text model.inviteTextInput }, Command.none )
+
         GotUserAgent _ ->
             ( model, Command.none )
 
@@ -1567,6 +1624,15 @@ nextFocus model =
 
                     ShowInviteUser ->
                         ShowInviteUser
+
+                    CloseInviteUser ->
+                        CloseInviteUser
+
+                    SubmitInviteUser ->
+                        SubmitInviteUser
+
+                    InviteEmailAddressTextInput ->
+                        InviteEmailAddressTextInput
                 )
                 { position = Coord.origin }
 
@@ -2270,6 +2336,25 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                             ShowInviteUser ->
                                 ( { model2 | showInvite = True }, Command.none )
+
+                            CloseInviteUser ->
+                                ( { model2 | showInvite = False }, Command.none )
+
+                            SubmitInviteUser ->
+                                case model2.inviteSubmitStatus of
+                                    NotSubmitted _ ->
+                                        ( { model2 | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }
+                                        , Command.none
+                                        )
+
+                                    Submitting ->
+                                        ( model2, Command.none )
+
+                                    Submitted _ ->
+                                        ( model2, Command.none )
+
+                            InviteEmailAddressTextInput ->
+                                ( model2, Command.none )
 
     else
         ( model2, Command.none )

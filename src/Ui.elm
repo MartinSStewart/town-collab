@@ -1,5 +1,5 @@
 module Ui exposing
-    ( BorderAndBackground(..)
+    ( BorderAndFill(..)
     , Element
     , HoverType(..)
     , Padding
@@ -31,8 +31,9 @@ module Ui exposing
 import Bounds
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import List.Extra as List
 import Pixels exposing (Pixels)
-import Quantity exposing (Quantity)
+import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sprite
 import TextInput
@@ -54,12 +55,12 @@ type Element id units
         , text : String
         , cachedSize : Coord units
         }
-    | TextInput { id : id, width : Quantity Int units, isValid : Bool } TextInput.Model
+    | TextInput { id : id, width : Int, isValid : Bool } TextInput.Model
     | Button
         { id : id
         , padding : Padding units
-        , borderAndBackground : BorderAndBackground units
-        , borderAndBackgroundFocus : BorderAndBackground units
+        , borderAndFill : BorderAndFill units
+        , borderAndFillFocus : BorderAndFill units
         , cachedSize : Coord units
         , inFront : List (Element id units)
         }
@@ -68,7 +69,7 @@ type Element id units
     | Column (RowColumn units) (List (Element id units))
     | Single
         { padding : Padding units
-        , borderAndBackground : BorderAndBackground units
+        , borderAndFill : BorderAndFill units
         , inFront : List (Element id units)
         , cachedSize : Coord units
         }
@@ -77,10 +78,10 @@ type Element id units
     | Empty
 
 
-type BorderAndBackground units
-    = NoBorderOrBackground
-    | BackgroundOnly Color
-    | BorderAndBackground { borderWidth : Int, borderColor : Color, backgroundColor : Color }
+type BorderAndFill units
+    = NoBorderOrFill
+    | FillOnly Color
+    | BorderAndFill { borderWidth : Int, borderColor : Color, fillColor : Color }
 
 
 type alias Padding units =
@@ -213,7 +214,7 @@ wrappedText maxWidth text2 =
         }
 
 
-textInput : { id : id, width : Quantity Int units, isValid : Bool } -> TextInput.Model -> Element id units
+textInput : { id : id, width : Int, isValid : Bool } -> TextInput.Model -> Element id units
 textInput =
     TextInput
 
@@ -232,17 +233,17 @@ button data child =
         { id = data.id
         , padding = data.padding
         , inFront = data.inFront
-        , borderAndBackground =
-            BorderAndBackground
+        , borderAndFill =
+            BorderAndFill
                 { borderWidth = 2
                 , borderColor = Color.outlineColor
-                , backgroundColor = Color.fillColor
+                , fillColor = Color.fillColor
                 }
-        , borderAndBackgroundFocus =
-            BorderAndBackground
+        , borderAndFillFocus =
+            BorderAndFill
                 { borderWidth = 2
                 , borderColor = Color.outlineColor
-                , backgroundColor = Color.highlightColor
+                , fillColor = Color.highlightColor
                 }
         , cachedSize =
             Coord.plus
@@ -256,8 +257,8 @@ customButton :
     { id : id
     , padding : Padding units
     , inFront : List (Element id units)
-    , borderAndBackground : BorderAndBackground units
-    , borderAndBackgroundFocus : BorderAndBackground units
+    , borderAndFill : BorderAndFill units
+    , borderAndFillFocus : BorderAndFill units
     }
     -> Element id units
     -> Element id units
@@ -266,8 +267,8 @@ customButton data child =
         { id = data.id
         , padding = data.padding
         , inFront = data.inFront
-        , borderAndBackground = data.borderAndBackground
-        , borderAndBackgroundFocus = data.borderAndBackgroundFocus
+        , borderAndFill = data.borderAndFill
+        , borderAndFillFocus = data.borderAndFillFocus
         , cachedSize =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
@@ -303,13 +304,13 @@ column data children =
 
 
 el :
-    { padding : Padding units, inFront : List (Element id units), borderAndBackground : BorderAndBackground units }
+    { padding : Padding units, inFront : List (Element id units), borderAndFill : BorderAndFill units }
     -> Element id units
     -> Element id units
 el data element2 =
     Single
         { padding = data.padding
-        , borderAndBackground = data.borderAndBackground
+        , borderAndFill = data.borderAndFill
         , inFront = data.inFront
         , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
         }
@@ -333,7 +334,7 @@ center data element2 =
             , bottomRight = data.size |> Coord.minus size2 |> Coord.minus topLeft
             }
         , inFront = []
-        , borderAndBackground = NoBorderOrBackground
+        , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
         }
         element2
@@ -354,7 +355,7 @@ bottomLeft data element2 =
             , bottomRight = Coord.xy (sizeX - childSizeX) 0
             }
         , inFront = []
-        , borderAndBackground = NoBorderOrBackground
+        , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
         }
         element2
@@ -378,7 +379,7 @@ bottomCenter data element2 =
             , bottomRight = Coord.xy (sizeX - childSizeX) (sizeX - childSizeX - left)
             }
         , inFront = data.inFront
-        , borderAndBackground = NoBorderOrBackground
+        , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
         }
         element2
@@ -425,7 +426,7 @@ hoverHelper point elementPosition element2 =
             NoHover
 
         TextInput data _ ->
-            if Bounds.fromCoordAndSize elementPosition (TextInput.size data.width) |> Bounds.contains point then
+            if Bounds.fromCoordAndSize elementPosition (TextInput.size (Quantity data.width)) |> Bounds.contains point then
                 InputHover { id = data.id, position = elementPosition }
 
             else
@@ -446,11 +447,37 @@ hoverHelper point elementPosition element2 =
 
         Single data child ->
             let
+                hover2 : HoverType id units
                 hover2 =
-                    hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
+                    List.foldl
+                        (\inFront hover4 ->
+                            case hover4 of
+                                NoHover ->
+                                    hoverHelper point elementPosition inFront
+
+                                InputHover _ ->
+                                    hover4
+
+                                BackgroundHover ->
+                                    hover4
+                        )
+                        NoHover
+                        data.inFront
+
+                hover3 : HoverType id units
+                hover3 =
+                    case hover2 of
+                        NoHover ->
+                            hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
+
+                        InputHover _ ->
+                            hover2
+
+                        BackgroundHover ->
+                            hover2
             in
-            case ( data.borderAndBackground, hover2 ) of
-                ( BorderAndBackground _, NoHover ) ->
+            case ( data.borderAndFill, hover3 ) of
+                ( BorderAndFill _, NoHover ) ->
                     if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
                         BackgroundHover
 
@@ -458,7 +485,7 @@ hoverHelper point elementPosition element2 =
                         NoHover
 
                 _ ->
-                    hover2
+                    hover3
 
         Quads _ ->
             NoHover
@@ -522,7 +549,7 @@ viewHelper focus position vertices element2 =
                 ++ vertices
 
         TextInput data model ->
-            TextInput.view position data.width (focus == Just data.id) data.isValid model ++ vertices
+            TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid model ++ vertices
 
         Button data child ->
             let
@@ -535,12 +562,12 @@ viewHelper focus position vertices element2 =
                         vertices
                         data.inFront
             in
-            borderAndBackgroundView position
+            borderAndFillView position
                 (if Just data.id == focus then
-                    data.borderAndBackgroundFocus
+                    data.borderAndFillFocus
 
                  else
-                    data.borderAndBackground
+                    data.borderAndFill
                 )
                 data.cachedSize
                 ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
@@ -586,7 +613,7 @@ viewHelper focus position vertices element2 =
                         vertices
                         data.inFront
             in
-            borderAndBackgroundView position data.borderAndBackground (size element2)
+            borderAndFillView position data.borderAndFill (size element2)
                 ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Quads data ->
@@ -596,23 +623,23 @@ viewHelper focus position vertices element2 =
             vertices
 
 
-borderAndBackgroundView :
+borderAndFillView :
     Coord units
-    -> BorderAndBackground units
+    -> BorderAndFill units
     -> Coord units
     -> List Vertex
-borderAndBackgroundView position borderAndBackground size2 =
+borderAndFillView position borderAndBackground size2 =
     case borderAndBackground of
-        NoBorderOrBackground ->
+        NoBorderOrFill ->
             []
 
-        BackgroundOnly color ->
+        FillOnly color ->
             Sprite.rectangle color position size2
 
-        BorderAndBackground { borderWidth, borderColor, backgroundColor } ->
+        BorderAndFill { borderWidth, borderColor, fillColor } ->
             Sprite.rectangle borderColor position size2
                 ++ Sprite.rectangle
-                    backgroundColor
+                    fillColor
                     (Coord.plus (Coord.xy borderWidth borderWidth) position)
                     (size2 |> Coord.minus (Coord.multiply (Coord.xy 2 2) (Coord.xy borderWidth borderWidth)))
 
@@ -624,7 +651,7 @@ size element2 =
             data.cachedSize
 
         TextInput data _ ->
-            TextInput.size data.width
+            TextInput.size (Quantity data.width)
 
         Button data _ ->
             data.cachedSize

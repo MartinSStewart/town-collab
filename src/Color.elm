@@ -2,6 +2,7 @@ module Color exposing
     ( Color
     , Colors
     , black
+    , errorColor
     , fillColor
     , fromHexCode
     , getBlue
@@ -60,6 +61,11 @@ black =
 white : Color
 white =
     rgb255 255 255 255
+
+
+errorColor : Color
+errorColor =
+    rgb255 185 0 0
 
 
 outlineColor : Color
