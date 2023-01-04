@@ -137,7 +137,7 @@ defaultCursorMesh colors =
         |> Sprite.toMesh
 
 
-defaultCursorMesh2 : Colors -> Ui.Element id units
+defaultCursorMesh2 : Colors -> Ui.Element id
 defaultCursorMesh2 colors =
     Ui.colorSprite
         { colors = colors
@@ -162,7 +162,7 @@ eyeDropperSize =
     Coord.xy 19 19
 
 
-eyeDropperCursor2 : Ui.Element id units
+eyeDropperCursor2 : Ui.Element id
 eyeDropperCursor2 =
     Ui.sprite
         { size = Coord.multiply (Coord.xy 2 2) eyeDropperSize

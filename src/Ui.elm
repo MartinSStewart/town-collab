@@ -40,70 +40,70 @@ import TextInput
 import WebGL
 
 
-type alias RowColumn units =
+type alias RowColumn =
     { spacing : Int
-    , padding : Padding units
-    , cachedSize : Coord units
+    , padding : Padding
+    , cachedSize : Coord Pixels
     }
 
 
-type Element id units
+type Element id
     = Text
         { outline : Maybe Color
         , color : Color
         , scale : Int
         , text : String
-        , cachedSize : Coord units
+        , cachedSize : Coord Pixels
         }
     | TextInput { id : id, width : Int, isValid : Bool } TextInput.Model
     | Button
         { id : id
-        , padding : Padding units
-        , borderAndFill : BorderAndFill units
-        , borderAndFillFocus : BorderAndFill units
-        , cachedSize : Coord units
-        , inFront : List (Element id units)
+        , padding : Padding
+        , borderAndFill : BorderAndFill
+        , borderAndFillFocus : BorderAndFill
+        , cachedSize : Coord Pixels
+        , inFront : List (Element id)
         }
-        (Element id units)
-    | Row (RowColumn units) (List (Element id units))
-    | Column (RowColumn units) (List (Element id units))
+        (Element id)
+    | Row RowColumn (List (Element id))
+    | Column RowColumn (List (Element id))
     | Single
-        { padding : Padding units
-        , borderAndFill : BorderAndFill units
-        , inFront : List (Element id units)
-        , cachedSize : Coord units
+        { padding : Padding
+        , borderAndFill : BorderAndFill
+        , inFront : List (Element id)
+        , cachedSize : Coord Pixels
         }
-        (Element id units)
-    | Quads { size : Coord units, vertices : Coord units -> List Vertex }
+        (Element id)
+    | Quads { size : Coord Pixels, vertices : Coord Pixels -> List Vertex }
     | Empty
 
 
-type BorderAndFill units
+type BorderAndFill
     = NoBorderOrFill
     | FillOnly Color
     | BorderAndFill { borderWidth : Int, borderColor : Color, fillColor : Color }
 
 
-type alias Padding units =
-    { topLeft : Coord units, bottomRight : Coord units }
+type alias Padding =
+    { topLeft : Coord Pixels, bottomRight : Coord Pixels }
 
 
-noPadding : Padding units
+noPadding : Padding
 noPadding =
     { topLeft = Coord.origin, bottomRight = Coord.origin }
 
 
-paddingXY : Int -> Int -> Padding units
+paddingXY : Int -> Int -> Padding
 paddingXY x y =
     { topLeft = Coord.xy x y, bottomRight = Coord.xy x y }
 
 
-paddingXY2 : Coord units -> Padding units
+paddingXY2 : Coord Pixels -> Padding
 paddingXY2 coord =
     { topLeft = coord, bottomRight = coord }
 
 
-text : String -> Element id units
+text : String -> Element id
 text text2 =
     Text
         { outline = Nothing
@@ -114,7 +114,7 @@ text text2 =
         }
 
 
-colorText : Color -> String -> Element id units
+colorText : Color -> String -> Element id
 colorText color text2 =
     Text
         { outline = Nothing
@@ -125,7 +125,7 @@ colorText color text2 =
         }
 
 
-outlinedText : { outline : Color, color : Color, text : String } -> Element id units
+outlinedText : { outline : Color, color : Color, text : String } -> Element id
 outlinedText data =
     Text
         { outline = Just data.outline
@@ -191,7 +191,7 @@ addLineBreaks charWidth maxWidth list text2 =
         text2 :: list
 
 
-wrappedText : Int -> String -> Element id units
+wrappedText : Int -> String -> Element id
 wrappedText maxWidth text2 =
     let
         charWidth : Int
@@ -214,20 +214,20 @@ wrappedText maxWidth text2 =
         }
 
 
-textInput : { id : id, width : Int, isValid : Bool } -> TextInput.Model -> Element id units
+textInput : { id : id, width : Int, isValid : Bool } -> TextInput.Model -> Element id
 textInput =
     TextInput
 
 
-empty : Element id units
+empty : Element id
 empty =
     Empty
 
 
 button :
-    { id : id, padding : Padding units, inFront : List (Element id units) }
-    -> Element id units
-    -> Element id units
+    { id : id, padding : Padding, inFront : List (Element id) }
+    -> Element id
+    -> Element id
 button data child =
     Button
         { id = data.id
@@ -255,13 +255,13 @@ button data child =
 
 customButton :
     { id : id
-    , padding : Padding units
-    , inFront : List (Element id units)
-    , borderAndFill : BorderAndFill units
-    , borderAndFillFocus : BorderAndFill units
+    , padding : Padding
+    , inFront : List (Element id)
+    , borderAndFill : BorderAndFill
+    , borderAndFillFocus : BorderAndFill
     }
-    -> Element id units
-    -> Element id units
+    -> Element id
+    -> Element id
 customButton data child =
     Button
         { id = data.id
@@ -278,9 +278,9 @@ customButton data child =
 
 
 row :
-    { spacing : Int, padding : Padding units }
-    -> List (Element id units)
-    -> Element id units
+    { spacing : Int, padding : Padding }
+    -> List (Element id)
+    -> Element id
 row data children =
     Row
         { spacing = data.spacing
@@ -291,9 +291,9 @@ row data children =
 
 
 column :
-    { spacing : Int, padding : Padding units }
-    -> List (Element id units)
-    -> Element id units
+    { spacing : Int, padding : Padding }
+    -> List (Element id)
+    -> Element id
 column data children =
     Column
         { spacing = data.spacing
@@ -304,9 +304,9 @@ column data children =
 
 
 el :
-    { padding : Padding units, inFront : List (Element id units), borderAndFill : BorderAndFill units }
-    -> Element id units
-    -> Element id units
+    { padding : Padding, inFront : List (Element id), borderAndFill : BorderAndFill }
+    -> Element id
+    -> Element id
 el data element2 =
     Single
         { padding = data.padding
@@ -317,14 +317,14 @@ el data element2 =
         element2
 
 
-center : { size : Coord units } -> Element id units -> Element id units
+center : { size : Coord Pixels } -> Element id -> Element id
 center data element2 =
     let
-        size2 : Coord units
+        size2 : Coord Pixels
         size2 =
             size element2
 
-        topLeft : Coord units
+        topLeft : Coord Pixels
         topLeft =
             data.size |> Coord.minus size2 |> Coord.divide (Coord.xy 2 2)
     in
@@ -340,7 +340,7 @@ center data element2 =
         element2
 
 
-bottomLeft : { size : Coord units } -> Element id units -> Element id units
+bottomLeft : { size : Coord Pixels } -> Element id -> Element id
 bottomLeft data element2 =
     let
         ( sizeX, sizeY ) =
@@ -361,7 +361,7 @@ bottomLeft data element2 =
         element2
 
 
-bottomCenter : { size : Coord units, inFront : List (Element id units) } -> Element id units -> Element id units
+bottomCenter : { size : Coord Pixels, inFront : List (Element id) } -> Element id -> Element id
 bottomCenter data element2 =
     let
         ( sizeX, sizeY ) =
@@ -385,7 +385,7 @@ bottomCenter data element2 =
         element2
 
 
-sprite : { size : Coord units, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id units
+sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id
 sprite data =
     Quads
         { size = data.size
@@ -394,8 +394,8 @@ sprite data =
 
 
 colorSprite :
-    { colors : Colors, size : Coord units, texturePosition : Coord Pixels, textureSize : Coord Pixels }
-    -> Element id units
+    { colors : Colors, size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels }
+    -> Element id
 colorSprite data =
     Quads
         { size = data.size
@@ -403,23 +403,23 @@ colorSprite data =
         }
 
 
-quads : { size : Coord units, vertices : Coord units -> List Vertex } -> Element id units
+quads : { size : Coord Pixels, vertices : Coord Pixels -> List Vertex } -> Element id
 quads =
     Quads
 
 
-type HoverType id units
+type HoverType id
     = NoHover
-    | InputHover { id : id, position : Coord units }
+    | InputHover { id : id, position : Coord Pixels }
     | BackgroundHover
 
 
-hover : Coord units -> Element id units -> HoverType id units
+hover : Coord Pixels -> Element id -> HoverType id
 hover point element2 =
     hoverHelper point Coord.origin element2
 
 
-hoverHelper : Coord units -> Coord units -> Element id units -> HoverType id units
+hoverHelper : Coord Pixels -> Coord Pixels -> Element id -> HoverType id
 hoverHelper point elementPosition element2 =
     case element2 of
         Text _ ->
@@ -447,7 +447,7 @@ hoverHelper point elementPosition element2 =
 
         Single data child ->
             let
-                hover2 : HoverType id units
+                hover2 : HoverType id
                 hover2 =
                     List.foldl
                         (\inFront hover4 ->
@@ -464,7 +464,7 @@ hoverHelper point elementPosition element2 =
                         NoHover
                         data.inFront
 
-                hover3 : HoverType id units
+                hover3 : HoverType id
                 hover3 =
                     case hover2 of
                         NoHover ->
@@ -496,11 +496,11 @@ hoverHelper point elementPosition element2 =
 
 hoverRowColumnHelper :
     Bool
-    -> Coord units
-    -> Coord units
-    -> RowColumn units
-    -> List (Element id units)
-    -> HoverType id units
+    -> Coord Pixels
+    -> Coord Pixels
+    -> RowColumn
+    -> List (Element id)
+    -> HoverType id
 hoverRowColumnHelper isRow point elementPosition data children =
     List.foldl
         (\child state ->
@@ -530,12 +530,12 @@ hoverRowColumnHelper isRow point elementPosition data children =
         |> .hover
 
 
-view : Maybe id -> Element id units -> WebGL.Mesh Vertex
+view : Maybe id -> Element id -> WebGL.Mesh Vertex
 view focus element2 =
     viewHelper focus Coord.origin [] element2 |> Sprite.toMesh
 
 
-viewHelper : Maybe id -> Coord units -> List Vertex -> Element id units -> List Vertex
+viewHelper : Maybe id -> Coord Pixels -> List Vertex -> Element id -> List Vertex
 viewHelper focus position vertices element2 =
     case element2 of
         Text data ->
@@ -624,9 +624,9 @@ viewHelper focus position vertices element2 =
 
 
 borderAndFillView :
-    Coord units
-    -> BorderAndFill units
-    -> Coord units
+    Coord Pixels
+    -> BorderAndFill
+    -> Coord Pixels
     -> List Vertex
 borderAndFillView position borderAndBackground size2 =
     case borderAndBackground of
@@ -644,7 +644,7 @@ borderAndFillView position borderAndBackground size2 =
                     (size2 |> Coord.minus (Coord.multiply (Coord.xy 2 2) (Coord.xy borderWidth borderWidth)))
 
 
-size : Element id units -> Coord units
+size : Element id -> Coord Pixels
 size element2 =
     case element2 of
         Text data ->
@@ -672,7 +672,7 @@ size element2 =
             Coord.origin
 
 
-rowSize : { a | spacing : Int, padding : Padding units } -> List (Element id units) -> Coord units
+rowSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
 rowSize data children =
     List.foldl
         (\child ( x, y ) ->
@@ -696,7 +696,7 @@ rowSize data children =
            )
 
 
-columnSize : { a | spacing : Int, padding : Padding units } -> List (Element id units) -> Coord units
+columnSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
 columnSize data children =
     List.foldl
         (\child ( x, y ) ->

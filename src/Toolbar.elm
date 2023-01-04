@@ -16,6 +16,7 @@ import Id exposing (Id, UserId)
 import List.Extra as List
 import List.Nonempty
 import PingData exposing (PingData)
+import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
 import Sprite
 import TextInput
@@ -25,9 +26,9 @@ import Ui exposing (BorderAndFill(..))
 import Units
 
 
-type alias ViewData units =
+type alias ViewData =
     { devicePixelRatio : Float
-    , windowSize : Coord units
+    , windowSize : Coord Pixels
     , pressedSubmitEmail : SubmitStatus EmailAddress
     , loginTextInput : TextInput.Model
     , hasCmdKey : Bool
@@ -45,7 +46,7 @@ type alias ViewData units =
     }
 
 
-view : ViewData units -> Ui.Element UiHover units
+view : ViewData -> Ui.Element UiHover
 view data =
     Ui.bottomCenter
         { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
@@ -79,7 +80,7 @@ view data =
         )
 
 
-inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover units
+inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
 inviteView showInvite inviteTextInput inviteSubmitStatus =
     if showInvite then
         Ui.el
@@ -111,7 +112,7 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
         Ui.button { id = ShowInviteUser, padding = Ui.paddingXY 10 4, inFront = [] } (Ui.text "Invite")
 
 
-borderAndFill : BorderAndFill units
+borderAndFill : BorderAndFill
 borderAndFill =
     BorderAndFill
         { borderWidth = 2
@@ -130,13 +131,13 @@ pressedSubmit submitStatus =
             False
 
 
-loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover units
+loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover
 loginToolbarUi pressedSubmitEmail emailTextInput =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
 
-        loginUi : Ui.Element UiHover units
+        loginUi : Ui.Element UiHover
         loginUi =
             Ui.column
                 { spacing = 10, padding = Ui.paddingXY 20 10 }
@@ -185,7 +186,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
     case pressedSubmitEmail of
         Submitted emailAddress ->
             let
-                submittedText : Ui.Element id units
+                submittedText : Ui.Element id
                 submittedText =
                     "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.wrappedText 1000
             in
@@ -212,7 +213,7 @@ toolbarUi :
     -> AssocList.Dict TileGroup Colors
     -> Dict String TileGroup
     -> Tool
-    -> Ui.Element UiHover units
+    -> Ui.Element UiHover
 toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
@@ -285,7 +286,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
         ]
 
 
-colorTextInput : id -> TextInput.Model -> Color -> Ui.Element id units
+colorTextInput : id -> TextInput.Model -> Color -> Ui.Element id
 colorTextInput id textInput color =
     let
         padding =
@@ -317,7 +318,7 @@ toolButtonUi :
     -> Dict String TileGroup
     -> ToolButton
     -> ToolButton
-    -> Ui.Element UiHover units
+    -> Ui.Element UiHover
 toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     let
         tileColors =
@@ -352,7 +353,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                     else
                         Just "Ctrl"
 
-        label : Ui.Element UiHover units
+        label : Ui.Element UiHover
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
@@ -438,7 +439,7 @@ toolbarRowCount =
     3
 
 
-tileMesh : Colors -> Tile -> Ui.Element id units
+tileMesh : Colors -> Tile -> Ui.Element id
 tileMesh colors tile =
     let
         data : TileData b
@@ -556,7 +557,7 @@ getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
 
 
-createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id units
+createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id
 createInfoMesh maybePingData maybeUserId =
     let
         durationToString duration =

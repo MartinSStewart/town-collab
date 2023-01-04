@@ -1780,7 +1780,7 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
             )
 
 
-getViewModel : FrontendLoaded -> ViewData Pixels
+getViewModel : FrontendLoaded -> ViewData
 getViewModel model =
     { devicePixelRatio = model.devicePixelRatio
     , windowSize = model.windowSize
