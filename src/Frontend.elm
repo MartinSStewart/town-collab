@@ -69,6 +69,7 @@ import Sound exposing (Sound(..))
 import Sprite
 import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
+import Time
 import Toolbar exposing (ViewData)
 import Train exposing (Status(..), Train)
 import Types exposing (..)
@@ -539,7 +540,14 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , primaryColorTextInput = TextInput.init
             , secondaryColorTextInput = TextInput.init
             , focus = focus
-            , music = { startTime = Duration.addTo time (Duration.seconds 10), sound = Music0 }
+            , music =
+                { startTime = Duration.addTo time (Duration.seconds 10)
+                , sound =
+                    Random.step
+                        (Sound.nextSong Nothing)
+                        (Random.initialSeed (Time.posixToMillis time))
+                        |> Tuple.first
+                }
             , previousCursorPositions = IdDict.empty
             , handMeshes = AssocList.empty
             , hasCmdKey = loading.hasCmdKey
@@ -1287,7 +1295,11 @@ updateLoaded audioData msg model =
 
                             else
                                 { startTime = Duration.addTo time (Duration.minutes 3)
-                                , sound = Music0
+                                , sound =
+                                    Random.step
+                                        (Sound.nextSong (Just model3.music.sound))
+                                        (Random.initialSeed (Time.posixToMillis time))
+                                        |> Tuple.first
                                 }
                     }
             in

@@ -1,10 +1,13 @@
-module Sound exposing (Sound(..), length, load, play, playWithConfig)
+module Sound exposing (Sound(..), length, load, nextSong, play, playWithConfig)
 
 import AssocList as Dict exposing (Dict)
 import Audio exposing (Audio, AudioCmd, AudioData, PlayAudioConfig)
 import Duration exposing (Duration)
 import Effect.Time
+import List.Extra as List
+import List.Nonempty exposing (Nonempty(..))
 import Quantity
+import Random
 
 
 type Sound
@@ -24,6 +27,7 @@ type Sound
     | Hello2Sound
     | TeleportSound
     | Music0
+    | Music1
     | Ambience0
     | Moo0
     | Moo1
@@ -51,6 +55,7 @@ allSounds =
     , Hello2Sound
     , TeleportSound
     , Music0
+    , Music1
     , Ambience0
     , Moo0
     , Moo1
@@ -60,6 +65,25 @@ allSounds =
     , Moo5
     , Moo6
     ]
+
+
+songs =
+    Nonempty Music0 [ Music1 ]
+
+
+nextSong : Maybe Sound -> Random.Generator Sound
+nextSong maybePreviousSong =
+    case maybePreviousSong of
+        Just previousSong ->
+            case List.Nonempty.toList songs |> List.remove previousSong |> List.Nonempty.fromList of
+                Just nonempty ->
+                    List.Nonempty.sample nonempty
+
+                Nothing ->
+                    List.Nonempty.sample songs
+
+        Nothing ->
+            List.Nonempty.sample songs
 
 
 play : Dict Sound (Result Audio.LoadError Audio.Source) -> Sound -> Effect.Time.Posix -> Audio
@@ -141,6 +165,9 @@ load onLoad =
 
                         Music0 ->
                             "grasslands.mp3"
+
+                        Music1 ->
+                            "dawn.mp3"
 
                         Ambience0 ->
                             "windy-grasslands-ambience.mp3"
