@@ -975,11 +975,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
             addSession sessionId clientId viewBounds userStatus model2
                 |> (case maybeRequestedBy of
                         Just requestedBy ->
-                            if requestedBy == sessionId then
-                                identity
-
-                            else
-                                addSession requestedBy clientId viewBounds userStatus
+                            addSession requestedBy clientId viewBounds userStatus
 
                         Nothing ->
                             identity

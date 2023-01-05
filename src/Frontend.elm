@@ -702,8 +702,8 @@ update audioData msg model =
                 AnimationFrame time ->
                     ( Loading { loadingModel | time = Just time }, Command.none )
 
-                GotUserAgent userAgent ->
-                    ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgent) }
+                GotUserAgentPlatform userAgentPlatform ->
+                    ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgentPlatform) }
                     , Command.none
                     )
 
@@ -1541,7 +1541,7 @@ updateLoaded audioData msg model =
                         InviteEmailAddressTextInput ->
                             ( { model | inviteTextInput = TextInput.paste text model.inviteTextInput }, Command.none )
 
-        GotUserAgent _ ->
+        GotUserAgentPlatform _ ->
             ( model, Command.none )
 
 
@@ -2536,17 +2536,22 @@ canOpenMailEditor model =
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
 updateLocalModel msg model =
-    let
-        ( newLocalModel, outMsg ) =
-            LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
-    in
-    ( { model
-        | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
-        , localModel = newLocalModel
-        , eventIdCounter = Id.increment model.eventIdCounter
-      }
-    , outMsg
-    )
+    case LocalGrid.localModel model.localModel |> .userStatus of
+        LoggedIn _ ->
+            let
+                ( newLocalModel, outMsg ) =
+                    LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
+            in
+            ( { model
+                | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
+                , localModel = newLocalModel
+                , eventIdCounter = Id.increment model.eventIdCounter
+              }
+            , outMsg
+            )
+
+        NotLoggedIn ->
+            ( model, LocalGrid.NoOutMsg )
 
 
 screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
@@ -4341,48 +4346,7 @@ canvasView audioData model =
                                 model.mailEditor
                             ++ (case currentUserId model of
                                     Just userId ->
-                                        case IdDict.get userId localGrid.cursors of
-                                            Just cursor ->
-                                                case showMousePointer of
-                                                    CursorSprite mousePointer ->
-                                                        let
-                                                            point =
-                                                                cursorActualPosition True userId cursor model
-                                                                    |> Point2d.unwrap
-                                                        in
-                                                        case getCursorMesh userId model of
-                                                            Just mesh ->
-                                                                [ Effect.WebGL.entityWith
-                                                                    [ Shaders.blend ]
-                                                                    Shaders.vertexShader
-                                                                    Shaders.fragmentShader
-                                                                    (Cursor.getSpriteMesh mousePointer mesh)
-                                                                    { view =
-                                                                        Mat4.makeTranslate3
-                                                                            (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                                                |> toFloat
-                                                                                |> (*) (1 / toFloat model.zoomFactor)
-                                                                            )
-                                                                            (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                                                |> toFloat
-                                                                                |> (*) (1 / toFloat model.zoomFactor)
-                                                                            )
-                                                                            0
-                                                                            |> Mat4.mul viewMatrix
-                                                                    , texture = texture
-                                                                    , textureSize = textureSize
-                                                                    , color = Vec4.vec4 1 1 1 1
-                                                                    }
-                                                                ]
-
-                                                            Nothing ->
-                                                                []
-
-                                                    _ ->
-                                                        []
-
-                                            Nothing ->
-                                                []
+                                        drawCursor showMousePointer texture viewMatrix userId model
 
                                     Nothing ->
                                         []
@@ -4394,6 +4358,52 @@ canvasView audioData model =
 
         Nothing ->
             Html.text ""
+
+
+drawCursor : CursorType -> WebGL.Texture.Texture -> Mat4 -> Id UserId -> FrontendLoaded -> List Effect.WebGL.Entity
+drawCursor showMousePointer texture viewMatrix userId model =
+    case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
+        Just cursor ->
+            case showMousePointer of
+                CursorSprite mousePointer ->
+                    let
+                        point =
+                            cursorActualPosition True userId cursor model
+                                |> Point2d.unwrap
+                    in
+                    case getCursorMesh userId model of
+                        Just mesh ->
+                            [ Effect.WebGL.entityWith
+                                [ Shaders.blend ]
+                                Shaders.vertexShader
+                                Shaders.fragmentShader
+                                (Cursor.getSpriteMesh mousePointer mesh)
+                                { view =
+                                    Mat4.makeTranslate3
+                                        (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                            |> toFloat
+                                            |> (*) (1 / toFloat model.zoomFactor)
+                                        )
+                                        (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                            |> toFloat
+                                            |> (*) (1 / toFloat model.zoomFactor)
+                                        )
+                                        0
+                                        |> Mat4.mul viewMatrix
+                                , texture = texture
+                                , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                                , color = Vec4.vec4 1 1 1 1
+                                }
+                            ]
+
+                        Nothing ->
+                            []
+
+                _ ->
+                    []
+
+        Nothing ->
+            []
 
 
 cursorActualPosition : Bool -> Id UserId -> Cursor -> FrontendLoaded -> Point2d WorldUnit WorldUnit
@@ -4661,7 +4671,7 @@ subscriptions _ model =
                     (\value ->
                         Json.Decode.decodeValue Json.Decode.string value
                             |> Result.withDefault ""
-                            |> GotUserAgent
+                            |> GotUserAgentPlatform
                     )
 
             Loaded loaded ->

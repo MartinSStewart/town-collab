@@ -317,7 +317,7 @@ type FrontendMsg_
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
     | PastedText String
-    | GotUserAgent String
+    | GotUserAgentPlatform String
 
 
 type ToBackend

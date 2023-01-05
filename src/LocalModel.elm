@@ -84,7 +84,7 @@ updateFromBackend config msgs (LocalModel localModel_) =
                 msgs
     in
     ( LocalModel
-        { localMsgs = List.reverse newLocalMsgs
+        { localMsgs = List.reverse newLocalMsgs |> Debug.log "local"
         , localModel =
             List.foldl
                 (\msg model -> config.update msg model |> Tuple.first)

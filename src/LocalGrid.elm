@@ -337,9 +337,7 @@ moveCursor userId position model =
                             { cursor | position = position }
 
                         Nothing ->
-                            { position = position
-                            , holdingCow = Nothing
-                            }
+                            { position = position, holdingCow = Nothing }
                     )
                         |> Just
                 )
