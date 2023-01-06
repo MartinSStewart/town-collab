@@ -288,10 +288,6 @@ updateServerChange serverChange model =
             )
 
         ServerYouLoggedIn loggedIn handColor ->
-            let
-                _ =
-                    Debug.log "you logged in" ()
-            in
             ( { model | userStatus = LoggedIn loggedIn, handColors = IdDict.insert loggedIn.userId handColor model.handColors }
             , HandColorChanged
             )

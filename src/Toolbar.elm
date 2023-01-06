@@ -440,31 +440,8 @@ buttonTiles : List ToolButton
 buttonTiles =
     [ HandToolButton
     , TilePickerToolButton
-    , TilePlacerToolButton EmptyTileGroup
-    , TilePlacerToolButton PostOfficeGroup
-    , TilePlacerToolButton HouseGroup
-    , TilePlacerToolButton LogCabinGroup
-    , TilePlacerToolButton TrainHouseGroup
-    , TilePlacerToolButton RailTurnGroup
-    , TilePlacerToolButton RailTurnSplitGroup
-    , TilePlacerToolButton RailTurnSplitMirrorGroup
-    , TilePlacerToolButton RailStrafeSmallGroup
-    , TilePlacerToolButton RailStrafeGroup
-    , TilePlacerToolButton RailTurnLargeGroup
-    , TilePlacerToolButton RailStraightGroup
-    , TilePlacerToolButton RailCrossingGroup
-    , TilePlacerToolButton SidewalkRailGroup
-    , TilePlacerToolButton SidewalkGroup
-    , TilePlacerToolButton PineTreeGroup
-    , TilePlacerToolButton RoadStraightGroup
-    , TilePlacerToolButton RoadTurnGroup
-    , TilePlacerToolButton Road4WayGroup
-    , TilePlacerToolButton RoadSidewalkCrossingGroup
-    , TilePlacerToolButton Road3WayGroup
-    , TilePlacerToolButton RoadRailCrossingGroup
-    , TilePlacerToolButton RoadDeadendGroup
-    , TilePlacerToolButton FenceStraightGroup
     ]
+        ++ List.map TilePlacerToolButton Tile.allTileGroups
 
 
 toolbarRowCount : number

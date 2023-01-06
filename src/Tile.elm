@@ -8,6 +8,7 @@ module Tile exposing
     , Tile(..)
     , TileData
     , TileGroup(..)
+    , allTileGroups
     , defaultPostOfficeColor
     , defaultToPrimaryAndSecondary
     , defaultTreeColor
@@ -68,6 +69,7 @@ type TileGroup
     | RoadRailCrossingGroup
     | RoadDeadendGroup
     | FenceStraightGroup
+    | BusStopGroup
 
 
 allTileGroups : List TileGroup
@@ -98,6 +100,7 @@ allTileGroups =
     , RoadRailCrossingGroup
     , RoadDeadendGroup
     , FenceStraightGroup
+    , BusStopGroup
     ]
 
 
@@ -216,32 +219,32 @@ getTileGroupData tileGroup =
             }
 
         RoadStraightGroup ->
-            { defaultColors = defaultSidewalkColor
+            { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadHorizontal [ RoadVertical ]
             }
 
         RoadTurnGroup ->
-            { defaultColors = defaultSidewalkColor
+            { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadBottomToLeft [ RoadTopToLeft, RoadTopToRight, RoadBottomToRight ]
             }
 
         Road4WayGroup ->
-            { defaultColors = defaultSidewalkColor
+            { defaultColors = defaultRoadColor
             , tiles = Nonempty Road4Way []
             }
 
         RoadSidewalkCrossingGroup ->
-            { defaultColors = defaultSidewalkColor
+            { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadSidewalkCrossingHorizontal [ RoadSidewalkCrossingVertical ]
             }
 
         Road3WayGroup ->
-            { defaultColors = defaultSidewalkColor
+            { defaultColors = defaultRoadColor
             , tiles = Nonempty Road3WayDown [ Road3WayLeft, Road3WayUp, Road3WayRight ]
             }
 
         RoadRailCrossingGroup ->
-            { defaultColors = defaultSidewalkColor
+            { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadRailCrossingHorizontal [ RoadRailCrossingVertical ]
             }
 
@@ -251,8 +254,13 @@ getTileGroupData tileGroup =
             }
 
         RoadDeadendGroup ->
-            { defaultColors = defaultSidewalkColor
+            { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadDeadendDown [ RoadDeadendUp ]
+            }
+
+        BusStopGroup ->
+            { defaultColors = defaultBusStopColor
+            , tiles = Nonempty BusStopDown [ BusStopLeft, BusStopUp, BusStopRight ]
             }
 
 
@@ -323,6 +331,10 @@ type Tile
     | FenceAntidiagonal
     | RoadDeadendUp
     | RoadDeadendDown
+    | BusStopDown
+    | BusStopLeft
+    | BusStopRight
+    | BusStopUp
 
 
 type Direction
@@ -843,9 +855,13 @@ defaultHouseColors =
     TwoDefaultColors { primaryColor = Color.rgb255 234 100 66, secondaryColor = Color.rgb255 234 168 36 }
 
 
+sidewalkColor =
+    Color.rgb255 193 182 162
+
+
 defaultSidewalkColor : DefaultColor
 defaultSidewalkColor =
-    TwoDefaultColors { primaryColor = Color.rgb255 193 182 162, secondaryColor = Color.rgb255 170 160 140 }
+    OneDefaultColor sidewalkColor
 
 
 defaultFenceColor : DefaultColor
@@ -860,12 +876,22 @@ defaultTreeColor =
 
 defaultPostOfficeColor : DefaultColor
 defaultPostOfficeColor =
-    OneDefaultColor (Color.rgb255 209 209 209)
+    TwoDefaultColors { primaryColor = sidewalkColor, secondaryColor = Color.rgb255 209 209 209 }
 
 
 defaultLogCabinColor : DefaultColor
 defaultLogCabinColor =
     TwoDefaultColors { primaryColor = Color.rgb255 220 129 97, secondaryColor = Color.rgb255 236 202 66 }
+
+
+defaultRoadColor : DefaultColor
+defaultRoadColor =
+    TwoDefaultColors { primaryColor = sidewalkColor, secondaryColor = Color.rgb255 243 243 243 }
+
+
+defaultBusStopColor : DefaultColor
+defaultBusStopColor =
+    TwoDefaultColors { primaryColor = sidewalkColor, secondaryColor = Color.rgb255 0 234 240 }
 
 
 getData : Tile -> TileData unit
@@ -1843,6 +1869,58 @@ getData tile =
             , texturePositionTopLayer = Nothing
             , size = Coord.xy 5 4
             , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        BusStopDown ->
+            { texturePosition = Just (Coord.xy 12 42)
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 12 44 }
+            , size = Coord.xy 2 2
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        BusStopLeft ->
+            { texturePosition = Just (Coord.xy 14 42)
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 16 42 }
+            , size = Coord.xy 1 3
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 0, 2 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        BusStopRight ->
+            { texturePosition = Just (Coord.xy 14 42)
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 15 42 }
+            , size = Coord.xy 1 3
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 0, 2 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        BusStopUp ->
+            { texturePosition = Just (Coord.xy 12 42)
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 12 46 }
+            , size = Coord.xy 2 2
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
             , railPath = NoRailPath
             }
 

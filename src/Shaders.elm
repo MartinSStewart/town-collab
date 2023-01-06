@@ -101,6 +101,7 @@ varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 
 vec3 primaryColor = vec3(1.0, 0.0, 1.0);
+vec3 primaryColorMidShade = vec3(233.0 / 255.0, 45.0 / 255.0, 231.0 / 255.0);
 vec3 primaryColorShade = vec3(209.0 / 255.0, 64.0 / 255.0, 206.0 / 255.0);
 vec3 secondaryColor = vec3(0.0, 1.0, 1.0);
 vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
@@ -114,13 +115,15 @@ void main () {
     gl_FragColor =
         (textureColor.xyz == primaryColor
             ? vec4(primaryColor2, opacity2)
-            : textureColor.xyz == primaryColorShade
-                ? vec4(primaryColor2 * 0.8, opacity2)
-                : textureColor.xyz == secondaryColor
-                    ? vec4(secondaryColor2, opacity2)
-                    : textureColor.xyz == secondaryColorShade
-                        ? vec4(secondaryColor2 * 0.8, opacity2)
-                        : vec4(textureColor.xyz, opacity2)
+            : textureColor.xyz == primaryColorMidShade
+                ? vec4(primaryColor2 * 0.9, opacity2)
+                : textureColor.xyz == primaryColorShade
+                    ? vec4(primaryColor2 * 0.8, opacity2)
+                    : textureColor.xyz == secondaryColor
+                        ? vec4(secondaryColor2, opacity2)
+                        : textureColor.xyz == secondaryColorShade
+                            ? vec4(secondaryColor2 * 0.8, opacity2)
+                            : vec4(textureColor.xyz, opacity2)
         ) * color;
 }|]
 
