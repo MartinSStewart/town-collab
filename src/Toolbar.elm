@@ -233,9 +233,6 @@ toolbarUi :
     -> Ui.Element UiHover UiMsg
 toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentTool =
     let
-        { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-            showColorTextInputs handColor tileColors currentTool
-
         currentToolButton : ToolButton
         currentToolButton =
             case currentTool of
@@ -254,8 +251,37 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
             |> List.greedyGroupsOf toolbarRowCount
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
+        , selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentTool
+        ]
+
+
+selectedToolView :
+    Colors
+    -> TextInput.Model
+    -> TextInput.Model
+    -> AssocList.Dict TileGroup Colors
+    -> Tool
+    -> Ui.Element UiHover UiMsg
+selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentTool =
+    let
+        { showPrimaryColorTextInput, showSecondaryColorTextInput } =
+            showColorTextInputs handColor tileColors currentTool
+    in
+    Ui.column
+        { spacing = 6, padding = Ui.paddingXY 12 8 }
+        [ Ui.text
+            (case currentTool of
+                HandTool ->
+                    "Pointer tool"
+
+                TilePickerTool ->
+                    "Tile picker"
+
+                TilePlacerTool { tileGroup } ->
+                    Tile.getTileGroupData tileGroup |> .name
+            )
         , Ui.row
-            { spacing = 10, padding = Ui.paddingXY 12 8 }
+            { spacing = 10, padding = Ui.noPadding }
             [ Ui.column
                 { spacing = 10, padding = Ui.noPadding }
                 [ case showPrimaryColorTextInput of

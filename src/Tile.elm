@@ -57,8 +57,6 @@ type TileGroup
     | RailTurnSplitGroup
     | RailTurnSplitMirrorGroup
     | PostOfficeGroup
-    | MowedGrass1Group
-    | MowedGrass4Group
     | PineTreeGroup
     | LogCabinGroup
     | RoadStraightGroup
@@ -88,8 +86,6 @@ allTileGroups =
     , RailTurnSplitGroup
     , RailTurnSplitMirrorGroup
     , PostOfficeGroup
-    , MowedGrass1Group
-    , MowedGrass4Group
     , PineTreeGroup
     , LogCabinGroup
     , RoadStraightGroup
@@ -116,6 +112,7 @@ tileToTileGroup tile =
 type alias TileGroupData =
     { defaultColors : DefaultColor
     , tiles : Nonempty Tile
+    , name : String
     }
 
 
@@ -125,56 +122,67 @@ getTileGroupData tileGroup =
         EmptyTileGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty EmptyTile []
+            , name = "Eraser"
             }
 
         HouseGroup ->
             { defaultColors = defaultHouseColors
             , tiles = Nonempty HouseDown [ HouseLeft, HouseUp, HouseRight ]
+            , name = "Brick house"
             }
 
         RailStraightGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty RailHorizontal [ RailVertical ]
+            , name = "Rail"
             }
 
         RailTurnGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty RailBottomToLeft [ RailTopToLeft, RailTopToRight, RailBottomToRight ]
+            , name = "Rail turn"
             }
 
         RailTurnLargeGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty RailBottomToLeftLarge [ RailTopToLeftLarge, RailTopToRightLarge, RailBottomToRightLarge ]
+            , name = "Big rail turn"
             }
 
         RailStrafeGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty RailStrafeDown [ RailStrafeLeft, RailStrafeUp, RailStrafeRight ]
+            , name = "Big rail bend"
             }
 
         RailStrafeSmallGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty RailStrafeDownSmall [ RailStrafeLeftSmall, RailStrafeUpSmall, RailStrafeRightSmall ]
+            , name = "Rail bend"
             }
 
         RailCrossingGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty RailCrossing []
+            , name = "Rail X'ing"
             }
 
         TrainHouseGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty TrainHouseRight [ TrainHouseLeft ]
+            , name = "Train house"
             }
 
         SidewalkGroup ->
             { defaultColors = defaultSidewalkColor
             , tiles = Nonempty Sidewalk []
+            , name = "Sidewalk"
             }
 
         SidewalkRailGroup ->
             { defaultColors = defaultSidewalkColor
             , tiles = Nonempty SidewalkHorizontalRailCrossing [ SidewalkVerticalRailCrossing ]
+            , name = "Rail crossing"
             }
 
         RailTurnSplitGroup ->
@@ -183,6 +191,7 @@ getTileGroupData tileGroup =
                 Nonempty
                     RailBottomToRight_SplitLeft
                     [ RailBottomToLeft_SplitUp, RailTopToLeft_SplitRight, RailTopToRight_SplitDown ]
+            , name = "Rail split L."
             }
 
         RailTurnSplitMirrorGroup ->
@@ -191,76 +200,79 @@ getTileGroupData tileGroup =
                 Nonempty
                     RailTopToLeft_SplitDown
                     [ RailTopToRight_SplitLeft, RailBottomToRight_SplitUp, RailBottomToLeft_SplitRight ]
+            , name = "Rail split R."
             }
 
         PostOfficeGroup ->
             { defaultColors = defaultPostOfficeColor
             , tiles = Nonempty PostOffice []
-            }
-
-        MowedGrass1Group ->
-            { defaultColors = ZeroDefaultColors
-            , tiles = Nonempty MowedGrass1 []
-            }
-
-        MowedGrass4Group ->
-            { defaultColors = ZeroDefaultColors
-            , tiles = Nonempty MowedGrass4 []
+            , name = "Post office"
             }
 
         PineTreeGroup ->
             { defaultColors = defaultTreeColor
             , tiles = Nonempty PineTree []
+            , name = "Pine tree"
             }
 
         LogCabinGroup ->
             { defaultColors = defaultLogCabinColor
             , tiles = Nonempty LogCabinDown [ LogCabinLeft, LogCabinUp, LogCabinRight ]
+            , name = "Log cabin"
             }
 
         RoadStraightGroup ->
             { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadHorizontal [ RoadVertical ]
+            , name = "Road"
             }
 
         RoadTurnGroup ->
             { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadBottomToLeft [ RoadTopToLeft, RoadTopToRight, RoadBottomToRight ]
+            , name = "Road turn"
             }
 
         Road4WayGroup ->
             { defaultColors = defaultRoadColor
             , tiles = Nonempty Road4Way []
+            , name = "Road 4-way"
             }
 
         RoadSidewalkCrossingGroup ->
             { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadSidewalkCrossingHorizontal [ RoadSidewalkCrossingVertical ]
+            , name = "Crosswalk"
             }
 
         Road3WayGroup ->
             { defaultColors = defaultRoadColor
             , tiles = Nonempty Road3WayDown [ Road3WayLeft, Road3WayUp, Road3WayRight ]
+            , name = "Road 3-way"
             }
 
         RoadRailCrossingGroup ->
-            { defaultColors = defaultRoadColor
+            { defaultColors = OneDefaultColor sidewalkColor
             , tiles = Nonempty RoadRailCrossingHorizontal [ RoadRailCrossingVertical ]
+            , name = "Rail-road"
             }
 
         FenceStraightGroup ->
             { defaultColors = defaultFenceColor
             , tiles = Nonempty FenceHorizontal [ FenceDiagonal, FenceVertical, FenceAntidiagonal ]
+            , name = "Fence"
             }
 
         RoadDeadendGroup ->
             { defaultColors = defaultRoadColor
             , tiles = Nonempty RoadDeadendDown [ RoadDeadendUp ]
+            , name = "Boulevard"
             }
 
         BusStopGroup ->
             { defaultColors = defaultBusStopColor
             , tiles = Nonempty BusStopDown [ BusStopLeft, BusStopUp, BusStopRight ]
+            , name = "Bus stop"
             }
 
 
@@ -891,7 +903,7 @@ defaultRoadColor =
 
 defaultBusStopColor : DefaultColor
 defaultBusStopColor =
-    TwoDefaultColors { primaryColor = sidewalkColor, secondaryColor = Color.rgb255 0 234 240 }
+    TwoDefaultColors { primaryColor = sidewalkColor, secondaryColor = Color.rgb255 250 202 16 }
 
 
 getData : Tile -> TileData unit
