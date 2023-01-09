@@ -27,11 +27,13 @@ module Grid exposing
     , removeUser
     , tileMesh
     , tileZ
+    , toggleRailSplit
     , worldToCellAndLocalCoord
     , worldToCellAndLocalPoint
     )
 
 import Array2D exposing (Array2D)
+import AssocSet
 import Basics.Extra
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
@@ -47,7 +49,7 @@ import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sprite
 import Terrain exposing (TerrainUnit)
-import Tile exposing (CollisionMask(..), Tile(..), TileData)
+import Tile exposing (CollisionMask(..), RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import Vector2d
 import WebGL
@@ -438,39 +440,26 @@ foregroundMesh :
     Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
     -> Maybe (Id UserId)
+    -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> WebGL.Mesh Vertex
-foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId tiles =
-    let
-        list :
-            List
-                { position : Coord WorldUnit
-                , userId : Id UserId
-                , value : Tile
-                , colors : Colors
-                }
-        list =
-            List.map
-                (\{ userId, position, value, colors } ->
-                    { position = cellAndLocalCoordToWorld ( cellPosition, position )
-                    , userId = userId
-                    , value = value
-                    , colors = colors
-                    }
-                )
-                tiles
-    in
+foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId railSplitToggled tiles =
     List.map
         (\{ position, userId, value, colors } ->
             let
+                position2 : Coord WorldUnit
+                position2 =
+                    cellAndLocalCoordToWorld ( cellPosition, position )
+
                 data : TileData unit
                 data =
                     Tile.getData value
 
+                opacity : Float
                 opacity =
                     case maybeCurrentTile of
                         Just currentTile ->
-                            if Tile.hasCollision currentTile.position currentTile.tile position value then
+                            if Tile.hasCollision currentTile.position currentTile.tile position2 value then
                                 0.5
 
                             else
@@ -479,24 +468,38 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId tiles =
                         Nothing ->
                             1
             in
-            (case data.texturePosition of
-                Just texturePosition ->
-                    tileMeshHelper opacity colors False position texturePosition data.size
+            (case data.railPath of
+                RailSplitPath pathData ->
+                    if AssocSet.member position railSplitToggled then
+                        tileMeshHelper opacity colors False position2 pathData.texturePosition data.size
 
-                Nothing ->
-                    []
+                    else
+                        case data.texturePosition of
+                            Just texturePosition ->
+                                tileMeshHelper opacity colors False position2 texturePosition data.size
+
+                            Nothing ->
+                                []
+
+                _ ->
+                    case data.texturePosition of
+                        Just texturePosition ->
+                            tileMeshHelper opacity colors False position2 texturePosition data.size
+
+                        Nothing ->
+                            []
             )
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             if value == PostOffice && Just userId /= maybeCurrentUserId then
-                                tileMeshHelper opacity colors True position (Coord.xy 4 35) data.size
+                                tileMeshHelper opacity colors True position2 (Coord.xy 4 35) data.size
 
                             else
                                 tileMeshHelper
                                     opacity
                                     colors
                                     True
-                                    position
+                                    position2
                                     topLayer.texturePosition
                                     data.size
 
@@ -504,7 +507,7 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId tiles =
                             []
                    )
         )
-        list
+        tiles
         |> List.concat
         |> Sprite.toMesh
 
@@ -766,3 +769,17 @@ getTile coord grid =
                         Nothing
             )
         |> List.head
+
+
+toggleRailSplit : Coord WorldUnit -> Grid -> Grid
+toggleRailSplit coord grid =
+    let
+        ( cellPos, localPos ) =
+            worldToCellAndLocalCoord coord
+    in
+    case getCell cellPos grid of
+        Just cell ->
+            setCell cellPos (GridCell.toggleRailSplit localPos cell) grid
+
+        Nothing ->
+            grid

@@ -29,6 +29,7 @@ module Train exposing
 import Angle
 import Array exposing (Array)
 import AssocList
+import AssocSet
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import Duration exposing (Duration, Seconds)
@@ -641,6 +642,7 @@ findNextTile trainId time position state speed_ direction list =
                             speed_
                             direction
                             state
+                            (GridCell.getToggledRailSplit cell)
                             (GridCell.flatten cell)
                     of
                         Just newTrain ->
@@ -664,44 +666,53 @@ findNextTileHelper :
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> Maybe TrainData
-findNextTileHelper trainId time neighborCellPos position speed_ direction state tiles =
+findNextTileHelper trainId time neighborCellPos position speed_ direction state toggledRailPaths tiles =
     case tiles of
         tile :: rest ->
             let
+                checkPath2 =
+                    checkPath trainId time tile state.mail neighborCellPos position speed_ direction
+
                 maybeNewTrain : Maybe TrainData
                 maybeNewTrain =
-                    case
-                        List.filterMap
-                            (checkPath trainId time tile state.mail neighborCellPos position speed_ direction)
-                            (case Tile.getData tile.value |> .railPath of
-                                NoRailPath ->
-                                    []
-
-                                SingleRailPath path1 ->
-                                    [ path1 ]
-
-                                DoubleRailPath path1 path2 ->
-                                    [ path1, path2 ]
-                            )
-                    of
-                        firstPath :: restOfPaths ->
-                            Random.step
-                                (Random.uniform firstPath restOfPaths)
-                                (Effect.Time.posixToMillis time + Id.toInt trainId |> Random.initialSeed)
-                                |> Tuple.first
-                                |> Just
-
-                        [] ->
+                    case Tile.getData tile.value |> .railPath of
+                        NoRailPath ->
                             Nothing
+
+                        SingleRailPath path1 ->
+                            checkPath2 path1
+
+                        DoubleRailPath path1 path2 ->
+                            List.filterMap checkPath2 [ path1, path2 ]
+                                |> List.head
+
+                        RailSplitPath { primary, secondary } ->
+                            case ( checkPath2 primary, checkPath2 secondary ) of
+                                ( Just primary2, Just secondary2 ) ->
+                                    if AssocSet.member tile.position toggledRailPaths then
+                                        Just secondary2
+
+                                    else
+                                        Just primary2
+
+                                ( Nothing, Just secondary2 ) ->
+                                    Just secondary2
+
+                                ( Just primary2, _ ) ->
+                                    Just primary2
+
+                                ( Nothing, Nothing ) ->
+                                    Nothing
             in
             case maybeNewTrain of
                 Just newTrain ->
                     Just newTrain
 
                 Nothing ->
-                    findNextTileHelper trainId time neighborCellPos position speed_ direction state rest
+                    findNextTileHelper trainId time neighborCellPos position speed_ direction state toggledRailPaths rest
 
         [] ->
             Nothing

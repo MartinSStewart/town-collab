@@ -59,7 +59,6 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
 import Route exposing (ConfirmEmailKey, LoginToken, UnsubscribeEmailKey)
-import SendGrid
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput

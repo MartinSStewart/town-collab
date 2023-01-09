@@ -2120,38 +2120,48 @@ tileInteraction :
     -> { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     -> FrontendLoaded
     -> Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
-tileInteraction currentUserId2 { tile, userId, position } model2 =
+tileInteraction currentUserId2 { tile, userId, position } model =
     let
         handleTrainHouse : Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend frontendMsg ))
         handleTrainHouse =
             case
-                AssocList.toList model2.trains
+                AssocList.toList model.trains
                     |> List.find (\( _, train ) -> Train.home train == position)
             of
                 Just ( trainId, train ) ->
-                    case Train.status model2.time train of
+                    case Train.status model.time train of
                         WaitingAtHome ->
-                            Just (\() -> clickLeaveHomeTrain trainId train model2)
+                            Just (\() -> clickLeaveHomeTrain trainId train model)
 
                         _ ->
-                            Just (\() -> clickTeleportHomeTrain trainId train model2)
+                            Just (\() -> clickTeleportHomeTrain trainId train model)
 
                 Nothing ->
                     Nothing
+
+        handleRailSplit =
+            Just
+                (\() ->
+                    let
+                        ( model2, outMsg ) =
+                            updateLocalModel (Change.ToggleRailSplit position) model
+                    in
+                    ( handleOutMsg outMsg model2, Command.none )
+                )
     in
     case tile of
         PostOffice ->
-            if userId == currentUserId2 && canOpenMailEditor model2 then
+            if userId == currentUserId2 && canOpenMailEditor model then
                 (\() ->
-                    ( { model2
+                    ( { model
                         | mailEditor =
                             MailEditor.open
-                                model2
+                                model
                                 (Coord.toPoint2d position
                                     |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                    |> worldToScreen model2
+                                    |> worldToScreen model
                                 )
-                                model2.mailEditor
+                                model.mailEditor
                       }
                     , Command.none
                     )
@@ -2162,22 +2172,46 @@ tileInteraction currentUserId2 { tile, userId, position } model2 =
                 Nothing
 
         HouseDown ->
-            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Command.none )) |> Just
+            (\() -> ( { model | lastHouseClick = Just model.time }, Command.none )) |> Just
 
         HouseLeft ->
-            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Command.none )) |> Just
+            (\() -> ( { model | lastHouseClick = Just model.time }, Command.none )) |> Just
 
         HouseUp ->
-            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Command.none )) |> Just
+            (\() -> ( { model | lastHouseClick = Just model.time }, Command.none )) |> Just
 
         HouseRight ->
-            (\() -> ( { model2 | lastHouseClick = Just model2.time }, Command.none )) |> Just
+            (\() -> ( { model | lastHouseClick = Just model.time }, Command.none )) |> Just
 
         TrainHouseLeft ->
             handleTrainHouse
 
         TrainHouseRight ->
             handleTrainHouse
+
+        RailBottomToRight_SplitLeft ->
+            handleRailSplit
+
+        RailBottomToLeft_SplitUp ->
+            handleRailSplit
+
+        RailTopToRight_SplitDown ->
+            handleRailSplit
+
+        RailTopToLeft_SplitRight ->
+            handleRailSplit
+
+        RailBottomToRight_SplitUp ->
+            handleRailSplit
+
+        RailBottomToLeft_SplitRight ->
+            handleRailSplit
+
+        RailTopToRight_SplitLeft ->
+            handleRailSplit
+
+        RailTopToLeft_SplitDown ->
+            handleRailSplit
 
         _ ->
             Nothing
@@ -3048,6 +3082,7 @@ updateMeshes forceUpdate oldModel newModel =
                     )
                     coord
                     newMaybeUserId
+                    (GridCell.getToggledRailSplit newCell)
                     (GridCell.flatten newCell)
             , background =
                 case backgroundMesh of

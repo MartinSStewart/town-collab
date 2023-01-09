@@ -239,6 +239,9 @@ updateLocalChange localChange model =
                 NotLoggedIn ->
                     ( model, NoOutMsg )
 
+        ToggleRailSplit coord ->
+            ( { model | grid = Grid.toggleRailSplit coord model.grid }, NoOutMsg )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -291,6 +294,9 @@ updateServerChange serverChange model =
             ( { model | userStatus = LoggedIn loggedIn, handColors = IdDict.insert loggedIn.userId handColor model.handColors }
             , HandColorChanged
             )
+
+        ServerToggleRailSplit coord ->
+            ( { model | grid = Grid.toggleRailSplit coord model.grid }, NoOutMsg )
 
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )

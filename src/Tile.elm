@@ -35,6 +35,7 @@ import Direction2d exposing (Direction2d)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 exposing (Vec2)
+import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
@@ -765,6 +766,7 @@ type RailPathType
     = NoRailPath
     | SingleRailPath RailPath
     | DoubleRailPath RailPath RailPath
+    | RailSplitPath { primary : RailPath, secondary : RailPath, texturePosition : Coord Pixels }
 
 
 pathDirection : (Float -> Point2d TileLocalUnit TileLocalUnit) -> Float -> Direction2d TileLocalUnit
@@ -1430,9 +1432,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathBottomToRight
-                    (RailPathHorizontal { offsetX = 1, offsetY = 0, length = 3 })
+                RailSplitPath
+                    { primary = RailPathHorizontal { offsetX = 1, offsetY = 0, length = 3 }
+                    , secondary = RailPathBottomToRight
+                    , texturePosition = Coord.xy 20 40
+                    }
             }
 
         RailBottomToLeft_SplitUp ->
@@ -1455,9 +1459,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathBottomToLeft
-                    (RailPathVertical { offsetX = 3, offsetY = 1, length = 3 })
+                RailSplitPath
+                    { primary = RailPathVertical { offsetX = 3, offsetY = 1, length = 3 }
+                    , secondary = RailPathBottomToLeft
+                    , texturePosition = Coord.xy 24 40
+                    }
             }
 
         RailTopToRight_SplitDown ->
@@ -1480,9 +1486,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathTopToRight
-                    (RailPathVertical { offsetX = 0, offsetY = 0, length = 3 })
+                RailSplitPath
+                    { primary = RailPathVertical { offsetX = 0, offsetY = 0, length = 3 }
+                    , secondary = RailPathTopToRight
+                    , texturePosition = Coord.xy 20 44
+                    }
             }
 
         RailTopToLeft_SplitRight ->
@@ -1505,9 +1513,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathTopToLeft
-                    (RailPathHorizontal { offsetX = 0, offsetY = 3, length = 3 })
+                RailSplitPath
+                    { primary = RailPathHorizontal { offsetX = 0, offsetY = 3, length = 3 }
+                    , secondary = RailPathTopToLeft
+                    , texturePosition = Coord.xy 24 44
+                    }
             }
 
         RailBottomToRight_SplitUp ->
@@ -1530,9 +1540,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathBottomToRight
-                    (RailPathVertical { offsetX = 0, offsetY = 1, length = 3 })
+                RailSplitPath
+                    { primary = RailPathVertical { offsetX = 0, offsetY = 1, length = 3 }
+                    , secondary = RailPathBottomToRight
+                    , texturePosition = Coord.xy 20 48
+                    }
             }
 
         RailBottomToLeft_SplitRight ->
@@ -1555,9 +1567,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathBottomToLeft
-                    (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 })
+                RailSplitPath
+                    { primary = RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 }
+                    , secondary = RailPathBottomToLeft
+                    , texturePosition = Coord.xy 24 48
+                    }
             }
 
         RailTopToRight_SplitLeft ->
@@ -1580,9 +1594,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathTopToRight
-                    (RailPathHorizontal { offsetX = 1, offsetY = 3, length = 3 })
+                RailSplitPath
+                    { primary = RailPathHorizontal { offsetX = 1, offsetY = 3, length = 3 }
+                    , secondary = RailPathTopToRight
+                    , texturePosition = Coord.xy 20 52
+                    }
             }
 
         RailTopToLeft_SplitDown ->
@@ -1605,9 +1621,11 @@ getData tile =
                     |> Set.fromList
                     |> CustomCollision
             , railPath =
-                DoubleRailPath
-                    RailPathTopToLeft
-                    (RailPathVertical { offsetX = 3, offsetY = 0, length = 3 })
+                RailSplitPath
+                    { primary = RailPathVertical { offsetX = 3, offsetY = 0, length = 3 }
+                    , secondary = RailPathTopToLeft
+                    , texturePosition = Coord.xy 24 52
+                    }
             }
 
         PostOffice ->

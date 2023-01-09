@@ -1,6 +1,7 @@
 module GridCell exposing
     ( Cell(..)
     , CellData
+    , SplitDirection(..)
     , Value
     , addValue
     , cellToData
@@ -9,11 +10,15 @@ module GridCell exposing
     , empty
     , flatten
     , getPostOffices
+    , getToggledRailSplit
     , hasChangesBy
     , moveUndoPoint
     , removeUser
+    , toggleRailSplit
     )
 
+import AssocList
+import AssocSet
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
@@ -28,21 +33,32 @@ import Units exposing (CellLocalUnit, CellUnit)
 
 
 type CellData
-    = CellData { history : List Value, undoPoint : Dict Int Int }
+    = CellData { history : List Value, undoPoint : Dict Int Int, railSplitToggled : AssocSet.Set (Coord CellLocalUnit) }
 
 
 dataToCell : Coord CellUnit -> CellData -> Cell
 dataToCell cellPosition (CellData cellData) =
-    Cell { history = cellData.history, undoPoint = cellData.undoPoint, cache = [] } |> updateCache cellPosition
+    Cell { history = cellData.history, undoPoint = cellData.undoPoint, cache = [], railSplitToggled = cellData.railSplitToggled }
+        |> updateCache cellPosition
 
 
 cellToData : Cell -> CellData
 cellToData (Cell cell) =
-    CellData { history = cell.history, undoPoint = cell.undoPoint }
+    CellData { history = cell.history, undoPoint = cell.undoPoint, railSplitToggled = cell.railSplitToggled }
 
 
 type Cell
-    = Cell { history : List Value, undoPoint : Dict Int Int, cache : List Value }
+    = Cell
+        { history : List Value
+        , undoPoint : Dict Int Int
+        , cache : List Value
+        , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
+        }
+
+
+type SplitDirection
+    = SplitLeft
+    | SplitRight
 
 
 type alias Value =
@@ -100,6 +116,7 @@ addValue value (Cell cell) =
                     (userUndoPoint + 1)
                     cell.undoPoint
             , cache = remaining
+            , railSplitToggled = cell.railSplitToggled
             }
     , removed = removed
     }
@@ -123,6 +140,7 @@ updateCache cellPosition (Cell cell) =
             { list = addTrees cellPosition, undoPoint = cell.undoPoint }
             cell.history
             |> .list
+    , railSplitToggled = cell.railSplitToggled
     }
         |> Cell
 
@@ -191,6 +209,7 @@ removeUser userId cellPosition (Cell cell) =
         { history = List.filter (.userId >> (==) userId) cell.history
         , undoPoint = Dict.remove (Id.toInt userId) cell.undoPoint
         , cache = cell.cache
+        , railSplitToggled = cell.railSplitToggled
         }
         |> updateCache cellPosition
 
@@ -206,6 +225,7 @@ moveUndoPoint userId moveAmount cellPosition (Cell cell) =
         { history = cell.history
         , undoPoint = Dict.update (Id.toInt userId) (Maybe.map ((+) moveAmount)) cell.undoPoint
         , cache = cell.cache
+        , railSplitToggled = cell.railSplitToggled
         }
         |> updateCache cellPosition
 
@@ -222,7 +242,27 @@ flatten (Cell cell) =
 
 empty : Coord CellUnit -> Cell
 empty cellPosition =
-    Cell { history = [], undoPoint = Dict.empty, cache = addTrees cellPosition }
+    Cell { history = [], undoPoint = Dict.empty, cache = addTrees cellPosition, railSplitToggled = AssocSet.empty }
+
+
+toggleRailSplit : Coord CellLocalUnit -> Cell -> Cell
+toggleRailSplit coord (Cell cell) =
+    Cell
+        { history = cell.history
+        , undoPoint = cell.undoPoint
+        , cache = cell.cache
+        , railSplitToggled =
+            if AssocSet.member coord cell.railSplitToggled then
+                AssocSet.remove coord cell.railSplitToggled |> Debug.log "disabled"
+
+            else
+                AssocSet.insert coord cell.railSplitToggled |> Debug.log "enabled"
+        }
+
+
+getToggledRailSplit : Cell -> AssocSet.Set (Coord CellLocalUnit)
+getToggledRailSplit (Cell cell) =
+    cell.railSplitToggled
 
 
 addTrees : ( Quantity Int CellUnit, Quantity Int CellUnit ) -> List Value

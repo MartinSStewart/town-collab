@@ -331,11 +331,12 @@ getUserFromSessionId sessionId model =
 
 broadcastLocalChange :
     Effect.Time.Posix
+    -> ClientId
     -> ( Id UserId, BackendUserData )
     -> Nonempty ( Id EventId, Change.LocalChange )
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-broadcastLocalChange time userIdAndUser changes model =
+broadcastLocalChange time clientId userIdAndUser changes model =
     let
         ( model2, ( eventId, originalChange ), firstMsg ) =
             updateLocalChange time userIdAndUser (Nonempty.head changes) model
@@ -361,20 +362,15 @@ broadcastLocalChange time userIdAndUser changes model =
     in
     ( model3
     , broadcast
-        (\sessionId_ _ ->
-            case getUserFromSessionId sessionId_ model3 of
-                Just ( userId_, _ ) ->
-                    if Tuple.first userIdAndUser == userId_ then
-                        ChangeBroadcast originalChanges2 |> Just
+        (\_ clientId_ ->
+            if clientId == clientId_ then
+                ChangeBroadcast originalChanges2 |> Just
 
-                    else
-                        Nonempty.toList serverChanges
-                            |> List.filterMap (Maybe.map Change.ServerChange)
-                            |> Nonempty.fromList
-                            |> Maybe.map ChangeBroadcast
-
-                Nothing ->
-                    Nothing
+            else
+                Nonempty.toList serverChanges
+                    |> List.filterMap (Maybe.map Change.ServerChange)
+                    |> Nonempty.fromList
+                    |> Maybe.map ChangeBroadcast
         )
         model3
     )
@@ -409,7 +405,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
         GridChange changes ->
             case getUserFromSessionId sessionId model of
                 Just userIdAndUser ->
-                    broadcastLocalChange currentTime userIdAndUser changes model
+                    broadcastLocalChange currentTime clientId userIdAndUser changes model
 
                 Nothing ->
                     ( model, Command.none )
@@ -856,6 +852,12 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                 model
             , originalChange
             , ServerChangeHandColor userId colors |> Just
+            )
+
+        ToggleRailSplit coord ->
+            ( { model | grid = Grid.toggleRailSplit coord model.grid }
+            , originalChange
+            , ServerToggleRailSplit coord |> Just
             )
 
 

@@ -29,6 +29,7 @@ type LocalChange
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors
+    | ToggleRailSplit (Coord WorldUnit)
 
 
 type ClientChange
@@ -45,6 +46,7 @@ type ServerChange
     | ServerUserConnected (Id UserId) Colors
     | ServerYouLoggedIn LoggedIn_ Colors
     | ServerChangeHandColor (Id UserId) Colors
+    | ServerToggleRailSplit (Coord WorldUnit)
 
 
 type alias Cow =
