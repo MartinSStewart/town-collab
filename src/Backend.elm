@@ -170,13 +170,13 @@ update isProduction msg model =
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend isProduction time sessionId clientId toBackendMsg model
 
-        SentLoginEmail time emailAddress result ->
+        SentLoginEmail sendTime emailAddress result ->
             case result of
                 Ok _ ->
                     ( model, Command.none )
 
                 Err error ->
-                    ( addError time (PostmarkError emailAddress error) model, Command.none )
+                    ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
 
         WorldUpdateTimeElapsed time ->
             case model.lastWorldUpdate of
@@ -297,6 +297,27 @@ update isProduction msg model =
 
                 Nothing ->
                     ( { model | lastWorldUpdate = Just time }, Command.none )
+
+        SentInviteEmail inviteToken result ->
+            ( { model
+                | invites =
+                    List.updateIf
+                        (.inviteToken >> (==) inviteToken)
+                        (\a ->
+                            { a
+                                | emailResult =
+                                    case result of
+                                        Ok ok ->
+                                            EmailSent ok
+
+                                        Err error ->
+                                            EmailSendFailed error
+                            }
+                        )
+                        model.invites
+              }
+            , Command.none
+            )
 
 
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -534,7 +555,11 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                         loginEmailUrl : String
                         loginEmailUrl =
-                            Env.domain ++ Route.encode (InternalRoute { loginToken = Just loginToken, viewPoint = Coord.origin })
+                            Env.domain
+                                ++ Route.encode
+                                    (InternalRoute
+                                        { loginToken = Just loginToken, viewPoint = Coord.origin, inviteToken = Nothing }
+                                    )
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
@@ -583,6 +608,59 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                         Nothing ->
                             ( model2, SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId )
+
+                Invalid ->
+                    ( model, Command.none )
+
+        SendInviteEmailRequest a ->
+            case Untrusted.emailAddress a of
+                Valid emailAddress ->
+                    case getUserFromSessionId sessionId model of
+                        Just ( userId, _ ) ->
+                            let
+                                ( inviteToken, model2 ) =
+                                    generateSecretId currentTime model
+
+                                inviteUrl : String
+                                inviteUrl =
+                                    Env.domain
+                                        ++ Route.encode
+                                            (InternalRoute
+                                                { viewPoint = Coord.origin, loginToken = Nothing, inviteToken = Just inviteToken }
+                                            )
+                            in
+                            ( { model2
+                                | invites =
+                                    { invitedBy = userId
+                                    , invitedAt = currentTime
+                                    , invitedEmailAddress = emailAddress
+                                    , emailResult = EmailSending
+                                    , inviteToken = inviteToken
+                                    }
+                                        :: model2.invites
+                              }
+                            , sendEmail
+                                isProduction
+                                (SentInviteEmail inviteToken)
+                                (NonemptyString 'T' "own-collab invitation")
+                                ("You've been invited to join town-collab! Click this link to join "
+                                    ++ inviteUrl
+                                    ++ ". If you weren't expecting this email then it is safe to ignore."
+                                )
+                                (Email.Html.div
+                                    []
+                                    [ Email.Html.text "You've been invited to join town-collab! "
+                                    , Email.Html.a
+                                        [ Email.Html.Attributes.href inviteUrl ]
+                                        [ Email.Html.text "Click here to join" ]
+                                    , Email.Html.text ". If you weren't expecting this email then it is safe to ignore."
+                                    ]
+                                )
+                                emailAddress
+                            )
+
+                        Nothing ->
+                            ( model, Command.none )
 
                 Invalid ->
                     ( model, Command.none )

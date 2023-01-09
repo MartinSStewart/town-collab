@@ -1,5 +1,6 @@
 module Route exposing
     ( ConfirmEmailKey(..)
+    , InviteToken
     , LoginToken
     , Route(..)
     , UnsubscribeEmailKey(..)
@@ -25,6 +26,10 @@ type LoginToken
     = LoginToken Never
 
 
+type InviteToken
+    = InviteToken Never
+
+
 startPointAt : Coord WorldUnit
 startPointAt =
     Coord.tuple ( 0, 0 )
@@ -32,19 +37,21 @@ startPointAt =
 
 coordQueryParser : Url.Parser.Query.Parser Route
 coordQueryParser =
-    Url.Parser.Query.map3
-        (\maybeX maybeY loginToken2 ->
+    Url.Parser.Query.map4
+        (\maybeX maybeY loginToken2 inviteToken2 ->
             InternalRoute
                 { viewPoint =
                     ( Maybe.withDefault (Tuple.first startPointAt) (Maybe.map Units.tileUnit maybeX)
                     , Maybe.withDefault (Tuple.second startPointAt) (Maybe.map Units.tileUnit maybeY)
                     )
                 , loginToken = Maybe.map Id.secretFromString loginToken2
+                , inviteToken = Maybe.map Id.secretFromString inviteToken2
                 }
         )
         (Url.Parser.Query.int "x")
         (Url.Parser.Query.int "y")
         (Url.Parser.Query.string loginToken)
+        (Url.Parser.Query.string inviteToken)
 
 
 urlParser : Url.Parser.Parser (Route -> b) b
@@ -83,6 +90,10 @@ loginToken =
     "login-token"
 
 
+inviteToken =
+    "invite-token"
+
+
 notifyMe : String
 notifyMe =
     "notify-me"
@@ -99,7 +110,7 @@ unsubscribe =
 
 
 type Route
-    = InternalRoute { viewPoint : Coord WorldUnit, loginToken : Maybe (SecretId LoginToken) }
+    = InternalRoute { viewPoint : Coord WorldUnit, loginToken : Maybe (SecretId LoginToken), inviteToken : Maybe (SecretId InviteToken) }
 
 
 type ConfirmEmailKey
@@ -112,4 +123,4 @@ type UnsubscribeEmailKey
 
 internalRoute : Coord WorldUnit -> Route
 internalRoute viewPoint =
-    InternalRoute { viewPoint = viewPoint, loginToken = Nothing }
+    InternalRoute { viewPoint = viewPoint, loginToken = Nothing, inviteToken = Nothing }

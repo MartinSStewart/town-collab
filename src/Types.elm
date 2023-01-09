@@ -4,6 +4,7 @@ module Types exposing
     , BackendMsg(..)
     , BackendUserData
     , EmailEvent(..)
+    , EmailResult(..)
     , FrontendLoaded
     , FrontendLoading
     , FrontendModel
@@ -11,7 +12,6 @@ module Types exposing
     , FrontendMsg
     , FrontendMsg_(..)
     , Hover(..)
-    , InviteToken
     , LoadedLocalModel_
     , LoadingData_
     , LoadingLocalModel(..)
@@ -58,7 +58,7 @@ import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
-import Route exposing (ConfirmEmailKey, LoginToken, UnsubscribeEmailKey)
+import Route exposing (ConfirmEmailKey, InviteToken, LoginToken, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput
@@ -266,13 +266,15 @@ type alias Invite =
     { invitedBy : Id UserId
     , invitedAt : Time.Posix
     , invitedEmailAddress : EmailAddress
-    , emailResult : Result Effect.Http.Error Postmark.PostmarkSendResponse
+    , emailResult : EmailResult
     , inviteToken : SecretId InviteToken
     }
 
 
-type InviteToken
-    = InviteToken Never
+type EmailResult
+    = EmailSending
+    | EmailSendFailed Effect.Http.Error
+    | EmailSent Postmark.PostmarkSendResponse
 
 
 type BackendError
@@ -329,6 +331,7 @@ type ToBackend
     | LeaveHomeTrainRequest (Id TrainId)
     | PingRequest
     | SendLoginEmailRequest (Untrusted EmailAddress)
+    | SendInviteEmailRequest (Untrusted EmailAddress)
 
 
 type BackendMsg
@@ -337,6 +340,7 @@ type BackendMsg
     | SentLoginEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | UpdateFromFrontend SessionId ClientId ToBackend Effect.Time.Posix
     | WorldUpdateTimeElapsed Effect.Time.Posix
+    | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
 
 
 type ToFrontend
@@ -348,6 +352,7 @@ type ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
+    | SendInviteEmailResponse EmailAddress
 
 
 type EmailEvent

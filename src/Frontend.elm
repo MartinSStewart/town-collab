@@ -593,7 +593,7 @@ init url key =
                     }
 
                 Nothing ->
-                    { data = { viewPoint = Route.startPointAt, loginToken = Nothing }
+                    { data = { viewPoint = Route.startPointAt, loginToken = Nothing, inviteToken = Nothing }
                     , cmd = Effect.Browser.Navigation.replaceUrl key (Route.encode defaultRoute)
                     }
 
@@ -2387,9 +2387,14 @@ uiUpdate msg model =
         PressedSendInviteUser ->
             case model.inviteSubmitStatus of
                 NotSubmitted _ ->
-                    ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }
-                    , Command.none
-                    )
+                    case EmailAddress.fromString model.inviteTextInput.current.text of
+                        Just emailAddress ->
+                            ( { model | inviteSubmitStatus = Submitting }
+                            , Effect.Lamdera.sendToBackend (SendInviteEmailRequest (Untrusted.untrust emailAddress))
+                            )
+
+                        Nothing ->
+                            ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }, Command.none )
 
                 Submitting ->
                     ( model, Command.none )
@@ -3503,6 +3508,22 @@ updateLoadedFromBackend msg model =
 
                         Submitted _ ->
                             model.pressedSubmitEmail
+              }
+            , Command.none
+            )
+
+        SendInviteEmailResponse emailAddress ->
+            ( { model
+                | inviteSubmitStatus =
+                    case model.inviteSubmitStatus of
+                        NotSubmitted _ ->
+                            model.inviteSubmitStatus
+
+                        Submitting ->
+                            Submitted emailAddress
+
+                        Submitted _ ->
+                            model.inviteSubmitStatus
               }
             , Command.none
             )
