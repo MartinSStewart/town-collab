@@ -204,7 +204,7 @@ audioLoaded audioData model =
                             , volume = volume model position * Quantity.unwrap trainSpeed / Train.defaultMaxSpeed |> abs
                             }
                 )
-                (AssocList.toList model.trains)
+                (IdDict.toList model.trains)
 
         mailEditorVolumeScale : Float
         mailEditorVolumeScale =
@@ -269,7 +269,7 @@ audioLoaded audioData model =
                 _ ->
                     Audio.silence
         )
-        (AssocList.toList model.trains)
+        (IdDict.toList model.trains)
         |> Audio.group
     , case model.lastTrainWhistle of
         Just time ->
@@ -593,7 +593,7 @@ init url key =
                     }
 
                 Nothing ->
-                    { data = { viewPoint = Route.startPointAt, loginToken = Nothing, inviteToken = Nothing }
+                    { data = { viewPoint = Route.startPointAt, loginOrInviteToken = Nothing }
                     , cmd = Effect.Browser.Navigation.replaceUrl key (Route.encode defaultRoute)
                     }
 
@@ -623,7 +623,7 @@ init url key =
         , hasCmdKey = False
         }
     , Command.batch
-        [ Effect.Lamdera.sendToBackend (ConnectToBackend bounds data.loginToken)
+        [ Effect.Lamdera.sendToBackend (ConnectToBackend bounds data.loginOrInviteToken)
         , Command.sendToJs "user_agent_to_js" user_agent_to_js Json.Encode.null
         , Effect.Task.perform
             (\{ viewport } ->
@@ -1274,7 +1274,7 @@ updateLoaded audioData msg model =
                     )
                         && List.any
                             (\( _, train ) -> BoundingBox2d.contains (Train.trainPosition model.time train) viewBounds)
-                            (AssocList.toList model.trains)
+                            (IdDict.toList model.trains)
 
                 musicEnd : Effect.Time.Posix
                 musicEnd =
@@ -1408,7 +1408,7 @@ updateLoaded audioData msg model =
                         , localTime = localTime
                         , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                         , trains =
-                            AssocList.map
+                            IdDict.map
                                 (\trainId train ->
                                     Train.moveTrain
                                         trainId
@@ -1876,7 +1876,7 @@ hoverAt model mousePosition =
                                 Nothing
 
                             HandTool ->
-                                AssocList.toList model.trains
+                                IdDict.toList model.trains
                                     |> List.filterMap
                                         (\( trainId, train ) ->
                                             let
@@ -2125,7 +2125,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
         handleTrainHouse : Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend frontendMsg ))
         handleTrainHouse =
             case
-                AssocList.toList model.trains
+                IdDict.toList model.trains
                     |> List.find (\( _, train ) -> Train.home train == position)
             of
                 Just ( trainId, train ) ->
@@ -2323,7 +2323,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 ( { model2
                                     | viewPoint = actualViewPoint model2 |> NormalViewPoint
                                     , trains =
-                                        AssocList.update
+                                        IdDict.update
                                             trainId
                                             (\_ -> Train.leaveHome model.time train |> Just)
                                             model2.trains
@@ -2525,7 +2525,7 @@ clickLeaveHomeTrain trainId train model =
     ( { model
         | viewPoint = actualViewPoint model |> NormalViewPoint
         , trains =
-            AssocList.update
+            IdDict.update
                 trainId
                 (\_ -> Train.cancelTeleportingHome model.time train |> Just)
                 model.trains
@@ -2539,7 +2539,7 @@ clickTeleportHomeTrain trainId train model =
     ( { model
         | viewPoint = actualViewPoint model |> NormalViewPoint
         , trains =
-            AssocList.update
+            IdDict.update
                 trainId
                 (\_ -> Train.startTeleportingHome model.time train |> Just)
                 model.trains
@@ -2855,7 +2855,7 @@ placeTile isDragPlacement tileGroup index model =
                     , trains =
                         case Train.handleAddingTrain model3.trains userId tile cursorPosition_ of
                             Just ( trainId, train ) ->
-                                AssocList.insert trainId train model.trains
+                                IdDict.insert trainId train model.trains
 
                             Nothing ->
                                 model.trains
@@ -2865,7 +2865,7 @@ placeTile isDragPlacement tileGroup index model =
             model
 
 
-canPlaceTile : Effect.Time.Posix -> Grid.GridChange -> AssocList.Dict (Id TrainId) Train -> Grid -> Bool
+canPlaceTile : Effect.Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid -> Bool
 canPlaceTile time change trains grid =
     if Grid.canPlaceTile change then
         let
@@ -3270,7 +3270,7 @@ actualViewPointHelper model =
             viewPoint
 
         TrainViewPoint trainViewPoint ->
-            case AssocList.get trainViewPoint.trainId model.trains of
+            case IdDict.get trainViewPoint.trainId model.trains of
                 Just train ->
                     let
                         t =
@@ -3408,17 +3408,17 @@ updateLoadedFromBackend msg model =
         WorldUpdateBroadcast diff ->
             ( { model
                 | trains =
-                    AssocList.toList diff
+                    IdDict.toList diff
                         |> List.filterMap
                             (\( trainId, diff_ ) ->
-                                case AssocList.get trainId model.trains |> Train.applyDiff diff_ of
+                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
                                     Just newTrain ->
                                         Just ( trainId, newTrain )
 
                                     Nothing ->
                                         Nothing
                             )
-                        |> AssocList.fromList
+                        |> IdDict.fromList
               }
             , Command.none
             )
@@ -4743,7 +4743,7 @@ subscriptions _ model =
 
 getSpeechBubbles : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isRadio : Bool }
 getSpeechBubbles model =
-    AssocList.toList model.trains
+    IdDict.toList model.trains
         |> List.concatMap
             (\( _, train ) ->
                 case ( Train.status model.time train, Train.isStuck model.time train ) of

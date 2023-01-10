@@ -1,6 +1,7 @@
 module Route exposing
     ( ConfirmEmailKey(..)
     , InviteToken
+    , LoginOrInviteToken(..)
     , LoginToken
     , Route(..)
     , UnsubscribeEmailKey(..)
@@ -30,6 +31,11 @@ type InviteToken
     = InviteToken Never
 
 
+type LoginOrInviteToken
+    = LoginToken2 (SecretId LoginToken)
+    | InviteToken2 (SecretId InviteToken)
+
+
 startPointAt : Coord WorldUnit
 startPointAt =
     Coord.tuple ( 0, 0 )
@@ -44,8 +50,16 @@ coordQueryParser =
                     ( Maybe.withDefault (Tuple.first startPointAt) (Maybe.map Units.tileUnit maybeX)
                     , Maybe.withDefault (Tuple.second startPointAt) (Maybe.map Units.tileUnit maybeY)
                     )
-                , loginToken = Maybe.map Id.secretFromString loginToken2
-                , inviteToken = Maybe.map Id.secretFromString inviteToken2
+                , loginOrInviteToken =
+                    case ( loginToken2, inviteToken2 ) of
+                        ( _, Just inviteToken3 ) ->
+                            Id.secretFromString inviteToken3 |> InviteToken2 |> Just
+
+                        ( Just loginToken3, Nothing ) ->
+                            Id.secretFromString loginToken3 |> LoginToken2 |> Just
+
+                        ( Nothing, Nothing ) ->
+                            Nothing
                 }
         )
         (Url.Parser.Query.int "x")
@@ -76,9 +90,12 @@ encode route =
                 []
                 (Url.Builder.int "x" x
                     :: Url.Builder.int "y" y
-                    :: (case internalRoute_.loginToken of
-                            Just loginToken2 ->
+                    :: (case internalRoute_.loginOrInviteToken of
+                            Just (LoginToken2 loginToken2) ->
                                 [ Url.Builder.string loginToken (Id.secretToString loginToken2) ]
+
+                            Just (InviteToken2 inviteToken2) ->
+                                [ Url.Builder.string loginToken (Id.secretToString inviteToken2) ]
 
                             Nothing ->
                                 []
@@ -110,7 +127,7 @@ unsubscribe =
 
 
 type Route
-    = InternalRoute { viewPoint : Coord WorldUnit, loginToken : Maybe (SecretId LoginToken), inviteToken : Maybe (SecretId InviteToken) }
+    = InternalRoute { viewPoint : Coord WorldUnit, loginOrInviteToken : Maybe LoginOrInviteToken }
 
 
 type ConfirmEmailKey
@@ -123,4 +140,4 @@ type UnsubscribeEmailKey
 
 internalRoute : Coord WorldUnit -> Route
 internalRoute viewPoint =
-    InternalRoute { viewPoint = viewPoint, loginToken = Nothing, inviteToken = Nothing }
+    InternalRoute { viewPoint = viewPoint, loginOrInviteToken = Nothing }

@@ -106,7 +106,16 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                     { spacing = 4, padding = Ui.noPadding }
                     [ Ui.button
                         { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
-                        (Ui.text "Send invite")
+                        (case inviteSubmitStatus of
+                            NotSubmitted _ ->
+                                Ui.text "Send invite"
+
+                            Submitting ->
+                                Ui.text "Submitting "
+
+                            Submitted _ ->
+                                Ui.empty
+                        )
                     , case ( pressedSubmit inviteSubmitStatus, EmailAddress.fromString inviteTextInput.current.text ) of
                         ( True, Nothing ) ->
                             Ui.el

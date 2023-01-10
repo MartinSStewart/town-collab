@@ -32,7 +32,7 @@ import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
-import Route exposing (LoginToken(..), Route(..))
+import Route exposing (LoginOrInviteToken(..), LoginToken(..), Route(..))
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..), Tile(..))
 import Train exposing (Status(..), Train, TrainDiff)
@@ -77,13 +77,13 @@ init =
             , users = IdDict.empty
             , secretLinkCounter = 0
             , errors = []
-            , trains = AssocList.empty
+            , trains = IdDict.empty
             , cows = IdDict.empty
-            , lastWorldUpdateTrains = AssocList.empty
+            , lastWorldUpdateTrains = IdDict.empty
             , lastWorldUpdate = Nothing
             , mail = AssocList.empty
             , pendingLoginTokens = AssocList.empty
-            , invites = []
+            , invites = AssocList.empty
             }
     in
     case Env.adminEmail of
@@ -182,11 +182,11 @@ update isProduction msg model =
             case model.lastWorldUpdate of
                 Just oldTime ->
                     let
-                        newTrains : AssocList.Dict (Id TrainId) Train
+                        newTrains : IdDict TrainId Train
                         newTrains =
                             case model.lastWorldUpdate of
                                 Just lastWorldUpdate ->
-                                    AssocList.map
+                                    IdDict.map
                                         (\trainId train ->
                                             Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
                                         )
@@ -198,16 +198,16 @@ update isProduction msg model =
                         mergeTrains :
                             { mail : AssocList.Dict (Id MailId) BackendMail
                             , mailChanged : Bool
-                            , diff : AssocList.Dict (Id TrainId) TrainDiff
+                            , diff : IdDict TrainId TrainDiff
                             }
                         mergeTrains =
-                            AssocList.merge
+                            IdDict.merge
                                 (\_ _ a -> a)
                                 (\trainId oldTrain newTrain state ->
                                     let
-                                        diff : AssocList.Dict (Id TrainId) TrainDiff
+                                        diff : IdDict TrainId TrainDiff
                                         diff =
-                                            AssocList.insert trainId (Train.diff oldTrain newTrain) state.diff
+                                            IdDict.insert trainId (Train.diff oldTrain newTrain) state.diff
                                     in
                                     case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
                                         ( TeleportingHome _, WaitingAtHome ) ->
@@ -271,11 +271,11 @@ update isProduction msg model =
                                             { state | diff = diff }
                                 )
                                 (\trainId train state ->
-                                    { state | diff = AssocList.insert trainId (Train.NewTrain train) state.diff }
+                                    { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
                                 )
                                 model.lastWorldUpdateTrains
                                 newTrains
-                                { mailChanged = False, mail = model.mail, diff = AssocList.empty }
+                                { mailChanged = False, mail = model.mail, diff = IdDict.empty }
                     in
                     ( { model
                         | lastWorldUpdate = Just time
@@ -301,18 +301,20 @@ update isProduction msg model =
         SentInviteEmail inviteToken result ->
             ( { model
                 | invites =
-                    List.updateIf
-                        (.inviteToken >> (==) inviteToken)
-                        (\a ->
-                            { a
-                                | emailResult =
-                                    case result of
-                                        Ok ok ->
-                                            EmailSent ok
+                    AssocList.update
+                        inviteToken
+                        (Maybe.map
+                            (\a ->
+                                { a
+                                    | emailResult =
+                                        case result of
+                                            Ok ok ->
+                                                EmailSent ok
 
-                                        Err error ->
-                                            EmailSendFailed error
-                            }
+                                            Err error ->
+                                                EmailSendFailed error
+                                }
+                            )
                         )
                         model.invites
               }
@@ -420,8 +422,8 @@ updateFromFrontend :
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 updateFromFrontend isProduction currentTime sessionId clientId msg model =
     case msg of
-        ConnectToBackend requestData maybeLoginToken ->
-            requestDataUpdate currentTime sessionId clientId requestData maybeLoginToken model
+        ConnectToBackend requestData maybeToken ->
+            requestDataUpdate currentTime sessionId clientId requestData maybeToken model
 
         GridChange changes ->
             case getUserFromSessionId sessionId model of
@@ -525,7 +527,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
         TeleportHomeTrainRequest trainId teleportTime ->
             ( { model
                 | trains =
-                    AssocList.update
+                    IdDict.update
                         trainId
                         (Maybe.map (Train.startTeleportingHome (adjustEventTime currentTime teleportTime)))
                         model.trains
@@ -534,12 +536,12 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
             )
 
         CancelTeleportHomeTrainRequest trainId ->
-            ( { model | trains = AssocList.update trainId (Maybe.map (Train.cancelTeleportingHome currentTime)) model.trains }
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.cancelTeleportingHome currentTime)) model.trains }
             , Command.none
             )
 
         LeaveHomeTrainRequest trainId ->
-            ( { model | trains = AssocList.update trainId (Maybe.map (Train.leaveHome currentTime)) model.trains }
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome currentTime)) model.trains }
             , Command.none
             )
 
@@ -558,7 +560,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                             Env.domain
                                 ++ Route.encode
                                     (InternalRoute
-                                        { loginToken = Just loginToken, viewPoint = Coord.origin, inviteToken = Nothing }
+                                        { loginOrInviteToken = Just (LoginToken2 loginToken), viewPoint = Coord.origin }
                                     )
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
@@ -617,47 +619,61 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                 Valid emailAddress ->
                     case getUserFromSessionId sessionId model of
                         Just ( userId, _ ) ->
-                            let
-                                ( inviteToken, model2 ) =
-                                    generateSecretId currentTime model
+                            -- Check if email address has already accepted an invite
+                            if IdDict.toList model.users |> List.any (\( _, user ) -> user.emailAddress == emailAddress) then
+                                ( model, Command.none )
 
-                                inviteUrl : String
-                                inviteUrl =
-                                    Env.domain
-                                        ++ Route.encode
-                                            (InternalRoute
-                                                { viewPoint = Coord.origin, loginToken = Nothing, inviteToken = Just inviteToken }
-                                            )
-                            in
-                            ( { model2
-                                | invites =
-                                    { invitedBy = userId
-                                    , invitedAt = currentTime
-                                    , invitedEmailAddress = emailAddress
-                                    , emailResult = EmailSending
-                                    , inviteToken = inviteToken
-                                    }
-                                        :: model2.invites
-                              }
-                            , sendEmail
-                                isProduction
-                                (SentInviteEmail inviteToken)
-                                (NonemptyString 'T' "own-collab invitation")
-                                ("You've been invited to join town-collab! Click this link to join "
-                                    ++ inviteUrl
-                                    ++ ". If you weren't expecting this email then it is safe to ignore."
-                                )
-                                (Email.Html.div
-                                    []
-                                    [ Email.Html.text "You've been invited to join town-collab! "
-                                    , Email.Html.a
-                                        [ Email.Html.Attributes.href inviteUrl ]
-                                        [ Email.Html.text "Click here to join" ]
-                                    , Email.Html.text ". If you weren't expecting this email then it is safe to ignore."
+                            else
+                                let
+                                    _ =
+                                        Debug.log "inviteUrl" inviteUrl
+
+                                    ( inviteToken, model2 ) =
+                                        generateSecretId currentTime model
+
+                                    inviteUrl : String
+                                    inviteUrl =
+                                        Env.domain
+                                            ++ Route.encode
+                                                (InternalRoute
+                                                    { viewPoint = Coord.origin
+                                                    , loginOrInviteToken = Just (InviteToken2 inviteToken)
+                                                    }
+                                                )
+                                in
+                                ( { model2
+                                    | invites =
+                                        AssocList.insert
+                                            inviteToken
+                                            { invitedBy = userId
+                                            , invitedAt = currentTime
+                                            , invitedEmailAddress = emailAddress
+                                            , emailResult = EmailSending
+                                            }
+                                            model2.invites
+                                  }
+                                , Command.batch
+                                    [ sendEmail
+                                        isProduction
+                                        (SentInviteEmail inviteToken)
+                                        (NonemptyString 'T' "own-collab invitation")
+                                        ("You've been invited to join town-collab! Click this link to join "
+                                            ++ inviteUrl
+                                            ++ ". If you weren't expecting this email then it is safe to ignore."
+                                        )
+                                        (Email.Html.div
+                                            []
+                                            [ Email.Html.text "You've been invited to join town-collab! "
+                                            , Email.Html.a
+                                                [ Email.Html.Attributes.href inviteUrl ]
+                                                [ Email.Html.text "Click here to join" ]
+                                            , Email.Html.text ". If you weren't expecting this email then it is safe to ignore."
+                                            ]
+                                        )
+                                        emailAddress
+                                    , Effect.Lamdera.sendToFrontend clientId (SendInviteEmailResponse emailAddress)
                                     ]
                                 )
-                                emailAddress
-                            )
 
                         Nothing ->
                             ( model, Command.none )
@@ -705,7 +721,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 
                                 trainsToRemove : List (Id TrainId)
                                 trainsToRemove =
-                                    AssocList.toList model.trains
+                                    IdDict.toList model.trains
                                         |> List.filterMap
                                             (\( trainId, train ) ->
                                                 if Train.owner train == userId then
@@ -763,7 +779,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 
                         maybeTrain : Maybe ( Id TrainId, Train )
                         maybeTrain =
-                            if AssocList.size model.trains < 50 then
+                            if IdDict.size model.trains < 50 then
                                 Train.handleAddingTrain model.trains userId localChange.change localChange.position
 
                             else
@@ -784,7 +800,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                                         , trains =
                                             case maybeTrain of
                                                 Just ( trainId, train ) ->
-                                                    AssocList.insert trainId train model.trains
+                                                    IdDict.insert trainId train model.trains
 
                                                 Nothing ->
                                                     model.trains
@@ -942,7 +958,7 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
 removeTrain : Id TrainId -> BackendModel -> BackendModel
 removeTrain trainId model =
     { model
-        | trains = AssocList.remove trainId model.trains
+        | trains = IdDict.remove trainId model.trains
         , mail =
             AssocList.map
                 (\_ mail ->
@@ -997,10 +1013,10 @@ requestDataUpdate :
     -> SessionId
     -> ClientId
     -> Bounds CellUnit
-    -> Maybe (SecretId LoginToken)
+    -> Maybe LoginOrInviteToken
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken model =
+requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
     let
         checkLogin () =
             ( case getUserFromSessionId sessionId model of
@@ -1020,8 +1036,8 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
             )
 
         ( userStatus, model2, maybeRequestedBy ) =
-            case maybeLoginToken of
-                Just loginToken ->
+            case maybeToken of
+                Just (LoginToken2 loginToken) ->
                     case AssocList.get loginToken model.pendingLoginTokens of
                         Just data ->
                             if Duration.from data.requestTime currentTime |> Quantity.lessThan (Duration.minutes 10) then
@@ -1043,6 +1059,38 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
 
                             else
                                 checkLogin ()
+
+                        Nothing ->
+                            checkLogin ()
+
+                Just (InviteToken2 inviteToken) ->
+                    case AssocList.get inviteToken model.invites of
+                        Just invite ->
+                            let
+                                userId : Id UserId
+                                userId =
+                                    Train.nextId model.users
+
+                                ( model4, newUser ) =
+                                    createUser userId invite.invitedEmailAddress model
+                            in
+                            ( LoggedIn
+                                { userId = userId
+                                , undoCurrent = newUser.undoCurrent
+                                , undoHistory = newUser.undoHistory
+                                , redoHistory = newUser.redoHistory
+                                , mailEditor = newUser.mailEditor
+                                }
+                            , { model4
+                                | invites = AssocList.remove inviteToken model.invites
+                                , users =
+                                    IdDict.update
+                                        invite.invitedBy
+                                        (Maybe.map (\user -> { user | acceptedInvites = IdDict.insert userId () user.acceptedInvites }))
+                                        model4.users
+                              }
+                            , Nothing
+                            )
 
                         Nothing ->
                             checkLogin ()
@@ -1090,7 +1138,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeLoginToken mode
     ( model3
     , Command.batch
         [ Effect.Lamdera.sendToFrontend clientId (LoadingData loadingData)
-        , case ( maybeLoginToken, userStatus ) of
+        , case ( maybeToken, userStatus ) of
             ( Just _, LoggedIn loggedIn ) ->
                 broadcast
                     (\sessionId2 clientId2 ->
@@ -1167,6 +1215,7 @@ createUser userId emailAddress model =
             , cursor = Nothing
             , handColor = Cursor.defaultColors
             , emailAddress = emailAddress
+            , acceptedInvites = IdDict.empty
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

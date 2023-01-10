@@ -58,7 +58,7 @@ import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
-import Route exposing (ConfirmEmailKey, InviteToken, LoginToken, UnsubscribeEmailKey)
+import Route exposing (ConfirmEmailKey, InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput
@@ -102,7 +102,7 @@ type LoadingLocalModel
 
 type alias LoadedLocalModel_ =
     { localModel : LocalModel Change LocalGrid
-    , trains : AssocList.Dict (Id TrainId) Train
+    , trains : IdDict TrainId Train
     , mail : AssocList.Dict (Id MailId) FrontendMail
     }
 
@@ -127,7 +127,7 @@ type Tool
 type alias FrontendLoaded =
     { key : Effect.Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
-    , trains : AssocList.Dict (Id TrainId) Train
+    , trains : IdDict TrainId Train
     , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
@@ -246,9 +246,9 @@ type alias BackendModel =
     , users : IdDict UserId BackendUserData
     , secretLinkCounter : Int
     , errors : List ( Effect.Time.Posix, BackendError )
-    , trains : AssocList.Dict (Id TrainId) Train
+    , trains : IdDict TrainId Train
     , cows : IdDict CowId Cow
-    , lastWorldUpdateTrains : AssocList.Dict (Id TrainId) Train
+    , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : AssocList.Dict (Id MailId) BackendMail
     , pendingLoginTokens :
@@ -258,7 +258,7 @@ type alias BackendModel =
             , userId : Id UserId
             , requestedBy : SessionId
             }
-    , invites : List Invite
+    , invites : AssocList.Dict (SecretId InviteToken) Invite
     }
 
 
@@ -267,7 +267,6 @@ type alias Invite =
     , invitedAt : Time.Posix
     , invitedEmailAddress : EmailAddress
     , emailResult : EmailResult
-    , inviteToken : SecretId InviteToken
     }
 
 
@@ -290,6 +289,7 @@ type alias BackendUserData =
     , cursor : Maybe Cursor
     , handColor : Colors
     , emailAddress : EmailAddress
+    , acceptedInvites : IdDict UserId ()
     }
 
 
@@ -322,7 +322,7 @@ type FrontendMsg_
 
 
 type ToBackend
-    = ConnectToBackend (Bounds CellUnit) (Maybe (SecretId LoginToken))
+    = ConnectToBackend (Bounds CellUnit) (Maybe LoginOrInviteToken)
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
     | MailEditorToBackend MailEditor.ToBackend
@@ -347,7 +347,7 @@ type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | WorldUpdateBroadcast (AssocList.Dict (Id TrainId) TrainDiff)
+    | WorldUpdateBroadcast (IdDict TrainId TrainDiff)
     | MailEditorToFrontend MailEditor.ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Effect.Time.Posix
@@ -363,7 +363,7 @@ type alias LoadingData_ =
     { grid : GridData
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
-    , trains : AssocList.Dict (Id TrainId) Train
+    , trains : IdDict TrainId Train
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor

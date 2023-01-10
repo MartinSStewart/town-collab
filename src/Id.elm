@@ -8,13 +8,10 @@ module Id exposing
     , UserId
     , fromInt
     , increment
-    , nextId
     , secretFromString
     , secretToString
     , toInt
     )
-
-import AssocList
 
 
 type SecretId a
@@ -58,16 +55,6 @@ toInt (Id int) =
 increment : Id a -> Id a
 increment (Id id) =
     Id (id + 1)
-
-
-nextId : AssocList.Dict (Id a) b -> Id a
-nextId ids =
-    AssocList.toList ids
-        |> List.map (Tuple.first >> toInt)
-        |> List.maximum
-        |> Maybe.withDefault 0
-        |> (+) 1
-        |> fromInt
 
 
 secretToString : SecretId a -> String

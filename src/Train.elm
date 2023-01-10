@@ -18,6 +18,7 @@ module Train exposing
     , isStuck
     , leaveHome
     , moveTrain
+    , nextId
     , owner
     , speed
     , startTeleportingHome
@@ -40,6 +41,7 @@ import Effect.WebGL.Texture exposing (Texture)
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, MailId, TrainId, UserId)
+import IdDict exposing (IdDict)
 import List.Extra as List
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -834,7 +836,7 @@ trainT time (Train train) =
 draw :
     Effect.Time.Posix
     -> AssocList.Dict (Id MailId) FrontendMail
-    -> AssocList.Dict (Id TrainId) Train
+    -> IdDict TrainId Train
     -> Mat4
     -> WebGL.Texture.Texture
     -> List Effect.WebGL.Entity
@@ -992,7 +994,7 @@ draw time mail trains viewMatrix trainTexture =
                             []
                    )
         )
-        (AssocList.toList trains)
+        (IdDict.toList trains)
 
 
 startTeleportingHome : Effect.Time.Posix -> Train -> Train
@@ -1217,7 +1219,17 @@ trainCoachMesh teleportAmount frame =
         ]
 
 
-handleAddingTrain : AssocList.Dict (Id TrainId) Train -> Id UserId -> Tile -> Coord WorldUnit -> Maybe ( Id TrainId, Train )
+nextId : IdDict a b -> Id a
+nextId ids =
+    IdDict.toList ids
+        |> List.map (Tuple.first >> Id.toInt)
+        |> List.maximum
+        |> Maybe.withDefault 0
+        |> (+) 1
+        |> Id.fromInt
+
+
+handleAddingTrain : IdDict TrainId Train -> Id UserId -> Tile -> Coord WorldUnit -> Maybe ( Id TrainId, Train )
 handleAddingTrain trains owner_ tile position =
     if tile == TrainHouseLeft || tile == TrainHouseRight then
         let
@@ -1228,7 +1240,7 @@ handleAddingTrain trains owner_ tile position =
                 else
                     ( Tile.trainHouseRightRailPath, Tile.trainHouseRightRailPath )
         in
-        ( Id.nextId trains
+        ( nextId trains
         , Train
             { position = position
             , path = railPath
@@ -1248,7 +1260,7 @@ handleAddingTrain trains owner_ tile position =
         Nothing
 
 
-canRemoveTiles : Effect.Time.Posix -> List { a | tile : Tile, position : Coord WorldUnit } -> AssocList.Dict (Id TrainId) Train -> Result (List ( Id TrainId, Train )) (List ( Id TrainId, Train ))
+canRemoveTiles : Effect.Time.Posix -> List { a | tile : Tile, position : Coord WorldUnit } -> IdDict TrainId Train -> Result (List ( Id TrainId, Train )) (List ( Id TrainId, Train ))
 canRemoveTiles time removed trains =
     let
         trainsToRemove : List ( Id TrainId, Train )
@@ -1256,7 +1268,7 @@ canRemoveTiles time removed trains =
             List.concatMap
                 (\remove ->
                     if remove.tile == TrainHouseLeft || remove.tile == TrainHouseRight then
-                        AssocList.toList trains
+                        IdDict.toList trains
                             |> List.filterMap
                                 (\( trainId, train ) ->
                                     if home train == remove.position then
