@@ -374,6 +374,12 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , List.map
+        (\( time, position ) ->
+            playSound RailToggleSound time |> Audio.scaleVolume (0.5 * volume model (Coord.toPoint2d position))
+        )
+        model.railToggles
+        |> Audio.group
     ]
         |> Audio.group
         |> Audio.scaleVolumeAt [ ( model.startTime, 0 ), ( Duration.addTo model.startTime Duration.second, 1 ) ]
@@ -556,9 +562,10 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , showInvite = False
             , inviteTextInput = TextInput.init
             , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
+            , railToggles = []
             }
                 |> setCurrentTool HandToolButton
-                |> handleOutMsg LocalGrid.HandColorChanged
+                |> handleOutMsg False LocalGrid.HandColorChanged
     in
     ( updateMeshes True model model
     , Command.batch
@@ -1686,7 +1693,7 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
                                 )
                                 model
                     in
-                    ( handleOutMsg outMsg model2, Command.none )
+                    ( handleOutMsg False outMsg model2, Command.none )
 
                 Nothing ->
                     ( model, Command.none )
@@ -2079,7 +2086,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                         ( model2, outMsg ) =
                             updateLocalModel (Change.ToggleRailSplit position) model
                     in
-                    ( handleOutMsg outMsg model2, Command.none )
+                    ( handleOutMsg False outMsg model2, Command.none )
                 )
     in
     case tile of
@@ -2761,6 +2768,12 @@ placeTile isDragPlacement tileGroup index model =
 
                             LocalGrid.HandColorChanged ->
                                 []
+
+                            LocalGrid.RailToggledBySelf _ ->
+                                []
+
+                            LocalGrid.RailToggledByAnother _ ->
+                                []
                 in
                 { model3
                     | lastTilePlaced =
@@ -3275,8 +3288,8 @@ updateFromBackend msg model =
             ( model, Command.none )
 
 
-handleOutMsg : LocalGrid.OutMsg -> FrontendLoaded -> FrontendLoaded
-handleOutMsg outMsg model =
+handleOutMsg : Bool -> LocalGrid.OutMsg -> FrontendLoaded -> FrontendLoaded
+handleOutMsg isFromBackend outMsg model =
     case outMsg of
         LocalGrid.NoOutMsg ->
             model
@@ -3321,6 +3334,29 @@ handleOutMsg outMsg model =
                         model.handMeshes
             }
 
+        LocalGrid.RailToggledByAnother position ->
+            handleRailToggleSound position model
+
+        LocalGrid.RailToggledBySelf position ->
+            if isFromBackend then
+                model
+
+            else
+                handleRailToggleSound position model
+
+
+handleRailToggleSound position model =
+    { model
+        | railToggles =
+            ( model.time, position )
+                :: List.filter
+                    (\( time, _ ) ->
+                        Duration.from time model.time
+                            |> Quantity.lessThan Duration.second
+                    )
+                    model.railToggles
+    }
+
 
 updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 updateLoadedFromBackend msg model =
@@ -3333,7 +3369,7 @@ updateLoadedFromBackend msg model =
                 ( newLocalModel, outMsgs ) =
                     LocalGrid.updateFromBackend changes model.localModel
             in
-            ( List.foldl handleOutMsg { model | localModel = newLocalModel } outMsgs, Command.none )
+            ( List.foldl (handleOutMsg True) { model | localModel = newLocalModel } outMsgs, Command.none )
 
         UnsubscribeEmailConfirmed ->
             ( model, Command.none )

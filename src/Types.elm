@@ -178,6 +178,7 @@ type alias FrontendLoaded =
     , showInvite : Bool
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
+    , railToggles : List ( Time.Posix, Coord WorldUnit )
     }
 
 

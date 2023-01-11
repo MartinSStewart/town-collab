@@ -116,6 +116,8 @@ type OutMsg
     | OtherUserCursorMoved { userId : Id UserId, previousPosition : Maybe (Point2d WorldUnit WorldUnit) }
     | NoOutMsg
     | HandColorChanged
+    | RailToggledBySelf (Coord WorldUnit)
+    | RailToggledByAnother (Coord WorldUnit)
 
 
 updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -240,7 +242,7 @@ updateLocalChange localChange model =
                     ( model, NoOutMsg )
 
         ToggleRailSplit coord ->
-            ( { model | grid = Grid.toggleRailSplit coord model.grid }, NoOutMsg )
+            ( { model | grid = Grid.toggleRailSplit coord model.grid }, RailToggledBySelf coord )
 
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -296,7 +298,7 @@ updateServerChange serverChange model =
             )
 
         ServerToggleRailSplit coord ->
-            ( { model | grid = Grid.toggleRailSplit coord model.grid }, NoOutMsg )
+            ( { model | grid = Grid.toggleRailSplit coord model.grid }, RailToggledByAnother coord )
 
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )

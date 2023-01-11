@@ -383,14 +383,19 @@ broadcastLocalChange time clientId changes userId user model =
             Nonempty.tail changes
                 |> List.foldl
                     (\change ( model_, originalChanges, serverChanges_ ) ->
-                        let
-                            ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
-                                updateLocalChange time userId user change model_
-                        in
-                        ( newModel
-                        , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
-                        , Nonempty.cons serverChange_ serverChanges_
-                        )
+                        case IdDict.get userId model_.users of
+                            Just user2 ->
+                                let
+                                    ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
+                                        updateLocalChange time userId user2 change model_
+                                in
+                                ( newModel
+                                , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
+                                , Nonempty.cons serverChange_ serverChanges_
+                                )
+
+                            Nothing ->
+                                ( model_, originalChanges, serverChanges_ )
                     )
                     ( model2
                     , Nonempty.singleton (Change.LocalChange eventId originalChange)
