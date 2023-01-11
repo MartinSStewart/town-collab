@@ -95,7 +95,7 @@ encode route =
                                 [ Url.Builder.string loginToken (Id.secretToString loginToken2) ]
 
                             Just (InviteToken2 inviteToken2) ->
-                                [ Url.Builder.string loginToken (Id.secretToString inviteToken2) ]
+                                [ Url.Builder.string inviteToken (Id.secretToString inviteToken2) ]
 
                             Nothing ->
                                 []
