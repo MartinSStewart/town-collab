@@ -1547,20 +1547,12 @@ updateLoaded audioData msg model =
 
 previousFocus : FrontendLoaded -> Hover
 previousFocus model =
-    rotationAntiClockwiseHelper model (List.Nonempty.singleton model.focus) |> List.Nonempty.head
+    case model.focus of
+        UiHover hoverId _ ->
+            UiHover (Toolbar.view (getViewModel model) |> Ui.tabBackward hoverId) { position = Coord.origin }
 
-
-rotationAntiClockwiseHelper : FrontendLoaded -> Nonempty Hover -> Nonempty Hover
-rotationAntiClockwiseHelper model list =
-    let
-        next =
-            nextFocus { model | focus = List.Nonempty.head list }
-    in
-    if List.Nonempty.any ((==) next) list then
-        list
-
-    else
-        rotationAntiClockwiseHelper model (List.Nonempty.cons next list)
+        _ ->
+            model.focus
 
 
 currentTileGroup : FrontendLoaded -> Maybe TileGroup
@@ -1579,75 +1571,11 @@ currentTileGroup model =
 nextFocus : FrontendLoaded -> Hover
 nextFocus model =
     case model.focus of
-        TileHover _ ->
+        UiHover hoverId _ ->
+            UiHover (Toolbar.view (getViewModel model) |> Ui.tabForward hoverId) { position = Coord.origin }
+
+        _ ->
             model.focus
-
-        TrainHover _ ->
-            model.focus
-
-        MapHover ->
-            model.focus
-
-        MailEditorHover _ ->
-            model.focus
-
-        CowHover _ ->
-            model.focus
-
-        UiBackgroundHover ->
-            model.focus
-
-        UiHover uiHover _ ->
-            UiHover
-                (case uiHover of
-                    EmailAddressTextInputHover ->
-                        SendEmailButtonHover
-
-                    SendEmailButtonHover ->
-                        EmailAddressTextInputHover
-
-                    PrimaryColorInput ->
-                        case currentUserId model of
-                            Just userId ->
-                                case Toolbar.showColorTextInputs (getHandColor userId model) model.tileColors model.currentTool |> .showSecondaryColorTextInput of
-                                    Just _ ->
-                                        SecondaryColorInput
-
-                                    Nothing ->
-                                        PrimaryColorInput
-
-                            Nothing ->
-                                PrimaryColorInput
-
-                    SecondaryColorInput ->
-                        case currentUserId model of
-                            Just userId ->
-                                case Toolbar.showColorTextInputs (getHandColor userId model) model.tileColors model.currentTool |> .showPrimaryColorTextInput of
-                                    Just _ ->
-                                        PrimaryColorInput
-
-                                    Nothing ->
-                                        SecondaryColorInput
-
-                            Nothing ->
-                                SecondaryColorInput
-
-                    ToolButtonHover toolButton ->
-                        ToolButtonHover toolButton
-
-                    ShowInviteUser ->
-                        ShowInviteUser
-
-                    CloseInviteUser ->
-                        CloseInviteUser
-
-                    SubmitInviteUser ->
-                        SubmitInviteUser
-
-                    InviteEmailAddressTextInput ->
-                        InviteEmailAddressTextInput
-                )
-                { position = Coord.origin }
 
 
 colorTextInputAdjustText : TextInput.Model -> TextInput.Model

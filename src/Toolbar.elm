@@ -84,48 +84,66 @@ view data =
 inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
 inviteView showInvite inviteTextInput inviteSubmitStatus =
     if showInvite then
+        let
+            inviteForm : Ui.Element UiHover UiMsg
+            inviteForm =
+                Ui.column
+                    { spacing = 8, padding = Ui.noPadding }
+                    [ Ui.button
+                        { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                        (Ui.text "Cancel")
+                    , Ui.column
+                        { spacing = 0, padding = Ui.noPadding }
+                        [ Ui.text "Enter email address to send an invite to"
+                        , Ui.textInput
+                            { id = InviteEmailAddressTextInput
+                            , width = 800
+                            , isValid = True
+                            , onKeyDown = ChangedInviteEmailAddressTextInput
+                            }
+                            inviteTextInput
+                        ]
+                    , Ui.row
+                        { spacing = 4, padding = Ui.noPadding }
+                        [ Ui.button
+                            { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
+                            (case inviteSubmitStatus of
+                                NotSubmitted _ ->
+                                    Ui.text "Send invite"
+
+                                Submitting ->
+                                    Ui.text "Submitting "
+
+                                Submitted _ ->
+                                    Ui.text "Submitting "
+                            )
+                        , case ( pressedSubmit inviteSubmitStatus, EmailAddress.fromString inviteTextInput.current.text ) of
+                            ( True, Nothing ) ->
+                                Ui.el
+                                    { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
+                                    (Ui.colorText Color.errorColor "Invalid email")
+
+                            _ ->
+                                Ui.none
+                        ]
+                    ]
+        in
         Ui.el
             { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = borderAndFill }
-            (Ui.column
-                { spacing = 8, padding = Ui.noPadding }
-                [ Ui.button
-                    { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
-                    (Ui.text "Cancel")
-                , Ui.column
-                    { spacing = 0, padding = Ui.noPadding }
-                    [ Ui.text "Enter email address to send an invite to"
-                    , Ui.textInput
-                        { id = InviteEmailAddressTextInput
-                        , width = 800
-                        , isValid = True
-                        , onKeyDown = ChangedInviteEmailAddressTextInput
-                        }
-                        inviteTextInput
-                    ]
-                , Ui.row
-                    { spacing = 4, padding = Ui.noPadding }
-                    [ Ui.button
-                        { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
-                        (case inviteSubmitStatus of
-                            NotSubmitted _ ->
-                                Ui.text "Send invite"
-
-                            Submitting ->
-                                Ui.text "Submitting "
-
-                            Submitted _ ->
-                                Ui.empty
+            (case inviteSubmitStatus of
+                Submitted emailAddress ->
+                    Ui.center
+                        { size = Ui.size inviteForm }
+                        (Ui.column
+                            { spacing = 8, padding = Ui.noPadding }
+                            [ Ui.wrappedText
+                                (Ui.size inviteForm |> Coord.xRaw |> (+) -16)
+                                ("An invite email as been sent to " ++ EmailAddress.toString emailAddress)
+                            ]
                         )
-                    , case ( pressedSubmit inviteSubmitStatus, EmailAddress.fromString inviteTextInput.current.text ) of
-                        ( True, Nothing ) ->
-                            Ui.el
-                                { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
-                                (Ui.colorText Color.errorColor "Invalid email")
 
-                        _ ->
-                            Ui.empty
-                    ]
-                ]
+                _ ->
+                    inviteForm
             )
 
     else
@@ -298,13 +316,13 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                         colorTextInput PrimaryColorInput ChangedPrimaryColorInput primaryColorTextInput color
 
                     Nothing ->
-                        Ui.empty
+                        Ui.none
                 , case showSecondaryColorTextInput of
                     Just color ->
                         colorTextInput SecondaryColorInput ChangedSecondaryColorInput secondaryColorTextInput color
 
                     Nothing ->
-                        Ui.empty
+                        Ui.none
                 , Ui.el
                     { padding =
                         { topLeft =
@@ -323,7 +341,7 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                     , inFront = []
                     , borderAndFill = NoBorderOrFill
                     }
-                    Ui.empty
+                    Ui.none
                 ]
             , Ui.center
                 { size = buttonSize }
@@ -336,7 +354,7 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                                     |> tileMesh color
 
                             Nothing ->
-                                Ui.empty
+                                Ui.none
 
                     TilePickerTool ->
                         Cursor.eyeDropperCursor2
@@ -371,7 +389,7 @@ colorTextInput id onChange textInput color =
                     , fillColor = color
                     }
             }
-            Ui.empty
+            Ui.none
         , Ui.textInput
             { id = id, width = primaryColorInputWidth, isValid = True, onKeyDown = onChange }
             textInput

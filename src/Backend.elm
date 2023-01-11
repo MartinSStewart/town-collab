@@ -136,33 +136,33 @@ townCollabEmail subject contentString content to =
     }
 
 
+disconnectClient : SessionId -> ClientId -> Id UserId -> BackendUserData -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend backendMsg )
+disconnectClient sessionId clientId userId user model =
+    ( { model
+        | userSessions =
+            Dict.update
+                (Effect.Lamdera.sessionIdToString sessionId)
+                (Maybe.map
+                    (\session ->
+                        { clientIds = AssocList.remove clientId session.clientIds
+                        , userId = session.userId
+                        }
+                    )
+                )
+                model.userSessions
+        , users = IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
+      }
+    , Nonempty (ServerUserDisconnected userId |> Change.ServerChange) []
+        |> ChangeBroadcast
+        |> Effect.Lamdera.broadcast
+    )
+
+
 update : Bool -> BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 update isProduction msg model =
     case msg of
         UserDisconnected sessionId clientId ->
-            case getUserFromSessionId sessionId model of
-                Just ( userId, user ) ->
-                    ( { model
-                        | userSessions =
-                            Dict.update
-                                (Effect.Lamdera.sessionIdToString sessionId)
-                                (Maybe.map
-                                    (\session ->
-                                        { clientIds = AssocList.remove clientId session.clientIds
-                                        , userId = session.userId
-                                        }
-                                    )
-                                )
-                                model.userSessions
-                        , users = IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
-                      }
-                    , Nonempty (ServerUserDisconnected userId |> Change.ServerChange) []
-                        |> ChangeBroadcast
-                        |> Effect.Lamdera.broadcast
-                    )
-
-                Nothing ->
-                    ( model, Command.none )
+            asUser sessionId model (disconnectClient sessionId clientId)
 
         NotifyAdminEmailSent ->
             ( model, Command.none )
@@ -352,17 +352,32 @@ getUserFromSessionId sessionId model =
             Nothing
 
 
+asUser :
+    SessionId
+    -> BackendModel
+    -> (Id UserId -> BackendUserData -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg ))
+    -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+asUser sessionId model updateFunc =
+    case getUserFromSessionId sessionId model of
+        Just ( userId, user ) ->
+            updateFunc userId user model
+
+        Nothing ->
+            ( model, Command.none )
+
+
 broadcastLocalChange :
     Effect.Time.Posix
     -> ClientId
-    -> ( Id UserId, BackendUserData )
     -> Nonempty ( Id EventId, Change.LocalChange )
+    -> Id UserId
+    -> BackendUserData
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-broadcastLocalChange time clientId userIdAndUser changes model =
+broadcastLocalChange time clientId changes userId user model =
     let
         ( model2, ( eventId, originalChange ), firstMsg ) =
-            updateLocalChange time userIdAndUser (Nonempty.head changes) model
+            updateLocalChange time userId user (Nonempty.head changes) model
 
         ( model3, originalChanges2, serverChanges ) =
             Nonempty.tail changes
@@ -370,7 +385,7 @@ broadcastLocalChange time clientId userIdAndUser changes model =
                     (\change ( model_, originalChanges, serverChanges_ ) ->
                         let
                             ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
-                                updateLocalChange time userIdAndUser change model_
+                                updateLocalChange time userId user change model_
                         in
                         ( newModel
                         , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
@@ -426,12 +441,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
             requestDataUpdate currentTime sessionId clientId requestData maybeToken model
 
         GridChange changes ->
-            case getUserFromSessionId sessionId model of
-                Just userIdAndUser ->
-                    broadcastLocalChange currentTime clientId userIdAndUser changes model
-
-                Nothing ->
-                    ( model, Command.none )
+            asUser
+                sessionId
+                model
+                (broadcastLocalChange currentTime clientId changes)
 
         ChangeViewBounds bounds ->
             case
@@ -489,20 +502,22 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
         MailEditorToBackend mailEditorToBackend ->
             case mailEditorToBackend of
                 MailEditor.SubmitMailRequest { content, to } ->
-                    case getUserFromSessionId sessionId model of
-                        Just ( userId, _ ) ->
+                    asUser
+                        sessionId
+                        model
+                        (\userId _ model2 ->
                             let
                                 newMail =
                                     AssocList.insert
-                                        (AssocList.size model.mail |> Id.fromInt)
+                                        (AssocList.size model2.mail |> Id.fromInt)
                                         { content = content
                                         , status = MailWaitingPickup
                                         , from = userId
                                         , to = to
                                         }
-                                        model.mail
+                                        model2.mail
                             in
-                            ( { model | mail = newMail }
+                            ( { model2 | mail = newMail }
                             , Command.batch
                                 [ MailEditor.SubmitMailResponse |> MailEditorToFrontend |> Effect.Lamdera.sendToFrontend clientId
                                 , MailBroadcast
@@ -510,19 +525,17 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                     |> Effect.Lamdera.broadcast
                                 ]
                             )
-
-                        Nothing ->
-                            ( model, Command.none )
+                        )
 
                 MailEditor.UpdateMailEditorRequest mailEditor ->
-                    case getUserFromSessionId sessionId model of
-                        Just ( userId, _ ) ->
-                            ( updateUser userId (\user -> { user | mailEditor = mailEditor }) model
+                    asUser
+                        sessionId
+                        model
+                        (\userId _ model2 ->
+                            ( updateUser userId (\user -> { user | mailEditor = mailEditor }) model2
                             , Command.none
                             )
-
-                        Nothing ->
-                            ( model, Command.none )
+                        )
 
         TeleportHomeTrainRequest trainId teleportTime ->
             ( { model
@@ -617,19 +630,21 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
         SendInviteEmailRequest a ->
             case Untrusted.emailAddress a of
                 Valid emailAddress ->
-                    case getUserFromSessionId sessionId model of
-                        Just ( userId, _ ) ->
+                    asUser
+                        sessionId
+                        model
+                        (\userId _ model2 ->
                             -- Check if email address has already accepted an invite
-                            if IdDict.toList model.users |> List.any (\( _, user ) -> user.emailAddress == emailAddress) then
-                                ( model, Command.none )
+                            if IdDict.toList model2.users |> List.any (\( _, user ) -> user.emailAddress == emailAddress) then
+                                ( model2, Command.none )
 
                             else
                                 let
                                     _ =
                                         Debug.log "inviteUrl" inviteUrl
 
-                                    ( inviteToken, model2 ) =
-                                        generateSecretId currentTime model
+                                    ( inviteToken, model3 ) =
+                                        generateSecretId currentTime model2
 
                                     inviteUrl : String
                                     inviteUrl =
@@ -641,7 +656,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                                     }
                                                 )
                                 in
-                                ( { model2
+                                ( { model3
                                     | invites =
                                         AssocList.insert
                                             inviteToken
@@ -650,7 +665,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                             , invitedEmailAddress = emailAddress
                                             , emailResult = EmailSending
                                             }
-                                            model2.invites
+                                            model3.invites
                                   }
                                 , Command.batch
                                     [ sendEmail
@@ -674,9 +689,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                     , Effect.Lamdera.sendToFrontend clientId (SendInviteEmailResponse emailAddress)
                                     ]
                                 )
-
-                        Nothing ->
-                            ( model, Command.none )
+                        )
 
                 Invalid ->
                     ( model, Command.none )
@@ -695,156 +708,142 @@ adjustEventTime currentTime eventTime =
 
 updateLocalChange :
     Effect.Time.Posix
-    -> ( Id UserId, BackendUserData )
+    -> Id UserId
+    -> BackendUserData
     -> ( Id EventId, Change.LocalChange )
     -> BackendModel
     -> ( BackendModel, ( Id EventId, Change.LocalChange ), Maybe ServerChange )
-updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) model =
+updateLocalChange time userId user (( eventId, change ) as originalChange) model =
     let
         invalidChange =
             ( eventId, Change.InvalidChange )
     in
     case change of
         Change.LocalUndo ->
-            case IdDict.get userId model.users of
-                Just user ->
-                    case Undo.undo user of
-                        Just newUser ->
-                            let
-                                undoMoveAmount : Dict.Dict RawCellCoord Int
-                                undoMoveAmount =
-                                    Dict.map (\_ a -> -a) user.undoCurrent
+            case Undo.undo user of
+                Just newUser ->
+                    let
+                        undoMoveAmount : Dict.Dict RawCellCoord Int
+                        undoMoveAmount =
+                            Dict.map (\_ a -> -a) user.undoCurrent
 
-                                newGrid : Grid
-                                newGrid =
-                                    Grid.moveUndoPoint userId undoMoveAmount model.grid
+                        newGrid : Grid
+                        newGrid =
+                            Grid.moveUndoPoint userId undoMoveAmount model.grid
 
-                                trainsToRemove : List (Id TrainId)
-                                trainsToRemove =
-                                    IdDict.toList model.trains
-                                        |> List.filterMap
-                                            (\( trainId, train ) ->
-                                                if Train.owner train == userId then
+                        trainsToRemove : List (Id TrainId)
+                        trainsToRemove =
+                            IdDict.toList model.trains
+                                |> List.filterMap
+                                    (\( trainId, train ) ->
+                                        if Train.owner train == userId then
+                                            case
+                                                Grid.getTile
+                                                    -- Add an offset since the top of the train home isn't collidable
+                                                    (Train.home train |> Coord.plus (Coord.xy 1 1))
+                                                    newGrid
+                                            of
+                                                Just tile ->
                                                     case
-                                                        Grid.getTile
-                                                            -- Add an offset since the top of the train home isn't collidable
-                                                            (Train.home train |> Coord.plus (Coord.xy 1 1))
-                                                            newGrid
+                                                        ( Tile.getData tile.tile |> .railPath
+                                                        , tile.position == Train.home train
+                                                        , tile.userId == userId
+                                                        )
                                                     of
-                                                        Just tile ->
-                                                            case
-                                                                ( Tile.getData tile.tile |> .railPath
-                                                                , tile.position == Train.home train
-                                                                , tile.userId == userId
-                                                                )
-                                                            of
-                                                                ( SingleRailPath path, True, True ) ->
-                                                                    if Train.homePath train == path then
-                                                                        Nothing
+                                                        ( SingleRailPath path, True, True ) ->
+                                                            if Train.homePath train == path then
+                                                                Nothing
 
-                                                                    else
-                                                                        Just trainId
+                                                            else
+                                                                Just trainId
 
-                                                                _ ->
-                                                                    Just trainId
-
-                                                        Nothing ->
+                                                        _ ->
                                                             Just trainId
 
-                                                else
-                                                    Nothing
-                                            )
-                            in
-                            ( List.foldl
-                                removeTrain
-                                { model | grid = newGrid }
-                                trainsToRemove
-                                |> updateUser userId (always newUser)
-                            , originalChange
-                            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
-                            )
+                                                Nothing ->
+                                                    Just trainId
 
-                        Nothing ->
-                            ( model, invalidChange, Nothing )
+                                        else
+                                            Nothing
+                                    )
+                    in
+                    ( List.foldl
+                        removeTrain
+                        { model | grid = newGrid }
+                        trainsToRemove
+                        |> updateUser userId (always newUser)
+                    , originalChange
+                    , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
+                    )
 
                 Nothing ->
                     ( model, invalidChange, Nothing )
 
         Change.LocalGridChange localChange ->
-            case IdDict.get userId model.users of
-                Just user ->
-                    let
-                        ( cellPosition, localPosition ) =
-                            Grid.worldToCellAndLocalCoord localChange.position
+            let
+                ( cellPosition, localPosition ) =
+                    Grid.worldToCellAndLocalCoord localChange.position
 
-                        maybeTrain : Maybe ( Id TrainId, Train )
-                        maybeTrain =
-                            if IdDict.size model.trains < 50 then
-                                Train.handleAddingTrain model.trains userId localChange.change localChange.position
+                maybeTrain : Maybe ( Id TrainId, Train )
+                maybeTrain =
+                    if IdDict.size model.trains < 50 then
+                        Train.handleAddingTrain model.trains userId localChange.change localChange.position
 
-                            else
-                                Nothing
+                    else
+                        Nothing
 
-                        { grid, removed, newCells } =
-                            Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
-                    in
-                    case Train.canRemoveTiles time removed model.trains of
-                        Ok trainsToRemove ->
-                            ( List.map Tuple.first trainsToRemove
-                                |> List.foldl
-                                    removeTrain
-                                    { model
-                                        | grid =
-                                            Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
-                                                |> .grid
-                                        , trains =
-                                            case maybeTrain of
-                                                Just ( trainId, train ) ->
-                                                    IdDict.insert trainId train model.trains
+                { grid, removed, newCells } =
+                    Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+            in
+            case Train.canRemoveTiles time removed model.trains of
+                Ok trainsToRemove ->
+                    ( List.map Tuple.first trainsToRemove
+                        |> List.foldl
+                            removeTrain
+                            { model
+                                | grid =
+                                    Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+                                        |> .grid
+                                , trains =
+                                    case maybeTrain of
+                                        Just ( trainId, train ) ->
+                                            IdDict.insert trainId train model.trains
 
-                                                Nothing ->
-                                                    model.trains
-                                    }
-                                |> LocalGrid.addCows newCells
-                                |> updateUser
-                                    userId
-                                    (always
-                                        { user
-                                            | undoCurrent =
-                                                LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
-                                        }
-                                    )
-                            , originalChange
-                            , ServerGridChange
-                                { gridChange = Grid.localChangeToChange userId localChange, newCells = newCells }
-                                |> Just
+                                        Nothing ->
+                                            model.trains
+                            }
+                        |> LocalGrid.addCows newCells
+                        |> updateUser
+                            userId
+                            (always
+                                { user
+                                    | undoCurrent =
+                                        LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
+                                }
                             )
+                    , originalChange
+                    , ServerGridChange
+                        { gridChange = Grid.localChangeToChange userId localChange, newCells = newCells }
+                        |> Just
+                    )
 
-                        Err _ ->
-                            ( model, invalidChange, Nothing )
-
-                Nothing ->
+                Err _ ->
                     ( model, invalidChange, Nothing )
 
         Change.LocalRedo ->
-            case IdDict.get userId model.users of
-                Just user ->
-                    case Undo.redo user of
-                        Just newUser ->
-                            let
-                                undoMoveAmount =
-                                    newUser.undoCurrent
-                            in
-                            ( { model
-                                | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
-                              }
-                                |> updateUser userId (always newUser)
-                            , originalChange
-                            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
-                            )
-
-                        Nothing ->
-                            ( model, invalidChange, Nothing )
+            case Undo.redo user of
+                Just newUser ->
+                    let
+                        undoMoveAmount =
+                            newUser.undoCurrent
+                    in
+                    ( { model
+                        | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
+                      }
+                        |> updateUser userId (always newUser)
+                    , originalChange
+                    , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> Just
+                    )
 
                 Nothing ->
                     ( model, invalidChange, Nothing )
@@ -860,8 +859,8 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
                 isCowHeld =
                     IdDict.toList model.users
                         |> List.any
-                            (\( _, user ) ->
-                                case user.cursor of
+                            (\( _, user2 ) ->
+                                case user2.cursor of
                                     Just cursor ->
                                         Maybe.map .cowId cursor.holdingCow == Just cowId
 
@@ -875,8 +874,8 @@ updateLocalChange time ( userId, _ ) (( eventId, change ) as originalChange) mod
             else
                 ( updateUser
                     userId
-                    (\user ->
-                        { user
+                    (\user2 ->
+                        { user2
                             | cursor =
                                 { position = position
                                 , holdingCow = Just { cowId = cowId, pickupTime = time2 }

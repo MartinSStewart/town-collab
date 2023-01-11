@@ -12,10 +12,10 @@ module Ui exposing
     , column
     , customButton
     , el
-    , empty
     , handleKeyDown
     , hover
     , noPadding
+    , none
     , outlinedText
     , paddingXY
     , paddingXY2
@@ -23,6 +23,8 @@ module Ui exposing
     , row
     , size
     , sprite
+    , tabBackward
+    , tabForward
     , text
     , textInput
     , view
@@ -231,8 +233,8 @@ textInput =
     TextInput
 
 
-empty : Element id msg
-empty =
+none : Element id msg
+none =
     Empty
 
 
@@ -550,6 +552,16 @@ view focus element2 =
     viewHelper focus Coord.origin [] element2 |> Sprite.toMesh
 
 
+verticesHelper : Maybe id -> Coord Pixels -> List Vertex -> { a | inFront : List (Element id msg) } -> List Vertex
+verticesHelper focus position vertices data =
+    List.foldl
+        (\inFront vertices3 ->
+            viewHelper focus position vertices3 inFront
+        )
+        vertices
+        data.inFront
+
+
 viewHelper : Maybe id -> Coord Pixels -> List Vertex -> Element id msg -> List Vertex
 viewHelper focus position vertices element2 =
     case element2 of
@@ -567,16 +579,6 @@ viewHelper focus position vertices element2 =
             TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid model ++ vertices
 
         Button data child ->
-            let
-                vertices2 : List Vertex
-                vertices2 =
-                    List.foldl
-                        (\inFront vertices3 ->
-                            viewHelper focus position vertices3 inFront
-                        )
-                        vertices
-                        data.inFront
-            in
             borderAndFillView position
                 (if Just data.id == focus then
                     data.borderAndFillFocus
@@ -585,7 +587,11 @@ viewHelper focus position vertices element2 =
                     data.borderAndFill
                 )
                 data.cachedSize
-                ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
+                ++ viewHelper
+                    focus
+                    (Coord.plus data.padding.topLeft position)
+                    (verticesHelper focus position vertices data)
+                    child
 
         Row data children ->
             List.foldl
@@ -789,3 +795,133 @@ handleKeyDown updateFunc keyUnhandled element maybeFocus ctrlOrMetaDown shiftDow
 
         Nothing ->
             updateFunc keyUnhandled model
+
+
+tabForward : id -> Element id msg -> id
+tabForward id element =
+    case tabHelper True False id element of
+        NotFound ->
+            id
+
+        FoundId ->
+            case tabHelper True True id element of
+                NotFound ->
+                    id
+
+                FoundId ->
+                    id
+
+                FoundNextId id2 ->
+                    id2
+
+        FoundNextId id2 ->
+            id2
+
+
+tabBackward : id -> Element id msg -> id
+tabBackward id element =
+    case tabHelper False False id element of
+        NotFound ->
+            id
+
+        FoundId ->
+            case tabHelper False True id element of
+                NotFound ->
+                    id
+
+                FoundId ->
+                    id
+
+                FoundNextId id2 ->
+                    id2
+
+        FoundNextId id2 ->
+            id2
+
+
+tabHelper : Bool -> Bool -> id -> Element id msg -> TabForward id
+tabHelper stepForward hasFoundId id element =
+    case element of
+        Text _ ->
+            if hasFoundId then
+                FoundId
+
+            else
+                NotFound
+
+        TextInput data _ ->
+            if hasFoundId then
+                FoundNextId data.id
+
+            else if id == data.id then
+                FoundId
+
+            else
+                NotFound
+
+        Button data _ ->
+            if hasFoundId then
+                FoundNextId data.id
+
+            else if id == data.id then
+                FoundId
+
+            else
+                NotFound
+
+        Row _ children ->
+            rowColumnTabHelper stepForward hasFoundId id children
+
+        Column _ children ->
+            rowColumnTabHelper stepForward hasFoundId id children
+
+        Single data child ->
+            rowColumnTabHelper stepForward hasFoundId id (child :: data.inFront)
+
+        Quads _ ->
+            if hasFoundId then
+                FoundId
+
+            else
+                NotFound
+
+        Empty ->
+            if hasFoundId then
+                FoundId
+
+            else
+                NotFound
+
+
+rowColumnTabHelper : Bool -> Bool -> id -> List (Element id msg) -> TabForward id
+rowColumnTabHelper stepForward hasFoundId id children =
+    (if stepForward then
+        List.foldl
+
+     else
+        List.foldr
+    )
+        (\child state2 ->
+            case state2 of
+                FoundNextId _ ->
+                    state2
+
+                FoundId ->
+                    tabHelper stepForward True id child
+
+                NotFound ->
+                    tabHelper stepForward False id child
+        )
+        (if hasFoundId then
+            FoundId
+
+         else
+            NotFound
+        )
+        children
+
+
+type TabForward id
+    = FoundId
+    | FoundNextId id
+    | NotFound
