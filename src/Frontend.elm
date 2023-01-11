@@ -815,8 +815,13 @@ updateLoaded audioData msg model =
                             ( UiHover EmailAddressTextInputHover _, _, Keyboard.Enter ) ->
                                 sendEmail model
 
-                            ( UiHover SendEmailButtonHover _, _, Keyboard.Enter ) ->
-                                sendEmail model
+                            ( UiHover id _, _, Keyboard.Enter ) ->
+                                case Ui.findOnPress id (Toolbar.view (getViewModel model)) of
+                                    Just onPress ->
+                                        uiUpdate onPress model
+
+                                    Nothing ->
+                                        ( model, Command.none )
 
                             ( UiHover PrimaryColorInput _, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Command.none )

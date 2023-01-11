@@ -12,6 +12,8 @@ module Ui exposing
     , column
     , customButton
     , el
+    , findId
+    , findOnPress
     , handleKeyDown
     , hover
     , noPadding
@@ -763,8 +765,40 @@ findId id element =
         Column _ children ->
             List.findMap (findId id) children
 
-        Single _ child ->
-            findId id child
+        Single data child ->
+            List.findMap (findId id) (child :: data.inFront)
+
+        Quads _ ->
+            Nothing
+
+        Empty ->
+            Nothing
+
+
+findOnPress : id -> Element id msg -> Maybe msg
+findOnPress id element =
+    case element of
+        Text _ ->
+            Nothing
+
+        TextInput _ _ ->
+            Nothing
+
+        Button data _ ->
+            if data.id == id then
+                Just data.onPress
+
+            else
+                Nothing
+
+        Row _ children ->
+            List.findMap (findOnPress id) children
+
+        Column _ children ->
+            List.findMap (findOnPress id) children
+
+        Single data child ->
+            List.findMap (findOnPress id) (child :: data.inFront)
 
         Quads _ ->
             Nothing
