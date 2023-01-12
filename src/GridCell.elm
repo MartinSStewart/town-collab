@@ -253,10 +253,10 @@ toggleRailSplit coord (Cell cell) =
         , cache = cell.cache
         , railSplitToggled =
             if AssocSet.member coord cell.railSplitToggled then
-                AssocSet.remove coord cell.railSplitToggled |> Debug.log "disabled"
+                AssocSet.remove coord cell.railSplitToggled
 
             else
-                AssocSet.insert coord cell.railSplitToggled |> Debug.log "enabled"
+                AssocSet.insert coord cell.railSplitToggled
         }
 
 
