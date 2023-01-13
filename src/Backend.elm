@@ -614,10 +614,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                             ]
                                         , Email.Html.div
                                             []
-                                            [ Email.Html.text "If you did,"
+                                            [ Email.Html.text "If you did, "
                                             , Email.Html.a
                                                 [ Email.Html.Attributes.href loginEmailUrl ]
-                                                [ Email.Html.text " click here" ]
+                                                [ Email.Html.text "click here" ]
                                             , Email.Html.text " to login to town-collab"
                                             ]
                                         ]
