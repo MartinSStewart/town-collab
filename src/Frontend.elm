@@ -376,7 +376,18 @@ audioLoaded audioData model =
             Audio.silence
     , List.map
         (\( time, position ) ->
-            playSound RailToggleSound time |> Audio.scaleVolume (0.5 * volume model (Coord.toPoint2d position))
+            let
+                tileCenter : Point2d WorldUnit WorldUnit
+                tileCenter =
+                    Point2d.translateBy
+                        (Tile.getData RailTopToLeft_SplitDown
+                            |> .size
+                            |> Coord.toVector2d
+                            |> Vector2d.scaleBy 0.5
+                        )
+                        (Coord.toPoint2d position)
+            in
+            playSound RailToggleSound time |> Audio.scaleVolume (0.5 * volume model tileCenter)
         )
         model.railToggles
         |> Audio.group
