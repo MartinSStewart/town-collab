@@ -562,7 +562,7 @@ tileMesh colors tile =
                                 colors
                                 position3
                                 spriteSize
-                                (Coord.multiply Units.tileSize texturePosition)
+                                texturePosition
                                 size
 
                         Nothing ->
@@ -570,15 +570,11 @@ tileMesh colors tile =
                     )
                         ++ (case data.texturePositionTopLayer of
                                 Just topLayer ->
-                                    let
-                                        texturePosition2 =
-                                            Coord.multiply Units.tileSize topLayer.texturePosition
-                                    in
                                     Sprite.spriteWithTwoColors
                                         colors
                                         position3
                                         spriteSize
-                                        texturePosition2
+                                        topLayer.texturePosition
                                         size
 
                                 Nothing ->

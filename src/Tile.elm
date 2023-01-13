@@ -716,7 +716,7 @@ texturePosition_ : Coord unit -> Coord unit -> { topLeft : Vec2, topRight : Vec2
 texturePosition_ position textureSize =
     let
         ( x, y ) =
-            Coord.multiply Units.tileSize position |> Coord.toTuple
+            Coord.toTuple position
 
         ( w, h ) =
             Coord.multiply Units.tileSize textureSize |> Coord.toTuple
@@ -745,8 +745,8 @@ texturePositionPixels position textureSize =
 
 
 type alias TileData unit =
-    { texturePosition : Maybe (Coord unit)
-    , texturePositionTopLayer : Maybe { yOffset : Int, texturePosition : Coord unit }
+    { texturePosition : Maybe (Coord Pixels)
+    , texturePositionTopLayer : Maybe { yOffset : Int, texturePosition : Coord Pixels }
     , size : Coord unit
     , collisionMask : CollisionMask
     , railPath : RailPathType
@@ -930,7 +930,7 @@ getData tile =
             }
 
         HouseDown ->
-            { texturePosition = Coord.xy 0 1 |> Just
+            { texturePosition = Coord.xy 0 1 |> Coord.multiply Units.tileSize |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 0 5 |> Coord.multiply Units.tileSize }
             , size = Coord.xy 3 3
             , collisionMask =
@@ -947,7 +947,7 @@ getData tile =
             }
 
         HouseRight ->
-            { texturePosition = Coord.xy 11 4 |> Just
+            { texturePosition = Coord.xy 11 4 |> Coord.multiply Units.tileSize |> Just
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 11 16 |> Coord.multiply Units.tileSize }
             , size = Coord.xy 2 4
             , collisionMask =
