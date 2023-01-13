@@ -12,6 +12,7 @@ import Cursor
 import Dict exposing (Dict)
 import Duration
 import EmailAddress exposing (EmailAddress)
+import Env
 import Id exposing (Id, UserId)
 import Keyboard
 import List.Extra as List
@@ -147,12 +148,30 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
             )
 
     else
-        Ui.button
-            { id = ShowInviteUser
-            , onPress = PressedShowInviteUser
-            , padding = Ui.paddingXY 10 4
-            }
-            (Ui.text "Invite")
+        Ui.row
+            { spacing = 10, padding = Ui.noPadding }
+            [ Ui.button
+                { id = ShowInviteUser
+                , onPress = PressedShowInviteUser
+                , padding = Ui.paddingXY 10 4
+                }
+                (Ui.text "Invite")
+            , Ui.text
+                (if Env.isProduction then
+                    "True"
+
+                 else
+                    "False"
+                )
+            , Ui.text
+                (case Env.adminEmail of
+                    Just email ->
+                        EmailAddress.toString email
+
+                    Nothing ->
+                        "Invalid email!"
+                )
+            ]
 
 
 borderAndFill : BorderAndFill
