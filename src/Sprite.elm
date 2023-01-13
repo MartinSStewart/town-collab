@@ -1,5 +1,7 @@
 module Sprite exposing
-    ( charSize
+    ( asciiChars
+    , charSize
+    , charTexturePosition
     , getIndices
     , getQuadIndices
     , nineSlice
@@ -18,11 +20,12 @@ module Sprite exposing
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
+import List.Nonempty exposing (Nonempty(..))
+import Math.Vector2
 import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
 import Random
 import Shaders exposing (Vertex)
-import Tile
 import WebGL
 
 
@@ -135,8 +138,11 @@ spriteWithTwoColors { primaryColor, secondaryColor } position size texturePositi
 spriteWithZ : Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithZ primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
     let
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels texturePosition textureSize
+        ( tx, ty ) =
+            Coord.toTuple texturePosition
+
+        ( w, h ) =
+            Coord.toTuple textureSize
 
         primaryColor2 =
             Color.toVec3 primaryColor
@@ -145,25 +151,25 @@ spriteWithZ primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity 
             Color.toVec3 secondaryColor
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
-      , texturePosition = topLeft
+      , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat ty)
       , opacity = 1
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
-      , texturePosition = topRight
+      , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat ty)
       , opacity = 1
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
-      , texturePosition = bottomRight
+      , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat (ty + h))
       , opacity = 1
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
-      , texturePosition = bottomLeft
+      , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat (ty + h))
       , opacity = 1
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
@@ -188,12 +194,14 @@ toMesh vertices =
     Shaders.indexedTriangles vertices (getQuadIndices vertices)
 
 
-asciiChars : List Char
+asciiChars : Nonempty Char
 asciiChars =
     (List.range 32 126 ++ List.range 161 172 ++ List.range 174 255)
         |> List.map Char.fromCode
         |> (++) [ '░', '▒', '▓', '█' ]
         |> (++) [ '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌' ]
+        |> List.Nonempty.fromList
+        |> Maybe.withDefault (Nonempty 'a' [])
 
 
 charsPerRow : number
@@ -220,7 +228,8 @@ charTexturePosition char =
 
 charTexturePositionHelper : Dict Char Int
 charTexturePositionHelper =
-    List.indexedMap (\index char -> ( char, index )) asciiChars
+    List.Nonempty.toList asciiChars
+        |> List.indexedMap (\index char -> ( char, index ))
         |> Dict.fromList
 
 

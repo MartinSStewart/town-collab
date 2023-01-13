@@ -2891,7 +2891,7 @@ createDebrisMesh appStartTime removedTiles =
 
 
 createDebrisMeshHelper :
-    ( Quantity Int WorldUnit, Quantity Int WorldUnit )
+    Coord WorldUnit
     -> Coord unit
     -> Coord unit
     -> Colors
