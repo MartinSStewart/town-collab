@@ -23,6 +23,7 @@ import Effect.Browser.Dom
 import Effect.Browser.Events exposing (Visibility(..))
 import Effect.Browser.Navigation
 import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.Http exposing (Error(..))
 import Effect.Lamdera
 import Effect.Subscription as Subscription exposing (Subscription)
 import Effect.Task
@@ -574,6 +575,7 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , inviteTextInput = TextInput.init
             , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
             , railToggles = []
+            , debugText = "Blah"
             }
                 |> setCurrentTool HandToolButton
                 |> handleOutMsg False LocalGrid.HandColorChanged
@@ -3508,6 +3510,33 @@ updateLoadedFromBackend msg model =
             , Command.none
             )
 
+        SentLoginEmailResponseDebug result ->
+            ( { model
+                | debugText =
+                    case result of
+                        Ok ok ->
+                            ok.message ++ ", id:" ++ ok.messageId ++ " errorCode: " ++ String.fromInt ok.errorCode
+
+                        Err error ->
+                            case error of
+                                BadUrl url ->
+                                    url
+
+                                Timeout ->
+                                    "Timeout"
+
+                                NetworkError ->
+                                    "NetworkError"
+
+                                BadStatus int ->
+                                    "BadStatus " ++ String.fromInt int
+
+                                BadBody string ->
+                                    "BadBody " ++ string
+              }
+            , Command.none
+            )
+
 
 actualTime : FrontendLoaded -> Effect.Time.Posix
 actualTime model =
@@ -3533,6 +3562,12 @@ view audioData model =
 
             Loaded loadedModel ->
                 canvasView audioData loadedModel
+        , case model of
+            Loading loadingModel ->
+                Html.text ""
+
+            Loaded loadedModel ->
+                Html.text loadedModel.debugText
         , Html.node "style" [] [ Html.text "body { overflow: hidden; margin: 0; }" ]
         ]
     }

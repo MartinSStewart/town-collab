@@ -179,6 +179,7 @@ type alias FrontendLoaded =
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
     , railToggles : List ( Time.Posix, Coord WorldUnit )
+    , debugText : String
     }
 
 
@@ -338,7 +339,7 @@ type ToBackend
 type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminEmailSent
-    | SentLoginEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
+    | SentLoginEmail ClientId Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | UpdateFromFrontend SessionId ClientId ToBackend Effect.Time.Posix
     | WorldUpdateTimeElapsed Effect.Time.Posix
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
@@ -353,6 +354,7 @@ type ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
+    | SentLoginEmailResponseDebug (Result Effect.Http.Error PostmarkSendResponse)
     | SendInviteEmailResponse EmailAddress
 
 

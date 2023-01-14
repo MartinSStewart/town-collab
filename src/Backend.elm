@@ -170,13 +170,15 @@ update isProduction msg model =
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend isProduction time sessionId clientId toBackendMsg model
 
-        SentLoginEmail sendTime emailAddress result ->
+        SentLoginEmail clientId sendTime emailAddress result ->
             case result of
                 Ok _ ->
-                    ( model, Command.none )
+                    ( model, Effect.Lamdera.sendToFrontend clientId (SentLoginEmailResponseDebug result) )
 
                 Err error ->
-                    ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
+                    ( addError sendTime (PostmarkError emailAddress error) model
+                    , Effect.Lamdera.sendToFrontend clientId (SentLoginEmailResponseDebug result)
+                    )
 
         WorldUpdateTimeElapsed time ->
             case model.lastWorldUpdate of
@@ -598,7 +600,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                 [ SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId
                                 , sendEmail
                                     isProduction
-                                    (SentLoginEmail currentTime emailAddress)
+                                    (SentLoginEmail clientId currentTime emailAddress)
                                     (NonemptyString 'L' "ogin Email")
                                     ("DO NOT click the following link if you didn't request this email.\n"
                                         ++ "\n"
