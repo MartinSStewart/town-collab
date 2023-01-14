@@ -354,7 +354,7 @@ type ToFrontend
     | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
-    | SentLoginEmailResponseDebug (Result Effect.Http.Error PostmarkSendResponse)
+    | DebugResponse String
     | SendInviteEmailResponse EmailAddress
 
 

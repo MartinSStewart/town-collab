@@ -171,13 +171,36 @@ update isProduction msg model =
             updateFromFrontend isProduction time sessionId clientId toBackendMsg model
 
         SentLoginEmail clientId sendTime emailAddress result ->
+            let
+                debugText =
+                    case result of
+                        Ok ok ->
+                            ok.message ++ ", id:" ++ ok.messageId ++ " errorCode: " ++ String.fromInt ok.errorCode
+
+                        Err error ->
+                            case error of
+                                Effect.Http.BadUrl url ->
+                                    url
+
+                                Effect.Http.Timeout ->
+                                    "Timeout"
+
+                                Effect.Http.NetworkError ->
+                                    "NetworkError"
+
+                                Effect.Http.BadStatus int ->
+                                    "BadStatus " ++ String.fromInt int
+
+                                Effect.Http.BadBody string ->
+                                    "BadBody " ++ string
+            in
             case result of
                 Ok _ ->
-                    ( model, Effect.Lamdera.sendToFrontend clientId (SentLoginEmailResponseDebug result) )
+                    ( model, Effect.Lamdera.sendToFrontend clientId (DebugResponse debugText) )
 
                 Err error ->
                     ( addError sendTime (PostmarkError emailAddress error) model
-                    , Effect.Lamdera.sendToFrontend clientId (SentLoginEmailResponseDebug result)
+                    , Effect.Lamdera.sendToFrontend clientId (DebugResponse debugText)
                     )
 
         WorldUpdateTimeElapsed time ->
@@ -629,10 +652,15 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                             )
 
                         Nothing ->
-                            ( model2, SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId )
+                            ( model2
+                            , Command.batch
+                                [ SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId
+                                , Effect.Lamdera.sendToFrontend clientId (DebugResponse "User not found")
+                                ]
+                            )
 
                 Invalid ->
-                    ( model, Command.none )
+                    ( model, Effect.Lamdera.sendToFrontend clientId (DebugResponse "Invalid email") )
 
         SendInviteEmailRequest a ->
             case Untrusted.emailAddress a of

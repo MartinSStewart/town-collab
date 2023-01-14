@@ -3510,32 +3510,8 @@ updateLoadedFromBackend msg model =
             , Command.none
             )
 
-        SentLoginEmailResponseDebug result ->
-            ( { model
-                | debugText =
-                    case result of
-                        Ok ok ->
-                            ok.message ++ ", id:" ++ ok.messageId ++ " errorCode: " ++ String.fromInt ok.errorCode
-
-                        Err error ->
-                            case error of
-                                BadUrl url ->
-                                    url
-
-                                Timeout ->
-                                    "Timeout"
-
-                                NetworkError ->
-                                    "NetworkError"
-
-                                BadStatus int ->
-                                    "BadStatus " ++ String.fromInt int
-
-                                BadBody string ->
-                                    "BadBody " ++ string
-              }
-            , Command.none
-            )
+        DebugResponse debugText ->
+            ( { model | debugText = debugText }, Command.none )
 
 
 actualTime : FrontendLoaded -> Effect.Time.Posix
