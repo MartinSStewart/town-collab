@@ -84,6 +84,7 @@ init =
             , mail = AssocList.empty
             , pendingLoginTokens = AssocList.empty
             , invites = AssocList.empty
+            , dummyField = 0
             }
     in
     case Env.adminEmail of

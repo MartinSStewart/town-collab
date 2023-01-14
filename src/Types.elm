@@ -261,6 +261,7 @@ type alias BackendModel =
             , requestedBy : SessionId
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
+    , dummyField : Int
     }
 
 
