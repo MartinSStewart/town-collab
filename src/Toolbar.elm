@@ -20,6 +20,7 @@ import List.Nonempty
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
+import Sound
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
@@ -45,6 +46,8 @@ type alias ViewData =
     , showInvite : Bool
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
+    , musicVolume : Int
+    , soundEffectVolume : Int
     }
 
 
@@ -55,7 +58,14 @@ view data =
         , inFront =
             case data.handColor of
                 Just _ ->
-                    [ inviteView data.showInvite data.inviteTextInput data.inviteSubmitStatus ]
+                    [ Ui.row
+                        { padding = Ui.noPadding
+                        , spacing = 4
+                        }
+                        [ inviteView data.showInvite data.inviteTextInput data.inviteSubmitStatus
+                        , settingsView data.musicVolume data.soundEffectVolume
+                        ]
+                    ]
 
                 Nothing ->
                     []
@@ -79,6 +89,59 @@ view data =
                 Nothing ->
                     loginToolbarUi data.pressedSubmitEmail data.loginTextInput
             )
+        )
+
+
+settingsView : Int -> Int -> Ui.Element UiHover UiMsg
+settingsView musicVolume soundEffectVolume =
+    let
+        buttonPadding =
+            { topLeft = Coord.xy 6 0, bottomRight = Coord.xy 4 2 }
+    in
+    Ui.el
+        { padding = Ui.paddingXY 8 8
+        , inFront = []
+        , borderAndFill = borderAndFill
+        }
+        (Ui.column
+            { spacing = 6
+            , padding = Ui.noPadding
+            }
+            [ Ui.row
+                { spacing = 8, padding = Ui.noPadding }
+                [ Ui.text "Music volume "
+                , Ui.button
+                    { id = LowerMusicVolume
+                    , padding = buttonPadding
+                    , onPress = PressedLowerMusicVolume
+                    }
+                    (Ui.text "-")
+                , Ui.text (String.padLeft 2 ' ' (String.fromInt musicVolume) ++ "/" ++ String.fromInt Sound.maxVolume)
+                , Ui.button
+                    { id = RaiseMusicVolume
+                    , padding = buttonPadding
+                    , onPress = PressedRaiseMusicVolume
+                    }
+                    (Ui.text "+")
+                ]
+            , Ui.row
+                { spacing = 8, padding = Ui.noPadding }
+                [ Ui.text "Sound effects"
+                , Ui.button
+                    { id = LowerSoundEffectVolume
+                    , padding = buttonPadding
+                    , onPress = PressedLowerSoundEffectVolume
+                    }
+                    (Ui.text "-")
+                , Ui.text (String.padLeft 2 ' ' (String.fromInt soundEffectVolume) ++ "/" ++ String.fromInt Sound.maxVolume)
+                , Ui.button
+                    { id = RaiseSoundEffectVolume
+                    , padding = buttonPadding
+                    , onPress = PressedRaiseSoundEffectVolume
+                    }
+                    (Ui.text "+")
+                ]
+            ]
         )
 
 

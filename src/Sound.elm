@@ -1,4 +1,4 @@
-module Sound exposing (Sound(..), length, load, nextSong, play, playWithConfig)
+module Sound exposing (Model, Sound(..), length, load, maxVolume, nextSong, play, playWithConfig)
 
 import AssocList as Dict exposing (Dict)
 import Audio exposing (Audio, AudioCmd, AudioData, PlayAudioConfig)
@@ -8,6 +8,14 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Quantity
 import Random
+
+
+type alias Model a =
+    { a
+        | sounds : Dict Sound (Result Audio.LoadError Audio.Source)
+        , musicVolume : Int
+        , soundEffectVolume : Int
+    }
 
 
 type Sound
@@ -73,6 +81,11 @@ songs =
     Nonempty Music0 [ Music1 ]
 
 
+isMusic : Sound -> Bool
+isMusic sound =
+    List.Nonempty.any ((==) sound) songs
+
+
 nextSong : Maybe Sound -> Random.Generator Sound
 nextSong maybePreviousSong =
     case maybePreviousSong of
@@ -88,27 +101,38 @@ nextSong maybePreviousSong =
             List.Nonempty.sample songs
 
 
-play : Dict Sound (Result Audio.LoadError Audio.Source) -> Sound -> Effect.Time.Posix -> Audio
-play dict sound startTime =
-    case Dict.get sound dict of
+maxVolume : number
+maxVolume =
+    10
+
+
+play : Model a -> Sound -> Effect.Time.Posix -> Audio
+play model sound startTime =
+    case Dict.get sound model.sounds of
         Just (Ok audio) ->
             Audio.audio audio startTime
+                |> (if isMusic sound then
+                        Audio.scaleVolume (toFloat model.musicVolume / maxVolume)
+
+                    else
+                        Audio.scaleVolume (toFloat model.soundEffectVolume / maxVolume)
+                   )
 
         _ ->
             Audio.silence
 
 
-playWithConfig :
-    AudioData
-    -> Dict Sound (Result Audio.LoadError Audio.Source)
-    -> (Duration -> PlayAudioConfig)
-    -> Sound
-    -> Effect.Time.Posix
-    -> Audio
-playWithConfig audioData dict config sound startTime =
-    case Dict.get sound dict of
+playWithConfig : AudioData -> Model a -> (Duration -> PlayAudioConfig) -> Sound -> Effect.Time.Posix -> Audio
+playWithConfig audioData model config sound startTime =
+    case Dict.get sound model.sounds of
         Just (Ok audio) ->
             Audio.audioWithConfig (config (Audio.length audioData audio)) audio startTime
+                |> (if isMusic sound then
+                        Audio.scaleVolume (toFloat model.musicVolume / maxVolume)
+
+                    else
+                        Audio.scaleVolume (toFloat model.soundEffectVolume / maxVolume)
+                   )
 
         _ ->
             Audio.silence

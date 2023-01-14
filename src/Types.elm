@@ -148,6 +148,8 @@ type alias FrontendLoaded =
     , ignoreNextUrlChanged : Bool
     , lastTilePlaced : Maybe { time : Effect.Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
+    , musicVolume : Int
+    , soundEffectVolume : Int
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Effect.Time.Posix
@@ -223,6 +225,10 @@ type UiHover
     | CloseInviteUser
     | SubmitInviteUser
     | InviteEmailAddressTextInput
+    | LowerMusicVolume
+    | RaiseMusicVolume
+    | LowerSoundEffectVolume
+    | RaiseSoundEffectVolume
 
 
 type UiMsg
@@ -235,6 +241,10 @@ type UiMsg
     | KeyDownEmailAddressTextInputHover Bool Bool Keyboard.Key TextInput.Model
     | ChangedPrimaryColorInput Bool Bool Keyboard.Key TextInput.Model
     | ChangedSecondaryColorInput Bool Bool Keyboard.Key TextInput.Model
+    | PressedLowerMusicVolume
+    | PressedRaiseMusicVolume
+    | PressedLowerSoundEffectVolume
+    | PressedRaiseSoundEffectVolume
 
 
 type alias BackendModel =

@@ -64,6 +64,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
 import Route
+import Serialize exposing (Codec)
 import Set exposing (Set)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
@@ -107,6 +108,44 @@ port supermario_copy_to_clipboard_to_js : Json.Encode.Value -> Cmd msg
 port mouse_leave : (Json.Decode.Value -> msg) -> Sub msg
 
 
+port get_local_storage : Json.Encode.Value -> Cmd msg
+
+
+port got_local_storage : (Json.Decode.Value -> msg) -> Sub msg
+
+
+port set_local_storage : Json.Encode.Value -> Cmd msg
+
+
+getLocalStorage : Command FrontendOnly toMsg msg
+getLocalStorage =
+    Command.sendToJs
+        "get_local_storage"
+        supermario_copy_to_clipboard_to_js
+        Json.Encode.null
+
+
+type alias UserSettings =
+    { musicVolume : Int, soundEffectVolume : Int }
+
+
+userSettingsCodec : Codec e UserSettings
+userSettingsCodec =
+    Serialize.record UserSettings
+        |> Serialize.field .musicVolume Serialize.byte
+        |> Serialize.field .soundEffectVolume Serialize.byte
+        |> Serialize.finishRecord
+
+
+setLocalStorage : UserSettings -> Command FrontendOnly toMsg msg
+setLocalStorage userSettings =
+    Command.sendToJs
+        "get_local_storage"
+        supermario_copy_to_clipboard_to_js
+        (Serialize.encodeToJson userSettingsCodec userSettings)
+
+
+copyToClipboard : String -> Command FrontendOnly toMsg msg
 copyToClipboard text =
     Command.sendToJs
         "supermario_copy_to_clipboard_to_js"
@@ -182,10 +221,10 @@ audioLoaded audioData model =
             PingData.pingOffset model
 
         playSound sound time =
-            Sound.play model.sounds sound (Duration.subtractFrom time timeOffset)
+            Sound.play model sound (Duration.subtractFrom time timeOffset)
 
         playWithConfig config sound time =
-            Sound.playWithConfig audioData model.sounds config sound (Duration.subtractFrom time timeOffset)
+            Sound.playWithConfig audioData model config sound (Duration.subtractFrom time timeOffset)
 
         movingTrains : List { playbackRate : Float, volume : Float }
         movingTrains =
@@ -529,6 +568,8 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , ignoreNextUrlChanged = False
             , lastTilePlaced = Nothing
             , sounds = loading.sounds
+            , musicVolume = Sound.maxVolume
+            , soundEffectVolume = Sound.maxVolume
             , removedTileParticles = []
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
@@ -1269,6 +1310,18 @@ updateLoaded audioData msg model =
                                                             model2.inviteTextInput
                                                 }
 
+                                            LowerMusicVolume ->
+                                                model2
+
+                                            RaiseMusicVolume ->
+                                                model2
+
+                                            LowerSoundEffectVolume ->
+                                                model2
+
+                                            RaiseSoundEffectVolume ->
+                                                model2
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1438,6 +1491,18 @@ updateLoaded audioData msg model =
                                 InviteEmailAddressTextInput ->
                                     False
 
+                                LowerMusicVolume ->
+                                    True
+
+                                RaiseMusicVolume ->
+                                    True
+
+                                LowerSoundEffectVolume ->
+                                    True
+
+                                RaiseSoundEffectVolume ->
+                                    True
+
                 model2 =
                     { model
                         | time = time
@@ -1576,6 +1641,18 @@ updateLoaded audioData msg model =
 
                         InviteEmailAddressTextInput ->
                             ( { model | inviteTextInput = TextInput.paste text model.inviteTextInput }, Command.none )
+
+                        LowerMusicVolume ->
+                            ( model, Command.none )
+
+                        RaiseMusicVolume ->
+                            ( model, Command.none )
+
+                        LowerSoundEffectVolume ->
+                            ( model, Command.none )
+
+                        RaiseSoundEffectVolume ->
+                            ( model, Command.none )
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -1775,6 +1852,8 @@ getViewModel model =
     , showInvite = model.showInvite
     , inviteTextInput = model.inviteTextInput
     , inviteSubmitStatus = model.inviteSubmitStatus
+    , musicVolume = model.musicVolume
+    , soundEffectVolume = model.soundEffectVolume
     }
 
 
@@ -2383,6 +2462,18 @@ uiUpdate msg model =
 
         ChangedSecondaryColorInput ctrlOrMetaDown shiftDown key textInput ->
             ( { model | secondaryColorTextInput = textInput }, Command.none )
+
+        PressedLowerMusicVolume ->
+            ( { model | musicVolume = model.musicVolume - 1 |> max 0 }, Command.none )
+
+        PressedRaiseMusicVolume ->
+            ( { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume }, Command.none )
+
+        PressedLowerSoundEffectVolume ->
+            ( { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 }, Command.none )
+
+        PressedRaiseSoundEffectVolume ->
+            ( { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume }, Command.none )
 
 
 sendEmail : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
