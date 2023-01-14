@@ -1,9 +1,10 @@
-module Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), LoggedIn_, ServerChange(..), UserStatus(..))
+module Change exposing (Change(..), ClientChange(..), Cow, FrontendUser, LocalChange(..), LoggedIn_, ServerChange(..), UserStatus(..))
 
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
+import DisplayName exposing (DisplayName)
 import Effect.Time
 import Grid
 import GridCell
@@ -43,10 +44,16 @@ type ServerChange
     | ServerDropCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
-    | ServerUserConnected (Id UserId) Colors
-    | ServerYouLoggedIn LoggedIn_ Colors
+    | ServerUserConnected (Id UserId) FrontendUser
+    | ServerYouLoggedIn LoggedIn_ FrontendUser
     | ServerChangeHandColor (Id UserId) Colors
     | ServerToggleRailSplit (Coord WorldUnit)
+
+
+type alias FrontendUser =
+    { name : DisplayName
+    , handColor : Colors
+    }
 
 
 type alias Cow =

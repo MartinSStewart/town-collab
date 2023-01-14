@@ -426,28 +426,29 @@ view offset width hasFocus isValid model =
     in
     Sprite.spriteWithColor
         (if not isValid then
-            Color.rgb255 255 0 0
+            Color.errorColor
 
          else if hasFocus then
-            Color.rgb255 241 231 223
+            Color.highlightColor
 
          else
-            Color.rgb255 157 143 134
+            Color.outlineColor
         )
         offset
         (size width)
         (Coord.xy 508 28)
         (Coord.xy 1 1)
-        ++ Sprite.sprite
+        ++ Sprite.spriteWithColor
+            (if hasFocus then
+                Color.highlightColor
+
+             else
+                Color.fillColor3
+            )
             (offset |> Coord.plus padding)
             (size width |> Coord.minus (Coord.multiplyTuple ( 2, 2 ) padding))
             (Coord.xy
-                (if hasFocus then
-                    505
-
-                 else
-                    507
-                )
+                508
                 28
             )
             (Coord.xy 1 1)
@@ -456,7 +457,7 @@ view offset width hasFocus isValid model =
 
             else
                 Sprite.spriteWithColor
-                    (Color.rgb255 120 170 255)
+                    (Color.rgb255 170 210 255)
                     (offset
                         |> Coord.plus
                             (Coord.xy

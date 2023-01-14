@@ -13,11 +13,12 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change(..), Cow, UserStatus(..))
+import Change exposing (Change(..), Cow, FrontendUser, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor exposing (CursorMeshes, CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
+import DisplayName
 import Duration exposing (Duration)
 import Effect.Browser.Dom
 import Effect.Browser.Events exposing (Visibility(..))
@@ -121,12 +122,23 @@ getLocalStorage : Command FrontendOnly toMsg msg
 getLocalStorage =
     Command.sendToJs
         "get_local_storage"
-        supermario_copy_to_clipboard_to_js
+        get_local_storage
         Json.Encode.null
 
 
-type alias UserSettings =
-    { musicVolume : Int, soundEffectVolume : Int }
+gotLocalStorage : (UserSettings -> msg) -> Subscription FrontendOnly msg
+gotLocalStorage sub =
+    Subscription.fromJs
+        "got_local_storage"
+        got_local_storage
+        (\value ->
+            case Serialize.decodeFromJson userSettingsCodec value of
+                Ok ok ->
+                    sub ok
+
+                Err _ ->
+                    sub { musicVolume = Sound.maxVolume, soundEffectVolume = Sound.maxVolume }
+        )
 
 
 userSettingsCodec : Codec e UserSettings
@@ -140,8 +152,8 @@ userSettingsCodec =
 setLocalStorage : UserSettings -> Command FrontendOnly toMsg msg
 setLocalStorage userSettings =
     Command.sendToJs
-        "get_local_storage"
-        supermario_copy_to_clipboard_to_js
+        "set_local_storage"
+        set_local_storage
         (Serialize.encodeToJson userSettingsCodec userSettings)
 
 
@@ -568,8 +580,8 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , ignoreNextUrlChanged = False
             , lastTilePlaced = Nothing
             , sounds = loading.sounds
-            , musicVolume = Sound.maxVolume
-            , soundEffectVolume = Sound.maxVolume
+            , musicVolume = loading.musicVolume
+            , soundEffectVolume = loading.soundEffectVolume
             , removedTileParticles = []
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
@@ -615,11 +627,11 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , hasCmdKey = loading.hasCmdKey
             , loginTextInput = TextInput.init
             , pressedSubmitEmail = NotSubmitted { pressedSubmit = False }
-            , showInvite = False
+            , topMenuOpened = Nothing
             , inviteTextInput = TextInput.init
             , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
             , railToggles = []
-            , debugText = "Blah"
+            , debugText = ""
             }
                 |> setCurrentTool HandToolButton
                 |> handleOutMsg False LocalGrid.HandColorChanged
@@ -682,6 +694,8 @@ init url key =
         , viewPoint = data.viewPoint
         , mousePosition = Point2d.origin
         , sounds = AssocList.empty
+        , musicVolume = 0
+        , soundEffectVolume = 0
         , texture = Nothing
         , localModel = LoadingLocalModel []
         , hasCmdKey = False
@@ -708,6 +722,7 @@ init url key =
             }
             "/texture.png"
             |> Effect.Task.attempt TextureLoaded
+        , getLocalStorage
         ]
     , Sound.load SoundLoaded
     )
@@ -768,6 +783,15 @@ update audioData msg model =
 
                 GotUserAgentPlatform userAgentPlatform ->
                     ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgentPlatform) }
+                    , Command.none
+                    )
+
+                LoadedUserSettings userSettings ->
+                    ( Loading
+                        { loadingModel
+                            | musicVolume = userSettings.musicVolume
+                            , soundEffectVolume = userSettings.soundEffectVolume
+                        }
                     , Command.none
                     )
 
@@ -899,6 +923,9 @@ updateLoaded audioData msg model =
                             ( UiHover InviteEmailAddressTextInput _, _, Keyboard.Escape ) ->
                                 ( setFocus MapHover model, Command.none )
 
+                            ( UiHover DisplayNameTextInput _, _, Keyboard.Escape ) ->
+                                ( setFocus MapHover model, Command.none )
+
                             ( UiHover PrimaryColorInput _, tool, _ ) ->
                                 case currentUserId model of
                                     Just userId ->
@@ -970,6 +997,32 @@ updateLoaded audioData msg model =
                                     NoOutMsg ->
                                         Command.none
                                 )
+
+                            ( UiHover DisplayNameTextInput _, _, _ ) ->
+                                case model.topMenuOpened of
+                                    Just (SettingsMenu nameTextInput) ->
+                                        let
+                                            ( newTextInput, outMsg ) =
+                                                TextInput.keyMsg
+                                                    (ctrlOrMeta model)
+                                                    (keyDown Keyboard.Shift model)
+                                                    key
+                                                    nameTextInput
+                                        in
+                                        ( { model | topMenuOpened = SettingsMenu newTextInput |> Just }
+                                        , case outMsg of
+                                            CopyText text ->
+                                                copyToClipboard text
+
+                                            PasteText ->
+                                                readFromClipboardRequest
+
+                                            NoOutMsg ->
+                                                Command.none
+                                        )
+
+                                    _ ->
+                                        ( model, Command.none )
 
                             _ ->
                                 keyMsgCanvasUpdate key model
@@ -1078,6 +1131,33 @@ updateLoaded audioData msg model =
                                                         model2.loginTextInput
                                             }
                                                 |> setFocus hover
+
+                                        ( _, UiHover InviteEmailAddressTextInput data ) ->
+                                            { model2
+                                                | inviteTextInput =
+                                                    TextInput.mouseDown
+                                                        mousePosition2
+                                                        data.position
+                                                        model2.inviteTextInput
+                                            }
+                                                |> setFocus hover
+
+                                        ( _, UiHover DisplayNameTextInput data ) ->
+                                            case model2.topMenuOpened of
+                                                Just (SettingsMenu nameTextInput) ->
+                                                    { model2
+                                                        | topMenuOpened =
+                                                            TextInput.mouseDown
+                                                                mousePosition2
+                                                                data.position
+                                                                nameTextInput
+                                                                |> SettingsMenu
+                                                                |> Just
+                                                    }
+                                                        |> setFocus hover
+
+                                                _ ->
+                                                    model2
 
                                         _ ->
                                             model2
@@ -1322,6 +1402,28 @@ updateLoaded audioData msg model =
                                             RaiseSoundEffectVolume ->
                                                 model2
 
+                                            SettingsButton ->
+                                                model2
+
+                                            CloseSettings ->
+                                                model2
+
+                                            DisplayNameTextInput ->
+                                                { model2
+                                                    | topMenuOpened =
+                                                        case model2.topMenuOpened of
+                                                            Just (SettingsMenu nameTextInput) ->
+                                                                TextInput.mouseDownMove
+                                                                    mousePosition2
+                                                                    data.position
+                                                                    nameTextInput
+                                                                    |> SettingsMenu
+                                                                    |> Just
+
+                                                            _ ->
+                                                                model2.topMenuOpened
+                                                }
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1503,6 +1605,15 @@ updateLoaded audioData msg model =
                                 RaiseSoundEffectVolume ->
                                     True
 
+                                SettingsButton ->
+                                    True
+
+                                CloseSettings ->
+                                    True
+
+                                DisplayNameTextInput ->
+                                    False
+
                 model2 =
                     { model
                         | time = time
@@ -1654,8 +1765,31 @@ updateLoaded audioData msg model =
                         RaiseSoundEffectVolume ->
                             ( model, Command.none )
 
+                        SettingsButton ->
+                            ( model, Command.none )
+
+                        CloseSettings ->
+                            ( model, Command.none )
+
+                        DisplayNameTextInput ->
+                            case model.topMenuOpened of
+                                Just (SettingsMenu nameTextInput) ->
+                                    ( { model
+                                        | topMenuOpened = TextInput.paste text nameTextInput |> SettingsMenu |> Just
+                                      }
+                                    , Command.none
+                                    )
+
+                                _ ->
+                                    ( model, Command.none )
+
         GotUserAgentPlatform _ ->
             ( model, Command.none )
+
+        LoadedUserSettings userSettings ->
+            ( { model | musicVolume = userSettings.musicVolume, soundEffectVolume = userSettings.soundEffectVolume }
+            , Command.none
+            )
 
 
 previousFocus : FrontendLoaded -> Hover
@@ -1849,7 +1983,7 @@ getViewModel model =
     , currentTool = model.currentTool
     , pingData = model.pingData
     , userId = currentUserId model
-    , showInvite = model.showInvite
+    , topMenuOpened = model.topMenuOpened
     , inviteTextInput = model.inviteTextInput
     , inviteSubmitStatus = model.inviteSubmitStatus
     , musicVolume = model.musicVolume
@@ -2422,10 +2556,10 @@ uiUpdate : UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToB
 uiUpdate msg model =
     case msg of
         PressedCloseInviteUser ->
-            ( { model | showInvite = False }, Command.none )
+            ( { model | topMenuOpened = Nothing }, Command.none )
 
         PressedShowInviteUser ->
-            ( { model | showInvite = True }, Command.none )
+            ( { model | topMenuOpened = Just InviteMenu }, Command.none )
 
         PressedSendInviteUser ->
             case model.inviteSubmitStatus of
@@ -2464,16 +2598,64 @@ uiUpdate msg model =
             ( { model | secondaryColorTextInput = textInput }, Command.none )
 
         PressedLowerMusicVolume ->
-            ( { model | musicVolume = model.musicVolume - 1 |> max 0 }, Command.none )
+            { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings
 
         PressedRaiseMusicVolume ->
-            ( { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume }, Command.none )
+            { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
 
         PressedLowerSoundEffectVolume ->
-            ( { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 }, Command.none )
+            { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings
 
         PressedRaiseSoundEffectVolume ->
-            ( { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume }, Command.none )
+            { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
+
+        PressedSettingsButton ->
+            let
+                localModel =
+                    LocalGrid.localModel model.localModel
+            in
+            ( { model
+                | topMenuOpened =
+                    case localModel.userStatus of
+                        LoggedIn loggedIn ->
+                            TextInput.init
+                                |> TextInput.withText
+                                    (case IdDict.get loggedIn.userId localModel.users of
+                                        Just user ->
+                                            DisplayName.toString user.name
+
+                                        Nothing ->
+                                            DisplayName.toString DisplayName.default
+                                    )
+                                |> SettingsMenu
+                                |> Just
+
+                        NotLoggedIn ->
+                            Just LoggedOutSettingsMenu
+              }
+            , Command.none
+            )
+
+        PressedCloseSettings ->
+            ( { model | topMenuOpened = Nothing }, Command.none )
+
+        ChangedDisplayNameTextInput ctrlOrMetaDown shiftDown key textInput ->
+            ( { model
+                | topMenuOpened =
+                    case model.topMenuOpened of
+                        Just (SettingsMenu _) ->
+                            SettingsMenu textInput |> Just
+
+                        _ ->
+                            Nothing
+              }
+            , Command.none
+            )
+
+
+saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
+saveUserSettings model =
+    ( model, setLocalStorage { musicVolume = model.musicVolume, soundEffectVolume = model.soundEffectVolume } )
 
 
 sendEmail : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -3431,8 +3613,9 @@ handleOutMsg isFromBackend outMsg model =
                 colors : AssocList.Dict Colors ()
                 colors =
                     LocalGrid.localModel model.localModel
-                        |> .handColors
-                        |> IdDict.values
+                        |> .users
+                        |> IdDict.toList
+                        |> List.map (\( _, { handColor } ) -> handColor)
                         |> EverySet.fromList
                         |> EverySet.toList
                         |> List.map (\value -> ( value, () ))
@@ -4091,7 +4274,12 @@ getHandColor userId model =
         localGrid =
             LocalGrid.localModel model.localModel
     in
-    IdDict.get userId localGrid.handColors |> Maybe.withDefault Cursor.defaultColors
+    case IdDict.get userId localGrid.users of
+        Just { handColor } ->
+            handColor
+
+        Nothing ->
+            Cursor.defaultColors
 
 
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
@@ -4832,6 +5020,7 @@ subscriptions _ model =
                     , Effect.Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         , Subscription.fromJs "mouse_leave" mouse_leave (\_ -> MouseLeave)
+        , gotLocalStorage LoadedUserSettings
         ]
 
 

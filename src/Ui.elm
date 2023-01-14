@@ -253,7 +253,7 @@ button data child =
             BorderAndFill
                 { borderWidth = 2
                 , borderColor = Color.outlineColor
-                , fillColor = Color.fillColor
+                , fillColor = Color.fillColor2
                 }
         , borderAndFillFocus =
             BorderAndFill

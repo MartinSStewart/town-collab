@@ -22,8 +22,10 @@ module Types exposing
     , ToFrontend(..)
     , Tool(..)
     , ToolButton(..)
+    , TopMenu(..)
     , UiHover(..)
     , UiMsg(..)
+    , UserSettings
     , ViewPoint(..)
     )
 
@@ -31,11 +33,12 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change, Cow, ServerChange, UserStatus)
+import Change exposing (Change, Cow, FrontendUser, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (CursorMeshes)
 import Dict exposing (Dict)
+import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Browser.Navigation
 import Effect.Http
@@ -89,6 +92,8 @@ type alias FrontendLoading =
     , viewPoint : Coord WorldUnit
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
+    , musicVolume : Int
+    , soundEffectVolume : Int
     , texture : Maybe Texture
     , localModel : LoadingLocalModel
     , hasCmdKey : Bool
@@ -177,12 +182,18 @@ type alias FrontendLoaded =
     , hasCmdKey : Bool
     , loginTextInput : TextInput.Model
     , pressedSubmitEmail : SubmitStatus EmailAddress
-    , showInvite : Bool
+    , topMenuOpened : Maybe TopMenu
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
     , railToggles : List ( Time.Posix, Coord WorldUnit )
     , debugText : String
     }
+
+
+type TopMenu
+    = InviteMenu
+    | SettingsMenu TextInput.Model
+    | LoggedOutSettingsMenu
 
 
 type SubmitStatus a
@@ -203,6 +214,10 @@ type MouseButtonState
         , current : Point2d Pixels Pixels
         , hover : Hover
         }
+
+
+type alias UserSettings =
+    { musicVolume : Int, soundEffectVolume : Int }
 
 
 type Hover
@@ -229,6 +244,9 @@ type UiHover
     | RaiseMusicVolume
     | LowerSoundEffectVolume
     | RaiseSoundEffectVolume
+    | SettingsButton
+    | CloseSettings
+    | DisplayNameTextInput
 
 
 type UiMsg
@@ -245,6 +263,9 @@ type UiMsg
     | PressedRaiseMusicVolume
     | PressedLowerSoundEffectVolume
     | PressedRaiseSoundEffectVolume
+    | PressedSettingsButton
+    | PressedCloseSettings
+    | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
 
 
 type alias BackendModel =
@@ -303,6 +324,7 @@ type alias BackendUserData =
     , handColor : Colors
     , emailAddress : EmailAddress
     , acceptedInvites : IdDict UserId ()
+    , name : DisplayName
     }
 
 
@@ -333,6 +355,7 @@ type FrontendMsg_
     | VisibilityChanged
     | PastedText String
     | GotUserAgentPlatform String
+    | LoadedUserSettings UserSettings
 
 
 type ToBackend
@@ -382,5 +405,5 @@ type alias LoadingData_ =
     , mail : AssocList.Dict (Id MailId) FrontendMail
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
-    , handColors : IdDict UserId Colors
+    , users : IdDict UserId FrontendUser
     }

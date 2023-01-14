@@ -12,7 +12,7 @@ module LocalGrid exposing
     )
 
 import Bounds exposing (Bounds)
-import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (Change(..), ClientChange(..), Cow, FrontendUser, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
@@ -43,7 +43,7 @@ type alias LocalGrid_ =
     , viewBounds : Bounds CellUnit
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
-    , handColors : IdDict UserId Colors
+    , users : IdDict UserId FrontendUser
     }
 
 
@@ -65,17 +65,17 @@ init :
         , viewBounds : Bounds CellUnit
         , cows : IdDict CowId Cow
         , cursors : IdDict UserId Cursor
-        , handColors : IdDict UserId Colors
+        , users : IdDict UserId FrontendUser
     }
     -> LocalModel Change LocalGrid
-init { grid, userStatus, viewBounds, cows, cursors, handColors } =
+init { grid, userStatus, viewBounds, cows, cursors, users } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
         , viewBounds = viewBounds
         , cows = cows
         , cursors = cursors
-        , handColors = handColors
+        , users = users
         }
         |> LocalModel.init
 
@@ -234,7 +234,13 @@ updateLocalChange localChange model =
         ChangeHandColor colors ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    ( { model | handColors = IdDict.insert loggedIn.userId colors model.handColors }
+                    ( { model
+                        | users =
+                            IdDict.update
+                                loggedIn.userId
+                                (Maybe.map (\user -> { user | handColor = colors }))
+                                model.users
+                      }
                     , HandColorChanged
                     )
 
@@ -283,17 +289,24 @@ updateServerChange serverChange model =
             )
 
         ServerChangeHandColor userId colors ->
-            ( { model | handColors = IdDict.insert userId colors model.handColors }
+            ( { model
+                | users =
+                    IdDict.update
+                        userId
+                        (Maybe.map (\user -> { user | handColor = colors }))
+                        model.users
+              }
             , HandColorChanged
             )
 
-        ServerUserConnected userId colors ->
-            ( { model | handColors = IdDict.insert userId colors model.handColors }
-            , HandColorChanged
-            )
+        ServerUserConnected userId user ->
+            ( { model | users = IdDict.insert userId user model.users }, HandColorChanged )
 
-        ServerYouLoggedIn loggedIn handColor ->
-            ( { model | userStatus = LoggedIn loggedIn, handColors = IdDict.insert loggedIn.userId handColor model.handColors }
+        ServerYouLoggedIn loggedIn user ->
+            ( { model
+                | userStatus = LoggedIn loggedIn
+                , users = IdDict.insert loggedIn.userId user model.users
+              }
             , HandColorChanged
             )
 

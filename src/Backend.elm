@@ -2,12 +2,13 @@ module Backend exposing (app, app_)
 
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (ClientChange(..), FrontendUser, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
 import Dict
+import DisplayName
 import Duration exposing (Duration)
 import Effect.Command as Command exposing (BackendOnly, Command)
 import Effect.Http
@@ -1122,22 +1123,21 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
             , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
             , cows = model3.cows
             , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
-            , handColors = IdDict.map (\_ a -> a.handColor) model3.users
+            , users = IdDict.map (\_ a -> backendUserToFrontend a) model3.users
             }
 
-        handColor : Colors
-        handColor =
+        frontendUser =
             case userStatus of
                 LoggedIn loggedIn ->
                     case IdDict.get loggedIn.userId model3.users of
                         Just user ->
-                            user.handColor
+                            backendUserToFrontend user
 
                         Nothing ->
-                            Cursor.defaultColors
+                            { handColor = Cursor.defaultColors, name = DisplayName.default }
 
                 NotLoggedIn ->
-                    Cursor.defaultColors
+                    { handColor = Cursor.defaultColors, name = DisplayName.default }
     in
     ( model3
     , Command.batch
@@ -1150,14 +1150,14 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                             Nothing
 
                         else if sessionId2 == sessionId || Just sessionId2 == maybeRequestedBy then
-                            ServerYouLoggedIn loggedIn handColor
+                            ServerYouLoggedIn loggedIn frontendUser
                                 |> Change.ServerChange
                                 |> Nonempty.singleton
                                 |> ChangeBroadcast
                                 |> Just
 
                         else
-                            ServerUserConnected loggedIn.userId handColor
+                            ServerUserConnected loggedIn.userId frontendUser
                                 |> Change.ServerChange
                                 |> Nonempty.singleton
                                 |> ChangeBroadcast
@@ -1169,6 +1169,13 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                 Command.none
         ]
     )
+
+
+backendUserToFrontend : BackendUserData -> FrontendUser
+backendUserToFrontend user =
+    { name = user.name
+    , handColor = user.handColor
+    }
 
 
 addSession : SessionId -> ClientId -> Bounds CellUnit -> UserStatus -> BackendModel -> BackendModel
@@ -1220,6 +1227,7 @@ createUser userId emailAddress model =
             , handColor = Cursor.defaultColors
             , emailAddress = emailAddress
             , acceptedInvites = IdDict.empty
+            , name = DisplayName.default
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )
