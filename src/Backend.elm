@@ -171,38 +171,13 @@ update isProduction msg model =
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontend isProduction time sessionId clientId toBackendMsg model
 
-        SentLoginEmail clientId sendTime emailAddress result ->
-            let
-                debugText =
-                    case result of
-                        Ok ok ->
-                            ok.message ++ ", id:" ++ ok.messageId ++ " errorCode: " ++ String.fromInt ok.errorCode
-
-                        Err error ->
-                            case error of
-                                Effect.Http.BadUrl url ->
-                                    url
-
-                                Effect.Http.Timeout ->
-                                    "Timeout"
-
-                                Effect.Http.NetworkError ->
-                                    "NetworkError"
-
-                                Effect.Http.BadStatus int ->
-                                    "BadStatus " ++ String.fromInt int
-
-                                Effect.Http.BadBody string ->
-                                    "BadBody " ++ string
-            in
+        SentLoginEmail sendTime emailAddress result ->
             case result of
                 Ok _ ->
-                    ( model, Effect.Lamdera.sendToFrontend clientId (DebugResponse debugText) )
+                    ( model, Command.none )
 
                 Err error ->
-                    ( addError sendTime (PostmarkError emailAddress error) model
-                    , Effect.Lamdera.sendToFrontend clientId (DebugResponse debugText)
-                    )
+                    ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
 
         WorldUpdateTimeElapsed time ->
             case model.lastWorldUpdate of
@@ -609,10 +584,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            --let
-                            --    _ =
-                            --        Debug.log "loginUrl" loginEmailUrl
-                            --in
+                            let
+                                _ =
+                                    Debug.log "loginUrl" loginEmailUrl
+                            in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
@@ -624,7 +599,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                 [ SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId
                                 , sendEmail
                                     isProduction
-                                    (SentLoginEmail clientId currentTime emailAddress)
+                                    (SentLoginEmail currentTime emailAddress)
                                     (NonemptyString 'L' "ogin Email")
                                     ("DO NOT click the following link if you didn't request this email.\n"
                                         ++ "\n"
@@ -653,15 +628,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                             )
 
                         Nothing ->
-                            ( model2
-                            , Command.batch
-                                [ SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId
-                                , Effect.Lamdera.sendToFrontend clientId (DebugResponse "User not found")
-                                ]
-                            )
+                            ( model2, SendLoginEmailResponse emailAddress |> Effect.Lamdera.sendToFrontend clientId )
 
                 Invalid ->
-                    ( model, Effect.Lamdera.sendToFrontend clientId (DebugResponse "Invalid email") )
+                    ( model, Command.none )
 
         SendInviteEmailRequest a ->
             case Untrusted.emailAddress a of
@@ -676,8 +646,9 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    --_ =
-                                    --    Debug.log "inviteUrl" inviteUrl
+                                    _ =
+                                        Debug.log "inviteUrl" inviteUrl
+
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 

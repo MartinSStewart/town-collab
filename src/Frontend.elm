@@ -3539,8 +3539,8 @@ view audioData model =
             Loaded loadedModel ->
                 canvasView audioData loadedModel
         , case model of
-            Loading loadingModel ->
-                Html.text "loading"
+            Loading _ ->
+                Html.text ""
 
             Loaded loadedModel ->
                 Html.text loadedModel.debugText

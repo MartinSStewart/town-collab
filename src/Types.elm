@@ -340,7 +340,7 @@ type ToBackend
 type BackendMsg
     = UserDisconnected SessionId ClientId
     | NotifyAdminEmailSent
-    | SentLoginEmail ClientId Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
+    | SentLoginEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | UpdateFromFrontend SessionId ClientId ToBackend Effect.Time.Posix
     | WorldUpdateTimeElapsed Effect.Time.Posix
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
