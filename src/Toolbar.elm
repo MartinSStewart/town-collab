@@ -148,30 +148,12 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
             )
 
     else
-        Ui.row
-            { spacing = 10, padding = Ui.noPadding }
-            [ Ui.button
-                { id = ShowInviteUser
-                , onPress = PressedShowInviteUser
-                , padding = Ui.paddingXY 10 4
-                }
-                (Ui.text "Invite")
-            , Ui.text
-                (if Env.isProduction then
-                    "True"
-
-                 else
-                    "False"
-                )
-            , Ui.text
-                (case Env.adminEmail of
-                    Just email ->
-                        EmailAddress.toString email
-
-                    Nothing ->
-                        "Invalid email!"
-                )
-            ]
+        Ui.button
+            { id = ShowInviteUser
+            , onPress = PressedShowInviteUser
+            , padding = Ui.paddingXY 10 4
+            }
+            (Ui.text "Invite")
 
 
 borderAndFill : BorderAndFill
@@ -244,21 +226,6 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                             Ui.text ""
                     ]
                 , Ui.wrappedText 1000 "If you don't have an account you'll need to be invited by an existing player."
-                , Ui.text
-                    (if Env.isProduction then
-                        "True"
-
-                     else
-                        "False"
-                    )
-                , Ui.text
-                    (case Env.adminEmail of
-                        Just email ->
-                            EmailAddress.toString email
-
-                        Nothing ->
-                            "Invalid email!"
-                    )
                 ]
     in
     case pressedSubmitEmail of
