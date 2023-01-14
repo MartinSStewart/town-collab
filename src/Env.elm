@@ -25,7 +25,7 @@ isProduction2 =
 
 isProduction : Bool
 isProduction =
-    case String.toLower isProduction_ |> String.trim of
+    case String.toLower isProduction2 |> String.trim of
         "true" ->
             True
 
@@ -43,7 +43,7 @@ adminEmail2 =
 
 adminEmail : Maybe EmailAddress
 adminEmail =
-    EmailAddress.fromString adminEmail_
+    EmailAddress.fromString adminEmail2
 
 
 postmarkApiKey_ : String
