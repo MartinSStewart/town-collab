@@ -18,8 +18,8 @@ adminUserId =
     String.toInt adminUserId_ |> Maybe.map Id.fromInt
 
 
-isProduction_ : String
-isProduction_ =
+isProduction2 : String
+isProduction2 =
     "False"
 
 
@@ -36,8 +36,8 @@ isProduction =
             False
 
 
-adminEmail_ : String
-adminEmail_ =
+adminEmail2 : String
+adminEmail2 =
     "a@a.se"
 
 
