@@ -244,6 +244,21 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                             Ui.text ""
                     ]
                 , Ui.wrappedText 1000 "If you don't have an account you'll need to be invited by an existing player."
+                , Ui.text
+                    (if Env.isProduction then
+                        "True"
+
+                     else
+                        "False"
+                    )
+                , Ui.text
+                    (case Env.adminEmail of
+                        Just email ->
+                            EmailAddress.toString email
+
+                        Nothing ->
+                            "Invalid email!"
+                    )
                 ]
     in
     case pressedSubmitEmail of
