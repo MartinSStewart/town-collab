@@ -314,6 +314,7 @@ type FrontendMsg_
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
     | MouseWheel Html.Events.Extra.Wheel.Event
+    | MouseLeave
     | ShortIntervalElapsed Effect.Time.Posix
     | ZoomFactorPressed Int
     | ToggleAdminEnabledPressed

@@ -104,6 +104,9 @@ port audioPortFromJS : (Json.Decode.Value -> msg) -> Sub msg
 port supermario_copy_to_clipboard_to_js : Json.Encode.Value -> Cmd msg
 
 
+port mouse_leave : (Json.Decode.Value -> msg) -> Sub msg
+
+
 copyToClipboard text =
     Command.sendToJs
         "supermario_copy_to_clipboard_to_js"
@@ -1140,6 +1143,14 @@ updateLoaded audioData msg model =
                 { model | scrollThreshold = scrollThreshold }
             , Command.none
             )
+
+        MouseLeave ->
+            case model.mouseLeft of
+                MouseButtonDown mouseState ->
+                    mainMouseButtonUp (mouseScreenPosition model) mouseState model
+
+                MouseButtonUp _ ->
+                    ( model, Command.none )
 
         MouseMove mousePosition ->
             let
@@ -4729,6 +4740,7 @@ subscriptions _ model =
                         (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Effect.Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
+        , Subscription.fromJs "mouse_leave" mouse_leave (\_ -> MouseLeave)
         ]
 
 

@@ -10,6 +10,8 @@ exports.init = async function(app) {
         }
     });
 
+  window.addEventListener("mouseout", (event) => app.ports.mouse_leave.send());
+
   app.ports.supermario_read_from_clipboard_to_js.subscribe(function() {
     try {
         navigator.clipboard.readText().then((clipText) => app.ports.supermario_read_from_clipboard_from_js.send(clipText));
