@@ -514,56 +514,6 @@ updateFromBackend config toFrontend mailEditor =
                         |> close config
 
 
-
---handleMouseDown :
---    cmd
---    -> (ToBackend -> cmd)
---    -> Int
---    -> Int
---    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
---    -> Point2d Pixels Pixels
---    -> Model
---    -> ( Model, cmd )
---handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosition model =
---    let
---        uiCoord : Coord UiPixelUnit
---        uiCoord =
---            screenToWorld windowWidth windowHeight config mousePosition
---                |> Coord.roundPoint
---
---        mailCoord : Coord MailPixelUnit
---        mailCoord =
---            uiCoord
---                |> Coord.minus (imageData.textureSize |> Coord.divide (Coord.tuple ( 2, 2 )))
---                |> uiPixelToMailPixel
---
---        imageData : ImageData units
---        imageData =
---            getImageData (currentImage model)
---    in
---    if validImagePosition imageData mailCoord then
---        let
---            oldEditorState : EditorState
---            oldEditorState =
---                model.current
---
---            newEditorState : EditorState
---            newEditorState =
---                { oldEditorState
---                    | content =
---                        oldEditorState.content
---                            ++ [ { position = mailCoord, image = currentImage model } ]
---                }
---
---            model3 =
---                addChange newEditorState { model | lastPlacedImage = Just config.time }
---        in
---        ( model3, UpdateMailEditorRequest (toData model3) |> sendToBackend )
---
---    else
---        ( model, cmdNone )
-
-
 validateUserId : String -> Maybe (Id UserId)
 validateUserId string =
     case String.toInt string of
@@ -728,8 +678,9 @@ mailZoomFactor : Int -> Int -> Int
 mailZoomFactor windowWidth windowHeight =
     min
         (toFloat windowWidth / (30 + mailWidth))
-        (toFloat (windowHeight - 400) / (30 + mailHeight))
+        (toFloat windowHeight / (30 + mailHeight))
         |> floor
+        |> min 3
 
 
 screenToWorld :
@@ -746,7 +697,7 @@ screenToWorld windowWidth windowHeight model =
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
         >> Point2d.at (scaleForScreenToWorld windowWidth windowHeight model)
-        >> Point2d.placeIn (Point2d.unsafe { x = 0, y = -mailYOffset } |> Frame2d.atPoint)
+        >> Point2d.placeIn (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
 worldToScreen :
@@ -763,7 +714,7 @@ worldToScreen windowWidth windowHeight model =
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
         << Point2d.at_ (scaleForScreenToWorld windowWidth windowHeight model)
-        << Point2d.relativeTo (Point2d.unsafe { x = 0, y = -mailYOffset } |> Frame2d.atPoint)
+        << Point2d.relativeTo (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
 scaleForScreenToWorld windowWidth windowHeight model =
@@ -889,7 +840,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                     mailWidth / -2
 
                 endY =
-                    (toFloat mailHeight / -2) + mailYOffset
+                    toFloat mailHeight / -2
 
                 mailX =
                     (endX - startPosition_.x) * t + startPosition_.x
@@ -941,7 +892,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                                     1
                                     |> Mat4.translate3
                                         (toFloat tileX |> round |> toFloat)
-                                        (toFloat tileY + mailYOffset |> round |> toFloat)
+                                        (toFloat tileY |> round |> toFloat)
                                         0
                             }
                         ]
@@ -952,10 +903,6 @@ drawMail texture mousePosition windowWidth windowHeight config model =
 
         Nothing ->
             []
-
-
-mailYOffset =
-    -50
 
 
 type Msg
@@ -971,43 +918,15 @@ ui windowSize idMap msgMap model =
         , borderAndFill = NoBorderOrFill
         , inFront =
             [ Ui.bottomCenter
-                { size = windowSize
-                , inFront = []
-                }
+                { size = windowSize, inFront = [] }
                 (Ui.el
                     { padding = Ui.paddingXY 2 2
                     , inFront = []
-                    , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                    , borderAndFill =
+                        BorderAndFill
+                            { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
                     }
-                    (List.foldl
-                        (\image state ->
-                            let
-                                button =
-                                    imageButton idMap msgMap model.currentImageIndex state.index image
-
-                                newHeight =
-                                    state.height + Coord.yRaw (Ui.size button)
-                            in
-                            if newHeight > 250 then
-                                { index = state.index + 1
-                                , height = Coord.yRaw (Ui.size button)
-                                , columns = List.Nonempty.cons [ button ] state.columns
-                                }
-
-                            else
-                                { index = state.index + 1
-                                , height = newHeight
-                                , columns =
-                                    List.Nonempty.replaceHead (button :: List.Nonempty.head state.columns) state.columns
-                                }
-                        )
-                        { index = 0, columns = Nonempty [] [], height = 0 }
-                        (Array.toList images)
-                        |> .columns
-                        |> List.Nonempty.toList
-                        |> List.map (Ui.column { padding = Ui.noPadding, spacing = 2 })
-                        |> Ui.row { padding = Ui.noPadding, spacing = 2 }
-                    )
+                    (imageButtons idMap msgMap model.currentImageIndex)
                 )
             ]
         }
@@ -1022,6 +941,37 @@ ui windowSize idMap msgMap model =
             }
             Ui.none
         )
+
+
+imageButtons idMap msgMap currentImageIndex =
+    List.foldl
+        (\image state ->
+            let
+                button =
+                    imageButton idMap msgMap currentImageIndex state.index image
+
+                newHeight =
+                    state.height + Coord.yRaw (Ui.size button)
+            in
+            if newHeight > 250 then
+                { index = state.index + 1
+                , height = Coord.yRaw (Ui.size button)
+                , columns = List.Nonempty.cons [ button ] state.columns
+                }
+
+            else
+                { index = state.index + 1
+                , height = newHeight
+                , columns =
+                    List.Nonempty.replaceHead (button :: List.Nonempty.head state.columns) state.columns
+                }
+        )
+        { index = 0, columns = Nonempty [] [], height = 0 }
+        (Array.toList images)
+        |> .columns
+        |> List.Nonempty.toList
+        |> List.map (Ui.column { padding = Ui.noPadding, spacing = 2 })
+        |> Ui.row { padding = Ui.noPadding, spacing = 2 }
 
 
 imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Int -> Int -> Image -> Ui.Element uiHover msg

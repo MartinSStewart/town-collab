@@ -4151,7 +4151,24 @@ cursorSprite hover model =
             let
                 helper () =
                     if MailEditor.isOpen model.mailEditor then
-                        DefaultCursor
+                        case hover of
+                            UiBackgroundHover ->
+                                DefaultCursor
+
+                            TileHover _ ->
+                                DefaultCursor
+
+                            TrainHover _ ->
+                                DefaultCursor
+
+                            MapHover ->
+                                DefaultCursor
+
+                            CowHover _ ->
+                                DefaultCursor
+
+                            UiHover _ _ ->
+                                PointerCursor
 
                     else if isHoldingCow model /= Nothing then
                         CursorSprite PinchSpriteCursor
