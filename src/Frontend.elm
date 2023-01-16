@@ -594,6 +594,7 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
                         NotLoggedIn ->
                             { to = "", content = [], currentImageIndex = 0 }
                     )
+                    |> MailEditor.open { time = time } Point2d.origin
             , currentTool = currentTile
             , lastTileRotation = []
             , lastPlacementError = Nothing
@@ -2024,112 +2025,108 @@ hoverAt model mousePosition =
                 ( UiBackgroundHover, Nothing )
 
             Ui.NoHover ->
-                if MailEditor.isOpen model.mailEditor then
-                    ( UiHover (MailEditorHover MailEditor.BackgroundHover) { position = Coord.origin }, Nothing )
+                let
+                    mouseWorldPosition_ : Point2d WorldUnit WorldUnit
+                    mouseWorldPosition_ =
+                        screenToWorld model mousePosition
 
-                else
-                    let
-                        mouseWorldPosition_ : Point2d WorldUnit WorldUnit
-                        mouseWorldPosition_ =
-                            screenToWorld model mousePosition
+                    tileHover : Maybe Hover
+                    tileHover =
+                        let
+                            localModel : LocalGrid_
+                            localModel =
+                                LocalGrid.localModel model.localModel
+                        in
+                        case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
+                            Just tile ->
+                                case model.currentTool of
+                                    HandTool ->
+                                        TileHover tile |> Just
 
-                        tileHover : Maybe Hover
-                        tileHover =
-                            let
-                                localModel : LocalGrid_
-                                localModel =
-                                    LocalGrid.localModel model.localModel
-                            in
-                            case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
-                                Just tile ->
-                                    case model.currentTool of
-                                        HandTool ->
+                                    TilePickerTool ->
+                                        TileHover tile |> Just
+
+                                    TilePlacerTool _ ->
+                                        if ctrlOrMeta model then
                                             TileHover tile |> Just
 
-                                        TilePickerTool ->
-                                            TileHover tile |> Just
+                                        else
+                                            Nothing
 
-                                        TilePlacerTool _ ->
-                                            if ctrlOrMeta model then
-                                                TileHover tile |> Just
+                            Nothing ->
+                                Nothing
+
+                    trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
+                    trainHovers =
+                        case model.currentTool of
+                            TilePlacerTool _ ->
+                                Nothing
+
+                            TilePickerTool ->
+                                Nothing
+
+                            HandTool ->
+                                IdDict.toList model.trains
+                                    |> List.filterMap
+                                        (\( trainId, train ) ->
+                                            let
+                                                distance =
+                                                    Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                                            in
+                                            if distance |> Quantity.lessThan (Quantity 0.9) then
+                                                Just ( { trainId = trainId, train = train }, distance )
 
                                             else
                                                 Nothing
+                                        )
+                                    |> Quantity.minimumBy Tuple.second
 
-                                Nothing ->
-                                    Nothing
+                    localGrid : LocalGrid_
+                    localGrid =
+                        LocalGrid.localModel model.localModel
 
-                        trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
-                        trainHovers =
-                            case model.currentTool of
-                                TilePlacerTool _ ->
-                                    Nothing
+                    cowHovers : Maybe ( Id CowId, Cow )
+                    cowHovers =
+                        case model.currentTool of
+                            TilePlacerTool _ ->
+                                Nothing
 
-                                TilePickerTool ->
-                                    Nothing
+                            TilePickerTool ->
+                                Nothing
 
-                                HandTool ->
-                                    IdDict.toList model.trains
-                                        |> List.filterMap
-                                            (\( trainId, train ) ->
-                                                let
-                                                    distance =
-                                                        Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                                in
-                                                if distance |> Quantity.lessThan (Quantity 0.9) then
-                                                    Just ( { trainId = trainId, train = train }, distance )
-
-                                                else
-                                                    Nothing
-                                            )
-                                        |> Quantity.minimumBy Tuple.second
-
-                        localGrid : LocalGrid_
-                        localGrid =
-                            LocalGrid.localModel model.localModel
-
-                        cowHovers : Maybe ( Id CowId, Cow )
-                        cowHovers =
-                            case model.currentTool of
-                                TilePlacerTool _ ->
-                                    Nothing
-
-                                TilePickerTool ->
-                                    Nothing
-
-                                HandTool ->
-                                    IdDict.toList localGrid.cows
-                                        |> List.filter
-                                            (\( cowId, _ ) ->
-                                                case cowActualPosition cowId model of
-                                                    Just a ->
-                                                        if a.isHeld then
-                                                            False
-
-                                                        else
-                                                            insideCow mouseWorldPosition_ a.position
-
-                                                    Nothing ->
+                            HandTool ->
+                                IdDict.toList localGrid.cows
+                                    |> List.filter
+                                        (\( cowId, _ ) ->
+                                            case cowActualPosition cowId model of
+                                                Just a ->
+                                                    if a.isHeld then
                                                         False
-                                            )
-                                        |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
-                    in
-                    case trainHovers of
-                        Just ( train, _ ) ->
-                            ( TrainHover train, Nothing )
 
-                        Nothing ->
-                            case cowHovers of
-                                Just ( cowId, cow ) ->
-                                    ( CowHover { cowId = cowId, cow = cow }, Nothing )
+                                                    else
+                                                        insideCow mouseWorldPosition_ a.position
 
-                                Nothing ->
-                                    case tileHover of
-                                        Just hover ->
-                                            ( hover, Nothing )
+                                                Nothing ->
+                                                    False
+                                        )
+                                    |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+                in
+                case trainHovers of
+                    Just ( train, _ ) ->
+                        ( TrainHover train, Nothing )
 
-                                        Nothing ->
-                                            ( MapHover, Nothing )
+                    Nothing ->
+                        case cowHovers of
+                            Just ( cowId, cow ) ->
+                                ( CowHover { cowId = cowId, cow = cow }, Nothing )
+
+                            Nothing ->
+                                case tileHover of
+                                    Just hover ->
+                                        ( hover, Nothing )
+
+                                    Nothing ->
+                                        ( MapHover, Nothing )
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -2666,7 +2663,7 @@ uiUpdate msg model =
             )
 
         MailEditorMsg mailEditorMsg ->
-            ( { model | mailEditor = MailEditor.uiUpdate mailEditorMsg model.mailEditor }, Command.none )
+            ( { model | mailEditor = MailEditor.uiUpdate model mailEditorMsg model.mailEditor }, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -4690,7 +4687,6 @@ canvasView audioData model =
                                 windowWidth
                                 windowHeight
                                 model
-                                (actualViewPoint model)
                                 model.mailEditor
                             ++ (case currentUserId model of
                                     Just userId ->

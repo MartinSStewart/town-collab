@@ -35,12 +35,15 @@ import Array exposing (Array)
 import AssocList
 import Color exposing (Colors)
 import Coord exposing (Coord)
+import Cursor
 import Duration exposing (Duration)
 import Effect.Time
 import Effect.WebGL
 import Frame2d
 import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard exposing (Key(..))
+import List.Extra
+import List.Nonempty exposing (Nonempty(..))
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
@@ -50,7 +53,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sprite
-import Tile
+import Tile exposing (DefaultColor(..), Tile, TileGroup(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (MailPixelUnit, WorldUnit)
 import Vector2d
@@ -159,13 +162,21 @@ type Image
     = BlueStamp Colors
     | SunglassesSmiley Colors
     | NormalSmiley Colors
+    | TileImage Tile Colors
+    | Grass
+    | DefaultCursor Colors
+    | DragCursor Colors
+    | PinchCursor Colors
 
 
-uiUpdate : Msg -> Model -> Model
-uiUpdate msg model =
+uiUpdate : { a | time : Effect.Time.Posix } -> Msg -> Model -> Model
+uiUpdate config msg model =
     case msg of
         PressedImageButton index ->
             setCurrentImage index model
+
+        PressedBackground ->
+            close config model
 
 
 currentImage : Model -> Image
@@ -183,7 +194,22 @@ images =
     [ defaultBlueStamp
     , SunglassesSmiley { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
     , NormalSmiley { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , Grass
+    , DefaultCursor Cursor.defaultColors
+    , DragCursor Cursor.defaultColors
+    , PinchCursor Cursor.defaultColors
     ]
+        ++ List.concatMap
+            (\group ->
+                let
+                    data =
+                        Tile.getTileGroupData group
+                in
+                List.map
+                    (\tile -> TileImage tile (Tile.defaultToPrimaryAndSecondary data.defaultColors))
+                    (List.Nonempty.toList data.tiles)
+            )
+            (List.Extra.remove EmptyTileGroup Tile.allTileGroups)
         |> Array.fromList
 
 
@@ -233,7 +259,7 @@ setCurrentImage index model =
         model2 =
             { model | currentImageIndex = index }
     in
-    { model2 | currentImageMesh = imageMesh { position = Coord.origin, image = currentImage model2 } |> Sprite.toMesh }
+    { model2 | currentImageMesh = imageMesh 1 { position = Coord.origin, image = currentImage model2 } |> Sprite.toMesh }
 
 
 init : MailEditorData
@@ -242,7 +268,7 @@ init =
 
 
 type alias ImageData units =
-    { textureSize : Coord units, texturePosition : Coord units, colors : Colors }
+    { textureSize : Coord units, texturePosition : List (Coord units), colors : Colors }
 
 
 type ToBackend
@@ -258,13 +284,61 @@ getImageData : Image -> ImageData units
 getImageData image =
     case image of
         BlueStamp colors ->
-            { textureSize = Coord.xy 28 28, texturePosition = Coord.xy 504 0, colors = colors }
+            { textureSize = Coord.xy 28 28, texturePosition = [ Coord.xy 504 0 ], colors = colors }
 
         SunglassesSmiley colors ->
-            { textureSize = Coord.xy 24 24, texturePosition = Coord.xy 532 0, colors = colors }
+            { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 532 0 ], colors = colors }
 
         NormalSmiley colors ->
-            { textureSize = Coord.xy 24 24, texturePosition = Coord.xy 556 0, colors = colors }
+            { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 556 0 ], colors = colors }
+
+        TileImage tile colors ->
+            let
+                tileData =
+                    Tile.getData tile
+            in
+            { textureSize = Coord.multiply Units.tileSize tileData.size
+            , texturePosition =
+                (case tileData.texturePosition of
+                    Just texturePosition ->
+                        [ Coord.multiply Units.tileSize texturePosition ]
+
+                    Nothing ->
+                        []
+                )
+                    ++ (case tileData.texturePositionTopLayer of
+                            Just { texturePosition } ->
+                                [ Coord.multiply Units.tileSize texturePosition ]
+
+                            Nothing ->
+                                []
+                       )
+            , colors = colors
+            }
+
+        Grass ->
+            { textureSize = Coord.xy 80 72
+            , texturePosition = [ Coord.xy 220 216 ]
+            , colors = Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
+            }
+
+        DefaultCursor colors ->
+            { textureSize = Cursor.defaultCursorTextureSize
+            , texturePosition = [ Cursor.defaultCursorTexturePosition ]
+            , colors = colors
+            }
+
+        DragCursor colors ->
+            { textureSize = Cursor.dragCursorTextureSize
+            , texturePosition = [ Cursor.dragCursorTexturePosition ]
+            , colors = colors
+            }
+
+        PinchCursor colors ->
+            { textureSize = Cursor.pinchCursorTextureSize
+            , texturePosition = [ Cursor.pinchCursorTexturePosition ]
+            , colors = colors
+            }
 
 
 updateFromBackend : { a | time : Effect.Time.Posix } -> ToFrontend -> Model -> Model
@@ -332,7 +406,7 @@ handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosit
         ( model3, UpdateMailEditorRequest (toData model3) |> sendToBackend )
 
     else
-        ( close config model, cmdNone )
+        ( model, cmdNone )
 
 
 validateUserId : String -> Maybe (Id UserId)
@@ -475,9 +549,9 @@ mailWidth =
     400
 
 
-mailHeight : Int
+mailHeight : number
 mailHeight =
-    round (mailWidth * (16 / 23))
+    240
 
 
 mailSize =
@@ -486,7 +560,7 @@ mailSize =
 
 updateMailMesh : Model -> Model
 updateMailMesh model =
-    { model | mesh = (mailMesh ++ List.concatMap imageMesh model.current.content) |> Sprite.toMesh }
+    { model | mesh = (mailMesh ++ List.concatMap (imageMesh 1) model.current.content) |> Sprite.toMesh }
 
 
 mailMesh : List Vertex
@@ -499,7 +573,7 @@ mailZoomFactor : Int -> Int -> Int
 mailZoomFactor windowWidth windowHeight =
     min
         (toFloat windowWidth / (30 + mailWidth))
-        (toFloat windowHeight / (30 + toFloat mailHeight))
+        (toFloat (windowHeight - 400) / (30 + mailHeight))
         |> floor
 
 
@@ -517,7 +591,7 @@ screenToWorld windowWidth windowHeight model =
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
         >> Point2d.at (scaleForScreenToWorld windowWidth windowHeight model)
-        >> Point2d.placeIn (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
+        >> Point2d.placeIn (Point2d.unsafe { x = 0, y = -mailYOffset } |> Frame2d.atPoint)
 
 
 worldToScreen :
@@ -534,7 +608,7 @@ worldToScreen windowWidth windowHeight model =
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
         << Point2d.at_ (scaleForScreenToWorld windowWidth windowHeight model)
-        << Point2d.relativeTo (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
+        << Point2d.relativeTo (Point2d.unsafe { x = 0, y = -mailYOffset } |> Frame2d.atPoint)
 
 
 scaleForScreenToWorld windowWidth windowHeight model =
@@ -603,10 +677,9 @@ drawMail :
             , time : Effect.Time.Posix
             , zoomFactor : Int
         }
-    -> Point2d WorldUnit WorldUnit
     -> Model
     -> List Effect.WebGL.Entity
-drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
+drawMail texture mousePosition windowWidth windowHeight config model =
     case isOpenAnimation config model of
         Just { startTime, startPosition } ->
             let
@@ -625,9 +698,6 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
 
                 imageData =
                     getImageData (currentImage model)
-
-                { topLeft, bottomRight, bottomLeft, topRight } =
-                    Tile.texturePositionPixels imageData.texturePosition imageData.textureSize
 
                 tilePosition : Coord UiPixelUnit
                 tilePosition =
@@ -664,7 +734,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                     mailWidth / -2
 
                 endY =
-                    toFloat mailHeight / -2
+                    (toFloat mailHeight / -2) + mailYOffset
 
                 mailX =
                     (endX - startPosition_.x) * t + startPosition_.x
@@ -708,8 +778,6 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                             model.currentImageMesh
                             { texture = texture
                             , textureSize = textureSize
-                            , texturePosition = imageData.texturePosition |> Coord.toVec2
-                            , textureScale = imageData.textureSize |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , view =
                                 Mat4.makeScale3
@@ -718,7 +786,7 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
                                     1
                                     |> Mat4.translate3
                                         (toFloat tileX |> round |> toFloat)
-                                        (toFloat tileY |> round |> toFloat)
+                                        (toFloat tileY + mailYOffset |> round |> toFloat)
                                         0
                             }
                         ]
@@ -731,20 +799,71 @@ drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
             []
 
 
+mailYOffset =
+    -50
+
+
 type Msg
     = PressedImageButton Int
+    | PressedBackground
 
 
-ui : (Hover -> uiHover) -> (Msg -> msg) -> Ui.Element uiHover msg
-ui idMap msgMap =
+ui : Coord Pixels -> (Hover -> uiHover) -> (Msg -> msg) -> Ui.Element uiHover msg
+ui windowSize idMap msgMap =
     Ui.el
-        { padding = Ui.paddingXY 2 2
-        , inFront = []
-        , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+        { padding = Ui.noPadding
+        , borderAndFill = NoBorderOrFill
+        , inFront =
+            [ Ui.bottomCenter
+                { size = windowSize
+                , inFront = []
+                }
+                (Ui.el
+                    { padding = Ui.paddingXY 2 2
+                    , inFront = []
+                    , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                    }
+                    (List.foldl
+                        (\image state ->
+                            let
+                                button =
+                                    imageButton idMap msgMap state.index image
+
+                                newHeight =
+                                    state.height + Coord.yRaw (Ui.size button)
+                            in
+                            if newHeight > 300 then
+                                { index = state.index + 1
+                                , height = Coord.yRaw (Ui.size button)
+                                , columns = List.Nonempty.cons [ button ] state.columns
+                                }
+
+                            else
+                                { index = state.index + 1
+                                , height = newHeight
+                                , columns =
+                                    List.Nonempty.replaceHead (button :: List.Nonempty.head state.columns) state.columns
+                                }
+                        )
+                        { index = 0, columns = Nonempty [] [], height = 0 }
+                        (Array.toList images)
+                        |> .columns
+                        |> List.Nonempty.toList
+                        |> List.map (Ui.column { padding = Ui.noPadding, spacing = 2 })
+                        |> Ui.row { padding = Ui.noPadding, spacing = 2 }
+                    )
+                )
+            ]
         }
-        (Ui.row
-            { padding = Ui.noPadding, spacing = 2 }
-            (List.indexedMap (imageButton idMap msgMap) (Array.toList images))
+        (Ui.customButton
+            { id = idMap BackgroundHover
+            , inFront = []
+            , onPress = msgMap PressedBackground
+            , padding = { topLeft = windowSize, bottomRight = Coord.origin }
+            , borderAndFill = NoBorderOrFill
+            , borderAndFillFocus = NoBorderOrFill
+            }
+            Ui.none
         )
 
 
@@ -759,7 +878,7 @@ imageButton idMap msgMap index image =
             Coord.toTuple imageData.textureSize
 
         scale =
-            if width < 20 && height < 20 then
+            if width < 36 && height < 36 then
                 2
 
             else
@@ -770,11 +889,9 @@ imageButton idMap msgMap index image =
         , onPress = PressedImageButton index |> msgMap
         , padding = Ui.paddingXY 2 2
         }
-        (Ui.colorSprite
-            { colors = imageData.colors
-            , size = Coord.multiply (Coord.xy scale scale) imageData.textureSize
-            , texturePosition = imageData.texturePosition
-            , textureSize = imageData.textureSize
+        (Ui.quads
+            { size = Coord.multiply (Coord.xy scale scale) imageData.textureSize
+            , vertices = \position -> imageMesh scale { position = position, image = image }
             }
         )
 
@@ -783,18 +900,22 @@ type UiPixelUnit
     = UiPixelUnit Never
 
 
-imageMesh : { position : Coord MailPixelUnit, image : Image } -> List Vertex
-imageMesh { position, image } =
+imageMesh : Int -> { position : Coord units, image : Image } -> List Vertex
+imageMesh scale { position, image } =
     let
         imageData =
             getImageData image
     in
-    Sprite.spriteWithTwoColors
-        imageData.colors
-        position
-        imageData.textureSize
+    List.concatMap
+        (\texturePosition ->
+            Sprite.spriteWithTwoColors
+                imageData.colors
+                position
+                (Coord.multiply (Coord.xy scale scale) imageData.textureSize)
+                texturePosition
+                imageData.textureSize
+        )
         imageData.texturePosition
-        imageData.textureSize
 
 
 square : Effect.WebGL.Mesh Vertex

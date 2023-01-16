@@ -56,11 +56,10 @@ type alias ViewData =
 view : ViewData -> Ui.Element UiHover UiMsg
 view data =
     if MailEditor.isOpen data.mailEditor then
-        Ui.bottomCenter
-            { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
-            , inFront = []
-            }
-            (MailEditor.ui MailEditorHover MailEditorMsg)
+        MailEditor.ui
+            (Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize)
+            MailEditorHover
+            MailEditorMsg
 
     else
         Ui.bottomCenter

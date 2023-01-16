@@ -5,12 +5,18 @@ module Cursor exposing
     , defaultColors
     , defaultCursorMesh
     , defaultCursorMesh2
+    , defaultCursorTexturePosition
+    , defaultCursorTextureSize
+    , dragCursorTexturePosition
+    , dragCursorTextureSize
     , dragScreenCursorMesh
     , eyeDropperCursor2
     , eyeDropperCursorMesh
     , getSpriteMesh
     , htmlAttribute
     , meshes
+    , pinchCursorTexturePosition
+    , pinchCursorTextureSize
     , pointerCursorMesh
     )
 
@@ -96,10 +102,12 @@ htmlAttribute cursor =
         )
 
 
-handSize =
+defaultCursorTextureSize : Coord units
+defaultCursorTextureSize =
     Coord.xy 30 23
 
 
+defaultColors : { primaryColor : Color, secondaryColor : Color }
 defaultColors =
     { primaryColor = Color.rgb255 190 190 185, secondaryColor = Color.rgb255 165 165 160 }
 
@@ -109,10 +117,20 @@ pinchCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
         (Coord.xy -15 -19)
-        (Coord.xy 31 20)
-        (Coord.xy 560 54)
-        (Coord.xy 31 20)
+        pinchCursorTextureSize
+        pinchCursorTexturePosition
+        pinchCursorTextureSize
         |> Sprite.toMesh
+
+
+pinchCursorTexturePosition : Coord units
+pinchCursorTexturePosition =
+    Coord.xy 560 54
+
+
+pinchCursorTextureSize : Coord units
+pinchCursorTextureSize =
+    Coord.xy 31 20
 
 
 dragScreenCursorMesh : Colors -> WebGL.Mesh Vertex
@@ -120,10 +138,20 @@ dragScreenCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
         (Coord.xy -14 -13)
-        (Coord.xy 28 26)
-        (Coord.xy 532 51)
-        (Coord.xy 28 26)
+        dragCursorTextureSize
+        dragCursorTexturePosition
+        dragCursorTextureSize
         |> Sprite.toMesh
+
+
+dragCursorTexturePosition : Coord units
+dragCursorTexturePosition =
+    Coord.xy 532 51
+
+
+dragCursorTextureSize : Coord units
+dragCursorTextureSize =
+    Coord.xy 28 26
 
 
 defaultCursorMesh : Colors -> WebGL.Mesh Vertex
@@ -131,19 +159,24 @@ defaultCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
         (Coord.xy -2 -3)
-        handSize
-        (Coord.xy 533 28)
-        handSize
+        defaultCursorTextureSize
+        defaultCursorTexturePosition
+        defaultCursorTextureSize
         |> Sprite.toMesh
+
+
+defaultCursorTexturePosition : Coord units
+defaultCursorTexturePosition =
+    Coord.xy 533 28
 
 
 defaultCursorMesh2 : Colors -> Ui.Element id msg
 defaultCursorMesh2 colors =
     Ui.colorSprite
         { colors = colors
-        , size = Coord.multiply (Coord.xy 2 2) handSize
-        , texturePosition = Coord.xy 533 28
-        , textureSize = handSize
+        , size = Coord.multiply (Coord.xy 2 2) defaultCursorTextureSize
+        , texturePosition = defaultCursorTexturePosition
+        , textureSize = defaultCursorTextureSize
         }
 
 
