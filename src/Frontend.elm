@@ -16,6 +16,7 @@ import Browser
 import Change exposing (Change(..), Cow, FrontendUser, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import Cow
 import Cursor exposing (CursorMeshes, CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import DisplayName
@@ -341,6 +342,7 @@ audioLoaded audioData model =
         MailEditorClosing { startTime } ->
             playSound PageTurnSound startTime |> Audio.scaleVolume 0.8
     , List.map (playSound WhooshSound) model.lastTileRotation |> Audio.group |> Audio.scaleVolume 0.5
+    , List.map (playSound WhooshSound) model.mailEditor.lastRotation |> Audio.group |> Audio.scaleVolume 0.5
     , case model.mailEditor.lastPlacedImage of
         Just time ->
             playSound PopSound time |> Audio.scaleVolume 0.4
@@ -901,8 +903,8 @@ updateLoaded audioData msg model =
                                 sendEmail model
 
                             ( UiHover id _, _, Keyboard.Enter ) ->
-                                case Ui.findOnPress id (Toolbar.view (getViewModel model)) of
-                                    Just onPress ->
+                                case Ui.findButton id (Toolbar.view (getViewModel model)) of
+                                    Just { onPress } ->
                                         uiUpdate onPress model
 
                                     Nothing ->
@@ -1053,7 +1055,7 @@ updateLoaded audioData msg model =
 
         MouseDown button mousePosition ->
             let
-                ( hover, _ ) =
+                hover =
                     hoverAt model mousePosition
 
                 mousePosition2 : Coord Pixels
@@ -1062,105 +1064,83 @@ updateLoaded audioData msg model =
                         |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                         |> Coord.roundPoint
             in
-            case model.mailEditor.showMailEditor of
-                MailEditorOpening { startTime, startPosition } ->
-                    if
-                        (button == MainButton)
-                            && (Duration.from startTime model.time |> Quantity.greaterThan MailEditor.openAnimationLength)
-                    then
-                        let
-                            ( windowWidth, windowHeight ) =
-                                actualCanvasSize
+            if button == MainButton then
+                { model
+                    | mouseLeft =
+                        MouseButtonDown
+                            { start = mousePosition
+                            , start_ = screenToWorld model mousePosition
+                            , current = mousePosition
+                            , hover = hover
+                            }
+                }
+                    |> (\model2 ->
+                            case hover of
+                                MapHover ->
+                                    case currentTool model2 of
+                                        TilePlacerTool { tileGroup, index } ->
+                                            ( placeTile False tileGroup index model2, Command.none )
 
-                            { canvasSize, actualCanvasSize } =
-                                findPixelPerfectSize model
+                                        HandTool ->
+                                            ( model2, Command.none )
 
-                            ( newMailEditor, cmd ) =
-                                MailEditor.handleMouseDown
-                                    Command.none
-                                    (MailEditorToBackend >> Effect.Lamdera.sendToBackend)
-                                    windowWidth
-                                    windowHeight
-                                    model
-                                    mousePosition
-                                    model.mailEditor
-                        in
-                        ( { model
-                            | mouseLeft =
-                                MouseButtonDown
-                                    { start = mousePosition
-                                    , start_ = screenToWorld model mousePosition
-                                    , current = mousePosition
-                                    , hover = hover
-                                    }
-                            , mailEditor = newMailEditor
-                          }
-                        , cmd
-                        )
+                                        TilePickerTool ->
+                                            ( model2, Command.none )
 
-                    else
-                        ( model, Command.none )
-
-                _ ->
-                    ( if button == MainButton then
-                        { model
-                            | mouseLeft =
-                                MouseButtonDown
-                                    { start = mousePosition
-                                    , start_ = screenToWorld model mousePosition
-                                    , current = mousePosition
-                                    , hover = hover
-                                    }
-                        }
-                            |> (\model2 ->
-                                    case ( currentTool model2, hover ) of
-                                        ( TilePlacerTool { tileGroup, index }, MapHover ) ->
-                                            placeTile False tileGroup index model2
-
-                                        ( _, UiHover PrimaryColorInput data ) ->
-                                            { model2
+                                UiHover id data ->
+                                    case id of
+                                        PrimaryColorInput ->
+                                            ( { model2
                                                 | primaryColorTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
                                                         data.position
                                                         model2.primaryColorTextInput
-                                            }
+                                              }
                                                 |> setFocus (UiHover PrimaryColorInput data)
+                                            , Command.none
+                                            )
 
-                                        ( _, UiHover SecondaryColorInput data ) ->
-                                            { model2
+                                        SecondaryColorInput ->
+                                            ( { model2
                                                 | secondaryColorTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
                                                         data.position
                                                         model2.secondaryColorTextInput
-                                            }
+                                              }
                                                 |> setFocus (UiHover SecondaryColorInput data)
+                                            , Command.none
+                                            )
 
-                                        ( _, UiHover EmailAddressTextInputHover data ) ->
-                                            { model2
+                                        EmailAddressTextInputHover ->
+                                            ( { model2
                                                 | loginTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
                                                         data.position
                                                         model2.loginTextInput
-                                            }
+                                              }
                                                 |> setFocus hover
+                                            , Command.none
+                                            )
 
-                                        ( _, UiHover InviteEmailAddressTextInput data ) ->
-                                            { model2
+                                        InviteEmailAddressTextInput ->
+                                            ( { model2
                                                 | inviteTextInput =
                                                     TextInput.mouseDown
                                                         mousePosition2
                                                         data.position
                                                         model2.inviteTextInput
-                                            }
+                                              }
                                                 |> setFocus hover
+                                            , Command.none
+                                            )
 
-                                        ( _, UiHover DisplayNameTextInput data ) ->
+                                        DisplayNameTextInput ->
                                             case model2.topMenuOpened of
                                                 Just (SettingsMenu nameTextInput) ->
-                                                    { model2
+                                                    ( { model2
                                                         | topMenuOpened =
                                                             TextInput.mouseDown
                                                                 mousePosition2
@@ -1168,31 +1148,46 @@ updateLoaded audioData msg model =
                                                                 nameTextInput
                                                                 |> SettingsMenu
                                                                 |> Just
-                                                    }
+                                                      }
                                                         |> setFocus hover
+                                                    , Command.none
+                                                    )
 
                                                 _ ->
-                                                    model2
+                                                    ( model2, Command.none )
 
                                         _ ->
-                                            model2
-                               )
+                                            case Toolbar.view (getViewModel model) |> Ui.findButton id of
+                                                Just { onMouseDown } ->
+                                                    case onMouseDown of
+                                                        Just onMouseDown2 ->
+                                                            uiUpdate onMouseDown2 model2
 
-                      else if button == MiddleButton then
-                        { model
-                            | mouseMiddle =
-                                MouseButtonDown
-                                    { start = mousePosition
-                                    , start_ = screenToWorld model mousePosition
-                                    , current = mousePosition
-                                    , hover = hover
-                                    }
-                        }
+                                                        Nothing ->
+                                                            ( model2, Command.none )
 
-                      else
-                        model
-                    , Command.none
-                    )
+                                                Nothing ->
+                                                    ( model2, Command.none )
+
+                                _ ->
+                                    ( model2, Command.none )
+                       )
+
+            else if button == MiddleButton then
+                ( { model
+                    | mouseMiddle =
+                        MouseButtonDown
+                            { start = mousePosition
+                            , start_ = screenToWorld model mousePosition
+                            , current = mousePosition
+                            , hover = hover
+                            }
+                  }
+                , Command.none
+                )
+
+            else
+                ( model, Command.none )
 
         MouseUp button mousePosition ->
             case ( button, model.mouseLeft, model.mouseMiddle ) of
@@ -1251,7 +1246,13 @@ updateLoaded audioData msg model =
                     model.scrollThreshold + event.deltaY
             in
             ( if abs scrollThreshold > 50 then
-                if ctrlOrMeta model then
+                if MailEditor.isOpen model.mailEditor then
+                    { model
+                        | mailEditor =
+                            MailEditor.scroll (scrollThreshold > 0) audioData model model.mailEditor
+                    }
+
+                else if ctrlOrMeta model then
                     { model
                         | zoomFactor =
                             (if scrollThreshold > 0 then
@@ -1292,7 +1293,7 @@ updateLoaded audioData msg model =
             let
                 tileHover_ : Maybe TileGroup
                 tileHover_ =
-                    case hoverAt model mousePosition |> Tuple.first of
+                    case hoverAt model mousePosition of
                         UiHover (ToolButtonHover (TilePlacerToolButton tile)) _ ->
                             Just tile
 
@@ -2007,126 +2008,125 @@ getViewModel model =
     }
 
 
-hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> ( Hover, Maybe UiMsg )
+hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
 hoverAt model mousePosition =
-    Debug.log "hover" <|
-        let
-            mousePosition2 : Coord Pixels
-            mousePosition2 =
-                mousePosition
-                    |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
-                    |> Coord.roundPoint
-        in
-        case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
-            Ui.InputHover data ->
-                ( UiHover data.id { position = data.position }, data.onPress )
+    let
+        mousePosition2 : Coord Pixels
+        mousePosition2 =
+            mousePosition
+                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                |> Coord.roundPoint
+    in
+    case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
+        Ui.InputHover data ->
+            UiHover data.id { position = data.position }
 
-            Ui.BackgroundHover ->
-                ( UiBackgroundHover, Nothing )
+        Ui.BackgroundHover ->
+            UiBackgroundHover
 
-            Ui.NoHover ->
-                let
-                    mouseWorldPosition_ : Point2d WorldUnit WorldUnit
-                    mouseWorldPosition_ =
-                        screenToWorld model mousePosition
+        Ui.NoHover ->
+            let
+                mouseWorldPosition_ : Point2d WorldUnit WorldUnit
+                mouseWorldPosition_ =
+                    screenToWorld model mousePosition
 
-                    tileHover : Maybe Hover
-                    tileHover =
-                        let
-                            localModel : LocalGrid_
-                            localModel =
-                                LocalGrid.localModel model.localModel
-                        in
-                        case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
-                            Just tile ->
-                                case model.currentTool of
-                                    HandTool ->
+                tileHover : Maybe Hover
+                tileHover =
+                    let
+                        localModel : LocalGrid_
+                        localModel =
+                            LocalGrid.localModel model.localModel
+                    in
+                    case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
+                        Just tile ->
+                            case model.currentTool of
+                                HandTool ->
+                                    TileHover tile |> Just
+
+                                TilePickerTool ->
+                                    TileHover tile |> Just
+
+                                TilePlacerTool _ ->
+                                    if ctrlOrMeta model then
                                         TileHover tile |> Just
 
-                                    TilePickerTool ->
-                                        TileHover tile |> Just
+                                    else
+                                        Nothing
 
-                                    TilePlacerTool _ ->
-                                        if ctrlOrMeta model then
-                                            TileHover tile |> Just
+                        Nothing ->
+                            Nothing
+
+                trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
+                trainHovers =
+                    case model.currentTool of
+                        TilePlacerTool _ ->
+                            Nothing
+
+                        TilePickerTool ->
+                            Nothing
+
+                        HandTool ->
+                            IdDict.toList model.trains
+                                |> List.filterMap
+                                    (\( trainId, train ) ->
+                                        let
+                                            distance =
+                                                Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                                        in
+                                        if distance |> Quantity.lessThan (Quantity 0.9) then
+                                            Just ( { trainId = trainId, train = train }, distance )
 
                                         else
                                             Nothing
+                                    )
+                                |> Quantity.minimumBy Tuple.second
 
-                            Nothing ->
-                                Nothing
+                localGrid : LocalGrid_
+                localGrid =
+                    LocalGrid.localModel model.localModel
 
-                    trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
-                    trainHovers =
-                        case model.currentTool of
-                            TilePlacerTool _ ->
-                                Nothing
+                cowHovers : Maybe ( Id CowId, Cow )
+                cowHovers =
+                    case model.currentTool of
+                        TilePlacerTool _ ->
+                            Nothing
 
-                            TilePickerTool ->
-                                Nothing
+                        TilePickerTool ->
+                            Nothing
 
-                            HandTool ->
-                                IdDict.toList model.trains
-                                    |> List.filterMap
-                                        (\( trainId, train ) ->
-                                            let
-                                                distance =
-                                                    Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                            in
-                                            if distance |> Quantity.lessThan (Quantity 0.9) then
-                                                Just ( { trainId = trainId, train = train }, distance )
-
-                                            else
-                                                Nothing
-                                        )
-                                    |> Quantity.minimumBy Tuple.second
-
-                    localGrid : LocalGrid_
-                    localGrid =
-                        LocalGrid.localModel model.localModel
-
-                    cowHovers : Maybe ( Id CowId, Cow )
-                    cowHovers =
-                        case model.currentTool of
-                            TilePlacerTool _ ->
-                                Nothing
-
-                            TilePickerTool ->
-                                Nothing
-
-                            HandTool ->
-                                IdDict.toList localGrid.cows
-                                    |> List.filter
-                                        (\( cowId, _ ) ->
-                                            case cowActualPosition cowId model of
-                                                Just a ->
-                                                    if a.isHeld then
-                                                        False
-
-                                                    else
-                                                        insideCow mouseWorldPosition_ a.position
-
-                                                Nothing ->
+                        HandTool ->
+                            IdDict.toList localGrid.cows
+                                |> List.filter
+                                    (\( cowId, _ ) ->
+                                        case cowActualPosition cowId model of
+                                            Just a ->
+                                                if a.isHeld then
                                                     False
-                                        )
-                                    |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
-                in
-                case trainHovers of
-                    Just ( train, _ ) ->
-                        ( TrainHover train, Nothing )
 
-                    Nothing ->
-                        case cowHovers of
-                            Just ( cowId, cow ) ->
-                                ( CowHover { cowId = cowId, cow = cow }, Nothing )
+                                                else
+                                                    Cow.insideCow mouseWorldPosition_ a.position
 
-                            Nothing ->
-                                case tileHover of
-                                    Just hover ->
-                                        ( hover, Nothing )
+                                            Nothing ->
+                                                False
+                                    )
+                                |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+            in
+            case trainHovers of
+                Just ( train, _ ) ->
+                    TrainHover train
 
-                                    Nothing ->
-                                        ( MapHover, Nothing )
+                Nothing ->
+                    case cowHovers of
+                        Just ( cowId, cow ) ->
+                            CowHover { cowId = cowId, cow = cow }
+
+                        Nothing ->
+                            case tileHover of
+                                Just hover ->
+                                    hover
+
+                                Nothing ->
+                                    MapHover
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -2417,7 +2417,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
         isSmallDistance2 =
             isSmallDistance previousMouseState mousePosition
 
-        ( hoverAt2, maybeOnPress ) =
+        hoverAt2 =
             hoverAt model mousePosition
 
         model2 =
@@ -2550,9 +2550,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         in
                         ( model3, Command.none )
 
-                    UiHover _ _ ->
-                        case maybeOnPress of
-                            Just onPress ->
+                    UiHover id _ ->
+                        case Ui.findButton id (Toolbar.view (getViewModel model)) of
+                            Just { onPress } ->
                                 uiUpdate onPress model
 
                             Nothing ->
@@ -2662,8 +2662,26 @@ uiUpdate msg model =
             , Command.none
             )
 
-        MailEditorMsg mailEditorMsg ->
-            ( { model | mailEditor = MailEditor.uiUpdate model mailEditorMsg model.mailEditor }, Command.none )
+        MailEditorUiMsg mailEditorMsg ->
+            let
+                { canvasSize, actualCanvasSize } =
+                    findPixelPerfectSize model
+
+                ( windowWidth, windowHeight ) =
+                    actualCanvasSize
+
+                ( newMailEditor, cmd ) =
+                    MailEditor.uiUpdate
+                        windowWidth
+                        windowHeight
+                        model
+                        (mouseScreenPosition model)
+                        mailEditorMsg
+                        model.mailEditor
+            in
+            ( { model | mailEditor = newMailEditor }
+            , Command.map MailEditorToBackend identity cmd
+            )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -4318,7 +4336,7 @@ canvasView audioData model =
                     LocalGrid.localModel model.localModel
 
                 showMousePointer =
-                    cursorSprite (hoverAt model (mouseScreenPosition model) |> Tuple.first) model
+                    cursorSprite (hoverAt model (mouseScreenPosition model)) model
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4376,12 +4394,12 @@ canvasView audioData model =
                                                 [ Shaders.blend ]
                                                 Shaders.vertexShader
                                                 Shaders.fragmentShader
-                                                cowMesh
+                                                Cow.cowMesh
                                                 { view =
                                                     Mat4.makeTranslate3
                                                         (point.x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
                                                         (point.y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
-                                                        (Grid.tileZ True y (Coord.yRaw cowSize))
+                                                        (Grid.tileZ True y (Coord.yRaw Cow.textureSize))
                                                         |> Mat4.mul viewMatrix
                                                 , texture = texture
                                                 , textureSize = textureSize
@@ -4542,7 +4560,7 @@ canvasView audioData model =
                                             Nothing
                                 )
                                 (getSpeechBubbles model)
-                            ++ (case ( hoverAt model mouseScreenPosition_ |> Tuple.first, currentTool model, currentUserId model ) of
+                            ++ (case ( hoverAt model mouseScreenPosition_, currentTool model, currentUserId model ) of
                                     ( MapHover, TilePlacerTool currentTile, Just userId ) ->
                                         let
                                             currentTile2 : Tile
@@ -5109,72 +5127,6 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         ++ Sprite.shiverText frame 1 "Help!" padding
         ++ Sprite.spriteWithTwoColors colors (Coord.xy 7 27) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
         |> Sprite.toMesh
-
-
-cowSize : Coord Pixels
-cowSize =
-    Coord.xy 20 14
-
-
-cowSizeWorld : Vector2d WorldUnit WorldUnit
-cowSizeWorld =
-    Vector2d.unsafe
-        { x = toFloat (Coord.xRaw cowSize) / toFloat (Coord.xRaw Units.tileSize)
-        , y = toFloat (Coord.yRaw cowSize) / toFloat (Coord.yRaw Units.tileSize)
-        }
-
-
-cowPrimaryColor =
-    Vec3.vec3 1 1 1
-
-
-cowSecondaryColor =
-    Vec3.vec3 0.2 0.2 0.2
-
-
-insideCow : Point2d WorldUnit WorldUnit -> Point2d WorldUnit WorldUnit -> Bool
-insideCow point cowPosition =
-    BoundingBox2d.from
-        (Point2d.translateBy (Vector2d.scaleBy 0.5 cowSizeWorld) cowPosition)
-        (Point2d.translateBy (Vector2d.scaleBy -0.5 cowSizeWorld) cowPosition)
-        |> BoundingBox2d.contains point
-
-
-cowMesh : Effect.WebGL.Mesh Vertex
-cowMesh =
-    let
-        ( width, height ) =
-            Coord.toTuple cowSize |> Tuple.mapBoth toFloat toFloat
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 99 594) cowSize
-    in
-    Shaders.triangleFan
-        [ { position = Vec3.vec3 (-width / 2) (-height / 2) 0
-          , texturePosition = topLeft
-          , opacity = 1
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        , { position = Vec3.vec3 (width / 2) (-height / 2) 0
-          , texturePosition = topRight
-          , opacity = 1
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        , { position = Vec3.vec3 (width / 2) (height / 2) 0
-          , texturePosition = bottomRight
-          , opacity = 1
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        , { position = Vec3.vec3 (-width / 2) (height / 2) 0
-          , texturePosition = bottomLeft
-          , opacity = 1
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        ]
 
 
 cowActualPosition : Id CowId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }

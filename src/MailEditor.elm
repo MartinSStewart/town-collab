@@ -18,13 +18,13 @@ module MailEditor exposing
     , getMailFrom
     , getMailTo
     , handleKeyDown
-    , handleMouseDown
     , init
     , initEditor
     , isOpen
     , open
     , openAnimationLength
     , redo
+    , scroll
     , ui
     , uiUpdate
     , undo
@@ -33,16 +33,19 @@ module MailEditor exposing
 
 import Array exposing (Array)
 import AssocList
+import Audio exposing (AudioData)
 import Color exposing (Colors)
 import Coord exposing (Coord)
+import Cow
 import Cursor
 import Duration exposing (Duration)
+import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.Lamdera as Lamdera
 import Effect.Time
 import Effect.WebGL
 import Frame2d
 import Id exposing (Id, MailId, TrainId, UserId)
 import Keyboard exposing (Key(..))
-import List.Extra
 import List.Nonempty exposing (Nonempty(..))
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -52,8 +55,9 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
+import Sound exposing (Sound(..))
 import Sprite
-import Tile exposing (DefaultColor(..), Tile, TileGroup(..))
+import Tile exposing (DefaultColor(..), Tile, TileData, TileGroup(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (MailPixelUnit, WorldUnit)
 import Vector2d
@@ -129,6 +133,8 @@ type alias Model =
     { mesh : Effect.WebGL.Mesh Vertex
     , currentImageMesh : Effect.WebGL.Mesh Vertex
     , currentImageIndex : Int
+    , imageRotationIndex : Int
+    , lastRotation : List Effect.Time.Posix
     , undo : List EditorState
     , current : EditorState
     , redo : List EditorState
@@ -160,28 +166,134 @@ type alias MailEditorData =
 
 type Image
     = BlueStamp Colors
-    | SunglassesSmiley Colors
-    | NormalSmiley Colors
-    | TileImage Tile Colors
+    | SunglassesEmoji Colors
+    | NormalEmoji Colors
+    | SadEmoji Colors
+    | Cow Colors
+    | Man Colors
+    | TileImage TileGroup Int Colors
     | Grass
     | DefaultCursor Colors
     | DragCursor Colors
     | PinchCursor Colors
 
 
-uiUpdate : { a | time : Effect.Time.Posix } -> Msg -> Model -> Model
-uiUpdate config msg model =
+scroll :
+    Bool
+    -> AudioData
+    -> { a | time : Effect.Time.Posix, sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source) }
+    -> Model
+    -> Model
+scroll scrollUp audioData config model =
+    { model
+        | imageRotationIndex =
+            model.imageRotationIndex
+                + (if scrollUp then
+                    1
+
+                   else
+                    -1
+                  )
+        , lastRotation =
+            config.time
+                :: List.filter
+                    (\time ->
+                        Duration.from time config.time
+                            |> Quantity.lessThan (Sound.length audioData config.sounds WhooshSound)
+                    )
+                    model.lastRotation
+    }
+        |> updateCurrentImageMesh
+
+
+uiUpdate :
+    Int
+    -> Int
+    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
+    -> Point2d Pixels Pixels
+    -> Msg
+    -> Model
+    -> ( Model, Command FrontendOnly ToBackend msg )
+uiUpdate windowWidth windowHeight config mousePosition msg model =
     case msg of
         PressedImageButton index ->
-            setCurrentImage index model
+            ( updateCurrentImageMesh { model | currentImageIndex = index, imageRotationIndex = 0 }, Command.none )
 
         PressedBackground ->
-            close config model
+            let
+                uiCoord : Coord UiPixelUnit
+                uiCoord =
+                    screenToWorld windowWidth windowHeight config mousePosition
+                        |> Coord.roundPoint
+
+                mailCoord : Coord MailPixelUnit
+                mailCoord =
+                    uiCoord
+                        |> Coord.minus (imageData.textureSize |> Coord.divide (Coord.tuple ( 2, 2 )))
+                        |> uiPixelToMailPixel
+
+                imageData : ImageData units
+                imageData =
+                    getImageData (currentImage model)
+            in
+            if validImagePosition imageData mailCoord then
+                ( model, Command.none )
+
+            else
+                ( close config model, Command.none )
+
+        MouseDownBackground ->
+            let
+                uiCoord : Coord UiPixelUnit
+                uiCoord =
+                    screenToWorld windowWidth windowHeight config mousePosition
+                        |> Coord.roundPoint
+
+                mailCoord : Coord MailPixelUnit
+                mailCoord =
+                    uiCoord
+                        |> Coord.minus (imageData.textureSize |> Coord.divide (Coord.tuple ( 2, 2 )))
+                        |> uiPixelToMailPixel
+
+                imageData : ImageData units
+                imageData =
+                    getImageData (currentImage model)
+            in
+            if validImagePosition imageData mailCoord then
+                let
+                    oldEditorState : EditorState
+                    oldEditorState =
+                        model.current
+
+                    newEditorState : EditorState
+                    newEditorState =
+                        { oldEditorState
+                            | content =
+                                oldEditorState.content
+                                    ++ [ { position = mailCoord, image = currentImage model } ]
+                        }
+
+                    model3 =
+                        addChange newEditorState { model | lastPlacedImage = Just config.time }
+                in
+                ( model3, UpdateMailEditorRequest (toData model3) |> Lamdera.sendToBackend )
+
+            else
+                ( model, Command.none )
 
 
 currentImage : Model -> Image
 currentImage model =
-    Array.get model.currentImageIndex images |> Maybe.withDefault defaultBlueStamp
+    Array.get model.currentImageIndex images
+        |> Maybe.withDefault defaultBlueStamp
+        |> (\a ->
+                case a of
+                    TileImage tileGroup _ colors ->
+                        TileImage tileGroup model.imageRotationIndex colors
+
+                    _ ->
+                        a
+           )
 
 
 defaultBlueStamp : Image
@@ -192,24 +304,49 @@ defaultBlueStamp =
 images : Array Image
 images =
     [ defaultBlueStamp
-    , SunglassesSmiley { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
-    , NormalSmiley { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , SunglassesEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , NormalEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , SadEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , Cow Cow.defaultColors
+    , Man { primaryColor = Color.rgb255 188 155 102, secondaryColor = Color.rgb255 63 63 93 }
     , Grass
     , DefaultCursor Cursor.defaultColors
     , DragCursor Cursor.defaultColors
     , PinchCursor Cursor.defaultColors
     ]
-        ++ List.concatMap
+        ++ List.map
             (\group ->
                 let
                     data =
                         Tile.getTileGroupData group
                 in
-                List.map
-                    (\tile -> TileImage tile (Tile.defaultToPrimaryAndSecondary data.defaultColors))
-                    (List.Nonempty.toList data.tiles)
+                TileImage group 0 (Tile.defaultToPrimaryAndSecondary data.defaultColors)
             )
-            (List.Extra.remove EmptyTileGroup Tile.allTileGroups)
+            [ FenceStraightGroup
+            , BusStopGroup
+            , PineTreeGroup
+            , LogCabinGroup
+            , HouseGroup
+            , RailStraightGroup
+            , RailTurnLargeGroup
+            , RailTurnGroup
+            , RailStrafeGroup
+            , RailStrafeSmallGroup
+            , RailCrossingGroup
+            , TrainHouseGroup
+            , SidewalkGroup
+            , SidewalkRailGroup
+            , RailTurnSplitGroup
+            , RailTurnSplitMirrorGroup
+            , PostOfficeGroup
+            , RoadStraightGroup
+            , RoadTurnGroup
+            , Road4WayGroup
+            , RoadSidewalkCrossingGroup
+            , Road3WayGroup
+            , RoadRailCrossingGroup
+            , RoadDeadendGroup
+            ]
         |> Array.fromList
 
 
@@ -244,21 +381,19 @@ initEditor data =
     , redo = []
     , mesh = Shaders.triangleFan []
     , currentImageMesh = Shaders.triangleFan []
-    , currentImageIndex = 0
+    , currentImageIndex = data.currentImageIndex
+    , imageRotationIndex = 0
+    , lastRotation = []
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
     , submitStatus = NotSubmitted
     }
-        |> setCurrentImage data.currentImageIndex
+        |> updateCurrentImageMesh
         |> updateMailMesh
 
 
-setCurrentImage : Int -> Model -> Model
-setCurrentImage index model =
-    let
-        model2 =
-            { model | currentImageIndex = index }
-    in
+updateCurrentImageMesh : Model -> Model
+updateCurrentImageMesh model2 =
     { model2 | currentImageMesh = imageMesh 1 { position = Coord.origin, image = currentImage model2 } |> Sprite.toMesh }
 
 
@@ -286,16 +421,23 @@ getImageData image =
         BlueStamp colors ->
             { textureSize = Coord.xy 28 28, texturePosition = [ Coord.xy 504 0 ], colors = colors }
 
-        SunglassesSmiley colors ->
+        SunglassesEmoji colors ->
             { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 532 0 ], colors = colors }
 
-        NormalSmiley colors ->
+        NormalEmoji colors ->
             { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 556 0 ], colors = colors }
 
-        TileImage tile colors ->
+        SadEmoji colors ->
+            { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 580 0 ], colors = colors }
+
+        TileImage tileGroup rotationIndex colors ->
             let
+                tileGroupData =
+                    Tile.getTileGroupData tileGroup
+
+                tileData : TileData unit
                 tileData =
-                    Tile.getData tile
+                    Tile.getData (List.Nonempty.get rotationIndex tileGroupData.tiles)
             in
             { textureSize = Coord.multiply Units.tileSize tileData.size
             , texturePosition =
@@ -340,6 +482,18 @@ getImageData image =
             , colors = colors
             }
 
+        Cow colors ->
+            { textureSize = Cow.textureSize
+            , texturePosition = [ Cow.texturePosition ]
+            , colors = colors
+            }
+
+        Man colors ->
+            { textureSize = Coord.xy 10 17
+            , texturePosition = [ Coord.xy 494 0 ]
+            , colors = colors
+            }
+
 
 updateFromBackend : { a | time : Effect.Time.Posix } -> ToFrontend -> Model -> Model
 updateFromBackend config toFrontend mailEditor =
@@ -360,53 +514,54 @@ updateFromBackend config toFrontend mailEditor =
                         |> close config
 
 
-handleMouseDown :
-    cmd
-    -> (ToBackend -> cmd)
-    -> Int
-    -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
-    -> Point2d Pixels Pixels
-    -> Model
-    -> ( Model, cmd )
-handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosition model =
-    let
-        uiCoord : Coord UiPixelUnit
-        uiCoord =
-            screenToWorld windowWidth windowHeight config mousePosition
-                |> Coord.roundPoint
 
-        mailCoord : Coord MailPixelUnit
-        mailCoord =
-            uiCoord
-                |> Coord.minus (imageData.textureSize |> Coord.divide (Coord.tuple ( 2, 2 )))
-                |> uiPixelToMailPixel
-
-        imageData : ImageData units
-        imageData =
-            getImageData (currentImage model)
-    in
-    if validImagePosition imageData mailCoord then
-        let
-            oldEditorState : EditorState
-            oldEditorState =
-                model.current
-
-            newEditorState : EditorState
-            newEditorState =
-                { oldEditorState
-                    | content =
-                        oldEditorState.content
-                            ++ [ { position = mailCoord, image = currentImage model } ]
-                }
-
-            model3 =
-                addChange newEditorState { model | lastPlacedImage = Just config.time }
-        in
-        ( model3, UpdateMailEditorRequest (toData model3) |> sendToBackend )
-
-    else
-        ( model, cmdNone )
+--handleMouseDown :
+--    cmd
+--    -> (ToBackend -> cmd)
+--    -> Int
+--    -> Int
+--    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
+--    -> Point2d Pixels Pixels
+--    -> Model
+--    -> ( Model, cmd )
+--handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosition model =
+--    let
+--        uiCoord : Coord UiPixelUnit
+--        uiCoord =
+--            screenToWorld windowWidth windowHeight config mousePosition
+--                |> Coord.roundPoint
+--
+--        mailCoord : Coord MailPixelUnit
+--        mailCoord =
+--            uiCoord
+--                |> Coord.minus (imageData.textureSize |> Coord.divide (Coord.tuple ( 2, 2 )))
+--                |> uiPixelToMailPixel
+--
+--        imageData : ImageData units
+--        imageData =
+--            getImageData (currentImage model)
+--    in
+--    if validImagePosition imageData mailCoord then
+--        let
+--            oldEditorState : EditorState
+--            oldEditorState =
+--                model.current
+--
+--            newEditorState : EditorState
+--            newEditorState =
+--                { oldEditorState
+--                    | content =
+--                        oldEditorState.content
+--                            ++ [ { position = mailCoord, image = currentImage model } ]
+--                }
+--
+--            model3 =
+--                addChange newEditorState { model | lastPlacedImage = Just config.time }
+--        in
+--        ( model3, UpdateMailEditorRequest (toData model3) |> sendToBackend )
+--
+--    else
+--        ( model, cmdNone )
 
 
 validateUserId : String -> Maybe (Id UserId)
@@ -546,12 +701,12 @@ redo model =
 
 mailWidth : number
 mailWidth =
-    400
+    500
 
 
 mailHeight : number
 mailHeight =
-    240
+    320
 
 
 mailSize =
@@ -778,7 +933,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                             model.currentImageMesh
                             { texture = texture
                             , textureSize = textureSize
-                            , color = Vec4.vec4 1 1 1 1
+                            , color = Vec4.vec4 1 1 1 0.5
                             , view =
                                 Mat4.makeScale3
                                     (zoomFactor * 2 / toFloat windowWidth)
@@ -806,10 +961,11 @@ mailYOffset =
 type Msg
     = PressedImageButton Int
     | PressedBackground
+    | MouseDownBackground
 
 
-ui : Coord Pixels -> (Hover -> uiHover) -> (Msg -> msg) -> Ui.Element uiHover msg
-ui windowSize idMap msgMap =
+ui : Coord Pixels -> (Hover -> uiHover) -> (Msg -> msg) -> Model -> Ui.Element uiHover msg
+ui windowSize idMap msgMap model =
     Ui.el
         { padding = Ui.noPadding
         , borderAndFill = NoBorderOrFill
@@ -827,12 +983,12 @@ ui windowSize idMap msgMap =
                         (\image state ->
                             let
                                 button =
-                                    imageButton idMap msgMap state.index image
+                                    imageButton idMap msgMap model.currentImageIndex state.index image
 
                                 newHeight =
                                     state.height + Coord.yRaw (Ui.size button)
                             in
-                            if newHeight > 300 then
+                            if newHeight > 250 then
                                 { index = state.index + 1
                                 , height = Coord.yRaw (Ui.size button)
                                 , columns = List.Nonempty.cons [ button ] state.columns
@@ -859,6 +1015,7 @@ ui windowSize idMap msgMap =
             { id = idMap BackgroundHover
             , inFront = []
             , onPress = msgMap PressedBackground
+            , onMouseDown = msgMap MouseDownBackground |> Just
             , padding = { topLeft = windowSize, bottomRight = Coord.origin }
             , borderAndFill = NoBorderOrFill
             , borderAndFillFocus = NoBorderOrFill
@@ -867,8 +1024,8 @@ ui windowSize idMap msgMap =
         )
 
 
-imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Int -> Image -> Ui.Element uiHover msg
-imageButton idMap msgMap index image =
+imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Int -> Int -> Image -> Ui.Element uiHover msg
+imageButton idMap msgMap selectedIndex index image =
     let
         imageData : ImageData units
         imageData =
@@ -883,11 +1040,31 @@ imageButton idMap msgMap index image =
 
             else
                 1
+
+        highlight =
+            BorderAndFill
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , fillColor = Color.highlightColor
+                }
     in
-    Ui.button
+    Ui.customButton
         { id = ImageButton index |> idMap
         , onPress = PressedImageButton index |> msgMap
-        , padding = Ui.paddingXY 2 2
+        , onMouseDown = Nothing
+        , padding = Ui.paddingXY 4 4
+        , borderAndFill =
+            if selectedIndex == index then
+                highlight
+
+            else
+                BorderAndFill
+                    { borderWidth = 2
+                    , borderColor = Color.outlineColor
+                    , fillColor = Color.fillColor2
+                    }
+        , borderAndFillFocus = highlight
+        , inFront = []
         }
         (Ui.quads
             { size = Coord.multiply (Coord.xy scale scale) imageData.textureSize

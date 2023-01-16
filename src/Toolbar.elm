@@ -59,7 +59,8 @@ view data =
         MailEditor.ui
             (Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize)
             MailEditorHover
-            MailEditorMsg
+            MailEditorUiMsg
+            data.mailEditor
 
     else
         Ui.bottomCenter
@@ -602,6 +603,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     Ui.customButton
         { id = ToolButtonHover tool
         , onPress = PressedTool tool
+        , onMouseDown = Nothing
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of

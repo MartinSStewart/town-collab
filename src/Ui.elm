@@ -12,8 +12,8 @@ module Ui exposing
     , column
     , customButton
     , el
+    , findButton
     , findId
-    , findOnPress
     , handleKeyDown
     , hover
     , noPadding
@@ -53,6 +53,18 @@ type alias RowColumn =
     }
 
 
+type alias ButtonData id msg =
+    { id : id
+    , padding : Padding
+    , borderAndFill : BorderAndFill
+    , borderAndFillFocus : BorderAndFill
+    , cachedSize : Coord Pixels
+    , inFront : List (Element id msg)
+    , onPress : msg
+    , onMouseDown : Maybe msg
+    }
+
+
 type Element id msg
     = Text
         { outline : Maybe Color
@@ -68,16 +80,7 @@ type Element id msg
         , onKeyDown : Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg
         }
         TextInput.Model
-    | Button
-        { id : id
-        , padding : Padding
-        , borderAndFill : BorderAndFill
-        , borderAndFillFocus : BorderAndFill
-        , cachedSize : Coord Pixels
-        , inFront : List (Element id msg)
-        , onPress : msg
-        }
-        (Element id msg)
+    | Button (ButtonData id msg) (Element id msg)
     | Row RowColumn (List (Element id msg))
     | Column RowColumn (List (Element id msg))
     | Single
@@ -266,6 +269,7 @@ button data child =
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
                 (size child)
         , onPress = data.onPress
+        , onMouseDown = Nothing
         }
         child
 
@@ -275,6 +279,7 @@ customButton :
     , padding : Padding
     , inFront : List (Element id msg)
     , onPress : msg
+    , onMouseDown : Maybe msg
     , borderAndFill : BorderAndFill
     , borderAndFillFocus : BorderAndFill
     }
@@ -292,6 +297,7 @@ customButton data child =
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
                 (size child)
         , onPress = data.onPress
+        , onMouseDown = data.onMouseDown
         }
         child
 
@@ -429,7 +435,7 @@ quads =
 
 type HoverType id msg
     = NoHover
-    | InputHover { id : id, position : Coord Pixels, onPress : Maybe msg }
+    | InputHover { id : id, position : Coord Pixels }
     | BackgroundHover
 
 
@@ -446,14 +452,14 @@ hoverHelper point elementPosition element2 =
 
         TextInput data _ ->
             if Bounds.fromCoordAndSize elementPosition (TextInput.size (Quantity data.width)) |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition, onPress = Nothing }
+                InputHover { id = data.id, position = elementPosition }
 
             else
                 NoHover
 
         Button data _ ->
             if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition, onPress = Just data.onPress }
+                InputHover { id = data.id, position = elementPosition }
 
             else
                 NoHover
@@ -775,8 +781,8 @@ findId id element =
             Nothing
 
 
-findOnPress : id -> Element id msg -> Maybe msg
-findOnPress id element =
+findButton : id -> Element id msg -> Maybe (ButtonData id msg)
+findButton id element =
     case element of
         Text _ ->
             Nothing
@@ -786,19 +792,19 @@ findOnPress id element =
 
         Button data _ ->
             if data.id == id then
-                Just data.onPress
+                Just data
 
             else
                 Nothing
 
         Row _ children ->
-            List.findMap (findOnPress id) children
+            List.findMap (findButton id) children
 
         Column _ children ->
-            List.findMap (findOnPress id) children
+            List.findMap (findButton id) children
 
         Single data child ->
-            List.findMap (findOnPress id) (child :: data.inFront)
+            List.findMap (findButton id) (child :: data.inFront)
 
         Quads _ ->
             Nothing

@@ -266,7 +266,7 @@ type UiMsg
     | PressedSettingsButton
     | PressedCloseSettings
     | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
-    | MailEditorMsg MailEditor.Msg
+    | MailEditorUiMsg MailEditor.Msg
 
 
 type alias BackendModel =
