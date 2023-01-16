@@ -17,6 +17,7 @@ import Id exposing (Id, UserId)
 import Keyboard
 import List.Extra as List
 import List.Nonempty
+import MailEditor
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
@@ -48,59 +49,68 @@ type alias ViewData =
     , musicVolume : Int
     , soundEffectVolume : Int
     , topMenuOpened : Maybe TopMenu
+    , mailEditor : MailEditor.Model
     }
 
 
 view : ViewData -> Ui.Element UiHover UiMsg
 view data =
-    Ui.bottomCenter
-        { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
-        , inFront =
-            [ Ui.row
-                { padding = Ui.noPadding, spacing = 4 }
-                [ case data.topMenuOpened of
-                    Just (SettingsMenu nameTextInput) ->
-                        settingsView data.musicVolume data.soundEffectVolume nameTextInput
+    if MailEditor.isOpen data.mailEditor then
+        Ui.bottomCenter
+            { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
+            , inFront = []
+            }
+            (MailEditor.ui MailEditorHover MailEditorMsg)
 
-                    Just LoggedOutSettingsMenu ->
-                        loggedOutSettingsView data.musicVolume data.soundEffectVolume
+    else
+        Ui.bottomCenter
+            { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
+            , inFront =
+                [ Ui.row
+                    { padding = Ui.noPadding, spacing = 4 }
+                    [ case data.topMenuOpened of
+                        Just (SettingsMenu nameTextInput) ->
+                            settingsView data.musicVolume data.soundEffectVolume nameTextInput
 
-                    _ ->
-                        Ui.button
-                            { id = SettingsButton
-                            , padding = Ui.paddingXY 10 4
-                            , onPress = PressedSettingsButton
-                            }
-                            (Ui.text "Settings")
-                , case data.handColor of
-                    Just _ ->
-                        inviteView (data.topMenuOpened == Just InviteMenu) data.inviteTextInput data.inviteSubmitStatus
+                        Just LoggedOutSettingsMenu ->
+                            loggedOutSettingsView data.musicVolume data.soundEffectVolume
+
+                        _ ->
+                            Ui.button
+                                { id = SettingsButton
+                                , padding = Ui.paddingXY 10 4
+                                , onPress = PressedSettingsButton
+                                }
+                                (Ui.text "Settings")
+                    , case data.handColor of
+                        Just _ ->
+                            inviteView (data.topMenuOpened == Just InviteMenu) data.inviteTextInput data.inviteSubmitStatus
+
+                        Nothing ->
+                            Ui.none
+                    ]
+                ]
+            }
+            (Ui.el
+                { padding = Ui.noPadding
+                , inFront = []
+                , borderAndFill = borderAndFill
+                }
+                (case data.handColor of
+                    Just handColor ->
+                        toolbarUi
+                            data.hasCmdKey
+                            handColor
+                            data.primaryColorTextInput
+                            data.secondaryColorTextInput
+                            data.tileColors
+                            data.tileHotkeys
+                            data.currentTool
 
                     Nothing ->
-                        Ui.none
-                ]
-            ]
-        }
-        (Ui.el
-            { padding = Ui.noPadding
-            , inFront = []
-            , borderAndFill = borderAndFill
-            }
-            (case data.handColor of
-                Just handColor ->
-                    toolbarUi
-                        data.hasCmdKey
-                        handColor
-                        data.primaryColorTextInput
-                        data.secondaryColorTextInput
-                        data.tileColors
-                        data.tileHotkeys
-                        data.currentTool
-
-                Nothing ->
-                    loginToolbarUi data.pressedSubmitEmail data.loginTextInput
+                        loginToolbarUi data.pressedSubmitEmail data.loginTextInput
+                )
             )
-        )
 
 
 settingsView : Int -> Int -> TextInput.Model -> Ui.Element UiHover UiMsg

@@ -24,7 +24,6 @@ import Effect.Browser.Dom
 import Effect.Browser.Events exposing (Visibility(..))
 import Effect.Browser.Navigation
 import Effect.Command as Command exposing (Command, FrontendOnly)
-import Effect.Http exposing (Error(..))
 import Effect.Lamdera
 import Effect.Subscription as Subscription exposing (Subscription)
 import Effect.Task
@@ -593,10 +592,7 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
                             loggedIn.mailEditor
 
                         NotLoggedIn ->
-                            { to = ""
-                            , content = []
-                            , currentImage = MailEditor.BlueStamp
-                            }
+                            { to = "", content = [], currentImageIndex = 0 }
                     )
             , currentTool = currentTile
             , lastTileRotation = []
@@ -1008,8 +1004,26 @@ updateLoaded audioData msg model =
                                                     (keyDown Keyboard.Shift model)
                                                     key
                                                     nameTextInput
+
+                                            ( model2, outMsg2 ) =
+                                                case ( DisplayName.fromString nameTextInput.current.text, DisplayName.fromString newTextInput.current.text ) of
+                                                    ( Ok old, Ok new ) ->
+                                                        if old == new then
+                                                            ( model, LocalGrid.NoOutMsg )
+
+                                                        else
+                                                            updateLocalModel (Change.ChangeDisplayName new) model
+
+                                                    ( Err _, Ok new ) ->
+                                                        updateLocalModel (Change.ChangeDisplayName new) model
+
+                                                    _ ->
+                                                        ( model, LocalGrid.NoOutMsg )
+
+                                            model3 =
+                                                handleOutMsg False outMsg2 model2
                                         in
-                                        ( { model | topMenuOpened = SettingsMenu newTextInput |> Just }
+                                        ( { model3 | topMenuOpened = SettingsMenu newTextInput |> Just }
                                         , case outMsg of
                                             CopyText text ->
                                                 copyToClipboard text
@@ -1334,9 +1348,6 @@ updateLoaded audioData msg model =
                                     MapHover ->
                                         placeTileHelper model2
 
-                                    MailEditorHover _ ->
-                                        model2
-
                                     UiHover uiHover data ->
                                         case uiHover of
                                             PrimaryColorInput ->
@@ -1423,6 +1434,9 @@ updateLoaded audioData msg model =
                                                             _ ->
                                                                 model2.topMenuOpened
                                                 }
+
+                                            MailEditorHover _ ->
+                                                model2
 
                                     CowHover _ ->
                                         placeTileHelper model2
@@ -1555,9 +1569,6 @@ updateLoaded audioData msg model =
                         MapHover ->
                             True
 
-                        MailEditorHover _ ->
-                            True
-
                         CowHover _ ->
                             True
 
@@ -1612,6 +1623,9 @@ updateLoaded audioData msg model =
                                     True
 
                                 DisplayNameTextInput ->
+                                    False
+
+                                MailEditorHover _ ->
                                     False
 
                 model2 =
@@ -1687,9 +1701,6 @@ updateLoaded audioData msg model =
                     ( model, Command.none )
 
                 MapHover ->
-                    ( model, Command.none )
-
-                MailEditorHover _ ->
                     ( model, Command.none )
 
                 CowHover _ ->
@@ -1782,6 +1793,9 @@ updateLoaded audioData msg model =
 
                                 _ ->
                                     ( model, Command.none )
+
+                        MailEditorHover _ ->
+                            ( model, Command.none )
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -1988,22 +2002,20 @@ getViewModel model =
     , inviteSubmitStatus = model.inviteSubmitStatus
     , musicVolume = model.musicVolume
     , soundEffectVolume = model.soundEffectVolume
+    , mailEditor = model.mailEditor
     }
 
 
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> ( Hover, Maybe UiMsg )
 hoverAt model mousePosition =
-    let
-        mousePosition2 : Coord Pixels
-        mousePosition2 =
-            mousePosition
-                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
-                |> Coord.roundPoint
-    in
-    if MailEditor.isOpen model.mailEditor then
-        ( MailEditor.hoverAt model.mailEditor |> MailEditorHover, Nothing )
-
-    else
+    Debug.log "hover" <|
+        let
+            mousePosition2 : Coord Pixels
+            mousePosition2 =
+                mousePosition
+                    |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                    |> Coord.roundPoint
+        in
         case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
             Ui.InputHover data ->
                 ( UiHover data.id { position = data.position }, data.onPress )
@@ -2012,108 +2024,112 @@ hoverAt model mousePosition =
                 ( UiBackgroundHover, Nothing )
 
             Ui.NoHover ->
-                let
-                    mouseWorldPosition_ : Point2d WorldUnit WorldUnit
-                    mouseWorldPosition_ =
-                        screenToWorld model mousePosition
+                if MailEditor.isOpen model.mailEditor then
+                    ( UiHover (MailEditorHover MailEditor.BackgroundHover) { position = Coord.origin }, Nothing )
 
-                    tileHover : Maybe Hover
-                    tileHover =
-                        let
-                            localModel : LocalGrid_
-                            localModel =
-                                LocalGrid.localModel model.localModel
-                        in
-                        case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
-                            Just tile ->
-                                case model.currentTool of
-                                    HandTool ->
-                                        TileHover tile |> Just
+                else
+                    let
+                        mouseWorldPosition_ : Point2d WorldUnit WorldUnit
+                        mouseWorldPosition_ =
+                            screenToWorld model mousePosition
 
-                                    TilePickerTool ->
-                                        TileHover tile |> Just
-
-                                    TilePlacerTool _ ->
-                                        if ctrlOrMeta model then
+                        tileHover : Maybe Hover
+                        tileHover =
+                            let
+                                localModel : LocalGrid_
+                                localModel =
+                                    LocalGrid.localModel model.localModel
+                            in
+                            case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
+                                Just tile ->
+                                    case model.currentTool of
+                                        HandTool ->
                                             TileHover tile |> Just
 
-                                        else
-                                            Nothing
+                                        TilePickerTool ->
+                                            TileHover tile |> Just
 
-                            Nothing ->
-                                Nothing
-
-                    trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
-                    trainHovers =
-                        case model.currentTool of
-                            TilePlacerTool _ ->
-                                Nothing
-
-                            TilePickerTool ->
-                                Nothing
-
-                            HandTool ->
-                                IdDict.toList model.trains
-                                    |> List.filterMap
-                                        (\( trainId, train ) ->
-                                            let
-                                                distance =
-                                                    Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                            in
-                                            if distance |> Quantity.lessThan (Quantity 0.9) then
-                                                Just ( { trainId = trainId, train = train }, distance )
+                                        TilePlacerTool _ ->
+                                            if ctrlOrMeta model then
+                                                TileHover tile |> Just
 
                                             else
                                                 Nothing
-                                        )
-                                    |> Quantity.minimumBy Tuple.second
 
-                    localGrid : LocalGrid_
-                    localGrid =
-                        LocalGrid.localModel model.localModel
+                                Nothing ->
+                                    Nothing
 
-                    cowHovers : Maybe ( Id CowId, Cow )
-                    cowHovers =
-                        case model.currentTool of
-                            TilePlacerTool _ ->
-                                Nothing
+                        trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
+                        trainHovers =
+                            case model.currentTool of
+                                TilePlacerTool _ ->
+                                    Nothing
 
-                            TilePickerTool ->
-                                Nothing
+                                TilePickerTool ->
+                                    Nothing
 
-                            HandTool ->
-                                IdDict.toList localGrid.cows
-                                    |> List.filter
-                                        (\( cowId, _ ) ->
-                                            case cowActualPosition cowId model of
-                                                Just a ->
-                                                    if a.isHeld then
+                                HandTool ->
+                                    IdDict.toList model.trains
+                                        |> List.filterMap
+                                            (\( trainId, train ) ->
+                                                let
+                                                    distance =
+                                                        Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                                                in
+                                                if distance |> Quantity.lessThan (Quantity 0.9) then
+                                                    Just ( { trainId = trainId, train = train }, distance )
+
+                                                else
+                                                    Nothing
+                                            )
+                                        |> Quantity.minimumBy Tuple.second
+
+                        localGrid : LocalGrid_
+                        localGrid =
+                            LocalGrid.localModel model.localModel
+
+                        cowHovers : Maybe ( Id CowId, Cow )
+                        cowHovers =
+                            case model.currentTool of
+                                TilePlacerTool _ ->
+                                    Nothing
+
+                                TilePickerTool ->
+                                    Nothing
+
+                                HandTool ->
+                                    IdDict.toList localGrid.cows
+                                        |> List.filter
+                                            (\( cowId, _ ) ->
+                                                case cowActualPosition cowId model of
+                                                    Just a ->
+                                                        if a.isHeld then
+                                                            False
+
+                                                        else
+                                                            insideCow mouseWorldPosition_ a.position
+
+                                                    Nothing ->
                                                         False
+                                            )
+                                        |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+                    in
+                    case trainHovers of
+                        Just ( train, _ ) ->
+                            ( TrainHover train, Nothing )
 
-                                                    else
-                                                        insideCow mouseWorldPosition_ a.position
+                        Nothing ->
+                            case cowHovers of
+                                Just ( cowId, cow ) ->
+                                    ( CowHover { cowId = cowId, cow = cow }, Nothing )
 
-                                                Nothing ->
-                                                    False
-                                        )
-                                    |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
-                in
-                case trainHovers of
-                    Just ( train, _ ) ->
-                        ( TrainHover train, Nothing )
+                                Nothing ->
+                                    case tileHover of
+                                        Just hover ->
+                                            ( hover, Nothing )
 
-                    Nothing ->
-                        case cowHovers of
-                            Just ( cowId, cow ) ->
-                                ( CowHover { cowId = cowId, cow = cow }, Nothing )
-
-                            Nothing ->
-                                case tileHover of
-                                    Just hover ->
-                                        ( hover, Nothing )
-
-                                    Nothing ->
-                                        ( MapHover, Nothing )
+                                        Nothing ->
+                                            ( MapHover, Nothing )
 
 
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -2530,9 +2546,6 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         , Command.none
                         )
 
-                    MailEditorHover _ ->
-                        ( model2, Command.none )
-
                     CowHover { cowId } ->
                         let
                             ( model3, _ ) =
@@ -2651,6 +2664,9 @@ uiUpdate msg model =
               }
             , Command.none
             )
+
+        MailEditorMsg mailEditorMsg ->
+            ( { model | mailEditor = MailEditor.uiUpdate mailEditorMsg model.mailEditor }, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -3451,9 +3467,6 @@ canDragView hover =
         MapHover ->
             True
 
-        MailEditorHover _ ->
-            False
-
         CowHover _ ->
             True
 
@@ -4144,9 +4157,6 @@ cursorSprite hover model =
                                     MapHover ->
                                         NoCursor
 
-                                    MailEditorHover _ ->
-                                        DefaultCursor
-
                                     CowHover _ ->
                                         NoCursor
 
@@ -4172,9 +4182,6 @@ cursorSprite hover model =
                                     MapHover ->
                                         CursorSprite DefaultSpriteCursor
 
-                                    MailEditorHover _ ->
-                                        DefaultCursor
-
                                     CowHover _ ->
                                         CursorSprite PointerSpriteCursor
 
@@ -4194,9 +4201,6 @@ cursorSprite hover model =
 
                                     MapHover ->
                                         CursorSprite EyeDropperSpriteCursor
-
-                                    MailEditorHover _ ->
-                                        DefaultCursor
 
                                     CowHover _ ->
                                         CursorSprite EyeDropperSpriteCursor
@@ -4649,6 +4653,13 @@ canvasView audioData model =
                                         ]
 
                                     _ ->
+                                        []
+                               )
+                            ++ (case MailEditor.backgroundLayer model model.mailEditor texture of
+                                    Just layer ->
+                                        [ layer ]
+
+                                    Nothing ->
                                         []
                                )
                             ++ [ Effect.WebGL.entityWith

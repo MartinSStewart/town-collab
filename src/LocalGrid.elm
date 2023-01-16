@@ -250,6 +250,22 @@ updateLocalChange localChange model =
         ToggleRailSplit coord ->
             ( { model | grid = Grid.toggleRailSplit coord model.grid }, RailToggledBySelf coord )
 
+        ChangeDisplayName displayName ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model
+                        | users =
+                            IdDict.update
+                                loggedIn.userId
+                                (Maybe.map (\user -> { user | name = displayName }))
+                                model.users
+                      }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -312,6 +328,17 @@ updateServerChange serverChange model =
 
         ServerToggleRailSplit coord ->
             ( { model | grid = Grid.toggleRailSplit coord model.grid }, RailToggledByAnother coord )
+
+        ServerChangeDisplayName userId displayName ->
+            ( { model
+                | users =
+                    IdDict.update
+                        userId
+                        (Maybe.map (\user -> { user | name = displayName }))
+                        model.users
+              }
+            , NoOutMsg
+            )
 
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )

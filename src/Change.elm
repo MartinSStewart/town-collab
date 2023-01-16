@@ -31,6 +31,7 @@ type LocalChange
     | InvalidChange
     | ChangeHandColor Colors
     | ToggleRailSplit (Coord WorldUnit)
+    | ChangeDisplayName DisplayName
 
 
 type ClientChange
@@ -48,6 +49,7 @@ type ServerChange
     | ServerYouLoggedIn LoggedIn_ FrontendUser
     | ServerChangeHandColor (Id UserId) Colors
     | ServerToggleRailSplit (Coord WorldUnit)
+    | ServerChangeDisplayName (Id UserId) DisplayName
 
 
 type alias FrontendUser =

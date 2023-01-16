@@ -3,7 +3,6 @@ module Backend exposing (app, app_)
 import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (ClientChange(..), FrontendUser, LocalChange(..), ServerChange(..), UserStatus(..))
-import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -957,6 +956,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             ( { model | grid = Grid.toggleRailSplit coord model.grid }
             , originalChange
             , ServerToggleRailSplit coord |> Just
+            )
+
+        ChangeDisplayName displayName ->
+            ( { model | users = IdDict.insert userId { user | name = displayName } model.users }
+            , originalChange
+            , ServerChangeDisplayName userId displayName |> Just
             )
 
 

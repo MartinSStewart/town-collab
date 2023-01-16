@@ -224,7 +224,6 @@ type Hover
     = TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
-    | MailEditorHover MailEditor.Hover
     | CowHover { cowId : Id CowId, cow : Cow }
     | UiBackgroundHover
     | UiHover UiHover { position : Coord Pixels }
@@ -247,6 +246,7 @@ type UiHover
     | SettingsButton
     | CloseSettings
     | DisplayNameTextInput
+    | MailEditorHover MailEditor.Hover
 
 
 type UiMsg
@@ -266,6 +266,7 @@ type UiMsg
     | PressedSettingsButton
     | PressedCloseSettings
     | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
+    | MailEditorMsg MailEditor.Msg
 
 
 type alias BackendModel =
