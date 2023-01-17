@@ -902,10 +902,10 @@ updateLoaded audioData msg model =
                             ( UiHover EmailAddressTextInputHover _, _, Keyboard.Enter ) ->
                                 sendEmail model
 
-                            ( UiHover id _, _, Keyboard.Enter ) ->
+                            ( UiHover id data, _, Keyboard.Enter ) ->
                                 case Ui.findButton id (Toolbar.view (getViewModel model)) of
                                     Just { onPress } ->
-                                        uiUpdate onPress model
+                                        uiUpdate data.position onPress model
 
                                     Nothing ->
                                         ( model, Command.none )
@@ -1161,7 +1161,7 @@ updateLoaded audioData msg model =
                                                 Just { onMouseDown } ->
                                                     case onMouseDown of
                                                         Just onMouseDown2 ->
-                                                            uiUpdate onMouseDown2 model2
+                                                            uiUpdate data.position onMouseDown2 model2
 
                                                         Nothing ->
                                                             ( model2, Command.none )
@@ -2550,10 +2550,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         in
                         ( model3, Command.none )
 
-                    UiHover id _ ->
+                    UiHover id data ->
                         case Ui.findButton id (Toolbar.view (getViewModel model)) of
                             Just { onPress } ->
-                                uiUpdate onPress model
+                                uiUpdate data.position onPress model
 
                             Nothing ->
                                 ( model2, Command.none )
@@ -2562,8 +2562,8 @@ mainMouseButtonUp mousePosition previousMouseState model =
         ( model2, Command.none )
 
 
-uiUpdate : UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-uiUpdate msg model =
+uiUpdate : Coord Pixels -> UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+uiUpdate elementPosition msg model =
     case msg of
         PressedCloseInviteUser ->
             ( { model | topMenuOpened = Nothing }, Command.none )
@@ -2664,18 +2664,17 @@ uiUpdate msg model =
 
         MailEditorUiMsg mailEditorMsg ->
             let
-                { canvasSize, actualCanvasSize } =
-                    findPixelPerfectSize model
-
-                ( windowWidth, windowHeight ) =
-                    actualCanvasSize
+                mousePosition2 : Coord Pixels
+                mousePosition2 =
+                    mouseScreenPosition model
+                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                        |> Coord.roundPoint
 
                 ( newMailEditor, cmd ) =
                     MailEditor.uiUpdate
-                        windowWidth
-                        windowHeight
                         model
-                        (mouseScreenPosition model)
+                        elementPosition
+                        mousePosition2
                         mailEditorMsg
                         model.mailEditor
             in

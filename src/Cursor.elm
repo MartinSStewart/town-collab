@@ -174,7 +174,7 @@ defaultCursorMesh2 : Colors -> Ui.Element id msg
 defaultCursorMesh2 colors =
     Ui.colorSprite
         { colors = colors
-        , size = Coord.multiply (Coord.xy 2 2) defaultCursorTextureSize
+        , size = Coord.scalar 2 defaultCursorTextureSize
         , texturePosition = defaultCursorTexturePosition
         , textureSize = defaultCursorTextureSize
         }

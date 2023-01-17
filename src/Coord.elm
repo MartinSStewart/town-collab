@@ -17,6 +17,7 @@ module Coord exposing
     , origin
     , plus
     , roundPoint
+    , scalar
     , toPoint2d
     , toTuple
     , toVec2
@@ -104,6 +105,11 @@ multiplyTuple_ ( x0, y0 ) ( x1, y1 ) =
 multiply : Coord unit -> Coord unit -> Coord unit
 multiply ( Quantity x0, Quantity y0 ) ( x1, y1 ) =
     ( Quantity.multiplyBy x0 x1, Quantity.multiplyBy y0 y1 )
+
+
+scalar : Int -> Coord unit -> Coord unit
+scalar a ( x1, y1 ) =
+    ( Quantity.multiplyBy a x1, Quantity.multiplyBy a y1 )
 
 
 divide : Coord unit -> Coord unit -> Coord unit

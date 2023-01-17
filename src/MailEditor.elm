@@ -83,6 +83,7 @@ type Hover
     = BackgroundHover
     | MailHover
     | ImageButton Int
+    | MailButton
 
 
 backendMailToFrontend : BackendMail -> FrontendMail
@@ -130,8 +131,7 @@ type MailStatus
 
 
 type alias Model =
-    { mesh : Effect.WebGL.Mesh Vertex
-    , currentImageMesh : Effect.WebGL.Mesh Vertex
+    { currentImageMesh : Effect.WebGL.Mesh Vertex
     , currentImageIndex : Int
     , imageRotationIndex : Int
     , lastRotation : List Effect.Time.Posix
@@ -154,7 +154,7 @@ type alias EditorState =
 
 
 type alias Content =
-    { position : Coord MailPixelUnit, image : Image }
+    { position : Coord Pixels, image : Image }
 
 
 type alias MailEditorData =
@@ -165,7 +165,7 @@ type alias MailEditorData =
 
 
 type Image
-    = BlueStamp Colors
+    = Stamp Colors
     | SunglassesEmoji Colors
     | NormalEmoji Colors
     | SadEmoji Colors
@@ -207,79 +207,48 @@ scroll scrollUp audioData config model =
 
 
 uiUpdate :
-    Int
-    -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
-    -> Point2d Pixels Pixels
+    { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
+    -> Coord Pixels
+    -> Coord Pixels
     -> Msg
     -> Model
     -> ( Model, Command FrontendOnly ToBackend msg )
-uiUpdate windowWidth windowHeight config mousePosition msg model =
+uiUpdate config elementPosition mousePosition msg model =
     case msg of
         PressedImageButton index ->
             ( updateCurrentImageMesh { model | currentImageIndex = index, imageRotationIndex = 0 }, Command.none )
 
         PressedBackground ->
+            ( close config model, Command.none )
+
+        MouseDownMail ->
             let
-                uiCoord : Coord UiPixelUnit
-                uiCoord =
-                    screenToWorld windowWidth windowHeight config mousePosition
-                        |> Coord.roundPoint
-
-                mailCoord : Coord MailPixelUnit
-                mailCoord =
-                    uiCoord
-                        |> Coord.minus (imageData.textureSize |> Coord.divide (Coord.tuple ( 2, 2 )))
-                        |> uiPixelToMailPixel
-
                 imageData : ImageData units
                 imageData =
                     getImageData (currentImage model)
+
+                oldEditorState : EditorState
+                oldEditorState =
+                    model.current
+
+                newEditorState : EditorState
+                newEditorState =
+                    { oldEditorState
+                        | content =
+                            oldEditorState.content
+                                ++ [ { position = mousePosition |> Coord.minus elementPosition
+                                     , image = currentImage model
+                                     }
+                                   ]
+                    }
+
+                model3 =
+                    addChange newEditorState { model | lastPlacedImage = Just config.time }
             in
-            if validImagePosition imageData mailCoord then
-                ( model, Command.none )
+            ( model3, UpdateMailEditorRequest (toData model3) |> Lamdera.sendToBackend )
 
-            else
-                ( close config model, Command.none )
-
-        MouseDownBackground ->
-            let
-                uiCoord : Coord UiPixelUnit
-                uiCoord =
-                    screenToWorld windowWidth windowHeight config mousePosition
-                        |> Coord.roundPoint
-
-                mailCoord : Coord MailPixelUnit
-                mailCoord =
-                    uiCoord
-                        |> Coord.minus (imageData.textureSize |> Coord.divide (Coord.tuple ( 2, 2 )))
-                        |> uiPixelToMailPixel
-
-                imageData : ImageData units
-                imageData =
-                    getImageData (currentImage model)
-            in
-            if validImagePosition imageData mailCoord then
-                let
-                    oldEditorState : EditorState
-                    oldEditorState =
-                        model.current
-
-                    newEditorState : EditorState
-                    newEditorState =
-                        { oldEditorState
-                            | content =
-                                oldEditorState.content
-                                    ++ [ { position = mailCoord, image = currentImage model } ]
-                        }
-
-                    model3 =
-                        addChange newEditorState { model | lastPlacedImage = Just config.time }
-                in
-                ( model3, UpdateMailEditorRequest (toData model3) |> Lamdera.sendToBackend )
-
-            else
-                ( model, Command.none )
+        PressedMail ->
+            ( model, Command.none )
 
 
 currentImage : Model -> Image
@@ -298,7 +267,7 @@ currentImage model =
 
 defaultBlueStamp : Image
 defaultBlueStamp =
-    BlueStamp { primaryColor = Color.rgb255 140 160 250, secondaryColor = Color.black }
+    Stamp { primaryColor = Color.rgb255 140 160 250, secondaryColor = Color.black }
 
 
 images : Array Image
@@ -379,7 +348,6 @@ initEditor data =
     { current = { content = data.content, to = data.to }
     , undo = []
     , redo = []
-    , mesh = Shaders.triangleFan []
     , currentImageMesh = Shaders.triangleFan []
     , currentImageIndex = data.currentImageIndex
     , imageRotationIndex = 0
@@ -389,12 +357,11 @@ initEditor data =
     , submitStatus = NotSubmitted
     }
         |> updateCurrentImageMesh
-        |> updateMailMesh
 
 
 updateCurrentImageMesh : Model -> Model
 updateCurrentImageMesh model2 =
-    { model2 | currentImageMesh = imageMesh 1 { position = Coord.origin, image = currentImage model2 } |> Sprite.toMesh }
+    { model2 | currentImageMesh = imageMesh Coord.origin 1 (currentImage model2) |> Sprite.toMesh }
 
 
 init : MailEditorData
@@ -418,8 +385,8 @@ type ToFrontend
 getImageData : Image -> ImageData units
 getImageData image =
     case image of
-        BlueStamp colors ->
-            { textureSize = Coord.xy 28 28, texturePosition = [ Coord.xy 504 0 ], colors = colors }
+        Stamp colors ->
+            { textureSize = Coord.xy 48 48, texturePosition = [ Coord.xy 591 24 ], colors = colors }
 
         SunglassesEmoji colors ->
             { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 532 0 ], colors = colors }
@@ -510,18 +477,7 @@ updateFromBackend config toFrontend mailEditor =
                         , redo = []
                         , current = { content = [], to = "" }
                     }
-                        |> updateMailMesh
                         |> close config
-
-
-validateUserId : String -> Maybe (Id UserId)
-validateUserId string =
-    case String.toInt string of
-        Just int ->
-            Id.fromInt int |> Just
-
-        Nothing ->
-            Nothing
 
 
 toData : Model -> MailEditorData
@@ -570,12 +526,6 @@ addChange editorState model =
         , current = editorState
         , redo = []
     }
-        |> updateMailMesh
-
-
-addChange_ : (EditorState -> EditorState) -> Model -> Model
-addChange_ editorStateFunc model =
-    addChange (editorStateFunc model.current) model
 
 
 close : { a | time : Effect.Time.Posix } -> Model -> Model
@@ -599,26 +549,6 @@ open config startPosition model =
     { model | showMailEditor = MailEditorOpening { startTime = config.time, startPosition = startPosition } }
 
 
-uiPixelToMailPixel : Coord UiPixelUnit -> Coord MailPixelUnit
-uiPixelToMailPixel coord =
-    coord |> Coord.plus (Coord.tuple ( mailWidth // 2, mailHeight // 2 )) |> Coord.toTuple |> Coord.tuple
-
-
-validImagePosition : ImageData units -> Coord MailPixelUnit -> Bool
-validImagePosition imageData position =
-    let
-        ( w, h ) =
-            Coord.toTuple imageData.textureSize
-
-        ( x, y ) =
-            Coord.toTuple position
-    in
-    (x > round (toFloat w / -2))
-        && (x < mailWidth + round (toFloat w / -2))
-        && (y > round (toFloat h / -2))
-        && (y < mailHeight + round (toFloat h / -2))
-
-
 undo : Model -> Model
 undo model =
     case model.undo of
@@ -628,7 +558,6 @@ undo model =
                 , current = head
                 , redo = model.current :: model.redo
             }
-                |> updateMailMesh
 
         [] ->
             model
@@ -643,7 +572,6 @@ redo model =
                 , current = head
                 , undo = model.current :: model.undo
             }
-                |> updateMailMesh
 
         [] ->
             model
@@ -663,62 +591,37 @@ mailSize =
     Coord.xy mailWidth mailHeight
 
 
-updateMailMesh : Model -> Model
-updateMailMesh model =
-    { model | mesh = (mailMesh ++ List.concatMap (imageMesh 1) model.current.content) |> Sprite.toMesh }
+mailSizeActual =
+    mailSize
 
 
-mailMesh : List Vertex
-mailMesh =
-    Sprite.rectangle Color.outlineColor (Coord.xy 0 0) mailSize
-        ++ Sprite.rectangle Color.fillColor (Coord.xy 1 1) (mailSize |> Coord.minus (Coord.xy 2 2))
-
-
-mailZoomFactor : Int -> Int -> Int
-mailZoomFactor windowWidth windowHeight =
+mailZoomFactor : Coord Pixels -> Int
+mailZoomFactor windowSize =
     min
-        (toFloat windowWidth / (30 + mailWidth))
-        (toFloat windowHeight / (30 + mailHeight))
+        (toFloat (Coord.xRaw windowSize) / (30 + mailWidth))
+        (toFloat (Coord.yRaw windowSize) / (30 + mailHeight))
         |> floor
         |> min 3
 
 
 screenToWorld :
-    Int
-    -> Int
+    Coord Pixels
     -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
     -> Point2d Pixels Pixels
     -> Point2d UiPixelUnit UiPixelUnit
-screenToWorld windowWidth windowHeight model =
+screenToWorld windowSize model =
     let
         ( w, h ) =
             model.windowSize
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at (scaleForScreenToWorld windowWidth windowHeight model)
+        >> Point2d.at (scaleForScreenToWorld windowSize model)
         >> Point2d.placeIn (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
-worldToScreen :
-    Int
-    -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
-    -> Point2d UiPixelUnit UiPixelUnit
-    -> Point2d Pixels Pixels
-worldToScreen windowWidth windowHeight model =
-    let
-        ( w, h ) =
-            model.windowSize
-    in
-    Point2d.translateBy
-        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << Point2d.at_ (scaleForScreenToWorld windowWidth windowHeight model)
-        << Point2d.relativeTo (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
-
-
-scaleForScreenToWorld windowWidth windowHeight model =
-    model.devicePixelRatio / toFloat (mailZoomFactor windowWidth windowHeight) |> Quantity
+scaleForScreenToWorld windowSize model =
+    model.devicePixelRatio / toFloat (mailZoomFactor windowSize) |> Quantity
 
 
 backgroundLayer : { b | time : Effect.Time.Posix } -> Model -> WebGL.Texture.Texture -> Maybe Effect.WebGL.Entity
@@ -789,17 +692,13 @@ drawMail texture mousePosition windowWidth windowHeight config model =
     case isOpenAnimation config model of
         Just { startTime, startPosition } ->
             let
-                startPosition_ : { x : Float, y : Float }
-                startPosition_ =
-                    screenToWorld windowWidth windowHeight config startPosition |> Point2d.unwrap
-
                 zoomFactor : Float
                 zoomFactor =
-                    mailZoomFactor windowWidth windowHeight |> toFloat
+                    mailZoomFactor (Coord.xy windowWidth windowHeight) |> toFloat
 
                 mousePosition_ : Coord UiPixelUnit
                 mousePosition_ =
-                    screenToWorld windowWidth windowHeight config mousePosition
+                    screenToWorld (Coord.xy windowWidth windowHeight) config mousePosition
                         |> Coord.roundPoint
 
                 imageData =
@@ -817,10 +716,8 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                 showHoverImage =
                     case model.showMailEditor of
                         MailEditorOpening mailEditorOpening ->
-                            (Duration.from mailEditorOpening.startTime config.time
+                            Duration.from mailEditorOpening.startTime config.time
                                 |> Quantity.greaterThan openAnimationLength
-                            )
-                                && validImagePosition imageData (uiPixelToMailPixel tilePosition)
 
                         MailEditorClosed ->
                             False
@@ -828,78 +725,32 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                         MailEditorClosing _ ->
                             False
 
-                t =
-                    case model.showMailEditor of
-                        MailEditorOpening _ ->
-                            Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> min 1
-
-                        _ ->
-                            1 - Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> max 0
-
-                endX =
-                    mailWidth / -2
-
-                endY =
-                    toFloat mailHeight / -2
-
-                mailX =
-                    (endX - startPosition_.x) * t + startPosition_.x
-
-                mailY =
-                    (endY - startPosition_.y) * t + startPosition_.y
-
-                scaleStart =
-                    0.13 * toFloat config.zoomFactor / zoomFactor
-
-                mailScale =
-                    (1 - scaleStart) * t * t + scaleStart
-
                 textureSize =
                     WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
             in
-            Effect.WebGL.entityWith
-                [ Shaders.blend ]
-                Shaders.vertexShader
-                Shaders.fragmentShader
-                model.mesh
-                { texture = texture
-                , textureSize = textureSize
-                , view =
-                    Mat4.makeScale3
-                        (zoomFactor * 2 / toFloat windowWidth)
-                        (zoomFactor * -2 / toFloat windowHeight)
-                        1
-                        |> Mat4.translate3
-                            (mailX |> round |> toFloat)
-                            (mailY |> round |> toFloat)
-                            0
-                        |> Mat4.scale3 mailScale mailScale 0
-                , color = Vec4.vec4 1 1 1 1
-                }
-                :: (if showHoverImage then
-                        [ Effect.WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.vertexShader
-                            Shaders.fragmentShader
-                            model.currentImageMesh
-                            { texture = texture
-                            , textureSize = textureSize
-                            , color = Vec4.vec4 1 1 1 0.5
-                            , view =
-                                Mat4.makeScale3
-                                    (zoomFactor * 2 / toFloat windowWidth)
-                                    (zoomFactor * -2 / toFloat windowHeight)
-                                    1
-                                    |> Mat4.translate3
-                                        (toFloat tileX |> round |> toFloat)
-                                        (toFloat tileY |> round |> toFloat)
-                                        0
-                            }
-                        ]
+            if showHoverImage then
+                [ Effect.WebGL.entityWith
+                    [ Shaders.blend ]
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
+                    model.currentImageMesh
+                    { texture = texture
+                    , textureSize = textureSize
+                    , color = Vec4.vec4 1 1 1 0.5
+                    , view =
+                        Mat4.makeScale3
+                            (zoomFactor * 2 / toFloat windowWidth)
+                            (zoomFactor * -2 / toFloat windowHeight)
+                            1
+                            |> Mat4.translate3
+                                (toFloat tileX |> round |> toFloat)
+                                (toFloat tileY |> round |> toFloat)
+                                0
+                    }
+                ]
 
-                    else
-                        []
-                   )
+            else
+                []
 
         Nothing ->
             []
@@ -908,25 +759,62 @@ drawMail texture mousePosition windowWidth windowHeight config model =
 type Msg
     = PressedImageButton Int
     | PressedBackground
-    | MouseDownBackground
+    | MouseDownMail
+    | PressedMail
 
 
 ui : Coord Pixels -> (Hover -> uiHover) -> (Msg -> msg) -> Model -> Ui.Element uiHover msg
 ui windowSize idMap msgMap model =
+    let
+        mailScale =
+            mailZoomFactor windowSize
+    in
     Ui.el
         { padding = Ui.noPadding
         , borderAndFill = NoBorderOrFill
         , inFront =
             [ Ui.bottomCenter
                 { size = windowSize, inFront = [] }
-                (Ui.el
-                    { padding = Ui.paddingXY 2 2
-                    , inFront = []
-                    , borderAndFill =
-                        BorderAndFill
-                            { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                (Ui.column
+                    { spacing = 40
+                    , padding = Ui.noPadding
                     }
-                    (imageButtons idMap msgMap model.currentImageIndex)
+                    [ Ui.customButton
+                        { id = idMap MailButton
+                        , padding = Ui.noPadding
+                        , inFront = []
+                        , onPress = msgMap PressedMail
+                        , onMouseDown = msgMap MouseDownMail |> Just
+                        , borderAndFill =
+                            BorderAndFill
+                                { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                        , borderAndFillFocus =
+                            BorderAndFill
+                                { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                        }
+                        (Ui.quads
+                            { size = Coord.multiply (Coord.xy mailScale mailScale) mailSize
+                            , vertices =
+                                \position ->
+                                    List.concatMap
+                                        (\content ->
+                                            imageMesh
+                                                (Coord.plus position (Coord.multiply (Coord.xy mailScale mailScale) content.position))
+                                                mailScale
+                                                content.image
+                                        )
+                                        model.current.content
+                            }
+                        )
+                    , Ui.el
+                        { padding = Ui.paddingXY 2 2
+                        , inFront = []
+                        , borderAndFill =
+                            BorderAndFill
+                                { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                        }
+                        (imageButtons idMap msgMap model.currentImageIndex)
+                    ]
                 )
             ]
         }
@@ -934,7 +822,7 @@ ui windowSize idMap msgMap model =
             { id = idMap BackgroundHover
             , inFront = []
             , onPress = msgMap PressedBackground
-            , onMouseDown = msgMap MouseDownBackground |> Just
+            , onMouseDown = Nothing
             , padding = { topLeft = windowSize, bottomRight = Coord.origin }
             , borderAndFill = NoBorderOrFill
             , borderAndFillFocus = NoBorderOrFill
@@ -943,6 +831,7 @@ ui windowSize idMap msgMap model =
         )
 
 
+imageButtons : (Hover -> uiHover) -> (Msg -> msg) -> Int -> Ui.Element uiHover msg
 imageButtons idMap msgMap currentImageIndex =
     List.foldl
         (\image state ->
@@ -1018,7 +907,7 @@ imageButton idMap msgMap selectedIndex index image =
         }
         (Ui.quads
             { size = Coord.multiply (Coord.xy scale scale) imageData.textureSize
-            , vertices = \position -> imageMesh scale { position = position, image = image }
+            , vertices = \position -> imageMesh position scale image
             }
         )
 
@@ -1027,8 +916,8 @@ type UiPixelUnit
     = UiPixelUnit Never
 
 
-imageMesh : Int -> { position : Coord units, image : Image } -> List Vertex
-imageMesh scale { position, image } =
+imageMesh : Coord units -> Int -> Image -> List Vertex
+imageMesh position scale image =
     let
         imageData =
             getImageData image
