@@ -227,6 +227,12 @@ uiUpdate config elementPosition mousePosition msg model =
                 imageData =
                     getImageData (currentImage model)
 
+                windowSize =
+                    Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
+
+                mailScale =
+                    mailZoomFactor windowSize |> Debug.log "a"
+
                 oldEditorState : EditorState
                 oldEditorState =
                     model.current
@@ -236,7 +242,10 @@ uiUpdate config elementPosition mousePosition msg model =
                     { oldEditorState
                         | content =
                             oldEditorState.content
-                                ++ [ { position = mousePosition |> Coord.minus elementPosition
+                                ++ [ { position =
+                                        mousePosition
+                                            |> Coord.minus elementPosition
+                                            |> Coord.divide (Coord.xy mailScale mailScale)
                                      , image = currentImage model
                                      }
                                    ]
@@ -793,13 +802,13 @@ ui windowSize idMap msgMap model =
                                 { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
                         }
                         (Ui.quads
-                            { size = Coord.multiply (Coord.xy mailScale mailScale) mailSize
+                            { size = Coord.scalar mailScale mailSize
                             , vertices =
                                 \position ->
                                     List.concatMap
                                         (\content ->
                                             imageMesh
-                                                (Coord.plus position (Coord.multiply (Coord.xy mailScale mailScale) content.position))
+                                                (Coord.plus position (Coord.scalar mailScale content.position))
                                                 mailScale
                                                 content.image
                                         )
@@ -906,7 +915,7 @@ imageButton idMap msgMap selectedIndex index image =
         , inFront = []
         }
         (Ui.quads
-            { size = Coord.multiply (Coord.xy scale scale) imageData.textureSize
+            { size = Coord.scalar scale imageData.textureSize
             , vertices = \position -> imageMesh position scale image
             }
         )
@@ -927,7 +936,7 @@ imageMesh position scale image =
             Sprite.spriteWithTwoColors
                 imageData.colors
                 position
-                (Coord.multiply (Coord.xy scale scale) imageData.textureSize)
+                (Coord.scalar scale imageData.textureSize)
                 texturePosition
                 imageData.textureSize
         )

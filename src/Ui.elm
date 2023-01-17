@@ -670,7 +670,7 @@ borderAndFillView position borderAndBackground size2 =
                 ++ Sprite.rectangle
                     fillColor
                     (Coord.plus (Coord.xy borderWidth borderWidth) position)
-                    (size2 |> Coord.minus (Coord.multiply (Coord.xy 2 2) (Coord.xy borderWidth borderWidth)))
+                    (size2 |> Coord.minus (Coord.scalar 2 (Coord.xy borderWidth borderWidth)))
 
 
 size : Element id msg -> Coord Pixels

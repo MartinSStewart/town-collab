@@ -312,4 +312,4 @@ textSize charScale string =
         (List.map Coord.xRaw list |> List.maximum |> Maybe.withDefault 0)
         (List.map Coord.yRaw list |> List.sum |> max 1)
         |> Coord.multiply charSize
-        |> Coord.multiply (Coord.xy charScale charScale)
+        |> Coord.scalar charScale

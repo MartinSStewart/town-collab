@@ -198,7 +198,7 @@ eyeDropperSize =
 eyeDropperCursor2 : Ui.Element id msg
 eyeDropperCursor2 =
     Ui.sprite
-        { size = Coord.multiply (Coord.xy 2 2) eyeDropperSize
+        { size = Coord.scalar 2 eyeDropperSize
         , texturePosition = Coord.xy 534 78
         , textureSize = eyeDropperSize
         }
