@@ -594,7 +594,7 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
                             loggedIn.mailEditor
 
                         NotLoggedIn ->
-                            { to = "", content = [], currentImageIndex = 0 }
+                            { to = "", content = [] }
                     )
                     |> MailEditor.open { time = time } Point2d.origin
             , currentTool = currentTile
@@ -904,8 +904,8 @@ updateLoaded audioData msg model =
 
                             ( UiHover id data, _, Keyboard.Enter ) ->
                                 case Ui.findButton id (Toolbar.view (getViewModel model)) of
-                                    Just { onPress } ->
-                                        uiUpdate data.position onPress model
+                                    Just { buttonData } ->
+                                        uiUpdate data.position buttonData.onPress model
 
                                     Nothing ->
                                         ( model, Command.none )
@@ -1158,8 +1158,8 @@ updateLoaded audioData msg model =
 
                                         _ ->
                                             case Toolbar.view (getViewModel model) |> Ui.findButton id of
-                                                Just { onMouseDown } ->
-                                                    case onMouseDown of
+                                                Just { buttonData } ->
+                                                    case buttonData.onMouseDown of
                                                         Just onMouseDown2 ->
                                                             uiUpdate data.position onMouseDown2 model2
 
@@ -2552,8 +2552,8 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                     UiHover id data ->
                         case Ui.findButton id (Toolbar.view (getViewModel model)) of
-                            Just { onPress } ->
-                                uiUpdate data.position onPress model
+                            Just { buttonData } ->
+                                uiUpdate data.position buttonData.onPress model
 
                             Nothing ->
                                 ( model2, Command.none )
@@ -4344,6 +4344,7 @@ canvasView audioData model =
                             (negate <| toFloat <| round (y * toFloat (Coord.yRaw Units.tileSize)))
                             0
 
+                mouseScreenPosition_ : Point2d Pixels Pixels
                 mouseScreenPosition_ =
                     mouseScreenPosition model
 
@@ -4353,6 +4354,14 @@ canvasView audioData model =
 
                 showMousePointer =
                     cursorSprite (hoverAt model (mouseScreenPosition model)) model
+
+                ( mailPosition, mailSize ) =
+                    case Toolbar.view (getViewModel model) |> Ui.findButton (MailEditorHover MailEditor.MailButton) of
+                        Just mailButton ->
+                            ( mailButton.position, mailButton.buttonData.cachedSize )
+
+                        Nothing ->
+                            ( Coord.origin, Coord.origin )
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4710,14 +4719,10 @@ canvasView audioData model =
                                     }
                                ]
                             ++ MailEditor.drawMail
+                                mailPosition
+                                mailSize
                                 texture
-                                (case model.mouseLeft of
-                                    MouseButtonDown { current } ->
-                                        current
-
-                                    MouseButtonUp { current } ->
-                                        current
-                                )
+                                (mouseScreenPosition model)
                                 windowWidth
                                 windowHeight
                                 model

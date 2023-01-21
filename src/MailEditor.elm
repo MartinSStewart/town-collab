@@ -34,6 +34,7 @@ module MailEditor exposing
 import Array exposing (Array)
 import AssocList
 import Audio exposing (AudioData)
+import Bounds
 import Color exposing (Colors)
 import Coord exposing (Coord)
 import Cow
@@ -84,6 +85,7 @@ type Hover
     | MailHover
     | ImageButton Int
     | MailButton
+    | EraserButton
 
 
 backendMailToFrontend : BackendMail -> FrontendMail
@@ -130,10 +132,19 @@ type MailStatus
     | MailReceivedAndViewed
 
 
+type Tool
+    = ImagePlacer ImagePlacer_
+    | ImagePicker
+    | EraserTool
+
+
+type alias ImagePlacer_ =
+    { imageIndex : Int, rotationIndex : Int }
+
+
 type alias Model =
     { currentImageMesh : Effect.WebGL.Mesh Vertex
-    , currentImageIndex : Int
-    , imageRotationIndex : Int
+    , currentTool : Tool
     , lastRotation : List Effect.Time.Posix
     , undo : List EditorState
     , current : EditorState
@@ -160,7 +171,6 @@ type alias Content =
 type alias MailEditorData =
     { to : String
     , content : List Content
-    , currentImageIndex : Int
     }
 
 
@@ -185,25 +195,37 @@ scroll :
     -> Model
     -> Model
 scroll scrollUp audioData config model =
-    { model
-        | imageRotationIndex =
-            model.imageRotationIndex
-                + (if scrollUp then
-                    1
+    case model.currentTool of
+        ImagePlacer imagePlacer ->
+            { model
+                | currentTool =
+                    ImagePlacer
+                        { imagePlacer
+                            | rotationIndex =
+                                imagePlacer.rotationIndex
+                                    + (if scrollUp then
+                                        1
 
-                   else
-                    -1
-                  )
-        , lastRotation =
-            config.time
-                :: List.filter
-                    (\time ->
-                        Duration.from time config.time
-                            |> Quantity.lessThan (Sound.length audioData config.sounds WhooshSound)
-                    )
-                    model.lastRotation
-    }
-        |> updateCurrentImageMesh
+                                       else
+                                        -1
+                                      )
+                        }
+                , lastRotation =
+                    config.time
+                        :: List.filter
+                            (\time ->
+                                Duration.from time config.time
+                                    |> Quantity.lessThan (Sound.length audioData config.sounds WhooshSound)
+                            )
+                            model.lastRotation
+            }
+                |> updateCurrentImageMesh
+
+        ImagePicker ->
+            model
+
+        EraserTool ->
+            model
 
 
 uiUpdate :
@@ -216,58 +238,72 @@ uiUpdate :
 uiUpdate config elementPosition mousePosition msg model =
     case msg of
         PressedImageButton index ->
-            ( updateCurrentImageMesh { model | currentImageIndex = index, imageRotationIndex = 0 }, Command.none )
+            ( updateCurrentImageMesh { model | currentTool = ImagePlacer { imageIndex = index, rotationIndex = 0 } }
+            , Command.none
+            )
 
         PressedBackground ->
             ( close config model, Command.none )
 
         MouseDownMail ->
-            let
-                imageData : ImageData units
-                imageData =
-                    getImageData (currentImage model)
+            case model.currentTool of
+                ImagePlacer imagePlacer ->
+                    let
+                        imageData : ImageData units
+                        imageData =
+                            getImageData (currentImage imagePlacer)
 
-                windowSize =
-                    Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
+                        windowSize =
+                            Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
 
-                mailScale =
-                    mailZoomFactor windowSize |> Debug.log "a"
+                        mailScale =
+                            mailZoomFactor windowSize
 
-                oldEditorState : EditorState
-                oldEditorState =
-                    model.current
+                        oldEditorState : EditorState
+                        oldEditorState =
+                            model.current
 
-                newEditorState : EditorState
-                newEditorState =
-                    { oldEditorState
-                        | content =
-                            oldEditorState.content
-                                ++ [ { position =
-                                        mousePosition
-                                            |> Coord.minus elementPosition
-                                            |> Coord.divide (Coord.xy mailScale mailScale)
-                                     , image = currentImage model
-                                     }
-                                   ]
-                    }
+                        newEditorState : EditorState
+                        newEditorState =
+                            { oldEditorState
+                                | content =
+                                    oldEditorState.content
+                                        ++ [ { position =
+                                                mousePosition
+                                                    |> Coord.minus elementPosition
+                                                    |> Coord.divide (Coord.xy mailScale mailScale)
+                                                    |> Coord.minus (Coord.divide (Coord.xy 2 2) imageData.textureSize)
+                                             , image = currentImage imagePlacer
+                                             }
+                                           ]
+                            }
 
-                model3 =
-                    addChange newEditorState { model | lastPlacedImage = Just config.time }
-            in
-            ( model3, UpdateMailEditorRequest (toData model3) |> Lamdera.sendToBackend )
+                        model3 =
+                            addChange newEditorState { model | lastPlacedImage = Just config.time }
+                    in
+                    ( model3, UpdateMailEditorRequest (toData model3) |> Lamdera.sendToBackend )
+
+                EraserTool ->
+                    Debug.todo ""
+
+                ImagePicker ->
+                    Debug.todo ""
 
         PressedMail ->
             ( model, Command.none )
 
+        PressedEraserButton ->
+            ( model, Command.none )
 
-currentImage : Model -> Image
-currentImage model =
-    Array.get model.currentImageIndex images
+
+currentImage : ImagePlacer_ -> Image
+currentImage imagePlacer =
+    Array.get imagePlacer.imageIndex images
         |> Maybe.withDefault defaultBlueStamp
         |> (\a ->
                 case a of
                     TileImage tileGroup _ colors ->
-                        TileImage tileGroup model.imageRotationIndex colors
+                        TileImage tileGroup imagePlacer.rotationIndex colors
 
                     _ ->
                         a
@@ -358,8 +394,7 @@ initEditor data =
     , undo = []
     , redo = []
     , currentImageMesh = Shaders.triangleFan []
-    , currentImageIndex = data.currentImageIndex
-    , imageRotationIndex = 0
+    , currentTool = ImagePlacer { imageIndex = 0, rotationIndex = 0 }
     , lastRotation = []
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
@@ -370,12 +405,32 @@ initEditor data =
 
 updateCurrentImageMesh : Model -> Model
 updateCurrentImageMesh model2 =
-    { model2 | currentImageMesh = imageMesh Coord.origin 1 (currentImage model2) |> Sprite.toMesh }
+    case model2.currentTool of
+        ImagePlacer imagePlacer ->
+            let
+                image : Image
+                image =
+                    currentImage imagePlacer
+
+                imageData : ImageData units
+                imageData =
+                    getImageData image
+            in
+            { model2
+                | currentImageMesh =
+                    imageMesh (Coord.divide (Coord.xy -2 -2) imageData.textureSize) 1 image |> Sprite.toMesh
+            }
+
+        ImagePicker ->
+            Debug.todo ""
+
+        EraserTool ->
+            Debug.todo ""
 
 
 init : MailEditorData
 init =
-    { to = "", content = [], currentImageIndex = 0 }
+    { to = "", content = [] }
 
 
 type alias ImageData units =
@@ -493,7 +548,6 @@ toData : Model -> MailEditorData
 toData model =
     { to = model.current.to
     , content = model.current.content
-    , currentImageIndex = model.currentImageIndex
     }
 
 
@@ -600,10 +654,6 @@ mailSize =
     Coord.xy mailWidth mailHeight
 
 
-mailSizeActual =
-    mailSize
-
-
 mailZoomFactor : Coord Pixels -> Int
 mailZoomFactor windowSize =
     min
@@ -684,7 +734,9 @@ isOpenAnimation config model =
 
 
 drawMail :
-    WebGL.Texture.Texture
+    Coord Pixels
+    -> Coord Pixels
+    -> WebGL.Texture.Texture
     -> Point2d Pixels Pixels
     -> Int
     -> Int
@@ -697,7 +749,7 @@ drawMail :
         }
     -> Model
     -> List Effect.WebGL.Entity
-drawMail texture mousePosition windowWidth windowHeight config model =
+drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight config model =
     case isOpenAnimation config model of
         Just { startTime, startPosition } ->
             let
@@ -710,16 +762,21 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                     screenToWorld (Coord.xy windowWidth windowHeight) config mousePosition
                         |> Coord.roundPoint
 
-                imageData =
-                    getImageData (currentImage model)
-
                 tilePosition : Coord UiPixelUnit
                 tilePosition =
                     mousePosition_
-                        |> Coord.plus (imageData.textureSize |> Coord.divide (Coord.xy -2 -2))
 
                 ( tileX, tileY ) =
                     Coord.toTuple tilePosition
+
+                mailHover : Bool
+                mailHover =
+                    Bounds.fromCoordAndSize mailPosition mailSize2
+                        |> Bounds.contains
+                            (mousePosition
+                                |> Point2d.scaleAbout Point2d.origin config.devicePixelRatio
+                                |> Coord.floorPoint
+                            )
 
                 showHoverImage : Bool
                 showHoverImage =
@@ -727,6 +784,7 @@ drawMail texture mousePosition windowWidth windowHeight config model =
                         MailEditorOpening mailEditorOpening ->
                             Duration.from mailEditorOpening.startTime config.time
                                 |> Quantity.greaterThan openAnimationLength
+                                |> (&&) mailHover
 
                         MailEditorClosed ->
                             False
@@ -770,6 +828,7 @@ type Msg
     | PressedBackground
     | MouseDownMail
     | PressedMail
+    | PressedEraserButton
 
 
 ui : Coord Pixels -> (Hover -> uiHover) -> (Msg -> msg) -> Model -> Ui.Element uiHover msg
@@ -822,7 +881,36 @@ ui windowSize idMap msgMap model =
                             BorderAndFill
                                 { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
                         }
-                        (imageButtons idMap msgMap model.currentImageIndex)
+                        (Ui.row
+                            { spacing = 16
+                            , padding = Ui.noPadding
+                            }
+                            [ Ui.column
+                                { spacing = 8
+                                , padding = Ui.noPadding
+                                }
+                                [ Ui.button
+                                    { id = idMap EraserButton
+                                    , padding = Ui.paddingXY 4 4
+                                    , onPress = msgMap PressedEraserButton
+                                    }
+                                    (Ui.text "Eraser")
+                                ]
+                            , imageButtons
+                                idMap
+                                msgMap
+                                (case model.currentTool of
+                                    ImagePlacer imagePlacer ->
+                                        Just imagePlacer.imageIndex
+
+                                    ImagePicker ->
+                                        Nothing
+
+                                    EraserTool ->
+                                        Nothing
+                                )
+                            ]
+                        )
                     ]
                 )
             ]
@@ -840,7 +928,7 @@ ui windowSize idMap msgMap model =
         )
 
 
-imageButtons : (Hover -> uiHover) -> (Msg -> msg) -> Int -> Ui.Element uiHover msg
+imageButtons : (Hover -> uiHover) -> (Msg -> msg) -> Maybe Int -> Ui.Element uiHover msg
 imageButtons idMap msgMap currentImageIndex =
     List.foldl
         (\image state ->
@@ -872,7 +960,7 @@ imageButtons idMap msgMap currentImageIndex =
         |> Ui.row { padding = Ui.noPadding, spacing = 2 }
 
 
-imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Int -> Int -> Image -> Ui.Element uiHover msg
+imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Maybe Int -> Int -> Image -> Ui.Element uiHover msg
 imageButton idMap msgMap selectedIndex index image =
     let
         imageData : ImageData units
@@ -902,7 +990,7 @@ imageButton idMap msgMap selectedIndex index image =
         , onMouseDown = Nothing
         , padding = Ui.paddingXY 4 4
         , borderAndFill =
-            if selectedIndex == index then
+            if selectedIndex == Just index then
                 highlight
 
             else

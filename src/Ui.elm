@@ -13,7 +13,7 @@ module Ui exposing
     , customButton
     , el
     , findButton
-    , findId
+    , findTextInput
     , handleKeyDown
     , hover
     , noPadding
@@ -243,10 +243,7 @@ none =
     Empty
 
 
-button :
-    { id : id, padding : Padding, onPress : msg }
-    -> Element id msg
-    -> Element id msg
+button : { id : id, padding : Padding, onPress : msg } -> Element id msg -> Element id msg
 button data child =
     Button
         { id = data.id
@@ -749,8 +746,8 @@ columnSize data children =
            )
 
 
-findId : id -> Element id msg -> Maybe ( Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg, TextInput.Model )
-findId id element =
+findTextInput : id -> Element id msg -> Maybe ( Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg, TextInput.Model )
+findTextInput id element =
     case element of
         Text _ ->
             Nothing
@@ -766,13 +763,13 @@ findId id element =
             Nothing
 
         Row _ children ->
-            List.findMap (findId id) children
+            List.findMap (findTextInput id) children
 
         Column _ children ->
-            List.findMap (findId id) children
+            List.findMap (findTextInput id) children
 
         Single data child ->
-            List.findMap (findId id) (child :: data.inFront)
+            List.findMap (findTextInput id) (child :: data.inFront)
 
         Quads _ ->
             Nothing
@@ -781,8 +778,13 @@ findId id element =
             Nothing
 
 
-findButton : id -> Element id msg -> Maybe (ButtonData id msg)
+findButton : id -> Element id msg -> Maybe { buttonData : ButtonData id msg, position : Coord Pixels }
 findButton id element =
+    findButtonHelper id Coord.origin element
+
+
+findButtonHelper : id -> Coord Pixels -> Element id msg -> Maybe { buttonData : ButtonData id msg, position : Coord Pixels }
+findButtonHelper id position element =
     case element of
         Text _ ->
             Nothing
@@ -792,19 +794,62 @@ findButton id element =
 
         Button data _ ->
             if data.id == id then
-                Just data
+                Just { buttonData = data, position = position }
 
             else
                 Nothing
 
-        Row _ children ->
-            List.findMap (findButton id) children
+        Row data children ->
+            List.foldl
+                (\child state ->
+                    case state.result of
+                        Just _ ->
+                            state
 
-        Column _ children ->
-            List.findMap (findButton id) children
+                        Nothing ->
+                            { result = findButtonHelper id state.position child
+                            , position =
+                                Coord.xy (Coord.xRaw (size child) + data.spacing) 0
+                                    |> Coord.plus state.position
+                            }
+                )
+                { position = Coord.plus data.padding.topLeft position
+                , result = Nothing
+                }
+                children
+                |> .result
+
+        Column data children ->
+            List.foldl
+                (\child state ->
+                    case state.result of
+                        Just _ ->
+                            state
+
+                        Nothing ->
+                            { result = findButtonHelper id state.position child
+                            , position =
+                                Coord.xy 0 (Coord.xRaw (size child) + data.spacing)
+                                    |> Coord.plus state.position
+                            }
+                )
+                { position = Coord.plus data.padding.topLeft position
+                , result = Nothing
+                }
+                children
+                |> .result
 
         Single data child ->
-            List.findMap (findButton id) (child :: data.inFront)
+            let
+                position2 =
+                    Coord.plus data.padding.topLeft position
+            in
+            case List.findMap (findButtonHelper id position2) (child :: data.inFront) of
+                Just result ->
+                    Just result
+
+                Nothing ->
+                    findButtonHelper id position2 child
 
         Quads _ ->
             Nothing
@@ -826,7 +871,7 @@ handleKeyDown :
 handleKeyDown updateFunc keyUnhandled element maybeFocus ctrlOrMetaDown shiftDown key model =
     case maybeFocus of
         Just focus ->
-            case findId focus element of
+            case findTextInput focus element of
                 Just ( onKeyDown, textInput2 ) ->
                     updateFunc (onKeyDown ctrlOrMetaDown shiftDown key textInput2) model
 
