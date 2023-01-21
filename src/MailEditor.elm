@@ -10,6 +10,7 @@ module MailEditor exposing
     , ShowMailEditor(..)
     , ToBackend(..)
     , ToFrontend(..)
+    , Tool(..)
     , backendMailToFrontend
     , backgroundLayer
     , close
@@ -82,7 +83,6 @@ type alias FrontendMail =
 
 type Hover
     = BackgroundHover
-    | MailHover
     | ImageButton Int
     | MailButton
     | EraserButton
@@ -278,13 +278,62 @@ uiUpdate config elementPosition mousePosition msg model =
                                            ]
                             }
 
-                        model3 =
+                        model2 =
                             addChange newEditorState { model | lastPlacedImage = Just config.time }
                     in
-                    ( model3, UpdateMailEditorRequest (toData model3) |> Lamdera.sendToBackend )
+                    ( model2, UpdateMailEditorRequest (toData model2) |> Lamdera.sendToBackend )
 
                 EraserTool ->
-                    Debug.todo ""
+                    let
+                        mailMousePosition : Coord Pixels
+                        mailMousePosition =
+                            mousePosition
+                                |> Coord.minus elementPosition
+                                |> Coord.divide (Coord.xy mailScale mailScale)
+
+                        windowSize =
+                            Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
+
+                        mailScale =
+                            mailZoomFactor windowSize
+
+                        oldEditorState : EditorState
+                        oldEditorState =
+                            model.current
+
+                        newEditorState : EditorState
+                        newEditorState =
+                            { oldEditorState
+                                | content =
+                                    List.foldl
+                                        (\content state ->
+                                            let
+                                                imageData : ImageData units
+                                                imageData =
+                                                    getImageData content.image
+
+                                                isOverImage : Bool
+                                                isOverImage =
+                                                    Bounds.contains
+                                                        mailMousePosition
+                                                        (Bounds.fromCoordAndSize content.position imageData.textureSize)
+                                            in
+                                            if not state.erased && isOverImage then
+                                                { content = state.content, erased = True }
+
+                                            else
+                                                { content = content :: state.content, erased = state.erased }
+                                        )
+                                        { content = [], erased = False }
+                                        oldEditorState.content
+                                        |> .content
+                                        |> List.reverse
+                            }
+
+                        model2 =
+                            addChange newEditorState model
+                    in
+                    ( model2, UpdateMailEditorRequest (toData model2) |> Lamdera.sendToBackend )
 
                 ImagePicker ->
                     Debug.todo ""
@@ -293,7 +342,7 @@ uiUpdate config elementPosition mousePosition msg model =
             ( model, Command.none )
 
         PressedEraserButton ->
-            ( model, Command.none )
+            ( { model | currentTool = EraserTool } |> updateCurrentImageMesh, Command.none )
 
 
 currentImage : ImagePlacer_ -> Image
@@ -404,8 +453,8 @@ initEditor data =
 
 
 updateCurrentImageMesh : Model -> Model
-updateCurrentImageMesh model2 =
-    case model2.currentTool of
+updateCurrentImageMesh model =
+    case model.currentTool of
         ImagePlacer imagePlacer ->
             let
                 image : Image
@@ -416,16 +465,18 @@ updateCurrentImageMesh model2 =
                 imageData =
                     getImageData image
             in
-            { model2
+            { model
                 | currentImageMesh =
                     imageMesh (Coord.divide (Coord.xy -2 -2) imageData.textureSize) 1 image |> Sprite.toMesh
             }
 
         ImagePicker ->
-            Debug.todo ""
+            { model
+                | currentImageMesh = Effect.WebGL.triangleFan []
+            }
 
         EraserTool ->
-            Debug.todo ""
+            model
 
 
 init : MailEditorData
@@ -780,16 +831,13 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
 
                 showHoverImage : Bool
                 showHoverImage =
-                    case model.showMailEditor of
-                        MailEditorOpening mailEditorOpening ->
+                    case ( model.showMailEditor, model.currentTool ) of
+                        ( MailEditorOpening mailEditorOpening, ImagePlacer _ ) ->
                             Duration.from mailEditorOpening.startTime config.time
                                 |> Quantity.greaterThan openAnimationLength
                                 |> (&&) mailHover
 
-                        MailEditorClosed ->
-                            False
-
-                        MailEditorClosing _ ->
+                        _ ->
                             False
 
                 textureSize =
@@ -803,7 +851,16 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
                     model.currentImageMesh
                     { texture = texture
                     , textureSize = textureSize
-                    , color = Vec4.vec4 1 1 1 0.5
+                    , color =
+                        case model.currentTool of
+                            ImagePlacer _ ->
+                                Vec4.vec4 1 1 1 0.5
+
+                            ImagePicker ->
+                                Vec4.vec4 1 1 1 1
+
+                            EraserTool ->
+                                Vec4.vec4 1 1 1 1
                     , view =
                         Mat4.makeScale3
                             (zoomFactor * 2 / toFloat windowWidth)
@@ -889,10 +946,29 @@ ui windowSize idMap msgMap model =
                                 { spacing = 8
                                 , padding = Ui.noPadding
                                 }
-                                [ Ui.button
+                                [ Ui.customButton
                                     { id = idMap EraserButton
                                     , padding = Ui.paddingXY 4 4
                                     , onPress = msgMap PressedEraserButton
+                                    , inFront = []
+                                    , onMouseDown = Nothing
+                                    , borderAndFill =
+                                        BorderAndFill
+                                            { borderWidth = 2
+                                            , borderColor = Color.outlineColor
+                                            , fillColor =
+                                                if model.currentTool == EraserTool then
+                                                    Color.highlightColor
+
+                                                else
+                                                    Color.fillColor2
+                                            }
+                                    , borderAndFillFocus =
+                                        BorderAndFill
+                                            { borderWidth = 2
+                                            , borderColor = Color.outlineColor
+                                            , fillColor = Color.highlightColor
+                                            }
                                     }
                                     (Ui.text "Eraser")
                                 ]

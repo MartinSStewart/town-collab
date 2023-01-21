@@ -1224,7 +1224,6 @@ updateLoaded audioData msg model =
                                 , index = tile.index + offset
                                 , mesh =
                                     Grid.tileMesh
-                                        Coord.origin
                                         (Toolbar.getTileGroupTile tile.tileGroup (tile.index + offset))
                                         (getTileColor tile.tileGroup model)
                                         |> Sprite.toMesh
@@ -1965,7 +1964,6 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
                                         , index = currentTile.index
                                         , mesh =
                                             Grid.tileMesh
-                                                Coord.origin
                                                 (Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index)
                                                 (getTileColor currentTile.tileGroup m)
                                                 |> Sprite.toMesh
@@ -2256,7 +2254,7 @@ setCurrentToolWithColors tool colors model =
                     TilePlacerTool
                         { tileGroup = tileGroup
                         , index = 0
-                        , mesh = Grid.tileMesh Coord.origin (Toolbar.getTileGroupTile tileGroup 0) colors |> Sprite.toMesh
+                        , mesh = Grid.tileMesh (Toolbar.getTileGroupTile tileGroup 0) colors |> Sprite.toMesh
                         }
 
                 HandToolButton ->
@@ -4151,23 +4149,30 @@ cursorSprite hover model =
                 helper () =
                     if MailEditor.isOpen model.mailEditor then
                         case hover of
-                            UiBackgroundHover ->
-                                DefaultCursor
+                            UiHover (MailEditorHover uiHover) _ ->
+                                case uiHover of
+                                    MailEditor.BackgroundHover ->
+                                        DefaultCursor
 
-                            TileHover _ ->
-                                DefaultCursor
+                                    MailEditor.ImageButton _ ->
+                                        PointerCursor
 
-                            TrainHover _ ->
-                                DefaultCursor
+                                    MailEditor.MailButton ->
+                                        case model.mailEditor.currentTool of
+                                            MailEditor.ImagePlacer _ ->
+                                                NoCursor
 
-                            MapHover ->
-                                DefaultCursor
+                                            MailEditor.ImagePicker ->
+                                                PointerCursor
 
-                            CowHover _ ->
-                                DefaultCursor
+                                            MailEditor.EraserTool ->
+                                                CursorSprite EraserSpriteCursor
 
-                            UiHover _ _ ->
-                                PointerCursor
+                                    MailEditor.EraserButton ->
+                                        PointerCursor
+
+                            _ ->
+                                DefaultCursor
 
                     else if isHoldingCow model /= Nothing then
                         CursorSprite PinchSpriteCursor

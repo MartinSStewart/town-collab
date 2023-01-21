@@ -10,6 +10,7 @@ module Cursor exposing
     , dragCursorTexturePosition
     , dragCursorTextureSize
     , dragScreenCursorMesh
+    , eraserCursorMesh
     , eyeDropperCursor2
     , eyeDropperCursorMesh
     , getSpriteMesh
@@ -36,6 +37,7 @@ type alias CursorMeshes =
     , dragScreenSprite : WebGL.Mesh Vertex
     , pinchSprite : WebGL.Mesh Vertex
     , eyeDropperSprite : WebGL.Mesh Vertex
+    , eraserSprite : WebGL.Mesh Vertex
     }
 
 
@@ -46,6 +48,7 @@ meshes colors =
     , dragScreenSprite = dragScreenCursorMesh colors
     , pinchSprite = pinchCursorMesh colors
     , eyeDropperSprite = eyeDropperCursorMesh
+    , eraserSprite = Sprite.toMesh eraserCursorMesh
     }
 
 
@@ -62,6 +65,7 @@ type CursorSprite
     | DragScreenSpriteCursor
     | PinchSpriteCursor
     | EyeDropperSpriteCursor
+    | EraserSpriteCursor
 
 
 getSpriteMesh : CursorSprite -> CursorMeshes -> WebGL.Mesh Vertex
@@ -81,6 +85,9 @@ getSpriteMesh cursorSprite cursorMeshes =
 
         EyeDropperSpriteCursor ->
             cursorMeshes.eyeDropperSprite
+
+        EraserSpriteCursor ->
+            cursorMeshes.eraserSprite
 
 
 htmlAttribute : CursorType -> Html.Attribute msg
@@ -178,6 +185,11 @@ defaultCursorMesh2 colors =
         , texturePosition = defaultCursorTexturePosition
         , textureSize = defaultCursorTextureSize
         }
+
+
+eraserCursorMesh : List Vertex
+eraserCursorMesh =
+    Sprite.sprite (Coord.xy -2 -24) (Coord.xy 28 27) (Coord.xy 504 42) (Coord.xy 28 27)
 
 
 eyeDropperCursorMesh : WebGL.Mesh Vertex

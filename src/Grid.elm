@@ -38,6 +38,7 @@ import Basics.Extra
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
+import Cursor
 import Dict exposing (Dict)
 import GridCell exposing (Cell, CellData)
 import Id exposing (Id, UserId)
@@ -649,26 +650,27 @@ backgroundMesh cellPosition =
         |> Sprite.toMesh
 
 
-tileMesh : Coord WorldUnit -> Tile -> Colors -> List Vertex
-tileMesh position tile colors =
+tileMesh : Tile -> Colors -> List Vertex
+tileMesh tile colors =
     let
+        data : TileData unit
         data =
             Tile.getData tile
     in
     if tile == EmptyTile then
-        Sprite.sprite (Coord.plus (Coord.xy 6 -16) position) (Coord.xy 28 27) (Coord.xy 504 42) (Coord.xy 28 27)
+        Cursor.eraserCursorMesh
 
     else
         (case data.texturePosition of
             Just texturePosition ->
-                tileMeshHelper 1 colors False position texturePosition data.size
+                tileMeshHelper 1 colors False Coord.origin texturePosition data.size
 
             Nothing ->
                 []
         )
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
-                        tileMeshHelper 1 colors True position topLayer.texturePosition data.size
+                        tileMeshHelper 1 colors True Coord.origin topLayer.texturePosition data.size
 
                     Nothing ->
                         []
