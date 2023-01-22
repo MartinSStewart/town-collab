@@ -1,4 +1,12 @@
-module Change exposing (Change(..), ClientChange(..), Cow, FrontendUser, LocalChange(..), LoggedIn_, ServerChange(..), UserStatus(..))
+module Change exposing
+    ( Change(..)
+    , ClientChange(..)
+    , Cow
+    , LocalChange(..)
+    , LoggedIn_
+    , ServerChange(..)
+    , UserStatus(..)
+    )
 
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
@@ -12,6 +20,7 @@ import Id exposing (CowId, EventId, Id, UserId)
 import MailEditor exposing (MailEditorData)
 import Point2d exposing (Point2d)
 import Units exposing (CellUnit, WorldUnit)
+import User exposing (FrontendUser)
 
 
 type Change
@@ -50,12 +59,6 @@ type ServerChange
     | ServerChangeHandColor (Id UserId) Colors
     | ServerToggleRailSplit (Coord WorldUnit)
     | ServerChangeDisplayName (Id UserId) DisplayName
-
-
-type alias FrontendUser =
-    { name : DisplayName
-    , handColor : Colors
-    }
 
 
 type alias Cow =

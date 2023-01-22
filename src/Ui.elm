@@ -829,7 +829,7 @@ findButtonHelper id position element =
                         Nothing ->
                             { result = findButtonHelper id state.position child
                             , position =
-                                Coord.xy 0 (Coord.xRaw (size child) + data.spacing)
+                                Coord.xy 0 (Coord.yRaw (size child) + data.spacing)
                                     |> Coord.plus state.position
                             }
                 )

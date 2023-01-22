@@ -33,7 +33,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change, Cow, FrontendUser, ServerChange, UserStatus)
+import Change exposing (Change, Cow, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (CursorMeshes)
@@ -71,6 +71,7 @@ import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
+import User exposing (FrontendUser)
 import WebGL
 
 

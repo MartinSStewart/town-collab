@@ -2,7 +2,7 @@ module Backend exposing (app, app_)
 
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (ClientChange(..), FrontendUser, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -40,6 +40,7 @@ import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
+import User exposing (FrontendUser)
 
 
 app =
@@ -513,6 +514,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                         model
                         (\userId _ model2 ->
                             let
+                                newMail : AssocList.Dict (Id MailId) BackendMail
                                 newMail =
                                     AssocList.insert
                                         (AssocList.size model2.mail |> Id.fromInt)

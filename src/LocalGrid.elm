@@ -12,7 +12,7 @@ module LocalGrid exposing
     )
 
 import Bounds exposing (Bounds)
-import Change exposing (Change(..), ClientChange(..), Cow, FrontendUser, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
@@ -31,6 +31,7 @@ import Terrain
 import Tile exposing (Tile)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
+import User exposing (FrontendUser)
 
 
 type LocalGrid

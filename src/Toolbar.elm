@@ -14,6 +14,7 @@ import DisplayName
 import Duration
 import EmailAddress exposing (EmailAddress)
 import Id exposing (Id, UserId)
+import IdDict exposing (IdDict)
 import Keyboard
 import List.Extra as List
 import List.Nonempty
@@ -28,6 +29,7 @@ import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), UiMsg(..))
 import Ui exposing (BorderAndFill(..))
 import Units
+import User exposing (FrontendUser)
 
 
 type alias ViewData =
@@ -44,6 +46,7 @@ type alias ViewData =
     , currentTool : Tool
     , pingData : Maybe PingData
     , userId : Maybe (Id UserId)
+    , users : IdDict UserId FrontendUser
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
     , musicVolume : Int
@@ -60,6 +63,7 @@ view data =
             (Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize)
             MailEditorHover
             MailEditorUiMsg
+            data.users
             data.mailEditor
 
     else

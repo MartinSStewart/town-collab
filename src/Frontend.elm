@@ -1,4 +1,4 @@
-port module Frontend exposing
+module Frontend exposing
     ( app
     , app_
     , init
@@ -13,7 +13,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change(..), Cow, FrontendUser, UserStatus(..))
+import Change exposing (Change(..), Cow, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
@@ -62,6 +62,7 @@ import Math.Vector4 as Vec4
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
+import Ports
 import Quantity exposing (Quantity(..), Rate)
 import Random
 import Route
@@ -85,112 +86,6 @@ import Vector2d exposing (Vector2d)
 import WebGL.Texture
 
 
-port martinsstewart_elm_device_pixel_ratio_from_js : (Json.Decode.Value -> msg) -> Sub msg
-
-
-port martinsstewart_elm_device_pixel_ratio_to_js : Json.Encode.Value -> Cmd msg
-
-
-port user_agent_to_js : Json.Encode.Value -> Cmd msg
-
-
-port user_agent_from_js : (Json.Decode.Value -> msg) -> Sub msg
-
-
-port audioPortToJS : Json.Encode.Value -> Cmd msg
-
-
-port audioPortFromJS : (Json.Decode.Value -> msg) -> Sub msg
-
-
-port supermario_copy_to_clipboard_to_js : Json.Encode.Value -> Cmd msg
-
-
-port mouse_leave : (Json.Decode.Value -> msg) -> Sub msg
-
-
-port get_local_storage : Json.Encode.Value -> Cmd msg
-
-
-port got_local_storage : (Json.Decode.Value -> msg) -> Sub msg
-
-
-port set_local_storage : Json.Encode.Value -> Cmd msg
-
-
-getLocalStorage : Command FrontendOnly toMsg msg
-getLocalStorage =
-    Command.sendToJs
-        "get_local_storage"
-        get_local_storage
-        Json.Encode.null
-
-
-gotLocalStorage : (UserSettings -> msg) -> Subscription FrontendOnly msg
-gotLocalStorage sub =
-    Subscription.fromJs
-        "got_local_storage"
-        got_local_storage
-        (\value ->
-            case Serialize.decodeFromJson userSettingsCodec value of
-                Ok ok ->
-                    sub ok
-
-                Err _ ->
-                    sub { musicVolume = Sound.maxVolume, soundEffectVolume = Sound.maxVolume }
-        )
-
-
-userSettingsCodec : Codec e UserSettings
-userSettingsCodec =
-    Serialize.record UserSettings
-        |> Serialize.field .musicVolume Serialize.byte
-        |> Serialize.field .soundEffectVolume Serialize.byte
-        |> Serialize.finishRecord
-
-
-setLocalStorage : UserSettings -> Command FrontendOnly toMsg msg
-setLocalStorage userSettings =
-    Command.sendToJs
-        "set_local_storage"
-        set_local_storage
-        (Serialize.encodeToJson userSettingsCodec userSettings)
-
-
-copyToClipboard : String -> Command FrontendOnly toMsg msg
-copyToClipboard text =
-    Command.sendToJs
-        "supermario_copy_to_clipboard_to_js"
-        supermario_copy_to_clipboard_to_js
-        (Json.Encode.string text)
-
-
-port supermario_read_from_clipboard_to_js : Json.Encode.Value -> Cmd msg
-
-
-readFromClipboardRequest : Command FrontendOnly toMsg msg
-readFromClipboardRequest =
-    Command.sendToJs
-        "supermario_read_from_clipboard_to_js"
-        supermario_read_from_clipboard_to_js
-        Json.Encode.null
-
-
-port supermario_read_from_clipboard_from_js : (Json.Decode.Value -> msg) -> Sub msg
-
-
-readFromClipboardResponse : (String -> msg) -> Subscription FrontendOnly msg
-readFromClipboardResponse msg =
-    Subscription.fromJs
-        "supermario_read_from_clipboard_from_js"
-        supermario_read_from_clipboard_from_js
-        (\value ->
-            Json.Decode.decodeValue Json.Decode.string value
-                |> Result.withDefault ""
-                |> msg
-        )
-
-
 app =
     Effect.Lamdera.frontend Lamdera.sendToBackend app_
 
@@ -206,8 +101,8 @@ app_ =
         , view = view
         , audio = audio
         , audioPort =
-            { toJS = Command.sendToJs "audioPortToJS" audioPortToJS
-            , fromJS = Subscription.fromJs "audioPortFromJS" audioPortFromJS
+            { toJS = Command.sendToJs "audioPortToJS" Ports.audioPortToJS
+            , fromJS = Subscription.fromJs "audioPortFromJS" Ports.audioPortFromJS
             }
         }
 
@@ -346,6 +241,12 @@ audioLoaded audioData model =
     , case model.mailEditor.lastPlacedImage of
         Just time ->
             playSound PopSound time |> Audio.scaleVolume 0.4
+
+        Nothing ->
+            Audio.silence
+    , case model.mailEditor.lastErase of
+        Just time ->
+            playSound EraseSound time |> Audio.scaleVolume 0.4
 
         Nothing ->
             Audio.silence
@@ -594,7 +495,7 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
                             loggedIn.mailEditor
 
                         NotLoggedIn ->
-                            { to = "", content = [] }
+                            { content = [] }
                     )
                     |> MailEditor.open { time = time } Point2d.origin
             , currentTool = currentTile
@@ -701,7 +602,7 @@ init url key =
         }
     , Command.batch
         [ Effect.Lamdera.sendToBackend (ConnectToBackend bounds data.loginOrInviteToken)
-        , Command.sendToJs "user_agent_to_js" user_agent_to_js Json.Encode.null
+        , Command.sendToJs "user_agent_to_js" Ports.user_agent_to_js Json.Encode.null
         , Effect.Task.perform
             (\{ viewport } ->
                 WindowResized
@@ -721,7 +622,7 @@ init url key =
             }
             "/texture.png"
             |> Effect.Task.attempt TextureLoaded
-        , getLocalStorage
+        , Ports.getLocalStorage
         ]
     , Sound.load SoundLoaded
     )
@@ -878,12 +779,38 @@ updateLoaded audioData msg model =
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
                     if MailEditor.isOpen model.mailEditor then
-                        ( { model
-                            | mailEditor =
-                                MailEditor.handleKeyDown model (ctrlOrMeta model) key model.mailEditor
-                          }
-                        , Command.none
-                        )
+                        case model.focus of
+                            UiHover (MailEditorHover MailEditor.ToUserTextInput) _ ->
+                                let
+                                    ( newTextInput, outMsg ) =
+                                        TextInput.keyMsg
+                                            (ctrlOrMeta model)
+                                            (keyDown Keyboard.Shift model)
+                                            key
+                                            model.mailEditor.toUserTextInput
+
+                                    mailEditor =
+                                        model.mailEditor
+                                in
+                                ( { model | mailEditor = { mailEditor | toUserTextInput = newTextInput } }
+                                , case outMsg of
+                                    CopyText text ->
+                                        Ports.copyToClipboard text
+
+                                    PasteText ->
+                                        Ports.readFromClipboardRequest
+
+                                    NoOutMsg ->
+                                        Command.none
+                                )
+
+                            _ ->
+                                ( { model
+                                    | mailEditor =
+                                        MailEditor.handleKeyDown model (ctrlOrMeta model) key model.mailEditor
+                                  }
+                                , Command.none
+                                )
 
                     else
                         case ( model.focus, model.currentTool, key ) of
@@ -967,10 +894,10 @@ updateLoaded audioData msg model =
                                 ( { model | loginTextInput = newTextInput }
                                 , case outMsg of
                                     CopyText text ->
-                                        copyToClipboard text
+                                        Ports.copyToClipboard text
 
                                     PasteText ->
-                                        readFromClipboardRequest
+                                        Ports.readFromClipboardRequest
 
                                     NoOutMsg ->
                                         Command.none
@@ -988,10 +915,10 @@ updateLoaded audioData msg model =
                                 ( { model | inviteTextInput = newTextInput }
                                 , case outMsg of
                                     CopyText text ->
-                                        copyToClipboard text
+                                        Ports.copyToClipboard text
 
                                     PasteText ->
-                                        readFromClipboardRequest
+                                        Ports.readFromClipboardRequest
 
                                     NoOutMsg ->
                                         Command.none
@@ -1029,10 +956,10 @@ updateLoaded audioData msg model =
                                         ( { model3 | topMenuOpened = SettingsMenu newTextInput |> Just }
                                         , case outMsg of
                                             CopyText text ->
-                                                copyToClipboard text
+                                                Ports.copyToClipboard text
 
                                             PasteText ->
-                                                readFromClipboardRequest
+                                                Ports.readFromClipboardRequest
 
                                             NoOutMsg ->
                                                 Command.none
@@ -1132,6 +1059,25 @@ updateLoaded audioData msg model =
                                                         mousePosition2
                                                         data.position
                                                         model2.inviteTextInput
+                                              }
+                                                |> setFocus hover
+                                            , Command.none
+                                            )
+
+                                        MailEditorHover MailEditor.ToUserTextInput ->
+                                            let
+                                                mailEditor =
+                                                    model2.mailEditor
+                                            in
+                                            ( { model2
+                                                | mailEditor =
+                                                    { mailEditor
+                                                        | toUserTextInput =
+                                                            TextInput.mouseDown
+                                                                mousePosition2
+                                                                data.position
+                                                                mailEditor.toUserTextInput
+                                                    }
                                               }
                                                 |> setFocus hover
                                             , Command.none
@@ -1436,8 +1382,38 @@ updateLoaded audioData msg model =
                                                                 model2.topMenuOpened
                                                 }
 
-                                            MailEditorHover _ ->
-                                                model2
+                                            MailEditorHover mailEditorHover ->
+                                                case mailEditorHover of
+                                                    MailEditor.BackgroundHover ->
+                                                        model2
+
+                                                    MailEditor.ImageButton int ->
+                                                        model2
+
+                                                    MailEditor.MailButton ->
+                                                        model2
+
+                                                    MailEditor.EraserButton ->
+                                                        model2
+
+                                                    MailEditor.SendLetterButton ->
+                                                        model2
+
+                                                    MailEditor.ToUserTextInput ->
+                                                        let
+                                                            mailEditor =
+                                                                model2.mailEditor
+                                                        in
+                                                        { model2
+                                                            | mailEditor =
+                                                                { mailEditor
+                                                                    | toUserTextInput =
+                                                                        TextInput.mouseDownMove
+                                                                            mousePosition2
+                                                                            data.position
+                                                                            mailEditor.toUserTextInput
+                                                                }
+                                                        }
 
                                     CowHover _ ->
                                         placeTileHelper model2
@@ -1795,8 +1771,34 @@ updateLoaded audioData msg model =
                                 _ ->
                                     ( model, Command.none )
 
-                        MailEditorHover _ ->
-                            ( model, Command.none )
+                        MailEditorHover mailEditorHover ->
+                            case mailEditorHover of
+                                MailEditor.ToUserTextInput ->
+                                    let
+                                        mailEditor =
+                                            model.mailEditor
+                                    in
+                                    ( { model
+                                        | mailEditor =
+                                            { mailEditor | toUserTextInput = TextInput.paste text mailEditor.toUserTextInput }
+                                      }
+                                    , Command.none
+                                    )
+
+                                MailEditor.BackgroundHover ->
+                                    ( model, Command.none )
+
+                                MailEditor.ImageButton int ->
+                                    ( model, Command.none )
+
+                                MailEditor.MailButton ->
+                                    ( model, Command.none )
+
+                                MailEditor.EraserButton ->
+                                    ( model, Command.none )
+
+                                MailEditor.SendLetterButton ->
+                                    ( model, Command.none )
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -1873,10 +1875,10 @@ handleKeyDownColorInput userId setTextInputModel updateColor tileGroup key model
                         ( colorTextInputAdjustText textInput2
                         , case maybeCopied of
                             CopyText text ->
-                                copyToClipboard text
+                                Ports.copyToClipboard text
 
                             PasteText ->
-                                readFromClipboardRequest
+                                Ports.readFromClipboardRequest
 
                             NoOutMsg ->
                                 Command.none
@@ -1997,6 +1999,7 @@ getViewModel model =
     , currentTool = model.currentTool
     , pingData = model.pingData
     , userId = currentUserId model
+    , users = LocalGrid.localModel model.localModel |> .users
     , topMenuOpened = model.topMenuOpened
     , inviteTextInput = model.inviteTextInput
     , inviteSubmitStatus = model.inviteSubmitStatus
@@ -2683,7 +2686,7 @@ uiUpdate elementPosition msg model =
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
 saveUserSettings model =
-    ( model, setLocalStorage { musicVolume = model.musicVolume, soundEffectVolume = model.soundEffectVolume } )
+    ( model, Ports.setLocalStorage { musicVolume = model.musicVolume, soundEffectVolume = model.soundEffectVolume } )
 
 
 sendEmail : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -2944,7 +2947,7 @@ windowResizedUpdate windowSize model =
     ( { model | windowSize = windowSize }
     , Command.sendToJs
         "martinsstewart_elm_device_pixel_ratio_to_js"
-        martinsstewart_elm_device_pixel_ratio_to_js
+        Ports.martinsstewart_elm_device_pixel_ratio_to_js
         Json.Encode.null
     )
 
@@ -4168,7 +4171,7 @@ cursorSprite hover model =
                                             MailEditor.EraserTool ->
                                                 CursorSprite EraserSpriteCursor
 
-                                    MailEditor.EraserButton ->
+                                    _ ->
                                         PointerCursor
 
                             _ ->
@@ -5041,7 +5044,7 @@ subscriptions _ model =
     Subscription.batch
         [ Subscription.fromJs
             "martinsstewart_elm_device_pixel_ratio_from_js"
-            martinsstewart_elm_device_pixel_ratio_from_js
+            Ports.martinsstewart_elm_device_pixel_ratio_from_js
             (\value ->
                 Json.Decode.decodeValue Json.Decode.float value
                     |> Result.withDefault 1
@@ -5050,12 +5053,12 @@ subscriptions _ model =
         , Effect.Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
         , Effect.Browser.Events.onAnimationFrame AnimationFrame
         , Keyboard.downs KeyDown
-        , readFromClipboardResponse PastedText
+        , Ports.readFromClipboardResponse PastedText
         , case model of
             Loading _ ->
                 Subscription.fromJs
                     "user_agent_from_js"
-                    user_agent_from_js
+                    Ports.user_agent_from_js
                     (\value ->
                         Json.Decode.decodeValue Json.Decode.string value
                             |> Result.withDefault ""
@@ -5070,8 +5073,8 @@ subscriptions _ model =
                         (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Effect.Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
-        , Subscription.fromJs "mouse_leave" mouse_leave (\_ -> MouseLeave)
-        , gotLocalStorage LoadedUserSettings
+        , Subscription.fromJs "mouse_leave" Ports.mouse_leave (\_ -> MouseLeave)
+        , Ports.gotLocalStorage LoadedUserSettings
         ]
 
 

@@ -40,6 +40,7 @@ import Color exposing (Colors)
 import Coord exposing (Coord)
 import Cow
 import Cursor
+import DisplayName
 import Duration exposing (Duration)
 import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.Lamdera as Lamdera
@@ -47,6 +48,7 @@ import Effect.Time
 import Effect.WebGL
 import Frame2d
 import Id exposing (Id, MailId, TrainId, UserId)
+import IdDict exposing (IdDict)
 import Keyboard exposing (Key(..))
 import List.Nonempty exposing (Nonempty(..))
 import Math.Matrix4 as Mat4
@@ -59,15 +61,17 @@ import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sound exposing (Sound(..))
 import Sprite
+import TextInput
 import Tile exposing (DefaultColor(..), Tile, TileData, TileGroup(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (MailPixelUnit, WorldUnit)
+import User exposing (FrontendUser)
 import Vector2d
 import WebGL.Texture
 
 
 type alias BackendMail =
-    { content : List { position : Coord MailPixelUnit, image : Image }
+    { content : List { position : Coord Pixels, image : Image }
     , status : MailStatus
     , from : Id UserId
     , to : Id UserId
@@ -86,6 +90,8 @@ type Hover
     | ImageButton Int
     | MailButton
     | EraserButton
+    | SendLetterButton
+    | ToUserTextInput
 
 
 backendMailToFrontend : BackendMail -> FrontendMail
@@ -151,7 +157,9 @@ type alias Model =
     , redo : List EditorState
     , showMailEditor : ShowMailEditor
     , lastPlacedImage : Maybe Effect.Time.Posix
+    , lastErase : Maybe Effect.Time.Posix
     , submitStatus : SubmitStatus
+    , toUserTextInput : TextInput.Model
     }
 
 
@@ -161,7 +169,7 @@ type SubmitStatus
 
 
 type alias EditorState =
-    { content : List Content, to : String }
+    { content : List Content }
 
 
 type alias Content =
@@ -169,8 +177,7 @@ type alias Content =
 
 
 type alias MailEditorData =
-    { to : String
-    , content : List Content
+    { content : List Content
     }
 
 
@@ -301,39 +308,40 @@ uiUpdate config elementPosition mousePosition msg model =
                         oldEditorState =
                             model.current
 
-                        newEditorState : EditorState
-                        newEditorState =
-                            { oldEditorState
-                                | content =
-                                    List.foldl
-                                        (\content state ->
-                                            let
-                                                imageData : ImageData units
-                                                imageData =
-                                                    getImageData content.image
+                        { newContent, erased } =
+                            List.foldr
+                                (\content state ->
+                                    let
+                                        imageData : ImageData units
+                                        imageData =
+                                            getImageData content.image
 
-                                                isOverImage : Bool
-                                                isOverImage =
-                                                    Bounds.contains
-                                                        mailMousePosition
-                                                        (Bounds.fromCoordAndSize content.position imageData.textureSize)
-                                            in
-                                            if not state.erased && isOverImage then
-                                                { content = state.content, erased = True }
+                                        isOverImage : Bool
+                                        isOverImage =
+                                            Bounds.contains
+                                                mailMousePosition
+                                                (Bounds.fromCoordAndSize content.position imageData.textureSize)
+                                    in
+                                    if not state.erased && isOverImage then
+                                        { newContent = state.newContent, erased = True }
 
-                                            else
-                                                { content = content :: state.content, erased = state.erased }
-                                        )
-                                        { content = [], erased = False }
-                                        oldEditorState.content
-                                        |> .content
-                                        |> List.reverse
-                            }
-
-                        model2 =
-                            addChange newEditorState model
+                                    else
+                                        { newContent = content :: state.newContent, erased = state.erased }
+                                )
+                                { newContent = [], erased = False }
+                                oldEditorState.content
                     in
-                    ( model2, UpdateMailEditorRequest (toData model2) |> Lamdera.sendToBackend )
+                    if erased then
+                        let
+                            model2 =
+                                addChange { oldEditorState | content = newContent } model
+                        in
+                        ( { model2 | lastErase = Just config.time }
+                        , UpdateMailEditorRequest (toData model2) |> Lamdera.sendToBackend
+                        )
+
+                    else
+                        ( { model | lastErase = Just config.time }, Command.none )
 
                 ImagePicker ->
                     Debug.todo ""
@@ -343,6 +351,14 @@ uiUpdate config elementPosition mousePosition msg model =
 
         PressedEraserButton ->
             ( { model | currentTool = EraserTool } |> updateCurrentImageMesh, Command.none )
+
+        PressedSendLetter userId ->
+            ( model
+            , SubmitMailRequest { content = model.current.content, to = userId } |> Lamdera.sendToBackend
+            )
+
+        TypedToUser _ _ _ _ ->
+            ( model, Command.none )
 
 
 currentImage : ImagePlacer_ -> Image
@@ -439,7 +455,7 @@ type ShowMailEditor
 
 initEditor : MailEditorData -> Model
 initEditor data =
-    { current = { content = data.content, to = data.to }
+    { current = { content = data.content }
     , undo = []
     , redo = []
     , currentImageMesh = Shaders.triangleFan []
@@ -447,7 +463,9 @@ initEditor data =
     , lastRotation = []
     , showMailEditor = MailEditorClosed
     , lastPlacedImage = Nothing
+    , lastErase = Nothing
     , submitStatus = NotSubmitted
+    , toUserTextInput = TextInput.init
     }
         |> updateCurrentImageMesh
 
@@ -481,7 +499,7 @@ updateCurrentImageMesh model =
 
 init : MailEditorData
 init =
-    { to = "", content = [] }
+    { content = [] }
 
 
 type alias ImageData units =
@@ -489,7 +507,7 @@ type alias ImageData units =
 
 
 type ToBackend
-    = SubmitMailRequest { content : List { position : Coord MailPixelUnit, image : Image }, to : Id UserId }
+    = SubmitMailRequest { content : List Content, to : Id UserId }
     | UpdateMailEditorRequest MailEditorData
 
 
@@ -590,16 +608,14 @@ updateFromBackend config toFrontend mailEditor =
                         | submitStatus = NotSubmitted
                         , undo = []
                         , redo = []
-                        , current = { content = [], to = "" }
+                        , current = { content = [] }
                     }
                         |> close config
 
 
 toData : Model -> MailEditorData
 toData model =
-    { to = model.current.to
-    , content = model.current.content
-    }
+    { content = model.current.content }
 
 
 handleKeyDown : { a | time : Effect.Time.Posix } -> Bool -> Key -> Model -> Model
@@ -701,6 +717,7 @@ mailHeight =
     320
 
 
+mailSize : Coord units
 mailSize =
     Coord.xy mailWidth mailHeight
 
@@ -709,9 +726,16 @@ mailZoomFactor : Coord Pixels -> Int
 mailZoomFactor windowSize =
     min
         (toFloat (Coord.xRaw windowSize) / (30 + mailWidth))
-        (toFloat (Coord.yRaw windowSize) / (30 + mailHeight))
+        (toFloat
+            (Coord.yRaw windowSize
+                - toolbarMaxHeight
+                - (mainColumnSpacing * 2)
+                - Coord.yRaw (Ui.size (addressView identity identity NotFound TextInput.init))
+            )
+            / mailHeight
+        )
         |> floor
-        |> min 3
+        |> clamp 1 3
 
 
 screenToWorld :
@@ -886,10 +910,108 @@ type Msg
     | MouseDownMail
     | PressedMail
     | PressedEraserButton
+    | PressedSendLetter (Id UserId)
+    | TypedToUser Bool Bool Keyboard.Key TextInput.Model
 
 
-ui : Coord Pixels -> (Hover -> uiHover) -> (Msg -> msg) -> Model -> Ui.Element uiHover msg
-ui windowSize idMap msgMap model =
+mainColumnSpacing =
+    40
+
+
+toolbarMaxHeight =
+    250
+
+
+addressView : (Hover -> id) -> (Msg -> msg) -> ToUserResult -> TextInput.Model -> Ui.Element id msg
+addressView idMap msgMap autocompletion textInput =
+    let
+        textPadding =
+            Ui.text >> Ui.el { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }
+    in
+    Ui.el
+        { padding = Ui.paddingXY 4 4
+        , inFront = []
+        , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+        }
+        (Ui.row
+            { spacing = 8, padding = Ui.noPadding }
+            [ textPadding "To:"
+            , Ui.textInput
+                { id = idMap ToUserTextInput
+                , width = 300
+                , isValid = True
+                , onKeyDown = \a b c d -> TypedToUser a b c d |> msgMap
+                }
+                textInput
+            , case autocompletion of
+                FoundUser userId user ->
+                    Ui.button
+                        { id = idMap SendLetterButton
+                        , padding = Ui.paddingXY 8 4
+                        , onPress = PressedSendLetter userId |> msgMap
+                        }
+                        (Ui.text
+                            ("Send letter to "
+                                ++ DisplayName.toString user.name
+                                ++ " #"
+                                ++ String.fromInt (Id.toInt userId)
+                            )
+                        )
+
+                NotFound ->
+                    textPadding "User not found"
+
+                MultipleResults ->
+                    textPadding "Enter a name or user ID"
+            ]
+        )
+
+
+type ToUserResult
+    = FoundUser (Id UserId) FrontendUser
+    | NotFound
+    | MultipleResults
+
+
+validateToUser : IdDict UserId FrontendUser -> Model -> ToUserResult
+validateToUser users model =
+    let
+        toUserText =
+            String.trim model.toUserTextInput.current.text
+    in
+    if toUserText == "" then
+        MultipleResults
+
+    else
+        let
+            filteredUsers : List ( Id UserId, FrontendUser )
+            filteredUsers =
+                IdDict.toList users
+                    |> List.filter
+                        (\( userId, user ) ->
+                            String.contains toUserText (DisplayName.toString user.name)
+                                || String.contains toUserText (String.fromInt (Id.toInt userId))
+                        )
+        in
+        case filteredUsers of
+            [] ->
+                NotFound
+
+            [ ( userId, user ) ] ->
+                FoundUser userId user
+
+            _ ->
+                MultipleResults
+
+
+ui :
+    Coord Pixels
+    -> (Hover -> uiHover)
+    -> (Msg -> msg)
+    -> IdDict UserId FrontendUser
+    -> Model
+    -> Ui.Element uiHover msg
+ui windowSize idMap msgMap users model =
     let
         mailScale =
             mailZoomFactor windowSize
@@ -901,10 +1023,15 @@ ui windowSize idMap msgMap model =
             [ Ui.bottomCenter
                 { size = windowSize, inFront = [] }
                 (Ui.column
-                    { spacing = 40
+                    { spacing = mainColumnSpacing
                     , padding = Ui.noPadding
                     }
-                    [ Ui.customButton
+                    [ addressView
+                        idMap
+                        msgMap
+                        (validateToUser users model)
+                        model.toUserTextInput
+                    , Ui.customButton
                         { id = idMap MailButton
                         , padding = Ui.noPadding
                         , inFront = []
@@ -1015,7 +1142,7 @@ imageButtons idMap msgMap currentImageIndex =
                 newHeight =
                     state.height + Coord.yRaw (Ui.size button)
             in
-            if newHeight > 250 then
+            if newHeight > toolbarMaxHeight then
                 { index = state.index + 1
                 , height = Coord.yRaw (Ui.size button)
                 , columns = List.Nonempty.cons [ button ] state.columns
