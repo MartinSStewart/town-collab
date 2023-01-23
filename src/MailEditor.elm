@@ -353,7 +353,7 @@ uiUpdate config elementPosition mousePosition msg model =
             ( { model | currentTool = EraserTool } |> updateCurrentImageMesh, Command.none )
 
         PressedSendLetter userId ->
-            ( model
+            ( { model | submitStatus = Submitting }
             , SubmitMailRequest { content = model.current.content, to = userId } |> Lamdera.sendToBackend
             )
 
@@ -925,6 +925,7 @@ toolbarMaxHeight =
 addressView : (Hover -> id) -> (Msg -> msg) -> ToUserResult -> TextInput.Model -> Ui.Element id msg
 addressView idMap msgMap autocompletion textInput =
     let
+        textPadding : String -> Ui.Element id msg
         textPadding =
             Ui.text >> Ui.el { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }
     in

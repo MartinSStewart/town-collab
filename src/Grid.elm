@@ -40,8 +40,10 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor
 import Dict exposing (Dict)
+import DisplayName
 import GridCell exposing (Cell, CellData)
 import Id exposing (Id, UserId)
+import IdDict exposing (IdDict)
 import List.Extra as List
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3 exposing (Vec3)
@@ -52,6 +54,7 @@ import Sprite
 import Terrain exposing (TerrainUnit)
 import Tile exposing (CollisionMask(..), RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
+import User exposing (FrontendUser)
 import Vector2d
 import WebGL
 
@@ -441,10 +444,11 @@ foregroundMesh :
     Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
     -> Maybe (Id UserId)
+    -> IdDict UserId FrontendUser
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> WebGL.Mesh Vertex
-foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId railSplitToggled tiles =
+foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
     List.map
         (\{ position, userId, value, colors } ->
             let
@@ -493,7 +497,29 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId railSplitToggled
                 ++ (case data.texturePositionTopLayer of
                         Just topLayer ->
                             if value == PostOffice && Just userId /= maybeCurrentUserId then
-                                tileMeshHelper opacity colors True position2 (Coord.xy 4 35) data.size
+                                let
+                                    text =
+                                        Sprite.textWithZ
+                                            colors.secondaryColor
+                                            1
+                                            (case IdDict.get userId users of
+                                                Just user ->
+                                                    let
+                                                        name =
+                                                            DisplayName.toString user.name
+                                                    in
+                                                    String.left 5 name ++ "\n" ++ String.dropLeft 5 name
+
+                                                Nothing ->
+                                                    ""
+                                            )
+                                            -5
+                                            (Coord.multiply position2 Units.tileSize
+                                                |> Coord.plus (Coord.xy 15 19)
+                                            )
+                                            (tileZ True (toFloat (Coord.yRaw position2)) 6)
+                                in
+                                text ++ tileMeshHelper opacity colors True position2 (Coord.xy 4 35) data.size
 
                             else
                                 tileMeshHelper

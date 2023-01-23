@@ -497,7 +497,8 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
                         NotLoggedIn ->
                             { content = [] }
                     )
-                    |> MailEditor.open { time = time } Point2d.origin
+
+            --|> MailEditor.open { time = time } Point2d.origin
             , currentTool = currentTile
             , lastTileRotation = []
             , lastPlacementError = Nothing
@@ -3359,6 +3360,7 @@ updateMeshes forceUpdate oldModel newModel =
                     )
                     coord
                     newMaybeUserId
+                    (LocalGrid.localModel newModel.localModel |> .users)
                     (GridCell.getToggledRailSplit newCell)
                     (GridCell.flatten newCell)
             , background =

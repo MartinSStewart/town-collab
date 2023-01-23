@@ -1,4 +1,13 @@
-module DisplayName exposing (DisplayName(..), Error(..), default, fromString, maxLength, minLength, toNonemptyString, toString)
+module DisplayName exposing
+    ( DisplayName(..)
+    , Error(..)
+    , default
+    , fromString
+    , maxLength
+    , minLength
+    , toNonemptyString
+    , toString
+    )
 
 import String.Nonempty exposing (NonemptyString(..))
 
@@ -14,12 +23,12 @@ type Error
 
 minLength : number
 minLength =
-    4
+    2
 
 
 maxLength : number
 maxLength =
-    12
+    10
 
 
 fromString : String -> Result Error DisplayName

@@ -12,6 +12,7 @@ module Sprite exposing
     , spriteWithZ
     , text
     , textSize
+    , textWithZ
     , toMesh
     )
 
@@ -246,6 +247,40 @@ text color charScale string position =
                         spriteWithColor
                             color
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
+                            charSize_
+                            (charTexturePosition char)
+                            charSize
+                            ++ state.vertices
+                    }
+            )
+            { offsetX = 0, offsetY = 0, vertices = [] }
+        |> .vertices
+
+
+textWithZ : Color -> Int -> String -> Int -> Coord unit -> Float -> List Vertex
+textWithZ color charScale string lineSpacing position z =
+    let
+        charSize_ =
+            Coord.multiplyTuple ( charScale, charScale ) charSize
+    in
+    String.toList string
+        |> List.foldl
+            (\char state ->
+                if char == '\n' then
+                    { offsetX = 0
+                    , offsetY = state.offsetY + Coord.yRaw charSize_ + lineSpacing
+                    , vertices = state.vertices
+                    }
+
+                else
+                    { offsetX = state.offsetX + Coord.xRaw charSize_
+                    , offsetY = state.offsetY
+                    , vertices =
+                        spriteWithZ
+                            color
+                            color
+                            (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
+                            z
                             charSize_
                             (charTexturePosition char)
                             charSize
