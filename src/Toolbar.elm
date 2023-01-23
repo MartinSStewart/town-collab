@@ -2,10 +2,12 @@ module Toolbar exposing
     ( ViewData
     , getTileGroupTile
     , showColorTextInputs
+    , validateInviteEmailAddress
     , view
     )
 
 import AssocList
+import Change exposing (UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
@@ -39,6 +41,7 @@ type alias ViewData =
     , loginTextInput : TextInput.Model
     , hasCmdKey : Bool
     , handColor : Maybe Colors
+    , userStatus : UserStatus
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
     , tileColors : AssocList.Dict TileGroup Colors
@@ -86,11 +89,15 @@ view data =
                                 , onPress = PressedSettingsButton
                                 }
                                 (Ui.text "Settings")
-                    , case data.handColor of
-                        Just _ ->
-                            inviteView (data.topMenuOpened == Just InviteMenu) data.inviteTextInput data.inviteSubmitStatus
+                    , case data.userStatus of
+                        LoggedIn loggedIn ->
+                            inviteView
+                                (data.topMenuOpened == Just InviteMenu)
+                                loggedIn.emailAddress
+                                data.inviteTextInput
+                                data.inviteSubmitStatus
 
-                        Nothing ->
+                        NotLoggedIn ->
                             Ui.none
                     ]
                 ]
@@ -235,8 +242,22 @@ loggedOutSettingsView musicVolume soundEffectVolume =
         )
 
 
-inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
-inviteView showInvite inviteTextInput inviteSubmitStatus =
+validateInviteEmailAddress : EmailAddress -> String -> Result String EmailAddress
+validateInviteEmailAddress emailAddress inviteEmailAddressText =
+    case EmailAddress.fromString inviteEmailAddressText of
+        Just inviteEmailAddress ->
+            if emailAddress == inviteEmailAddress then
+                Err "You can't invite yourself"
+
+            else
+                Ok inviteEmailAddress
+
+        Nothing ->
+            Err "Invalid email"
+
+
+inviteView : Bool -> EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
+inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
     if showInvite then
         let
             inviteForm : Ui.Element UiHover UiMsg
@@ -246,7 +267,14 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                     [ Ui.button
                         { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
                         (Ui.text "Cancel")
-                    , Ui.column
+                    , content
+                    ]
+
+            content : Ui.Element UiHover UiMsg
+            content =
+                Ui.column
+                    { spacing = 0, padding = Ui.noPadding }
+                    [ Ui.column
                         { spacing = 0, padding = Ui.noPadding }
                         [ Ui.text "Enter email address to send an invite to"
                         , Ui.textInput
@@ -258,7 +286,7 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                             inviteTextInput
                         ]
                     , Ui.row
-                        { spacing = 4, padding = Ui.noPadding }
+                        { spacing = 4, padding = { topLeft = Coord.xy 0 8, bottomRight = Coord.origin } }
                         [ Ui.button
                             { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
                             (case inviteSubmitStatus of
@@ -271,11 +299,15 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                                 Submitted _ ->
                                     Ui.text "Submitting "
                             )
-                        , case ( pressedSubmit inviteSubmitStatus, EmailAddress.fromString inviteTextInput.current.text ) of
-                            ( True, Nothing ) ->
+                        , case
+                            ( pressedSubmit inviteSubmitStatus
+                            , validateInviteEmailAddress emailAddress inviteTextInput.current.text
+                            )
+                          of
+                            ( True, Err error ) ->
                                 Ui.el
                                     { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
-                                    (Ui.colorText Color.errorColor "Invalid email")
+                                    (Ui.colorText Color.errorColor error)
 
                             _ ->
                                 Ui.none
@@ -285,16 +317,19 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
         Ui.el
             { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = borderAndFill }
             (case inviteSubmitStatus of
-                Submitted emailAddress ->
-                    Ui.center
-                        { size = Ui.size inviteForm }
-                        (Ui.column
-                            { spacing = 8, padding = Ui.noPadding }
-                            [ Ui.wrappedText
-                                (Ui.size inviteForm |> Coord.xRaw |> (+) -16)
-                                ("An invite email as been sent to " ++ EmailAddress.toString emailAddress)
-                            ]
-                        )
+                Submitted inviteEmailAddress ->
+                    Ui.column
+                        { spacing = 0, padding = Ui.noPadding }
+                        [ Ui.button
+                            { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                            (Ui.text "Close")
+                        , Ui.center
+                            { size = Ui.size content }
+                            (Ui.wrappedText
+                                (Ui.size content |> Coord.xRaw |> (+) -16)
+                                ("An invite email as been sent to " ++ EmailAddress.toString inviteEmailAddress)
+                            )
+                        ]
 
                 _ ->
                     inviteForm

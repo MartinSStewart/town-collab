@@ -648,8 +648,9 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    --_ =
-                                    --    Debug.log "inviteUrl" inviteUrl
+                                    _ =
+                                        Debug.log "inviteUrl" inviteUrl
+
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
@@ -1039,6 +1040,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , undoHistory = user.undoHistory
                         , redoHistory = user.redoHistory
                         , mailEditor = user.mailEditor
+                        , emailAddress = user.emailAddress
                         }
 
                 Nothing ->
@@ -1061,6 +1063,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , undoHistory = user.undoHistory
                                             , redoHistory = user.redoHistory
                                             , mailEditor = user.mailEditor
+                                            , emailAddress = user.emailAddress
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , Just data.requestedBy
@@ -1092,6 +1095,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , undoHistory = newUser.undoHistory
                                 , redoHistory = newUser.redoHistory
                                 , mailEditor = newUser.mailEditor
+                                , emailAddress = newUser.emailAddress
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites

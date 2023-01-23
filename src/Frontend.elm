@@ -1992,6 +1992,7 @@ getViewModel model =
     , loginTextInput = model.loginTextInput
     , hasCmdKey = model.hasCmdKey
     , handColor = Maybe.map (\userId -> getHandColor userId model) (currentUserId model)
+    , userStatus = LocalGrid.localModel model.localModel |> .userStatus
     , primaryColorTextInput = model.primaryColorTextInput
     , secondaryColorTextInput = model.secondaryColorTextInput
     , tileColors = model.tileColors
@@ -2573,21 +2574,18 @@ uiUpdate elementPosition msg model =
             ( { model | topMenuOpened = Just InviteMenu }, Command.none )
 
         PressedSendInviteUser ->
-            case model.inviteSubmitStatus of
-                NotSubmitted _ ->
-                    case EmailAddress.fromString model.inviteTextInput.current.text of
-                        Just emailAddress ->
+            case ( LocalGrid.localModel model.localModel |> .userStatus, model.inviteSubmitStatus ) of
+                ( LoggedIn loggedIn, NotSubmitted _ ) ->
+                    case Toolbar.validateInviteEmailAddress loggedIn.emailAddress model.inviteTextInput.current.text of
+                        Ok emailAddress ->
                             ( { model | inviteSubmitStatus = Submitting }
                             , Effect.Lamdera.sendToBackend (SendInviteEmailRequest (Untrusted.untrust emailAddress))
                             )
 
-                        Nothing ->
+                        Err _ ->
                             ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }, Command.none )
 
-                Submitting ->
-                    ( model, Command.none )
-
-                Submitted _ ->
+                _ ->
                     ( model, Command.none )
 
         PressedSendEmail ->

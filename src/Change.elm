@@ -14,6 +14,7 @@ import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
 import Effect.Time
+import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
 import Id exposing (CowId, EventId, Id, UserId)
@@ -77,4 +78,5 @@ type alias LoggedIn_ =
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
     , mailEditor : MailEditorData
+    , emailAddress : EmailAddress
     }
