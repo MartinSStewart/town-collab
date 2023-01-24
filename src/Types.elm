@@ -56,7 +56,7 @@ import Lamdera
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (Cursor, LocalGrid)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
+import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -160,7 +160,8 @@ type alias FrontendLoaded =
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Effect.Time.Posix
     , mail : AssocList.Dict (Id MailId) FrontendMail
-    , mailEditor : Model
+    , mailEditor : Maybe Model
+    , lastMailEditorToggle : Maybe Effect.Time.Posix
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix

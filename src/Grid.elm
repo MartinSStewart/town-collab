@@ -47,6 +47,7 @@ import IdDict exposing (IdDict)
 import List.Extra as List
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3 exposing (Vec3)
+import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
@@ -476,12 +477,12 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
             (case data.railPath of
                 RailSplitPath pathData ->
                     if AssocSet.member position railSplitToggled then
-                        tileMeshHelper opacity colors False position2 pathData.texturePosition data.size
+                        tileMeshHelper opacity colors False (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
 
                     else
                         case data.texturePosition of
                             Just texturePosition ->
-                                tileMeshHelper opacity colors False position2 texturePosition data.size
+                                tileMeshHelper opacity colors False (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
 
                             Nothing ->
                                 []
@@ -489,7 +490,7 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
                 _ ->
                     case data.texturePosition of
                         Just texturePosition ->
-                            tileMeshHelper opacity colors False position2 texturePosition data.size
+                            tileMeshHelper opacity colors False (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
 
                         Nothing ->
                             []
@@ -519,14 +520,15 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
                                             )
                                             (tileZ True (toFloat (Coord.yRaw position2)) 6)
                                 in
-                                text ++ tileMeshHelper opacity colors True position2 (Coord.xy 4 35) data.size
+                                text ++ tileMeshHelper opacity colors True (Coord.multiply Units.tileSize position2) 1 (Coord.xy 4 35) data.size
 
                             else
                                 tileMeshHelper
                                     opacity
                                     colors
                                     True
-                                    position2
+                                    (Coord.multiply Units.tileSize position2)
+                                    1
                                     topLayer.texturePosition
                                     data.size
 
@@ -667,7 +669,6 @@ backgroundMesh cellPosition =
                                                 draw 560 576
 
                                             ( True, ( True, True ), True ) ->
-                                                --draw 198 216
                                                 draw 480 288
                             in
                             corners ++ tile
@@ -676,8 +677,8 @@ backgroundMesh cellPosition =
         |> Sprite.toMesh
 
 
-tileMesh : Tile -> Colors -> List Vertex
-tileMesh tile colors =
+tileMesh : Tile -> Coord Pixels -> Int -> Colors -> List Vertex
+tileMesh tile position scale colors =
     let
         data : TileData unit
         data =
@@ -689,14 +690,14 @@ tileMesh tile colors =
     else
         (case data.texturePosition of
             Just texturePosition ->
-                tileMeshHelper 1 colors False Coord.origin texturePosition data.size
+                tileMeshHelper 1 colors False position scale texturePosition data.size
 
             Nothing ->
                 []
         )
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
-                        tileMeshHelper 1 colors True Coord.origin topLayer.texturePosition data.size
+                        tileMeshHelper 1 colors True position scale topLayer.texturePosition data.size
 
                     Nothing ->
                         []
@@ -707,11 +708,12 @@ tileMeshHelper :
     Float
     -> Colors
     -> Bool
-    -> Coord WorldUnit
+    -> Coord unit2
+    -> Int
     -> Coord unit
     -> Coord unit
     -> List Vertex
-tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer position texturePosition size =
+tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer position scale texturePosition size =
     let
         { topLeft, topRight, bottomLeft, bottomRight } =
             Tile.texturePosition_ texturePosition size
@@ -733,9 +735,9 @@ tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer position text
             in
             { position =
                 Vec3.vec3
-                    (uvRecord.x - topLeftRecord.x + toFloat x * toFloat (Coord.xRaw Units.tileSize))
-                    (uvRecord.y - topLeftRecord.y + toFloat y * toFloat (Coord.yRaw Units.tileSize))
-                    (tileZ isTopLayer (toFloat y) height)
+                    ((uvRecord.x - topLeftRecord.x) * toFloat scale + toFloat x)
+                    ((uvRecord.y - topLeftRecord.y) * toFloat scale + toFloat y)
+                    (tileZ isTopLayer (toFloat y / toFloat (Coord.yRaw Units.tileSize)) height)
             , texturePosition = uv
             , opacity = opacity
             , primaryColor = Color.toVec3 primaryColor

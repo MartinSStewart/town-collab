@@ -36,6 +36,7 @@ import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress
 import Env
 import EverySet
+import Flag
 import Grid exposing (Grid)
 import GridCell
 import Html exposing (Html)
@@ -54,7 +55,7 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (FrontendMail, MailStatus(..), ShowMailEditor(..))
+import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
@@ -66,7 +67,6 @@ import Ports
 import Quantity exposing (Quantity(..), Rate)
 import Random
 import Route
-import Serialize exposing (Codec)
 import Set exposing (Set)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
@@ -161,15 +161,15 @@ audioLoaded audioData model =
             clamp
                 0
                 1
-                (case model.mailEditor.showMailEditor of
-                    MailEditorClosed ->
+                (case ( model.lastMailEditorToggle, model.mailEditor ) of
+                    ( Just time, Nothing ) ->
+                        Quantity.ratio (Duration.from time model.time) MailEditor.openAnimationLength
+
+                    ( Just time, Just _ ) ->
+                        1 - Quantity.ratio (Duration.from time model.time) MailEditor.openAnimationLength
+
+                    ( Nothing, _ ) ->
                         1
-
-                    MailEditorClosing { startTime } ->
-                        Quantity.ratio (Duration.from startTime model.time) MailEditor.openAnimationLength
-
-                    MailEditorOpening { startTime } ->
-                        1 - Quantity.ratio (Duration.from startTime model.time) MailEditor.openAnimationLength
                 )
                 * 0.75
                 + 0.25
@@ -227,26 +227,30 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
-    , case model.mailEditor.showMailEditor of
-        MailEditorClosed ->
-            Audio.silence
-
-        MailEditorOpening { startTime } ->
-            playSound PageTurnSound startTime |> Audio.scaleVolume 0.8
-
-        MailEditorClosing { startTime } ->
-            playSound PageTurnSound startTime |> Audio.scaleVolume 0.8
-    , List.map (playSound WhooshSound) model.lastTileRotation |> Audio.group |> Audio.scaleVolume 0.5
-    , List.map (playSound WhooshSound) model.mailEditor.lastRotation |> Audio.group |> Audio.scaleVolume 0.5
-    , case model.mailEditor.lastPlacedImage of
+    , case model.lastMailEditorToggle of
         Just time ->
-            playSound PopSound time |> Audio.scaleVolume 0.4
+            playSound PageTurnSound time |> Audio.scaleVolume 0.8
 
         Nothing ->
             Audio.silence
-    , case model.mailEditor.lastErase of
-        Just time ->
-            playSound EraseSound time |> Audio.scaleVolume 0.4
+    , List.map (playSound WhooshSound) model.lastTileRotation |> Audio.group |> Audio.scaleVolume 0.5
+    , case model.mailEditor of
+        Just mailEditor ->
+            [ List.map (playSound WhooshSound) mailEditor.lastRotation |> Audio.group |> Audio.scaleVolume 0.5
+            , case mailEditor.lastPlacedImage of
+                Just time ->
+                    playSound PopSound time |> Audio.scaleVolume 0.4
+
+                Nothing ->
+                    Audio.silence
+            , case mailEditor.lastErase of
+                Just time ->
+                    playSound EraseSound time |> Audio.scaleVolume 0.4
+
+                Nothing ->
+                    Audio.silence
+            ]
+                |> Audio.group
 
         Nothing ->
             Audio.silence
@@ -488,17 +492,8 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadedLocalModel.mail
-            , mailEditor =
-                MailEditor.initEditor
-                    (case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
-                        LoggedIn loggedIn ->
-                            loggedIn.mailEditor
-
-                        NotLoggedIn ->
-                            { content = [] }
-                    )
-
-            --|> MailEditor.open { time = time } Point2d.origin
+            , mailEditor = Nothing
+            , lastMailEditorToggle = Nothing
             , currentTool = currentTile
             , lastTileRotation = []
             , lastPlacementError = Nothing
@@ -779,198 +774,182 @@ updateLoaded audioData msg model =
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
-                    if MailEditor.isOpen model.mailEditor then
-                        case model.focus of
-                            UiHover (MailEditorHover MailEditor.ToUserTextInput) _ ->
-                                let
-                                    ( newTextInput, outMsg ) =
-                                        TextInput.keyMsg
-                                            (ctrlOrMeta model)
-                                            (keyDown Keyboard.Shift model)
-                                            key
-                                            model.mailEditor.toUserTextInput
+                    case model.mailEditor of
+                        Just mailEditor ->
+                            let
+                                newMailEditor =
+                                    MailEditor.handleKeyDown (ctrlOrMeta model) key mailEditor
+                            in
+                            ( { model
+                                | mailEditor = newMailEditor
+                                , lastMailEditorToggle =
+                                    if newMailEditor == Nothing then
+                                        Just model.time
 
-                                    mailEditor =
-                                        model.mailEditor
-                                in
-                                ( { model | mailEditor = { mailEditor | toUserTextInput = newTextInput } }
-                                , case outMsg of
-                                    CopyText text ->
-                                        Ports.copyToClipboard text
+                                    else
+                                        model.lastMailEditorToggle
+                              }
+                            , Command.none
+                            )
 
-                                    PasteText ->
-                                        Ports.readFromClipboardRequest
+                        Nothing ->
+                            case ( model.focus, model.currentTool, key ) of
+                                ( _, _, Keyboard.Tab ) ->
+                                    ( setFocus
+                                        (if keyDown Keyboard.Shift model then
+                                            previousFocus model
 
-                                    NoOutMsg ->
-                                        Command.none
-                                )
-
-                            _ ->
-                                ( { model
-                                    | mailEditor =
-                                        MailEditor.handleKeyDown model (ctrlOrMeta model) key model.mailEditor
-                                  }
-                                , Command.none
-                                )
-
-                    else
-                        case ( model.focus, model.currentTool, key ) of
-                            ( _, _, Keyboard.Tab ) ->
-                                ( setFocus
-                                    (if keyDown Keyboard.Shift model then
-                                        previousFocus model
-
-                                     else
-                                        nextFocus model
+                                         else
+                                            nextFocus model
+                                        )
+                                        model
+                                    , Command.none
                                     )
-                                    model
-                                , Command.none
-                                )
 
-                            ( UiHover EmailAddressTextInputHover _, _, Keyboard.Enter ) ->
-                                sendEmail model
+                                ( UiHover EmailAddressTextInputHover _, _, Keyboard.Enter ) ->
+                                    sendEmail model
 
-                            ( UiHover id data, _, Keyboard.Enter ) ->
-                                case Ui.findButton id (Toolbar.view (getViewModel model)) of
-                                    Just { buttonData } ->
-                                        uiUpdate data.position buttonData.onPress model
+                                ( UiHover id data, _, Keyboard.Enter ) ->
+                                    case Ui.findButton id (Toolbar.view (getViewModel model)) of
+                                        Just { buttonData } ->
+                                            uiUpdate data.position buttonData.onPress model
 
-                                    Nothing ->
-                                        ( model, Command.none )
+                                        Nothing ->
+                                            ( model, Command.none )
 
-                            ( UiHover PrimaryColorInput _, _, Keyboard.Escape ) ->
-                                ( setFocus MapHover model, Command.none )
+                                ( UiHover PrimaryColorInput _, _, Keyboard.Escape ) ->
+                                    ( setFocus MapHover model, Command.none )
 
-                            ( UiHover SecondaryColorInput _, _, Keyboard.Escape ) ->
-                                ( setFocus MapHover model, Command.none )
+                                ( UiHover SecondaryColorInput _, _, Keyboard.Escape ) ->
+                                    ( setFocus MapHover model, Command.none )
 
-                            ( UiHover EmailAddressTextInputHover _, _, Keyboard.Escape ) ->
-                                ( setFocus MapHover model, Command.none )
+                                ( UiHover EmailAddressTextInputHover _, _, Keyboard.Escape ) ->
+                                    ( setFocus MapHover model, Command.none )
 
-                            ( UiHover InviteEmailAddressTextInput _, _, Keyboard.Escape ) ->
-                                ( setFocus MapHover model, Command.none )
+                                ( UiHover InviteEmailAddressTextInput _, _, Keyboard.Escape ) ->
+                                    ( setFocus MapHover model, Command.none )
 
-                            ( UiHover DisplayNameTextInput _, _, Keyboard.Escape ) ->
-                                ( setFocus MapHover model, Command.none )
+                                ( UiHover DisplayNameTextInput _, _, Keyboard.Escape ) ->
+                                    ( setFocus MapHover model, Command.none )
 
-                            ( UiHover PrimaryColorInput _, tool, _ ) ->
-                                case currentUserId model of
-                                    Just userId ->
-                                        handleKeyDownColorInput
-                                            userId
-                                            (\a b -> { b | primaryColorTextInput = a })
-                                            (\color a -> { a | primaryColor = color })
-                                            tool
-                                            key
-                                            model
-                                            model.primaryColorTextInput
+                                ( UiHover PrimaryColorInput _, tool, _ ) ->
+                                    case currentUserId model of
+                                        Just userId ->
+                                            handleKeyDownColorInput
+                                                userId
+                                                (\a b -> { b | primaryColorTextInput = a })
+                                                (\color a -> { a | primaryColor = color })
+                                                tool
+                                                key
+                                                model
+                                                model.primaryColorTextInput
 
-                                    Nothing ->
-                                        ( model, Command.none )
+                                        Nothing ->
+                                            ( model, Command.none )
 
-                            ( UiHover SecondaryColorInput _, tool, _ ) ->
-                                case currentUserId model of
-                                    Just userId ->
-                                        handleKeyDownColorInput
-                                            userId
-                                            (\a b -> { b | secondaryColorTextInput = a })
-                                            (\color a -> { a | secondaryColor = color })
-                                            tool
-                                            key
-                                            model
-                                            model.secondaryColorTextInput
+                                ( UiHover SecondaryColorInput _, tool, _ ) ->
+                                    case currentUserId model of
+                                        Just userId ->
+                                            handleKeyDownColorInput
+                                                userId
+                                                (\a b -> { b | secondaryColorTextInput = a })
+                                                (\color a -> { a | secondaryColor = color })
+                                                tool
+                                                key
+                                                model
+                                                model.secondaryColorTextInput
 
-                                    Nothing ->
-                                        ( model, Command.none )
+                                        Nothing ->
+                                            ( model, Command.none )
 
-                            ( UiHover EmailAddressTextInputHover _, _, _ ) ->
-                                let
-                                    ( newTextInput, outMsg ) =
-                                        TextInput.keyMsg
-                                            (ctrlOrMeta model)
-                                            (keyDown Keyboard.Shift model)
-                                            key
-                                            model.loginTextInput
-                                in
-                                ( { model | loginTextInput = newTextInput }
-                                , case outMsg of
-                                    CopyText text ->
-                                        Ports.copyToClipboard text
+                                ( UiHover EmailAddressTextInputHover _, _, _ ) ->
+                                    let
+                                        ( newTextInput, outMsg ) =
+                                            TextInput.keyMsg
+                                                (ctrlOrMeta model)
+                                                (keyDown Keyboard.Shift model)
+                                                key
+                                                model.loginTextInput
+                                    in
+                                    ( { model | loginTextInput = newTextInput }
+                                    , case outMsg of
+                                        CopyText text ->
+                                            Ports.copyToClipboard text
 
-                                    PasteText ->
-                                        Ports.readFromClipboardRequest
+                                        PasteText ->
+                                            Ports.readFromClipboardRequest
 
-                                    NoOutMsg ->
-                                        Command.none
-                                )
+                                        NoOutMsg ->
+                                            Command.none
+                                    )
 
-                            ( UiHover InviteEmailAddressTextInput _, _, _ ) ->
-                                let
-                                    ( newTextInput, outMsg ) =
-                                        TextInput.keyMsg
-                                            (ctrlOrMeta model)
-                                            (keyDown Keyboard.Shift model)
-                                            key
-                                            model.inviteTextInput
-                                in
-                                ( { model | inviteTextInput = newTextInput }
-                                , case outMsg of
-                                    CopyText text ->
-                                        Ports.copyToClipboard text
+                                ( UiHover InviteEmailAddressTextInput _, _, _ ) ->
+                                    let
+                                        ( newTextInput, outMsg ) =
+                                            TextInput.keyMsg
+                                                (ctrlOrMeta model)
+                                                (keyDown Keyboard.Shift model)
+                                                key
+                                                model.inviteTextInput
+                                    in
+                                    ( { model | inviteTextInput = newTextInput }
+                                    , case outMsg of
+                                        CopyText text ->
+                                            Ports.copyToClipboard text
 
-                                    PasteText ->
-                                        Ports.readFromClipboardRequest
+                                        PasteText ->
+                                            Ports.readFromClipboardRequest
 
-                                    NoOutMsg ->
-                                        Command.none
-                                )
+                                        NoOutMsg ->
+                                            Command.none
+                                    )
 
-                            ( UiHover DisplayNameTextInput _, _, _ ) ->
-                                case model.topMenuOpened of
-                                    Just (SettingsMenu nameTextInput) ->
-                                        let
-                                            ( newTextInput, outMsg ) =
-                                                TextInput.keyMsg
-                                                    (ctrlOrMeta model)
-                                                    (keyDown Keyboard.Shift model)
-                                                    key
-                                                    nameTextInput
+                                ( UiHover DisplayNameTextInput _, _, _ ) ->
+                                    case model.topMenuOpened of
+                                        Just (SettingsMenu nameTextInput) ->
+                                            let
+                                                ( newTextInput, outMsg ) =
+                                                    TextInput.keyMsg
+                                                        (ctrlOrMeta model)
+                                                        (keyDown Keyboard.Shift model)
+                                                        key
+                                                        nameTextInput
 
-                                            ( model2, outMsg2 ) =
-                                                case ( DisplayName.fromString nameTextInput.current.text, DisplayName.fromString newTextInput.current.text ) of
-                                                    ( Ok old, Ok new ) ->
-                                                        if old == new then
-                                                            ( model, LocalGrid.NoOutMsg )
+                                                ( model2, outMsg2 ) =
+                                                    case ( DisplayName.fromString nameTextInput.current.text, DisplayName.fromString newTextInput.current.text ) of
+                                                        ( Ok old, Ok new ) ->
+                                                            if old == new then
+                                                                ( model, LocalGrid.NoOutMsg )
 
-                                                        else
+                                                            else
+                                                                updateLocalModel (Change.ChangeDisplayName new) model
+
+                                                        ( Err _, Ok new ) ->
                                                             updateLocalModel (Change.ChangeDisplayName new) model
 
-                                                    ( Err _, Ok new ) ->
-                                                        updateLocalModel (Change.ChangeDisplayName new) model
+                                                        _ ->
+                                                            ( model, LocalGrid.NoOutMsg )
 
-                                                    _ ->
-                                                        ( model, LocalGrid.NoOutMsg )
+                                                model3 =
+                                                    handleOutMsg False outMsg2 model2
+                                            in
+                                            ( { model3 | topMenuOpened = SettingsMenu newTextInput |> Just }
+                                            , case outMsg of
+                                                CopyText text ->
+                                                    Ports.copyToClipboard text
 
-                                            model3 =
-                                                handleOutMsg False outMsg2 model2
-                                        in
-                                        ( { model3 | topMenuOpened = SettingsMenu newTextInput |> Just }
-                                        , case outMsg of
-                                            CopyText text ->
-                                                Ports.copyToClipboard text
+                                                PasteText ->
+                                                    Ports.readFromClipboardRequest
 
-                                            PasteText ->
-                                                Ports.readFromClipboardRequest
+                                                NoOutMsg ->
+                                                    Command.none
+                                            )
 
-                                            NoOutMsg ->
-                                                Command.none
-                                        )
+                                        _ ->
+                                            ( model, Command.none )
 
-                                    _ ->
-                                        ( model, Command.none )
-
-                            _ ->
-                                keyMsgCanvasUpdate key model
+                                _ ->
+                                    keyMsgCanvasUpdate key model
 
                 Nothing ->
                     ( model, Command.none )
@@ -1065,25 +1044,6 @@ updateLoaded audioData msg model =
                                             , Command.none
                                             )
 
-                                        MailEditorHover MailEditor.ToUserTextInput ->
-                                            let
-                                                mailEditor =
-                                                    model2.mailEditor
-                                            in
-                                            ( { model2
-                                                | mailEditor =
-                                                    { mailEditor
-                                                        | toUserTextInput =
-                                                            TextInput.mouseDown
-                                                                mousePosition2
-                                                                data.position
-                                                                mailEditor.toUserTextInput
-                                                    }
-                                              }
-                                                |> setFocus hover
-                                            , Command.none
-                                            )
-
                                         DisplayNameTextInput ->
                                             case model2.topMenuOpened of
                                                 Just (SettingsMenu nameTextInput) ->
@@ -1145,11 +1105,12 @@ updateLoaded audioData msg model =
                     ( { model
                         | mouseMiddle = MouseButtonUp { current = mousePosition }
                         , viewPoint =
-                            if MailEditor.isOpen model.mailEditor then
-                                model.viewPoint
+                            case model.mailEditor of
+                                Just _ ->
+                                    model.viewPoint
 
-                            else
-                                offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
+                                Nothing ->
+                                    offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
                       }
                     , Command.none
                     )
@@ -1172,6 +1133,8 @@ updateLoaded audioData msg model =
                                 , mesh =
                                     Grid.tileMesh
                                         (Toolbar.getTileGroupTile tile.tileGroup (tile.index + offset))
+                                        Coord.origin
+                                        1
                                         (getTileColor tile.tileGroup model)
                                         |> Sprite.toMesh
                                 }
@@ -1192,35 +1155,37 @@ updateLoaded audioData msg model =
                     model.scrollThreshold + event.deltaY
             in
             ( if abs scrollThreshold > 50 then
-                if MailEditor.isOpen model.mailEditor then
-                    { model
-                        | mailEditor =
-                            MailEditor.scroll (scrollThreshold > 0) audioData model model.mailEditor
-                    }
+                case model.mailEditor of
+                    Just mailEditor ->
+                        { model
+                            | mailEditor =
+                                MailEditor.scroll (scrollThreshold > 0) audioData model mailEditor |> Just
+                        }
 
-                else if ctrlOrMeta model then
-                    { model
-                        | zoomFactor =
-                            (if scrollThreshold > 0 then
-                                model.zoomFactor - 1
+                    Nothing ->
+                        if ctrlOrMeta model then
+                            { model
+                                | zoomFactor =
+                                    (if scrollThreshold > 0 then
+                                        model.zoomFactor - 1
 
-                             else
-                                model.zoomFactor + 1
-                            )
-                                |> clamp 1 3
-                        , scrollThreshold = 0
-                    }
+                                     else
+                                        model.zoomFactor + 1
+                                    )
+                                        |> clamp 1 3
+                                , scrollThreshold = 0
+                            }
 
-                else
-                    case ( scrollThreshold > 0, model.currentTool ) of
-                        ( True, TilePlacerTool currentTile ) ->
-                            rotationHelper 1 currentTile
+                        else
+                            case ( scrollThreshold > 0, model.currentTool ) of
+                                ( True, TilePlacerTool currentTile ) ->
+                                    rotationHelper 1 currentTile
 
-                        ( False, TilePlacerTool currentTile ) ->
-                            rotationHelper -1 currentTile
+                                ( False, TilePlacerTool currentTile ) ->
+                                    rotationHelper -1 currentTile
 
-                        _ ->
-                            { model | scrollThreshold = 0 }
+                                _ ->
+                                    { model | scrollThreshold = 0 }
 
               else
                 { model | scrollThreshold = scrollThreshold }
@@ -1400,21 +1365,8 @@ updateLoaded audioData msg model =
                                                     MailEditor.SendLetterButton ->
                                                         model2
 
-                                                    MailEditor.ToUserTextInput ->
-                                                        let
-                                                            mailEditor =
-                                                                model2.mailEditor
-                                                        in
-                                                        { model2
-                                                            | mailEditor =
-                                                                { mailEditor
-                                                                    | toUserTextInput =
-                                                                        TextInput.mouseDownMove
-                                                                            mousePosition2
-                                                                            data.position
-                                                                            mailEditor.toUserTextInput
-                                                                }
-                                                        }
+                                                    MailEditor.CloseSendLetterInstructionsButton ->
+                                                        model2
 
                                     CowHover _ ->
                                         placeTileHelper model2
@@ -1774,18 +1726,6 @@ updateLoaded audioData msg model =
 
                         MailEditorHover mailEditorHover ->
                             case mailEditorHover of
-                                MailEditor.ToUserTextInput ->
-                                    let
-                                        mailEditor =
-                                            model.mailEditor
-                                    in
-                                    ( { model
-                                        | mailEditor =
-                                            { mailEditor | toUserTextInput = TextInput.paste text mailEditor.toUserTextInput }
-                                      }
-                                    , Command.none
-                                    )
-
                                 MailEditor.BackgroundHover ->
                                     ( model, Command.none )
 
@@ -1799,6 +1739,9 @@ updateLoaded audioData msg model =
                                     ( model, Command.none )
 
                                 MailEditor.SendLetterButton ->
+                                    ( model, Command.none )
+
+                                MailEditor.CloseSendLetterInstructionsButton ->
                                     ( model, Command.none )
 
         GotUserAgentPlatform _ ->
@@ -1968,6 +1911,8 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
                                         , mesh =
                                             Grid.tileMesh
                                                 (Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index)
+                                                Coord.origin
+                                                1
                                                 (getTileColor currentTile.tileGroup m)
                                                 |> Sprite.toMesh
                                         }
@@ -2001,7 +1946,6 @@ getViewModel model =
     , currentTool = model.currentTool
     , pingData = model.pingData
     , userId = currentUserId model
-    , users = LocalGrid.localModel model.localModel |> .users
     , topMenuOpened = model.topMenuOpened
     , inviteTextInput = model.inviteTextInput
     , inviteSubmitStatus = model.inviteSubmitStatus
@@ -2259,7 +2203,7 @@ setCurrentToolWithColors tool colors model =
                     TilePlacerTool
                         { tileGroup = tileGroup
                         , index = 0
-                        , mesh = Grid.tileMesh (Toolbar.getTileGroupTile tileGroup 0) colors |> Sprite.toMesh
+                        , mesh = Grid.tileMesh (Toolbar.getTileGroupTile tileGroup 0) Coord.origin 1 colors |> Sprite.toMesh
                         }
 
                 HandToolButton ->
@@ -2344,20 +2288,28 @@ tileInteraction currentUserId2 { tile, userId, position } model =
     in
     case tile of
         PostOffice ->
-            if userId == currentUserId2 && canOpenMailEditor model then
+            if canOpenMailEditor model then
                 (\() ->
-                    ( { model
-                        | mailEditor =
-                            MailEditor.open
-                                model
-                                (Coord.toPoint2d position
-                                    |> Point2d.translateBy (Vector2d.unsafe { x = 1, y = 1.5 })
-                                    |> worldToScreen model
+                    if currentUserId2 == userId then
+                        ( { model
+                            | mailEditor = MailEditor.initEditor [] Nothing |> Just
+                            , lastMailEditorToggle = Just model.time
+                          }
+                        , Command.none
+                        )
+
+                    else
+                        case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
+                            Just user ->
+                                ( { model
+                                    | mailEditor = MailEditor.initEditor [] (Just ( userId, user.name )) |> Just
+                                    , lastMailEditorToggle = Just model.time
+                                  }
+                                , Command.none
                                 )
-                                model.mailEditor
-                      }
-                    , Command.none
-                    )
+
+                            Nothing ->
+                                ( model, Command.none )
                 )
                     |> Just
 
@@ -2427,8 +2379,8 @@ mainMouseButtonUp mousePosition previousMouseState model =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
                 , viewPoint =
-                    case ( MailEditor.isOpen model.mailEditor, model.mouseMiddle ) of
-                        ( False, MouseButtonUp _ ) ->
+                    case ( model.mailEditor, model.mouseMiddle ) of
+                        ( Nothing, MouseButtonUp _ ) ->
                             case model.currentTool of
                                 TilePlacerTool _ ->
                                     model.viewPoint
@@ -2663,24 +2615,32 @@ uiUpdate elementPosition msg model =
             )
 
         MailEditorUiMsg mailEditorMsg ->
-            let
-                mousePosition2 : Coord Pixels
-                mousePosition2 =
-                    mouseScreenPosition model
-                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
-                        |> Coord.roundPoint
+            case model.mailEditor of
+                Just mailEditor ->
+                    let
+                        mousePosition2 : Coord Pixels
+                        mousePosition2 =
+                            mouseScreenPosition model
+                                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                                |> Coord.roundPoint
 
-                ( newMailEditor, cmd ) =
-                    MailEditor.uiUpdate
-                        model
-                        elementPosition
-                        mousePosition2
-                        mailEditorMsg
-                        model.mailEditor
-            in
-            ( { model | mailEditor = newMailEditor }
-            , Command.map MailEditorToBackend identity cmd
-            )
+                        ( newMailEditor, cmd ) =
+                            MailEditor.uiUpdate model elementPosition mousePosition2 mailEditorMsg mailEditor
+                    in
+                    ( { model
+                        | mailEditor = newMailEditor
+                        , lastMailEditorToggle =
+                            if newMailEditor == Nothing then
+                                Just model.time
+
+                            else
+                                model.lastMailEditorToggle
+                      }
+                    , Command.map MailEditorToBackend identity cmd
+                    )
+
+                Nothing ->
+                    ( model, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -2829,12 +2789,9 @@ setTrainViewPoint trainId model =
 
 canOpenMailEditor : FrontendLoaded -> Bool
 canOpenMailEditor model =
-    case ( model.mailEditor.showMailEditor, model.currentTool ) of
-        ( MailEditorClosed, HandTool ) ->
+    case ( model.mailEditor, model.currentTool ) of
+        ( Nothing, HandTool ) ->
             True
-
-        ( MailEditorClosing { startTime }, HandTool ) ->
-            Duration.from startTime model.time |> Quantity.greaterThan MailEditor.openAnimationLength
 
         _ ->
             False
@@ -3515,11 +3472,11 @@ offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurr
 
 actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
-    case ( MailEditor.isOpen model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( False, _, MouseButtonDown { start, current, hover } ) ->
+    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
+        ( Nothing, _, MouseButtonDown { start, current, hover } ) ->
             offsetViewPoint model hover start current
 
-        ( False, MouseButtonDown { start, current, hover }, _ ) ->
+        ( Nothing, MouseButtonDown { start, current, hover }, _ ) ->
             case model.currentTool of
                 TilePlacerTool _ ->
                     actualViewPointHelper model
@@ -3719,9 +3676,16 @@ updateLoadedFromBackend msg model =
             )
 
         MailEditorToFrontend mailEditorToFrontend ->
-            ( { model | mailEditor = MailEditor.updateFromBackend model mailEditorToFrontend model.mailEditor }
-            , Command.none
-            )
+            case model.mailEditor of
+                Just mailEditor ->
+                    ( { model
+                        | mailEditor = MailEditor.updateFromBackend mailEditorToFrontend mailEditor |> Just
+                      }
+                    , Command.none
+                    )
+
+                Nothing ->
+                    ( model, Command.none )
 
         MailBroadcast mail ->
             ( { model | mail = mail }, Command.none )
@@ -4150,102 +4114,104 @@ cursorSprite hover model =
         Just userId ->
             let
                 helper () =
-                    if MailEditor.isOpen model.mailEditor then
-                        case hover of
-                            UiHover (MailEditorHover uiHover) _ ->
-                                case uiHover of
-                                    MailEditor.BackgroundHover ->
-                                        DefaultCursor
+                    case model.mailEditor of
+                        Just mailEditor ->
+                            case hover of
+                                UiHover (MailEditorHover uiHover) _ ->
+                                    case uiHover of
+                                        MailEditor.BackgroundHover ->
+                                            DefaultCursor
 
-                                    MailEditor.ImageButton _ ->
-                                        PointerCursor
+                                        MailEditor.ImageButton _ ->
+                                            PointerCursor
 
-                                    MailEditor.MailButton ->
-                                        case model.mailEditor.currentTool of
-                                            MailEditor.ImagePlacer _ ->
+                                        MailEditor.MailButton ->
+                                            case mailEditor.currentTool of
+                                                MailEditor.ImagePlacer _ ->
+                                                    NoCursor
+
+                                                MailEditor.ImagePicker ->
+                                                    PointerCursor
+
+                                                MailEditor.EraserTool ->
+                                                    CursorSprite EraserSpriteCursor
+
+                                        _ ->
+                                            PointerCursor
+
+                                _ ->
+                                    DefaultCursor
+
+                        Nothing ->
+                            if isHoldingCow model /= Nothing then
+                                CursorSprite PinchSpriteCursor
+
+                            else
+                                case currentTool model of
+                                    TilePlacerTool _ ->
+                                        case hover of
+                                            UiBackgroundHover ->
+                                                DefaultCursor
+
+                                            TileHover _ ->
                                                 NoCursor
 
-                                            MailEditor.ImagePicker ->
+                                            TrainHover _ ->
+                                                NoCursor
+
+                                            MapHover ->
+                                                NoCursor
+
+                                            CowHover _ ->
+                                                NoCursor
+
+                                            UiHover _ _ ->
                                                 PointerCursor
 
-                                            MailEditor.EraserTool ->
-                                                CursorSprite EraserSpriteCursor
+                                    HandTool ->
+                                        case hover of
+                                            UiBackgroundHover ->
+                                                DefaultCursor
 
-                                    _ ->
-                                        PointerCursor
+                                            TileHover data ->
+                                                case tileInteraction userId data model of
+                                                    Just _ ->
+                                                        CursorSprite PointerSpriteCursor
 
-                            _ ->
-                                DefaultCursor
+                                                    Nothing ->
+                                                        CursorSprite DefaultSpriteCursor
 
-                    else if isHoldingCow model /= Nothing then
-                        CursorSprite PinchSpriteCursor
-
-                    else
-                        case currentTool model of
-                            TilePlacerTool _ ->
-                                case hover of
-                                    UiBackgroundHover ->
-                                        DefaultCursor
-
-                                    TileHover _ ->
-                                        NoCursor
-
-                                    TrainHover _ ->
-                                        NoCursor
-
-                                    MapHover ->
-                                        NoCursor
-
-                                    CowHover _ ->
-                                        NoCursor
-
-                                    UiHover _ _ ->
-                                        PointerCursor
-
-                            HandTool ->
-                                case hover of
-                                    UiBackgroundHover ->
-                                        DefaultCursor
-
-                                    TileHover data ->
-                                        case tileInteraction userId data model of
-                                            Just _ ->
+                                            TrainHover _ ->
                                                 CursorSprite PointerSpriteCursor
 
-                                            Nothing ->
+                                            MapHover ->
                                                 CursorSprite DefaultSpriteCursor
 
-                                    TrainHover _ ->
-                                        CursorSprite PointerSpriteCursor
+                                            CowHover _ ->
+                                                CursorSprite PointerSpriteCursor
 
-                                    MapHover ->
-                                        CursorSprite DefaultSpriteCursor
+                                            UiHover _ _ ->
+                                                PointerCursor
 
-                                    CowHover _ ->
-                                        CursorSprite PointerSpriteCursor
+                                    TilePickerTool ->
+                                        case hover of
+                                            UiBackgroundHover ->
+                                                DefaultCursor
 
-                                    UiHover _ _ ->
-                                        PointerCursor
+                                            TileHover _ ->
+                                                CursorSprite EyeDropperSpriteCursor
 
-                            TilePickerTool ->
-                                case hover of
-                                    UiBackgroundHover ->
-                                        DefaultCursor
+                                            TrainHover _ ->
+                                                CursorSprite EyeDropperSpriteCursor
 
-                                    TileHover _ ->
-                                        CursorSprite EyeDropperSpriteCursor
+                                            MapHover ->
+                                                CursorSprite EyeDropperSpriteCursor
 
-                                    TrainHover _ ->
-                                        CursorSprite EyeDropperSpriteCursor
+                                            CowHover _ ->
+                                                CursorSprite EyeDropperSpriteCursor
 
-                                    MapHover ->
-                                        CursorSprite EyeDropperSpriteCursor
-
-                                    CowHover _ ->
-                                        CursorSprite EyeDropperSpriteCursor
-
-                                    UiHover _ _ ->
-                                        PointerCursor
+                                            UiHover _ _ ->
+                                                PointerCursor
             in
             case isDraggingView hover model of
                 Just mouse ->
@@ -4278,11 +4244,11 @@ isDraggingView :
             , hover : Hover
             }
 isDraggingView hover model =
-    case ( MailEditor.isOpen model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( False, _, MouseButtonDown a ) ->
+    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
+        ( Nothing, _, MouseButtonDown a ) ->
             Just a
 
-        ( False, MouseButtonDown a, _ ) ->
+        ( Nothing, MouseButtonDown a, _ ) ->
             case model.currentTool of
                 TilePlacerTool _ ->
                     Nothing
@@ -4447,17 +4413,17 @@ canvasView audioData model =
                             ++ List.filterMap
                                 (\flag ->
                                     let
-                                        flagMesh =
+                                        flagMesh2 =
                                             if flag.isReceived then
-                                                receivingMailFlagMeshes
+                                                Flag.receivingMailFlagMeshes
 
                                             else
-                                                sendingMailFlagMeshes
+                                                Flag.sendingMailFlagMeshes
                                     in
                                     case
                                         Array.get
                                             (Effect.Time.posixToMillis model.time |> toFloat |> (*) 0.005 |> round |> modBy 3)
-                                            flagMesh
+                                            flagMesh2
                                     of
                                         Just flagMesh_ ->
                                             let
@@ -4703,9 +4669,9 @@ canvasView audioData model =
                                     _ ->
                                         []
                                )
-                            ++ (case MailEditor.backgroundLayer model model.mailEditor texture of
-                                    Just layer ->
-                                        [ layer ]
+                            ++ (case model.mailEditor of
+                                    Just _ ->
+                                        [ MailEditor.backgroundLayer texture ]
 
                                     Nothing ->
                                         []
@@ -4726,15 +4692,21 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
-                            ++ MailEditor.drawMail
-                                mailPosition
-                                mailSize
-                                texture
-                                (mouseScreenPosition model)
-                                windowWidth
-                                windowHeight
-                                model
-                                model.mailEditor
+                            ++ (case model.mailEditor of
+                                    Just mailEditor ->
+                                        MailEditor.drawMail
+                                            mailPosition
+                                            mailSize
+                                            texture
+                                            (mouseScreenPosition model)
+                                            windowWidth
+                                            windowHeight
+                                            model
+                                            mailEditor
+
+                                    Nothing ->
+                                        []
+                               )
                             ++ (case currentUserId model of
                                     Just userId ->
                                         drawCursor showMousePointer texture viewMatrix userId model
@@ -4848,7 +4820,7 @@ getFlags model =
                                 [ { position =
                                         Grid.cellAndLocalCoordToWorld ( coord, tile.position )
                                             |> Coord.toPoint2d
-                                            |> Point2d.translateBy postOfficeSendingMailFlagOffset
+                                            |> Point2d.translateBy Flag.postOfficeSendingMailFlagOffset
                                   , isReceived = False
                                   }
                                 ]
@@ -4860,7 +4832,7 @@ getFlags model =
                                         [ { position =
                                                 Grid.cellAndLocalCoordToWorld ( coord, tile.position )
                                                     |> Coord.toPoint2d
-                                                    |> Point2d.translateBy postOfficeReceivedMailFlagOffset
+                                                    |> Point2d.translateBy Flag.postOfficeReceivedMailFlagOffset
                                           , isReceived = True
                                           }
                                         ]
@@ -4878,16 +4850,6 @@ getFlags model =
         identity
         localModel.viewBounds
         []
-
-
-postOfficeSendingMailFlagOffset : Vector2d WorldUnit WorldUnit
-postOfficeSendingMailFlagOffset =
-    Vector2d.unsafe { x = 3.5, y = 2 + 1 / 18 }
-
-
-postOfficeReceivedMailFlagOffset : Vector2d WorldUnit WorldUnit
-postOfficeReceivedMailFlagOffset =
-    Vector2d.unsafe { x = 3.5, y = 1 + 13 / 18 }
 
 
 drawForeground :
@@ -4938,100 +4900,6 @@ drawBackground meshes viewMatrix texture =
                     , color = Vec4.vec4 1 1 1 1
                     }
             )
-
-
-sendingMailFlagMeshes : Array (Effect.WebGL.Mesh Vertex)
-sendingMailFlagMeshes =
-    List.range 0 2
-        |> List.map sendingMailFlagMesh
-        |> Array.fromList
-
-
-sendingMailFlagMesh : Int -> Effect.WebGL.Mesh Vertex
-sendingMailFlagMesh frame =
-    let
-        width =
-            11
-
-        height =
-            6
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 80 (594 + frame * 6)) (Coord.xy width 6)
-    in
-    Shaders.triangleFan
-        [ { position = Vec3.vec3 0 0 0
-          , texturePosition = topLeft
-          , opacity = 1
-          , primaryColor = Vec3.vec3 1 0 0
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        , { position = Vec3.vec3 width 0 0
-          , texturePosition = topRight
-          , opacity = 1
-          , primaryColor = Vec3.vec3 1 0 0
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        , { position = Vec3.vec3 width height 0
-          , texturePosition = bottomRight
-          , opacity = 1
-          , primaryColor = Vec3.vec3 1 0 0
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        , { position = Vec3.vec3 0 height 0
-          , texturePosition = bottomLeft
-          , opacity = 1
-          , primaryColor = Vec3.vec3 1 0 0
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        ]
-
-
-receivingMailFlagMeshes : Array (Effect.WebGL.Mesh Vertex)
-receivingMailFlagMeshes =
-    List.range 0 2
-        |> List.map receivingMailFlagMesh
-        |> Array.fromList
-
-
-receivingMailFlagMesh : Int -> Effect.WebGL.Mesh Vertex
-receivingMailFlagMesh frame =
-    let
-        width =
-            11
-
-        height =
-            6
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 90 (594 + frame * 6)) (Coord.xy width 6)
-    in
-    Shaders.triangleFan
-        [ { position = Vec3.vec3 0 0 0
-          , texturePosition = topLeft
-          , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        , { position = Vec3.vec3 width 0 0
-          , texturePosition = topRight
-          , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        , { position = Vec3.vec3 width height 0
-          , texturePosition = bottomRight
-          , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        , { position = Vec3.vec3 0 height 0
-          , texturePosition = bottomLeft
-          , opacity = 1
-          , primaryColor = Color.rgb255 255 161 0 |> Color.toVec3
-          , secondaryColor = Vec3.vec3 0 0 0
-          }
-        ]
 
 
 shortDelayDuration : Duration
