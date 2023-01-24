@@ -2518,14 +2518,14 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                     , trains =
                                         IdDict.update
                                             trainId
-                                            (\_ -> Train.leaveHome model.time train |> Just)
+                                            (\_ -> Train.leaveHome model2.time train |> Just)
                                             model2.trains
                                   }
                                 , CancelTeleportHomeTrainRequest trainId |> Effect.Lamdera.sendToBackend
                                 )
 
                             _ ->
-                                case Train.isStuck model.time train of
+                                case Train.isStuck model2.time train of
                                     Just stuckTime ->
                                         if Duration.from stuckTime model2.time |> Quantity.lessThan stuckMessageDelay then
                                             ( setTrainViewPoint trainId model2, Command.none )
@@ -2554,9 +2554,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( model3, Command.none )
 
                     UiHover id data ->
-                        case Ui.findButton id (Toolbar.view (getViewModel model)) of
+                        case Ui.findButton id (Toolbar.view (getViewModel model2)) of
                             Just { buttonData } ->
-                                uiUpdate data.position buttonData.onPress model
+                                uiUpdate data.position buttonData.onPress model2
 
                             Nothing ->
                                 ( model2, Command.none )
