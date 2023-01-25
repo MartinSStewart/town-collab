@@ -56,7 +56,7 @@ import Lamdera
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (Cursor, LocalGrid)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model)
+import MailEditor exposing (BackendMail, FrontendMail, Model)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -91,6 +91,7 @@ type alias FrontendLoading =
     , zoomFactor : Int
     , time : Maybe Effect.Time.Posix
     , viewPoint : Coord WorldUnit
+    , showInbox : Bool
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , musicVolume : Int
@@ -322,12 +323,13 @@ type alias BackendUserData =
     { undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
-    , mailEditor : MailEditorData
+    , mailDrafts : IdDict UserId (List MailEditor.Content)
     , cursor : Maybe Cursor
     , handColor : Colors
     , emailAddress : EmailAddress
     , acceptedInvites : IdDict UserId ()
     , name : DisplayName
+    , sendEmailWhenReceivingALetter : Bool
     }
 
 

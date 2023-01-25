@@ -18,7 +18,8 @@ import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
 import Id exposing (CowId, EventId, Id, UserId)
-import MailEditor exposing (MailEditorData)
+import IdDict exposing (IdDict)
+import MailEditor
 import Point2d exposing (Point2d)
 import Units exposing (CellUnit, WorldUnit)
 import User exposing (FrontendUser)
@@ -77,6 +78,6 @@ type alias LoggedIn_ =
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
-    , mailEditor : MailEditorData
+    , mailDrafts : IdDict UserId (List MailEditor.Content)
     , emailAddress : EmailAddress
     }

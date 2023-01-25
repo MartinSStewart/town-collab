@@ -1,9 +1,9 @@
 module MailEditor exposing
     ( BackendMail
+    , Content
     , FrontendMail
     , Hover(..)
     , Image(..)
-    , MailEditorData
     , MailStatus(..)
     , Model
     , Msg
@@ -18,7 +18,6 @@ module MailEditor exposing
     , getMailTo
     , handleKeyDown
     , init
-    , initEditor
     , openAnimationLength
     , redo
     , scroll
@@ -172,11 +171,6 @@ type alias Content =
     { position : Coord Pixels, image : Image }
 
 
-type alias MailEditorData =
-    { content : List Content
-    }
-
-
 type Image
     = Stamp Colors
     | SunglassesEmoji Colors
@@ -249,98 +243,103 @@ uiUpdate config elementPosition mousePosition msg model =
             ( Nothing, Command.none )
 
         MouseDownMail ->
-            case model.currentTool of
-                ImagePlacer imagePlacer ->
-                    let
-                        imageData : ImageData units
-                        imageData =
-                            getImageData (currentImage imagePlacer)
+            case model.to of
+                Just ( to, _ ) ->
+                    case model.currentTool of
+                        ImagePlacer imagePlacer ->
+                            let
+                                imageData : ImageData units
+                                imageData =
+                                    getImageData (currentImage imagePlacer)
 
-                        windowSize =
-                            Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
+                                windowSize =
+                                    Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
 
-                        mailScale =
-                            mailZoomFactor windowSize
+                                mailScale =
+                                    mailZoomFactor windowSize
 
-                        oldEditorState : EditorState
-                        oldEditorState =
-                            model.current
+                                oldEditorState : EditorState
+                                oldEditorState =
+                                    model.current
 
-                        newEditorState : EditorState
-                        newEditorState =
-                            { oldEditorState
-                                | content =
-                                    oldEditorState.content
-                                        ++ [ { position =
-                                                mousePosition
-                                                    |> Coord.minus elementPosition
-                                                    |> Coord.divide (Coord.xy mailScale mailScale)
-                                                    |> Coord.minus (Coord.divide (Coord.xy 2 2) imageData.textureSize)
-                                             , image = currentImage imagePlacer
-                                             }
-                                           ]
-                            }
+                                newEditorState : EditorState
+                                newEditorState =
+                                    { oldEditorState
+                                        | content =
+                                            oldEditorState.content
+                                                ++ [ { position =
+                                                        mousePosition
+                                                            |> Coord.minus elementPosition
+                                                            |> Coord.divide (Coord.xy mailScale mailScale)
+                                                            |> Coord.minus (Coord.divide (Coord.xy 2 2) imageData.textureSize)
+                                                     , image = currentImage imagePlacer
+                                                     }
+                                                   ]
+                                    }
 
-                        model2 =
-                            addChange newEditorState { model | lastPlacedImage = Just config.time }
-                    in
-                    ( Just model2, UpdateMailEditorRequest (toData model2) |> Lamdera.sendToBackend )
+                                model2 =
+                                    addChange newEditorState { model | lastPlacedImage = Just config.time }
+                            in
+                            ( Just model2, UpdateMailEditorRequest (toData to model2) |> Lamdera.sendToBackend )
 
-                EraserTool ->
-                    let
-                        mailMousePosition : Coord Pixels
-                        mailMousePosition =
-                            mousePosition
-                                |> Coord.minus elementPosition
-                                |> Coord.divide (Coord.xy mailScale mailScale)
+                        EraserTool ->
+                            let
+                                mailMousePosition : Coord Pixels
+                                mailMousePosition =
+                                    mousePosition
+                                        |> Coord.minus elementPosition
+                                        |> Coord.divide (Coord.xy mailScale mailScale)
 
-                        windowSize =
-                            Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
+                                windowSize =
+                                    Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
 
-                        mailScale =
-                            mailZoomFactor windowSize
+                                mailScale =
+                                    mailZoomFactor windowSize
 
-                        oldEditorState : EditorState
-                        oldEditorState =
-                            model.current
+                                oldEditorState : EditorState
+                                oldEditorState =
+                                    model.current
 
-                        { newContent, erased } =
-                            List.foldr
-                                (\content state ->
-                                    let
-                                        imageData : ImageData units
-                                        imageData =
-                                            getImageData content.image
+                                { newContent, erased } =
+                                    List.foldr
+                                        (\content state ->
+                                            let
+                                                imageData : ImageData units
+                                                imageData =
+                                                    getImageData content.image
 
-                                        isOverImage : Bool
-                                        isOverImage =
-                                            Bounds.contains
-                                                mailMousePosition
-                                                (Bounds.fromCoordAndSize content.position imageData.textureSize)
-                                    in
-                                    if not state.erased && isOverImage then
-                                        { newContent = state.newContent, erased = True }
+                                                isOverImage : Bool
+                                                isOverImage =
+                                                    Bounds.contains
+                                                        mailMousePosition
+                                                        (Bounds.fromCoordAndSize content.position imageData.textureSize)
+                                            in
+                                            if not state.erased && isOverImage then
+                                                { newContent = state.newContent, erased = True }
 
-                                    else
-                                        { newContent = content :: state.newContent, erased = state.erased }
+                                            else
+                                                { newContent = content :: state.newContent, erased = state.erased }
+                                        )
+                                        { newContent = [], erased = False }
+                                        oldEditorState.content
+                            in
+                            if erased then
+                                let
+                                    model2 =
+                                        addChange { oldEditorState | content = newContent } model
+                                in
+                                ( Just { model2 | lastErase = Just config.time }
+                                , UpdateMailEditorRequest (toData to model2) |> Lamdera.sendToBackend
                                 )
-                                { newContent = [], erased = False }
-                                oldEditorState.content
-                    in
-                    if erased then
-                        let
-                            model2 =
-                                addChange { oldEditorState | content = newContent } model
-                        in
-                        ( Just { model2 | lastErase = Just config.time }
-                        , UpdateMailEditorRequest (toData model2) |> Lamdera.sendToBackend
-                        )
 
-                    else
-                        ( Just { model | lastErase = Just config.time }, Command.none )
+                            else
+                                ( Just { model | lastErase = Just config.time }, Command.none )
 
-                ImagePicker ->
-                    Debug.todo ""
+                        ImagePicker ->
+                            Debug.todo ""
+
+                Nothing ->
+                    ( Just model, Command.none )
 
         PressedMail ->
             ( Just model, Command.none )
@@ -438,9 +437,17 @@ openAnimationLength =
     Duration.milliseconds 300
 
 
-initEditor : List Content -> Maybe ( Id UserId, DisplayName ) -> Model
-initEditor content maybeUserIdAndName =
-    { current = { content = content }
+init : Maybe { userId : Id UserId, name : DisplayName, draft : List Content } -> Model
+init maybeUserIdAndName =
+    { current =
+        { content =
+            case maybeUserIdAndName of
+                Just { draft } ->
+                    draft
+
+                Nothing ->
+                    []
+        }
     , undo = []
     , redo = []
     , currentImageMesh = Shaders.triangleFan []
@@ -449,7 +456,13 @@ initEditor content maybeUserIdAndName =
     , lastPlacedImage = Nothing
     , lastErase = Nothing
     , submitStatus = NotSubmitted
-    , to = maybeUserIdAndName
+    , to =
+        case maybeUserIdAndName of
+            Just { userId, name } ->
+                Just ( userId, name )
+
+            Nothing ->
+                Nothing
     , showSendLetterInstructions = False
     }
         |> updateCurrentImageMesh
@@ -482,18 +495,13 @@ updateCurrentImageMesh model =
             model
 
 
-init : MailEditorData
-init =
-    { content = [] }
-
-
 type alias ImageData units =
     { textureSize : Coord units, texturePosition : List (Coord units), colors : Colors }
 
 
 type ToBackend
     = SubmitMailRequest { content : List Content, to : Id UserId }
-    | UpdateMailEditorRequest MailEditorData
+    | UpdateMailEditorRequest { content : List Content, to : Id UserId }
 
 
 type ToFrontend
@@ -592,9 +600,9 @@ updateFromBackend toFrontend mailEditor =
                     { mailEditor | showSendLetterInstructions = True }
 
 
-toData : Model -> MailEditorData
-toData model =
-    { content = model.current.content }
+toData : Id UserId -> Model -> { to : Id UserId, content : List Content }
+toData to model =
+    { to = to, content = model.current.content }
 
 
 handleKeyDown : Bool -> Key -> Model -> Maybe Model

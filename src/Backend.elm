@@ -540,7 +540,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                         sessionId
                         model
                         (\userId _ model2 ->
-                            ( updateUser userId (\user -> { user | mailEditor = mailEditor }) model2
+                            ( updateUser
+                                userId
+                                (\user -> { user | mailDrafts = IdDict.insert mailEditor.to mailEditor.content user.mailDrafts })
+                                model2
                             , Command.none
                             )
                         )
@@ -581,7 +584,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                             Env.domain
                                 ++ Route.encode
                                     (InternalRoute
-                                        { loginOrInviteToken = Just (LoginToken2 loginToken), viewPoint = Coord.origin }
+                                        { loginOrInviteToken = Just (LoginToken2 loginToken)
+                                        , showInbox = False
+                                        , viewPoint = Coord.origin
+                                        }
                                     )
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
@@ -641,10 +647,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     asUser
                         sessionId
                         model
-                        (\userId _ model2 ->
+                        (\userId user model2 ->
                             -- Check if email address has already accepted an invite
-                            if IdDict.toList model2.users |> List.any (\( _, user ) -> user.emailAddress == emailAddress) then
-                                ( model2, Command.none )
+                            if IdDict.toList model2.users |> List.any (\( _, user2 ) -> user2.emailAddress == emailAddress) then
+                                ( model2, Effect.Lamdera.sendToFrontend clientId (SendInviteEmailResponse emailAddress) )
 
                             else
                                 let
@@ -660,6 +666,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                             ++ Route.encode
                                                 (InternalRoute
                                                     { viewPoint = Coord.origin
+                                                    , showInbox = False
                                                     , loginOrInviteToken = Just (InviteToken2 inviteToken)
                                                     }
                                                 )
@@ -680,13 +687,23 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                         isProduction
                                         (SentInviteEmail inviteToken)
                                         (NonemptyString 'T' "own-collab invitation")
-                                        ("You've been invited to join town-collab! Click this link to join "
+                                        ("You've been invited by "
+                                            ++ DisplayName.toString user.name
+                                            ++ "#"
+                                            ++ String.fromInt (Id.toInt userId)
+                                            ++ " to join town-collab! Click this link to join "
                                             ++ inviteUrl
                                             ++ ". If you weren't expecting this email then it is safe to ignore."
                                         )
                                         (Email.Html.div
                                             []
-                                            [ Email.Html.text "You've been invited to join town-collab! "
+                                            [ Email.Html.text
+                                                ("You've been invited by "
+                                                    ++ DisplayName.toString user.name
+                                                    ++ "#"
+                                                    ++ String.fromInt (Id.toInt userId)
+                                                    ++ " to join town-collab! "
+                                                )
                                             , Email.Html.a
                                                 [ Email.Html.Attributes.href inviteUrl ]
                                                 [ Email.Html.text "Click here to join" ]
@@ -1039,7 +1056,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , undoCurrent = user.undoCurrent
                         , undoHistory = user.undoHistory
                         , redoHistory = user.redoHistory
-                        , mailEditor = user.mailEditor
+                        , mailDrafts = user.mailDrafts
                         , emailAddress = user.emailAddress
                         }
 
@@ -1062,7 +1079,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , undoCurrent = user.undoCurrent
                                             , undoHistory = user.undoHistory
                                             , redoHistory = user.redoHistory
-                                            , mailEditor = user.mailEditor
+                                            , mailDrafts = user.mailDrafts
                                             , emailAddress = user.emailAddress
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
@@ -1094,7 +1111,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , undoCurrent = newUser.undoCurrent
                                 , undoHistory = newUser.undoHistory
                                 , redoHistory = newUser.redoHistory
-                                , mailEditor = newUser.mailEditor
+                                , mailDrafts = newUser.mailDrafts
                                 , emailAddress = newUser.emailAddress
                                 }
                             , { model4
@@ -1233,12 +1250,13 @@ createUser userId emailAddress model =
             { undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
-            , mailEditor = MailEditor.init
+            , mailDrafts = IdDict.empty
             , cursor = Nothing
             , handColor = Cursor.defaultColors
             , emailAddress = emailAddress
             , acceptedInvites = IdDict.empty
             , name = DisplayName.default
+            , sendEmailWhenReceivingALetter = True
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

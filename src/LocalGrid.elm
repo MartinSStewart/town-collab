@@ -23,7 +23,6 @@ import Id exposing (CowId, Id, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (MailEditorData)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random

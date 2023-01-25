@@ -58,7 +58,6 @@ import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
-import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
@@ -492,7 +491,13 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
             , mail = loadedLocalModel.mail
-            , mailEditor = Nothing
+            , mailEditor =
+                case ( loading.showInbox, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
+                    ( True, LoggedIn _ ) ->
+                        MailEditor.init Nothing |> Just
+
+                    _ ->
+                        Nothing
             , lastMailEditorToggle = Nothing
             , currentTool = currentTile
             , lastTileRotation = []
@@ -561,11 +566,14 @@ init url key =
             case Route.decode url of
                 Just (Route.InternalRoute a) ->
                     { data = a
-                    , cmd = Command.none
+                    , cmd =
+                        Effect.Browser.Navigation.replaceUrl
+                            key
+                            (Route.encode (Route.InternalRoute { a | showInbox = False, loginOrInviteToken = Nothing }))
                     }
 
                 Nothing ->
-                    { data = { viewPoint = Route.startPointAt, loginOrInviteToken = Nothing }
+                    { data = { viewPoint = Route.startPointAt, showInbox = False, loginOrInviteToken = Nothing }
                     , cmd = Effect.Browser.Navigation.replaceUrl key (Route.encode defaultRoute)
                     }
 
@@ -588,6 +596,7 @@ init url key =
         , zoomFactor = 2
         , time = Nothing
         , viewPoint = data.viewPoint
+        , showInbox = data.showInbox
         , mousePosition = Point2d.origin
         , sounds = AssocList.empty
         , musicVolume = 0
@@ -2288,33 +2297,46 @@ tileInteraction currentUserId2 { tile, userId, position } model =
     in
     case tile of
         PostOffice ->
-            if canOpenMailEditor model then
-                (\() ->
-                    if currentUserId2 == userId then
-                        ( { model
-                            | mailEditor = MailEditor.initEditor [] Nothing |> Just
-                            , lastMailEditorToggle = Just model.time
-                          }
-                        , Command.none
-                        )
+            case canOpenMailEditor model of
+                Just drafts ->
+                    (\() ->
+                        if currentUserId2 == userId then
+                            ( { model
+                                | mailEditor = MailEditor.init Nothing |> Just
+                                , lastMailEditorToggle = Just model.time
+                              }
+                            , Command.none
+                            )
 
-                    else
-                        case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
-                            Just user ->
-                                ( { model
-                                    | mailEditor = MailEditor.initEditor [] (Just ( userId, user.name )) |> Just
-                                    , lastMailEditorToggle = Just model.time
-                                  }
-                                , Command.none
-                                )
+                        else
+                            let
+                                localModel =
+                                    LocalGrid.localModel model.localModel
+                            in
+                            case localModel.users |> IdDict.get userId of
+                                Just user ->
+                                    ( { model
+                                        | mailEditor =
+                                            MailEditor.init
+                                                (Just
+                                                    { userId = userId
+                                                    , name = user.name
+                                                    , draft = IdDict.get userId drafts |> Maybe.withDefault []
+                                                    }
+                                                )
+                                                |> Just
+                                        , lastMailEditorToggle = Just model.time
+                                      }
+                                    , Command.none
+                                    )
 
-                            Nothing ->
-                                ( model, Command.none )
-                )
-                    |> Just
+                                Nothing ->
+                                    ( model, Command.none )
+                    )
+                        |> Just
 
-            else
-                Nothing
+                Nothing ->
+                    Nothing
 
         HouseDown ->
             (\() -> ( { model | lastHouseClick = Just model.time }, Command.none )) |> Just
@@ -2787,14 +2809,14 @@ setTrainViewPoint trainId model =
     }
 
 
-canOpenMailEditor : FrontendLoaded -> Bool
+canOpenMailEditor : FrontendLoaded -> Maybe (IdDict UserId (List MailEditor.Content))
 canOpenMailEditor model =
-    case ( model.mailEditor, model.currentTool ) of
-        ( Nothing, HandTool ) ->
-            True
+    case ( model.mailEditor, model.currentTool, LocalGrid.localModel model.localModel |> .userStatus ) of
+        ( Nothing, HandTool, LoggedIn loggedIn ) ->
+            Just loggedIn.mailDrafts
 
         _ ->
-            False
+            Nothing
 
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )

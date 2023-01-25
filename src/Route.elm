@@ -43,13 +43,20 @@ startPointAt =
 
 coordQueryParser : Url.Parser.Query.Parser Route
 coordQueryParser =
-    Url.Parser.Query.map4
-        (\maybeX maybeY loginToken2 inviteToken2 ->
+    Url.Parser.Query.map5
+        (\maybeX maybeY showInbox2 loginToken2 inviteToken2 ->
             InternalRoute
                 { viewPoint =
                     ( Maybe.withDefault (Tuple.first startPointAt) (Maybe.map Units.tileUnit maybeX)
                     , Maybe.withDefault (Tuple.second startPointAt) (Maybe.map Units.tileUnit maybeY)
                     )
+                , showInbox =
+                    case showInbox2 of
+                        Just "true" ->
+                            True
+
+                        _ ->
+                            False
                 , loginOrInviteToken =
                     case ( loginToken2, inviteToken2 ) of
                         ( _, Just inviteToken3 ) ->
@@ -64,6 +71,7 @@ coordQueryParser =
         )
         (Url.Parser.Query.int "x")
         (Url.Parser.Query.int "y")
+        (Url.Parser.Query.string showInbox)
         (Url.Parser.Query.string loginToken)
         (Url.Parser.Query.string inviteToken)
 
@@ -107,6 +115,10 @@ loginToken =
     "login-token"
 
 
+showInbox =
+    "show-inbox"
+
+
 inviteToken =
     "invite-token"
 
@@ -127,7 +139,7 @@ unsubscribe =
 
 
 type Route
-    = InternalRoute { viewPoint : Coord WorldUnit, loginOrInviteToken : Maybe LoginOrInviteToken }
+    = InternalRoute { viewPoint : Coord WorldUnit, showInbox : Bool, loginOrInviteToken : Maybe LoginOrInviteToken }
 
 
 type ConfirmEmailKey
@@ -140,4 +152,4 @@ type UnsubscribeEmailKey
 
 internalRoute : Coord WorldUnit -> Route
 internalRoute viewPoint =
-    InternalRoute { viewPoint = viewPoint, loginOrInviteToken = Nothing }
+    InternalRoute { viewPoint = viewPoint, showInbox = False, loginOrInviteToken = Nothing }
