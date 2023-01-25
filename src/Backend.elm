@@ -967,7 +967,10 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                         }
                         model.mail
             in
-            ( { model | mail = newMail }
+            ( { model
+                | mail = newMail
+                , users = IdDict.insert userId { user | mailDrafts = IdDict.remove to user.mailDrafts } model.users
+              }
             , originalChange
             , ServerSubmitMail { to = to, from = userId } |> Just
             )

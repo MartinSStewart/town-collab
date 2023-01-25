@@ -147,13 +147,12 @@ type alias Model =
     , lastErase : Maybe Effect.Time.Posix
     , submitStatus : SubmitStatus
     , to : Maybe ( Id UserId, DisplayName )
-    , showSendLetterInstructions : Bool
     }
 
 
 type SubmitStatus
     = NotSubmitted
-    | Submitting
+    | Submitted
 
 
 type alias EditorState =
@@ -349,7 +348,7 @@ uiUpdate config elementPosition mousePosition msg model =
         PressedSendLetter ->
             case model.to of
                 Just ( userId, _ ) ->
-                    ( Just { model | submitStatus = Submitting }
+                    ( Just { model | submitStatus = Submitted }
                     , SubmitMail { content = model.current.content, to = userId }
                     )
 
@@ -462,7 +461,6 @@ init maybeUserIdAndName =
 
             Nothing ->
                 Nothing
-    , showSendLetterInstructions = False
     }
         |> updateCurrentImageMesh
 
@@ -861,8 +859,8 @@ ui windowSize idMap msgMap model =
         { padding = Ui.noPadding
         , borderAndFill = NoBorderOrFill
         , inFront =
-            case ( model.showSendLetterInstructions, model.to ) of
-                ( True, Just ( _, name ) ) ->
+            case ( model.submitStatus, model.to ) of
+                ( Submitted, Just ( _, name ) ) ->
                     let
                         grassSize : Coord Pixels
                         grassSize =
@@ -938,7 +936,20 @@ ui windowSize idMap msgMap model =
                         )
                     ]
 
-                ( False, Just userIdAndName ) ->
+                ( NotSubmitted, Just userIdAndName ) ->
+                    let
+                        stampSize =
+                            Coord.xy 46 46
+
+                        line position y =
+                            Sprite.rectangle
+                                Color.outlineColor
+                                (Coord.xy (mailWidth - 200) y
+                                    |> Coord.scalar mailScale
+                                    |> Coord.plus position
+                                )
+                                (Coord.xy 180 2 |> Coord.scalar mailScale)
+                    in
                     [ Ui.bottomCenter
                         { size = windowSize, inFront = [] }
                         (Ui.column
@@ -963,14 +974,31 @@ ui windowSize idMap msgMap model =
                                     { size = Coord.scalar mailScale mailSize
                                     , vertices =
                                         \position ->
-                                            List.concatMap
-                                                (\content ->
-                                                    imageMesh
-                                                        (Coord.plus position (Coord.scalar mailScale content.position))
-                                                        mailScale
-                                                        content.image
+                                            Sprite.rectangle
+                                                Color.outlineColor
+                                                (Coord.xy (mailWidth - Coord.xRaw stampSize - 20) 20
+                                                    |> Coord.scalar mailScale
+                                                    |> Coord.plus position
                                                 )
-                                                model.current.content
+                                                (Coord.scalar mailScale stampSize)
+                                                ++ Sprite.rectangle
+                                                    Color.fillColor
+                                                    (Coord.xy (mailWidth - Coord.xRaw stampSize - 18) 22
+                                                        |> Coord.scalar mailScale
+                                                        |> Coord.plus position
+                                                    )
+                                                    (stampSize |> Coord.minus (Coord.xy 4 4) |> Coord.scalar mailScale)
+                                                ++ line position 120
+                                                ++ line position 170
+                                                ++ line position 220
+                                                ++ List.concatMap
+                                                    (\content ->
+                                                        imageMesh
+                                                            (Coord.plus position (Coord.scalar mailScale content.position))
+                                                            mailScale
+                                                            content.image
+                                                    )
+                                                    model.current.content
                                     }
                                 )
                             , Ui.el
