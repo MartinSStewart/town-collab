@@ -7,8 +7,7 @@ module MailEditor exposing
     , MailStatus(..)
     , Model
     , Msg
-    , ToBackend(..)
-    , ToFrontend(..)
+    , OutMsg(..)
     , Tool(..)
     , backendMailToFrontend
     , backgroundLayer
@@ -24,7 +23,6 @@ module MailEditor exposing
     , ui
     , uiUpdate
     , undo
-    , updateFromBackend
     )
 
 import Array exposing (Array)
@@ -45,6 +43,7 @@ import Flag
 import Frame2d
 import Grid
 import Id exposing (Id, MailId, TrainId, UserId)
+import IdDict exposing (IdDict)
 import Keyboard exposing (Key(..))
 import List.Nonempty exposing (Nonempty(..))
 import Math.Matrix4 as Mat4
@@ -94,12 +93,9 @@ backendMailToFrontend mail =
     { status = mail.status, from = mail.from, to = mail.to }
 
 
-getMailFrom :
-    Id UserId
-    -> AssocList.Dict (Id MailId) { a | from : Id UserId }
-    -> List ( Id MailId, { a | from : Id UserId } )
+getMailFrom : Id UserId -> IdDict MailId { a | from : Id UserId } -> List ( Id MailId, { a | from : Id UserId } )
 getMailFrom userId dict =
-    AssocList.toList dict
+    IdDict.toList dict
         |> List.filterMap
             (\( mailId, mail ) ->
                 if mail.from == userId then
@@ -110,12 +106,9 @@ getMailFrom userId dict =
             )
 
 
-getMailTo :
-    Id UserId
-    -> AssocList.Dict (Id MailId) { a | to : Id UserId }
-    -> List ( Id MailId, { a | to : Id UserId } )
+getMailTo : Id UserId -> IdDict MailId { a | to : Id UserId } -> List ( Id MailId, { a | to : Id UserId } )
 getMailTo userId dict =
-    AssocList.toList dict
+    IdDict.toList dict
         |> List.filterMap
             (\( mailId, mail ) ->
                 if mail.to == userId then
@@ -225,22 +218,28 @@ scroll scrollUp audioData config model =
             model
 
 
+type OutMsg
+    = NoOutMsg
+    | SubmitMail { to : Id UserId, content : List Content }
+    | UpdateDraft { to : Id UserId, content : List Content }
+
+
 uiUpdate :
     { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
     -> Coord Pixels
     -> Coord Pixels
     -> Msg
     -> Model
-    -> ( Maybe Model, Command FrontendOnly ToBackend msg )
+    -> ( Maybe Model, OutMsg )
 uiUpdate config elementPosition mousePosition msg model =
     case msg of
         PressedImageButton index ->
             ( updateCurrentImageMesh { model | currentTool = ImagePlacer { imageIndex = index, rotationIndex = 0 } } |> Just
-            , Command.none
+            , NoOutMsg
             )
 
         PressedBackground ->
-            ( Nothing, Command.none )
+            ( Nothing, NoOutMsg )
 
         MouseDownMail ->
             case model.to of
@@ -280,7 +279,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                 model2 =
                                     addChange newEditorState { model | lastPlacedImage = Just config.time }
                             in
-                            ( Just model2, UpdateMailEditorRequest (toData to model2) |> Lamdera.sendToBackend )
+                            ( Just model2, UpdateDraft (toData to model2) )
 
                         EraserTool ->
                             let
@@ -329,39 +328,39 @@ uiUpdate config elementPosition mousePosition msg model =
                                         addChange { oldEditorState | content = newContent } model
                                 in
                                 ( Just { model2 | lastErase = Just config.time }
-                                , UpdateMailEditorRequest (toData to model2) |> Lamdera.sendToBackend
+                                , UpdateDraft (toData to model2)
                                 )
 
                             else
-                                ( Just { model | lastErase = Just config.time }, Command.none )
+                                ( Just { model | lastErase = Just config.time }, NoOutMsg )
 
                         ImagePicker ->
                             Debug.todo ""
 
                 Nothing ->
-                    ( Just model, Command.none )
+                    ( Just model, NoOutMsg )
 
         PressedMail ->
-            ( Just model, Command.none )
+            ( Just model, NoOutMsg )
 
         PressedEraserButton ->
-            ( { model | currentTool = EraserTool } |> updateCurrentImageMesh |> Just, Command.none )
+            ( { model | currentTool = EraserTool } |> updateCurrentImageMesh |> Just, NoOutMsg )
 
         PressedSendLetter ->
             case model.to of
                 Just ( userId, _ ) ->
                     ( Just { model | submitStatus = Submitting }
-                    , SubmitMailRequest { content = model.current.content, to = userId } |> Lamdera.sendToBackend
+                    , SubmitMail { content = model.current.content, to = userId }
                     )
 
                 Nothing ->
-                    ( Just model, Command.none )
+                    ( Just model, NoOutMsg )
 
         TypedToUser _ _ _ _ ->
-            ( Just model, Command.none )
+            ( Just model, NoOutMsg )
 
         PressedCloseSendLetterInstructions ->
-            ( Nothing, Command.none )
+            ( Nothing, NoOutMsg )
 
 
 currentImage : ImagePlacer_ -> Image
@@ -499,15 +498,6 @@ type alias ImageData units =
     { textureSize : Coord units, texturePosition : List (Coord units), colors : Colors }
 
 
-type ToBackend
-    = SubmitMailRequest { content : List Content, to : Id UserId }
-    | UpdateMailEditorRequest { content : List Content, to : Id UserId }
-
-
-type ToFrontend
-    = SubmitMailResponse
-
-
 getImageData : Image -> ImageData units
 getImageData image =
     case image of
@@ -586,18 +576,6 @@ getImageData image =
             , texturePosition = [ Coord.xy 494 0 ]
             , colors = colors
             }
-
-
-updateFromBackend : ToFrontend -> Model -> Model
-updateFromBackend toFrontend mailEditor =
-    case toFrontend of
-        SubmitMailResponse ->
-            case mailEditor.submitStatus of
-                NotSubmitted ->
-                    mailEditor
-
-                Submitting ->
-                    { mailEditor | showSendLetterInstructions = True }
 
 
 toData : Id UserId -> Model -> { to : Id UserId, content : List Content }

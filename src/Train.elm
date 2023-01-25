@@ -312,7 +312,7 @@ moveTrain :
     -> Float
     -> Effect.Time.Posix
     -> Effect.Time.Posix
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
 moveTrain trainId maxSpeed startTime endTime state (Train train) =
@@ -367,7 +367,7 @@ moveTrainHelper :
     -> Effect.Time.Posix
     -> Quantity Float TileLocalUnit
     -> Quantity Float TileLocalUnit
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
 moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Train train) =
@@ -625,7 +625,7 @@ findNextTile :
     Id TrainId
     -> Effect.Time.Posix
     -> Point2d WorldUnit WorldUnit
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
@@ -667,7 +667,7 @@ findNextTileHelper :
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
-    -> { a | grid : Grid, mail : AssocList.Dict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> Maybe TrainData
@@ -724,7 +724,7 @@ checkPath :
     Id TrainId
     -> Effect.Time.Posix
     -> GridCell.Value
-    -> AssocList.Dict (Id MailId) { a | status : MailStatus, from : Id UserId, to : Id UserId }
+    -> IdDict MailId { a | status : MailStatus, from : Id UserId, to : Id UserId }
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
@@ -761,7 +761,7 @@ checkPath trainId time tile mail neighborCellPos position speed_ direction railP
                     if
                         List.any
                             (\mail_ -> tile.userId == mail_.from && mail_.status == MailWaitingPickup)
-                            (AssocList.values mail)
+                            (IdDict.values mail)
                     then
                         Just { time = time, userId = tile.userId }
 
@@ -835,7 +835,7 @@ trainT time (Train train) =
 
 draw :
     Effect.Time.Posix
-    -> AssocList.Dict (Id MailId) FrontendMail
+    -> IdDict MailId FrontendMail
     -> IdDict TrainId Train
     -> Mat4
     -> WebGL.Texture.Texture
@@ -1081,11 +1081,11 @@ trainEntity trainTexture trainMesh viewMatrix x y =
 
 
 carryingMail :
-    AssocList.Dict (Id MailId) { a | status : MailStatus }
+    IdDict MailId { a | status : MailStatus }
     -> Id TrainId
     -> Maybe ( Id MailId, { a | status : MailStatus } )
 carryingMail mail trainId =
-    AssocList.toList mail
+    IdDict.toList mail
         |> List.find
             (\( _, mail_ ) ->
                 case mail_.status of

@@ -17,9 +17,9 @@ import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
-import Id exposing (CowId, EventId, Id, UserId)
+import Id exposing (CowId, EventId, Id, MailId, UserId)
 import IdDict exposing (IdDict)
-import MailEditor
+import MailEditor exposing (MailStatus)
 import Point2d exposing (Point2d)
 import Units exposing (CellUnit, WorldUnit)
 import User exposing (FrontendUser)
@@ -43,6 +43,8 @@ type LocalChange
     | ChangeHandColor Colors
     | ToggleRailSplit (Coord WorldUnit)
     | ChangeDisplayName DisplayName
+    | SubmitMail { content : List MailEditor.Content, to : Id UserId }
+    | UpdateDraft { content : List MailEditor.Content, to : Id UserId }
 
 
 type ClientChange
@@ -61,6 +63,8 @@ type ServerChange
     | ServerChangeHandColor (Id UserId) Colors
     | ServerToggleRailSplit (Coord WorldUnit)
     | ServerChangeDisplayName (Id UserId) DisplayName
+    | ServerSubmitMail { from : Id UserId, to : Id UserId }
+    | ServerMailStatusChanged (Id MailId) MailStatus
 
 
 type alias Cow =

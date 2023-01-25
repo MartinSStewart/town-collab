@@ -82,7 +82,7 @@ init =
             , cows = IdDict.empty
             , lastWorldUpdateTrains = IdDict.empty
             , lastWorldUpdate = Nothing
-            , mail = AssocList.empty
+            , mail = IdDict.empty
             , pendingLoginTokens = AssocList.empty
             , invites = AssocList.empty
             , dummyField = 0
@@ -198,8 +198,8 @@ update isProduction msg model =
                                     model.trains
 
                         mergeTrains :
-                            { mail : AssocList.Dict (Id MailId) BackendMail
-                            , mailChanged : Bool
+                            { mail : IdDict MailId BackendMail
+                            , mailChanges : List ( Id MailId, MailStatus )
                             , diff : IdDict TrainId TrainDiff
                             }
                         mergeTrains =
@@ -213,24 +213,29 @@ update isProduction msg model =
                                     in
                                     case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
                                         ( TeleportingHome _, WaitingAtHome ) ->
-                                            { mail =
-                                                AssocList.map
-                                                    (\_ mail ->
-                                                        case mail.status of
-                                                            MailInTransit mailTrainId ->
-                                                                if trainId == mailTrainId then
-                                                                    { mail | status = MailWaitingPickup }
+                                            List.foldl
+                                                (\( mailId, mail ) state2 ->
+                                                    case mail.status of
+                                                        MailInTransit mailTrainId ->
+                                                            if trainId == mailTrainId then
+                                                                { mail =
+                                                                    IdDict.insert
+                                                                        mailId
+                                                                        { mail | status = MailWaitingPickup }
+                                                                        state2.mail
+                                                                , mailChanges =
+                                                                    ( mailId, MailWaitingPickup ) :: state2.mailChanges
+                                                                , diff = diff
+                                                                }
 
-                                                                else
-                                                                    mail
+                                                            else
+                                                                state2
 
-                                                            _ ->
-                                                                mail
-                                                    )
-                                                    state.mail
-                                            , mailChanged = True
-                                            , diff = diff
-                                            }
+                                                        _ ->
+                                                            state2
+                                                )
+                                                state
+                                                (IdDict.toList state.mail)
 
                                         ( StoppedAtPostOffice _, _ ) ->
                                             { state | diff = diff }
@@ -240,11 +245,11 @@ update isProduction msg model =
                                                 Just ( mailId, mail ) ->
                                                     if mail.to == userId then
                                                         { mail =
-                                                            AssocList.update
+                                                            IdDict.update
                                                                 mailId
                                                                 (\_ -> Just { mail | status = MailReceived })
                                                                 state.mail
-                                                        , mailChanged = True
+                                                        , mailChanges = ( mailId, MailReceived ) :: state.mailChanges
                                                         , diff = diff
                                                         }
 
@@ -258,11 +263,12 @@ update isProduction msg model =
                                                     of
                                                         ( mailId, mail ) :: _ ->
                                                             { mail =
-                                                                AssocList.update
+                                                                IdDict.update
                                                                     mailId
                                                                     (\_ -> Just { mail | status = MailInTransit trainId })
                                                                     state.mail
-                                                            , mailChanged = True
+                                                            , mailChanges =
+                                                                ( mailId, MailInTransit trainId ) :: state.mailChanges
                                                             , diff = diff
                                                             }
 
@@ -277,7 +283,7 @@ update isProduction msg model =
                                 )
                                 model.lastWorldUpdateTrains
                                 newTrains
-                                { mailChanged = False, mail = model.mail, diff = IdDict.empty }
+                                { mailChanges = [], mail = model.mail, diff = IdDict.empty }
                     in
                     ( { model
                         | lastWorldUpdate = Just time
@@ -287,13 +293,16 @@ update isProduction msg model =
                       }
                     , Command.batch
                         [ WorldUpdateBroadcast mergeTrains.diff |> Effect.Lamdera.broadcast
-                        , if mergeTrains.mailChanged then
-                            AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) mergeTrains.mail
-                                |> MailBroadcast
-                                |> Effect.Lamdera.broadcast
+                        , case Nonempty.fromList mergeTrains.mailChanges of
+                            Just nonempty ->
+                                Nonempty.map
+                                    (\( mailId, status ) -> ServerMailStatusChanged mailId status |> Change.ServerChange)
+                                    nonempty
+                                    |> ChangeBroadcast
+                                    |> Effect.Lamdera.broadcast
 
-                          else
-                            Command.none
+                            Nothing ->
+                                Command.none
                         ]
                     )
 
@@ -505,48 +514,6 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                 Nothing ->
                     ( model, Command.none )
-
-        MailEditorToBackend mailEditorToBackend ->
-            case mailEditorToBackend of
-                MailEditor.SubmitMailRequest { content, to } ->
-                    asUser
-                        sessionId
-                        model
-                        (\userId _ model2 ->
-                            let
-                                newMail : AssocList.Dict (Id MailId) BackendMail
-                                newMail =
-                                    AssocList.insert
-                                        (AssocList.size model2.mail |> Id.fromInt)
-                                        { content = content
-                                        , status = MailWaitingPickup
-                                        , from = userId
-                                        , to = to
-                                        }
-                                        model2.mail
-                            in
-                            ( { model2 | mail = newMail }
-                            , Command.batch
-                                [ MailEditor.SubmitMailResponse |> MailEditorToFrontend |> Effect.Lamdera.sendToFrontend clientId
-                                , MailBroadcast
-                                    (AssocList.map (\_ mail -> MailEditor.backendMailToFrontend mail) newMail)
-                                    |> Effect.Lamdera.broadcast
-                                ]
-                            )
-                        )
-
-                MailEditor.UpdateMailEditorRequest mailEditor ->
-                    asUser
-                        sessionId
-                        model
-                        (\userId _ model2 ->
-                            ( updateUser
-                                userId
-                                (\user -> { user | mailDrafts = IdDict.insert mailEditor.to mailEditor.content user.mailDrafts })
-                                model2
-                            , Command.none
-                            )
-                        )
 
         TeleportHomeTrainRequest trainId teleportTime ->
             ( { model
@@ -984,13 +951,46 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             , ServerChangeDisplayName userId displayName |> Just
             )
 
+        SubmitMail { to, content } ->
+            let
+                mailId =
+                    IdDict.size model.mail |> Id.fromInt
+
+                newMail : IdDict MailId BackendMail
+                newMail =
+                    IdDict.insert
+                        mailId
+                        { content = content
+                        , status = MailWaitingPickup
+                        , from = userId
+                        , to = to
+                        }
+                        model.mail
+            in
+            ( { model | mail = newMail }
+            , originalChange
+            , ServerSubmitMail { to = to, from = userId } |> Just
+            )
+
+        UpdateDraft { to, content } ->
+            ( { model
+                | users =
+                    IdDict.insert
+                        userId
+                        { user | mailDrafts = IdDict.insert to content user.mailDrafts }
+                        model.users
+              }
+            , originalChange
+            , Nothing
+            )
+
 
 removeTrain : Id TrainId -> BackendModel -> BackendModel
 removeTrain trainId model =
     { model
         | trains = IdDict.remove trainId model.trains
         , mail =
-            AssocList.map
+            IdDict.map
                 (\_ mail ->
                     case mail.status of
                         MailInTransit trainId2 ->
@@ -1148,7 +1148,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
             , userStatus = userStatus
             , viewBounds = viewBounds
             , trains = model3.trains
-            , mail = AssocList.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
+            , mail = IdDict.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
             , cows = model3.cows
             , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
             , users = IdDict.map (\_ a -> backendUserToFrontend a) model3.users

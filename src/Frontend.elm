@@ -490,7 +490,6 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , removedTileParticles = []
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
-            , mail = loadedLocalModel.mail
             , mailEditor =
                 case ( loading.showInbox, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
                     ( True, LoggedIn _ ) ->
@@ -535,7 +534,7 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , debugText = ""
             }
                 |> setCurrentTool HandToolButton
-                |> handleOutMsg False LocalGrid.HandColorChanged
+                |> (\state -> handleOutMsg False ( state, LocalGrid.HandColorChanged ))
     in
     ( updateMeshes True model model
     , Command.batch
@@ -940,7 +939,7 @@ updateLoaded audioData msg model =
                                                             ( model, LocalGrid.NoOutMsg )
 
                                                 model3 =
-                                                    handleOutMsg False outMsg2 model2
+                                                    handleOutMsg False ( model2, outMsg2 )
                                             in
                                             ( { model3 | topMenuOpened = SettingsMenu newTextInput |> Just }
                                             , case outMsg of
@@ -1580,7 +1579,7 @@ updateLoaded audioData msg model =
                                         Train.defaultMaxSpeed
                                         model.time
                                         time
-                                        { grid = localGrid.grid, mail = AssocList.empty }
+                                        { grid = localGrid.grid, mail = IdDict.empty }
                                         train
                                 )
                                 model.trains
@@ -1890,15 +1889,12 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
         HandTool ->
             case maybeNewColor of
                 Just color ->
-                    let
-                        ( model2, outMsg ) =
-                            updateLocalModel
-                                (updateColor color (getHandColor userId model)
-                                    |> Change.ChangeHandColor
-                                )
-                                model
-                    in
-                    ( handleOutMsg False outMsg model2, Command.none )
+                    ( updateLocalModel
+                        (updateColor color (getHandColor userId model) |> Change.ChangeHandColor)
+                        model
+                        |> handleOutMsg False
+                    , Command.none
+                    )
 
                 Nothing ->
                     ( model, Command.none )
@@ -2288,11 +2284,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
         handleRailSplit =
             Just
                 (\() ->
-                    let
-                        ( model2, outMsg ) =
-                            updateLocalModel (Change.ToggleRailSplit position) model
-                    in
-                    ( handleOutMsg False outMsg model2, Command.none )
+                    ( updateLocalModel (Change.ToggleRailSplit position) model |> handleOutMsg False, Command.none )
                 )
     in
     case tile of
@@ -2646,19 +2638,32 @@ uiUpdate elementPosition msg model =
                                 |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                                 |> Coord.roundPoint
 
-                        ( newMailEditor, cmd ) =
+                        ( newMailEditor, outMsg ) =
                             MailEditor.uiUpdate model elementPosition mousePosition2 mailEditorMsg mailEditor
-                    in
-                    ( { model
-                        | mailEditor = newMailEditor
-                        , lastMailEditorToggle =
-                            if newMailEditor == Nothing then
-                                Just model.time
 
-                            else
-                                model.lastMailEditorToggle
-                      }
-                    , Command.map MailEditorToBackend identity cmd
+                        model2 =
+                            { model
+                                | mailEditor = newMailEditor
+                                , lastMailEditorToggle =
+                                    if newMailEditor == Nothing then
+                                        Just model.time
+
+                                    else
+                                        model.lastMailEditorToggle
+                            }
+                    in
+                    ( (case outMsg of
+                        MailEditor.NoOutMsg ->
+                            ( model2, LocalGrid.NoOutMsg )
+
+                        MailEditor.SubmitMail submitMail ->
+                            updateLocalModel (Change.SubmitMail submitMail) model2
+
+                        MailEditor.UpdateDraft updateDraft ->
+                            updateLocalModel (Change.UpdateDraft updateDraft) model2
+                      )
+                        |> handleOutMsg False
+                    , Command.none
                     )
 
                 Nothing ->
@@ -3592,8 +3597,8 @@ updateFromBackend msg model =
             ( model, Command.none )
 
 
-handleOutMsg : Bool -> LocalGrid.OutMsg -> FrontendLoaded -> FrontendLoaded
-handleOutMsg isFromBackend outMsg model =
+handleOutMsg : Bool -> ( FrontendLoaded, LocalGrid.OutMsg ) -> FrontendLoaded
+handleOutMsg isFromBackend ( model, outMsg ) =
     case outMsg of
         LocalGrid.NoOutMsg ->
             model
@@ -3674,7 +3679,12 @@ updateLoadedFromBackend msg model =
                 ( newLocalModel, outMsgs ) =
                     LocalGrid.updateFromBackend changes model.localModel
             in
-            ( List.foldl (handleOutMsg True) { model | localModel = newLocalModel } outMsgs, Command.none )
+            ( List.foldl
+                (\outMsg state -> handleOutMsg True ( state, outMsg ))
+                { model | localModel = newLocalModel }
+                outMsgs
+            , Command.none
+            )
 
         UnsubscribeEmailConfirmed ->
             ( model, Command.none )
@@ -3696,21 +3706,6 @@ updateLoadedFromBackend msg model =
               }
             , Command.none
             )
-
-        MailEditorToFrontend mailEditorToFrontend ->
-            case model.mailEditor of
-                Just mailEditor ->
-                    ( { model
-                        | mailEditor = MailEditor.updateFromBackend mailEditorToFrontend mailEditor |> Just
-                      }
-                    , Command.none
-                    )
-
-                Nothing ->
-                    ( model, Command.none )
-
-        MailBroadcast mail ->
-            ( { model | mail = mail }, Command.none )
 
         PingResponse serverTime ->
             case model.pingStartTime of
@@ -4402,7 +4397,7 @@ canvasView audioData model =
                         in
                         drawBackground meshes viewMatrix texture
                             ++ drawForeground meshes viewMatrix texture
-                            ++ Train.draw model.time model.mail model.trains viewMatrix trainTexture
+                            ++ Train.draw model.time localGrid.mail model.trains viewMatrix trainTexture
                             ++ List.filterMap
                                 (\( cowId, _ ) ->
                                     case cowActualPosition cowId model of
@@ -4820,14 +4815,14 @@ getFlags model =
 
         hasMailWaitingPickup : Id UserId -> Bool
         hasMailWaitingPickup userId =
-            MailEditor.getMailFrom userId model.mail
+            MailEditor.getMailFrom userId localModel.mail
                 |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
                 |> List.isEmpty
                 |> not
 
         hasReceivedNewMail : Id UserId -> Bool
         hasReceivedNewMail userId =
-            MailEditor.getMailTo userId model.mail
+            MailEditor.getMailTo userId localModel.mail
                 |> List.filter (\( _, mail ) -> mail.status == MailReceived)
                 |> List.isEmpty
                 |> not

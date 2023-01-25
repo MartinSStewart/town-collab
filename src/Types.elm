@@ -110,7 +110,7 @@ type LoadingLocalModel
 type alias LoadedLocalModel_ =
     { localModel : LocalModel Change LocalGrid
     , trains : IdDict TrainId Train
-    , mail : AssocList.Dict (Id MailId) FrontendMail
+    , mail : IdDict MailId FrontendMail
     }
 
 
@@ -160,7 +160,6 @@ type alias FrontendLoaded =
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Effect.Time.Posix
-    , mail : AssocList.Dict (Id MailId) FrontendMail
     , mailEditor : Maybe Model
     , lastMailEditorToggle : Maybe Effect.Time.Posix
     , currentTool : Tool
@@ -287,7 +286,7 @@ type alias BackendModel =
     , cows : IdDict CowId Cow
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
-    , mail : AssocList.Dict (Id MailId) BackendMail
+    , mail : IdDict MailId BackendMail
     , pendingLoginTokens :
         AssocList.Dict
             (SecretId LoginToken)
@@ -367,7 +366,6 @@ type ToBackend
     = ConnectToBackend (Bounds CellUnit) (Maybe LoginOrInviteToken)
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
-    | MailEditorToBackend MailEditor.ToBackend
     | TeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | CancelTeleportHomeTrainRequest (Id TrainId)
     | LeaveHomeTrainRequest (Id TrainId)
@@ -390,8 +388,6 @@ type ToFrontend
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
     | WorldUpdateBroadcast (IdDict TrainId TrainDiff)
-    | MailEditorToFrontend MailEditor.ToFrontend
-    | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
     | DebugResponse String
@@ -407,7 +403,7 @@ type alias LoadingData_ =
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
     , trains : IdDict TrainId Train
-    , mail : AssocList.Dict (Id MailId) FrontendMail
+    , mail : IdDict MailId FrontendMail
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser

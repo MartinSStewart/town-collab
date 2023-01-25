@@ -11,6 +11,7 @@ module LocalGrid exposing
     , updateFromBackend
     )
 
+import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
@@ -19,10 +20,11 @@ import Dict exposing (Dict)
 import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell
-import Id exposing (CowId, Id, UserId)
+import Id exposing (CowId, Id, MailId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
+import MailEditor exposing (FrontendMail, MailStatus(..))
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -44,6 +46,7 @@ type alias LocalGrid_ =
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
+    , mail : IdDict MailId FrontendMail
     }
 
 
@@ -66,9 +69,10 @@ init :
         , cows : IdDict CowId Cow
         , cursors : IdDict UserId Cursor
         , users : IdDict UserId FrontendUser
+        , mail : IdDict MailId FrontendMail
     }
     -> LocalModel Change LocalGrid
-init { grid, userStatus, viewBounds, cows, cursors, users } =
+init { grid, userStatus, viewBounds, cows, cursors, users, mail } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
@@ -76,6 +80,7 @@ init { grid, userStatus, viewBounds, cows, cursors, users } =
         , cows = cows
         , cursors = cursors
         , users = users
+        , mail = mail
         }
         |> LocalModel.init
 
@@ -266,6 +271,44 @@ updateLocalChange localChange model =
                 NotLoggedIn ->
                     ( model, NoOutMsg )
 
+        SubmitMail submitMail ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    let
+                        mailId =
+                            IdDict.size model.mail |> Id.fromInt
+                    in
+                    ( { model
+                        | userStatus =
+                            LoggedIn { loggedIn | mailDrafts = IdDict.remove submitMail.to loggedIn.mailDrafts }
+                        , mail =
+                            IdDict.insert mailId
+                                { to = submitMail.to, from = loggedIn.userId, status = MailWaitingPickup }
+                                model.mail
+                      }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
+        UpdateDraft updateDraft ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model
+                        | userStatus =
+                            LoggedIn
+                                { loggedIn
+                                    | mailDrafts =
+                                        IdDict.insert updateDraft.to updateDraft.content loggedIn.mailDrafts
+                                }
+                      }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -337,6 +380,20 @@ updateServerChange serverChange model =
                         (Maybe.map (\user -> { user | name = displayName }))
                         model.users
               }
+            , NoOutMsg
+            )
+
+        ServerSubmitMail { to, from } ->
+            let
+                mailId =
+                    IdDict.size model.mail |> Id.fromInt
+            in
+            ( { model | mail = IdDict.insert mailId { to = to, from = from, status = MailWaitingPickup } model.mail }
+            , NoOutMsg
+            )
+
+        ServerMailStatusChanged mailId mailStatus ->
+            ( { model | mail = IdDict.update mailId (Maybe.map (\mail -> { mail | status = mailStatus })) model.mail }
             , NoOutMsg
             )
 
