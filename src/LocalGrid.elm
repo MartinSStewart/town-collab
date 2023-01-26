@@ -442,6 +442,35 @@ updateServerChange serverChange model =
             , TrainsUpdated diff
             )
 
+        ServerReceivedMail mailId from content deliveryTime ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model
+                        | userStatus =
+                            LoggedIn
+                                { loggedIn
+                                    | inbox =
+                                        IdDict.insert
+                                            mailId
+                                            { from = from
+                                            , content = content
+                                            , deliveryTime = deliveryTime
+                                            , isViewed = False
+                                            }
+                                            loggedIn.inbox
+                                }
+                        , mail =
+                            IdDict.update
+                                mailId
+                                (Maybe.map (\mail -> { mail | status = MailReceived { deliveryTime = deliveryTime } }))
+                                model.mail
+                      }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 pickupCow userId cowId position time model =

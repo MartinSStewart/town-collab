@@ -72,6 +72,7 @@ type ServerChange
     | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerWorldUpdateBroadcast (IdDict TrainId TrainDiff)
+    | ServerReceivedMail (Id MailId) (Id UserId) (List MailEditor.Content) Effect.Time.Posix
 
 
 type alias Cow =

@@ -70,6 +70,7 @@ type TileGroup
     | FenceStraightGroup
     | BusStopGroup
     | HospitalGroup
+    | StatueGroup
 
 
 allTileGroups : List TileGroup
@@ -100,6 +101,7 @@ allTileGroups =
     , FenceStraightGroup
     , BusStopGroup
     , HospitalGroup
+    , StatueGroup
     ]
 
 
@@ -284,6 +286,12 @@ getTileGroupData tileGroup =
             , name = "Hospital"
             }
 
+        StatueGroup ->
+            { defaultColors = defaultStatueColor
+            , tiles = Nonempty Statue []
+            , name = "Statue"
+            }
+
 
 type Tile
     = EmptyTile
@@ -357,6 +365,7 @@ type Tile
     | BusStopRight
     | BusStopUp
     | Hospital
+    | Statue
 
 
 type Direction
@@ -920,6 +929,11 @@ defaultBusStopColor =
 defaultHospitalColor : DefaultColor
 defaultHospitalColor =
     TwoDefaultColors { primaryColor = Color.rgb255 245 245 245, secondaryColor = Color.rgb255 163 224 223 }
+
+
+defaultStatueColor : DefaultColor
+defaultStatueColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 208 195 173, secondaryColor = Color.rgb255 171 129 128 }
 
 
 getData : Tile -> TileData unit
@@ -1982,6 +1996,21 @@ getData tile =
                 , ( 0, 4 )
                 , ( 1, 4 )
                 , ( 2, 4 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        Statue ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 17 43 }
+            , size = Coord.xy 2 3
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                , ( 0, 2 )
+                , ( 1, 2 )
                 ]
                     |> Set.fromList
                     |> CustomCollision

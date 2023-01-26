@@ -418,31 +418,15 @@ images =
                 in
                 TileImage group 0 (Tile.defaultToPrimaryAndSecondary data.defaultColors)
             )
-            [ FenceStraightGroup
-            , BusStopGroup
-            , PineTreeGroup
-            , LogCabinGroup
-            , HouseGroup
-            , RailStraightGroup
-            , RailTurnLargeGroup
-            , RailTurnGroup
-            , RailStrafeGroup
-            , RailStrafeSmallGroup
-            , RailCrossingGroup
-            , TrainHouseGroup
-            , SidewalkGroup
-            , SidewalkRailGroup
-            , RailTurnSplitGroup
-            , RailTurnSplitMirrorGroup
-            , PostOfficeGroup
-            , RoadStraightGroup
-            , RoadTurnGroup
-            , Road4WayGroup
-            , RoadSidewalkCrossingGroup
-            , Road3WayGroup
-            , RoadRailCrossingGroup
-            , RoadDeadendGroup
-            ]
+            Tile.allTileGroups
+        |> List.sortBy
+            (\image ->
+                let
+                    data =
+                        getImageData image
+                in
+                data.textureSize |> Coord.xRaw |> (*) (imageButtonScale data.textureSize)
+            )
         |> Array.fromList
 
 
@@ -1255,6 +1239,15 @@ imageButtons idMap msgMap currentImageIndex =
         |> Ui.row { padding = Ui.noPadding, spacing = 2 }
 
 
+imageButtonScale : Coord units -> number
+imageButtonScale size =
+    if Coord.xRaw size < 36 && Coord.yRaw size < 36 then
+        2
+
+    else
+        1
+
+
 imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Maybe Int -> Int -> Image -> Ui.Element uiHover msg
 imageButton idMap msgMap selectedIndex index image =
     let
@@ -1262,15 +1255,8 @@ imageButton idMap msgMap selectedIndex index image =
         imageData =
             getImageData image
 
-        ( width, height ) =
-            Coord.toTuple imageData.textureSize
-
         scale =
-            if width < 36 && height < 36 then
-                2
-
-            else
-                1
+            imageButtonScale imageData.textureSize
     in
     highlightButton
         (Ui.paddingXY 4 4)

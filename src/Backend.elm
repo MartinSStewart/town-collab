@@ -199,7 +199,7 @@ update isProduction msg model =
 
                         mergeTrains :
                             { mail : IdDict MailId BackendMail
-                            , mailChanges : List ( Id MailId, MailStatus )
+                            , mailChanges : List ( Id MailId, BackendMail )
                             , diff : IdDict TrainId TrainDiff
                             }
                         mergeTrains =
@@ -218,13 +218,12 @@ update isProduction msg model =
                                                     case mail.status of
                                                         MailInTransit mailTrainId ->
                                                             if trainId == mailTrainId then
-                                                                { mail =
-                                                                    IdDict.insert
-                                                                        mailId
+                                                                let
+                                                                    mail2 =
                                                                         { mail | status = MailWaitingPickup }
-                                                                        state2.mail
-                                                                , mailChanges =
-                                                                    ( mailId, MailWaitingPickup ) :: state2.mailChanges
+                                                                in
+                                                                { mail = IdDict.insert mailId mail2 state2.mail
+                                                                , mailChanges = ( mailId, mail2 ) :: state2.mailChanges
                                                                 , diff = state2.diff
                                                                 }
 
@@ -244,14 +243,12 @@ update isProduction msg model =
                                             case Train.carryingMail state.mail trainId of
                                                 Just ( mailId, mail ) ->
                                                     if mail.to == userId then
-                                                        { mail =
-                                                            IdDict.update
-                                                                mailId
-                                                                (\_ -> Just { mail | status = MailReceived { deliveryTime = time } })
-                                                                state.mail
-                                                        , mailChanges =
-                                                            ( mailId, MailReceived { deliveryTime = time } )
-                                                                :: state.mailChanges
+                                                        let
+                                                            mail2 =
+                                                                { mail | status = MailReceived { deliveryTime = time } }
+                                                        in
+                                                        { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                                        , mailChanges = ( mailId, mail2 ) :: state.mailChanges
                                                         , diff = diff
                                                         }
 
@@ -264,13 +261,12 @@ update isProduction msg model =
                                                             |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
                                                     of
                                                         ( mailId, mail ) :: _ ->
-                                                            { mail =
-                                                                IdDict.update
-                                                                    mailId
-                                                                    (\_ -> Just { mail | status = MailInTransit trainId })
-                                                                    state.mail
-                                                            , mailChanges =
-                                                                ( mailId, MailInTransit trainId ) :: state.mailChanges
+                                                            let
+                                                                mail2 =
+                                                                    { mail | status = MailInTransit trainId }
+                                                            in
+                                                            { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                                            , mailChanges = ( mailId, mail2 ) :: state.mailChanges
                                                             , diff = diff
                                                             }
 
@@ -293,14 +289,31 @@ update isProduction msg model =
                         , lastWorldUpdateTrains = model.trains
                         , mail = mergeTrains.mail
                       }
-                    , Nonempty
-                        (Change.ServerChange (ServerWorldUpdateBroadcast mergeTrains.diff))
-                        (List.map
-                            (\( mailId, status ) -> ServerMailStatusChanged mailId status |> Change.ServerChange)
-                            mergeTrains.mailChanges
+                    , broadcast
+                        (\sessionId clientId ->
+                            let
+                                maybeUserId =
+                                    getUserFromSessionId sessionId model |> Maybe.map Tuple.first
+                            in
+                            Nonempty
+                                (Change.ServerChange (ServerWorldUpdateBroadcast mergeTrains.diff))
+                                (List.map
+                                    (\( mailId, mail ) ->
+                                        (case ( Just mail.to == maybeUserId, mail.status ) of
+                                            ( True, MailReceived { deliveryTime } ) ->
+                                                ServerReceivedMail mailId mail.from mail.content deliveryTime
+
+                                            _ ->
+                                                ServerMailStatusChanged mailId mail.status
+                                        )
+                                            |> Change.ServerChange
+                                    )
+                                    mergeTrains.mailChanges
+                                )
+                                |> ChangeBroadcast
+                                |> Just
                         )
-                        |> ChangeBroadcast
-                        |> Effect.Lamdera.broadcast
+                        model
                     )
 
                 Nothing ->
