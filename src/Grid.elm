@@ -685,7 +685,7 @@ tileMesh tile position scale colors =
             Tile.getData tile
     in
     if tile == EmptyTile then
-        Cursor.eraserCursorMesh
+        Sprite.sprite (Coord.plus (Coord.xy 6 -16) position) (Coord.xy 28 27) (Coord.xy 504 42) (Coord.xy 28 27)
 
     else
         (case data.texturePosition of
