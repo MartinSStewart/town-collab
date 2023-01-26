@@ -69,6 +69,7 @@ type TileGroup
     | RoadDeadendGroup
     | FenceStraightGroup
     | BusStopGroup
+    | HospitalGroup
 
 
 allTileGroups : List TileGroup
@@ -98,6 +99,7 @@ allTileGroups =
     , RoadDeadendGroup
     , FenceStraightGroup
     , BusStopGroup
+    , HospitalGroup
     ]
 
 
@@ -276,6 +278,12 @@ getTileGroupData tileGroup =
             , name = "Bus stop"
             }
 
+        HospitalGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty Hospital []
+            , name = "Hospital"
+            }
+
 
 type Tile
     = EmptyTile
@@ -348,6 +356,7 @@ type Tile
     | BusStopLeft
     | BusStopRight
     | BusStopUp
+    | Hospital
 
 
 type Direction
@@ -1945,6 +1954,19 @@ getData tile =
             { texturePosition = Just (Coord.xy 12 42)
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 12 46 }
             , size = Coord.xy 2 2
+            , collisionMask =
+                [ ( 0, 1 )
+                , ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        Hospital ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 14 46 }
+            , size = Coord.xy 3 5
             , collisionMask =
                 [ ( 0, 1 )
                 , ( 1, 1 )
