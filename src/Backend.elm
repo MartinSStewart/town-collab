@@ -247,9 +247,11 @@ update isProduction msg model =
                                                         { mail =
                                                             IdDict.update
                                                                 mailId
-                                                                (\_ -> Just { mail | status = MailReceived })
+                                                                (\_ -> Just { mail | status = MailReceived { deliveryTime = time } })
                                                                 state.mail
-                                                        , mailChanges = ( mailId, MailReceived ) :: state.mailChanges
+                                                        , mailChanges =
+                                                            ( mailId, MailReceived { deliveryTime = time } )
+                                                                :: state.mailChanges
                                                         , diff = diff
                                                         }
 
@@ -629,9 +631,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                         (SentInviteEmail inviteToken)
                                         (NonemptyString 'T' "own-collab invitation")
                                         ("You've been invited by "
-                                            ++ DisplayName.toString user.name
-                                            ++ "#"
-                                            ++ String.fromInt (Id.toInt userId)
+                                            ++ DisplayName.nameAndId user.name userId
                                             ++ " to join town-collab! Click this link to join "
                                             ++ inviteUrl
                                             ++ ". If you weren't expecting this email then it is safe to ignore."
@@ -640,9 +640,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                             []
                                             [ Email.Html.text
                                                 ("You've been invited by "
-                                                    ++ DisplayName.toString user.name
-                                                    ++ "#"
-                                                    ++ String.fromInt (Id.toInt userId)
+                                                    ++ DisplayName.nameAndId user.name userId
                                                     ++ " to join town-collab! "
                                                 )
                                             , Email.Html.a
@@ -1006,10 +1004,10 @@ removeTrain trainId model =
                         MailWaitingPickup ->
                             mail
 
-                        MailReceived ->
+                        MailReceived _ ->
                             mail
 
-                        MailReceivedAndViewed ->
+                        MailReceivedAndViewed _ ->
                             mail
                 )
                 model.mail
@@ -1041,6 +1039,40 @@ hiddenUsers userId model =
         |> EverySet.fromList
 
 
+getUserInbox : Id UserId -> BackendModel -> IdDict MailId MailEditor.ReceivedMail
+getUserInbox userId model =
+    IdDict.filterMap
+        (\_ mail ->
+            if mail.to == userId then
+                case mail.status of
+                    MailWaitingPickup ->
+                        Nothing
+
+                    MailInTransit _ ->
+                        Nothing
+
+                    MailReceived { deliveryTime } ->
+                        Just
+                            { content = mail.content
+                            , from = mail.from
+                            , isViewed = False
+                            , deliveryTime = deliveryTime
+                            }
+
+                    MailReceivedAndViewed { deliveryTime } ->
+                        Just
+                            { content = mail.content
+                            , from = mail.from
+                            , isViewed = True
+                            , deliveryTime = deliveryTime
+                            }
+
+            else
+                Nothing
+        )
+        model.mail
+
+
 requestDataUpdate :
     Effect.Time.Posix
     -> SessionId
@@ -1061,6 +1093,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , redoHistory = user.redoHistory
                         , mailDrafts = user.mailDrafts
                         , emailAddress = user.emailAddress
+                        , inbox = getUserInbox userId model
                         }
 
                 Nothing ->
@@ -1084,6 +1117,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , redoHistory = user.redoHistory
                                             , mailDrafts = user.mailDrafts
                                             , emailAddress = user.emailAddress
+                                            , inbox = getUserInbox data.userId model
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , Just data.requestedBy
@@ -1116,6 +1150,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , redoHistory = newUser.redoHistory
                                 , mailDrafts = newUser.mailDrafts
                                 , emailAddress = newUser.emailAddress
+                                , inbox = getUserInbox userId model
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites

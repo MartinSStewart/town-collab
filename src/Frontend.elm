@@ -1357,24 +1357,7 @@ updateLoaded audioData msg model =
                                                 }
 
                                             MailEditorHover mailEditorHover ->
-                                                case mailEditorHover of
-                                                    MailEditor.BackgroundHover ->
-                                                        model2
-
-                                                    MailEditor.ImageButton int ->
-                                                        model2
-
-                                                    MailEditor.MailButton ->
-                                                        model2
-
-                                                    MailEditor.EraserButton ->
-                                                        model2
-
-                                                    MailEditor.SendLetterButton ->
-                                                        model2
-
-                                                    MailEditor.CloseSendLetterInstructionsButton ->
-                                                        model2
+                                                model2
 
                                     CowHover _ ->
                                         placeTileHelper model2
@@ -1733,24 +1716,7 @@ updateLoaded audioData msg model =
                                     ( model, Command.none )
 
                         MailEditorHover mailEditorHover ->
-                            case mailEditorHover of
-                                MailEditor.BackgroundHover ->
-                                    ( model, Command.none )
-
-                                MailEditor.ImageButton int ->
-                                    ( model, Command.none )
-
-                                MailEditor.MailButton ->
-                                    ( model, Command.none )
-
-                                MailEditor.EraserButton ->
-                                    ( model, Command.none )
-
-                                MailEditor.SendLetterButton ->
-                                    ( model, Command.none )
-
-                                MailEditor.CloseSendLetterInstructionsButton ->
-                                    ( model, Command.none )
+                            ( model, Command.none )
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -1937,13 +1903,17 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
 
 getViewModel : FrontendLoaded -> ViewData
 getViewModel model =
+    let
+        localModel =
+            LocalGrid.localModel model.localModel
+    in
     { devicePixelRatio = model.devicePixelRatio
     , windowSize = model.windowSize
     , pressedSubmitEmail = model.pressedSubmitEmail
     , loginTextInput = model.loginTextInput
     , hasCmdKey = model.hasCmdKey
     , handColor = Maybe.map (\userId -> getHandColor userId model) (currentUserId model)
-    , userStatus = LocalGrid.localModel model.localModel |> .userStatus
+    , userStatus = localModel.userStatus
     , primaryColorTextInput = model.primaryColorTextInput
     , secondaryColorTextInput = model.secondaryColorTextInput
     , tileColors = model.tileColors
@@ -1957,6 +1927,7 @@ getViewModel model =
     , musicVolume = model.musicVolume
     , soundEffectVolume = model.soundEffectVolume
     , mailEditor = model.mailEditor
+    , users = localModel.users
     }
 
 
@@ -4790,7 +4761,15 @@ getFlags model =
         hasReceivedNewMail : Id UserId -> Bool
         hasReceivedNewMail userId =
             MailEditor.getMailTo userId localModel.mail
-                |> List.filter (\( _, mail ) -> mail.status == MailReceived)
+                |> List.filter
+                    (\( _, mail ) ->
+                        case mail.status of
+                            MailReceived _ ->
+                                True
+
+                            _ ->
+                                False
+                    )
                 |> List.isEmpty
                 |> not
     in

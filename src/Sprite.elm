@@ -228,7 +228,8 @@ charTexturePositionHelper =
 text : Color -> Int -> String -> Coord unit -> List Vertex
 text color charScale string position =
     let
-        charSize_ =
+        charSize2 : Coord unit
+        charSize2 =
             Coord.multiplyTuple ( charScale, charScale ) charSize
     in
     String.toList string
@@ -236,18 +237,18 @@ text color charScale string position =
             (\char state ->
                 if char == '\n' then
                     { offsetX = 0
-                    , offsetY = state.offsetY + Coord.yRaw charSize_
+                    , offsetY = state.offsetY + Coord.yRaw charSize2
                     , vertices = state.vertices
                     }
 
                 else
-                    { offsetX = state.offsetX + Coord.xRaw charSize_
+                    { offsetX = state.offsetX + Coord.xRaw charSize2
                     , offsetY = state.offsetY
                     , vertices =
                         spriteWithColor
                             color
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
-                            charSize_
+                            charSize2
                             (charTexturePosition char)
                             charSize
                             ++ state.vertices

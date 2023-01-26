@@ -15,7 +15,7 @@ import Dict exposing (Dict)
 import DisplayName
 import Duration
 import EmailAddress exposing (EmailAddress)
-import Id exposing (Id, UserId)
+import Id exposing (Id, MailId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import List.Extra as List
@@ -55,20 +55,23 @@ type alias ViewData =
     , soundEffectVolume : Int
     , topMenuOpened : Maybe TopMenu
     , mailEditor : Maybe MailEditor.Model
+    , users : IdDict UserId FrontendUser
     }
 
 
 view : ViewData -> Ui.Element UiHover UiMsg
 view data =
-    case data.mailEditor of
-        Just mailEditor ->
+    case ( data.userStatus, data.mailEditor ) of
+        ( LoggedIn loggedIn, Just mailEditor ) ->
             MailEditor.ui
                 (Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize)
                 MailEditorHover
                 MailEditorUiMsg
+                data.users
+                loggedIn.inbox
                 mailEditor
 
-        Nothing ->
+        _ ->
             Ui.bottomCenter
                 { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
                 , inFront =

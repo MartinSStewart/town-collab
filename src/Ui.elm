@@ -23,6 +23,7 @@ module Ui exposing
     , paddingXY2
     , quads
     , row
+    , scaledText
     , size
     , sprite
     , tabBackward
@@ -127,6 +128,17 @@ text text2 =
         , scale = defaultCharScale
         , text = text2
         , cachedSize = Sprite.textSize defaultCharScale text2
+        }
+
+
+scaledText : Int -> String -> Element id msg
+scaledText scale text2 =
+    Text
+        { outline = Nothing
+        , color = Color.black
+        , scale = scale
+        , text = text2
+        , cachedSize = Sprite.textSize scale text2
         }
 
 

@@ -20,6 +20,7 @@ import GridCell
 import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import MailEditor exposing (MailStatus)
+import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Train exposing (TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
@@ -90,4 +91,5 @@ type alias LoggedIn_ =
     , undoCurrent : Dict RawCellCoord Int
     , mailDrafts : IdDict UserId (List MailEditor.Content)
     , emailAddress : EmailAddress
+    , inbox : IdDict MailId MailEditor.ReceivedMail
     }

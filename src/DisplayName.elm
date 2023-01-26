@@ -5,10 +5,12 @@ module DisplayName exposing
     , fromString
     , maxLength
     , minLength
+    , nameAndId
     , toNonemptyString
     , toString
     )
 
+import Id exposing (Id, UserId)
 import String.Nonempty exposing (NonemptyString(..))
 
 
@@ -65,3 +67,8 @@ toNonemptyString (DisplayName groupName) =
 default : DisplayName
 default =
     DisplayName (NonemptyString 'U' "nnamed")
+
+
+nameAndId : DisplayName -> Id UserId -> String
+nameAndId name userId =
+    toString name ++ "#" ++ String.fromInt (Id.toInt userId)
