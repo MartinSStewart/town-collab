@@ -17,10 +17,11 @@ import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
-import Id exposing (CowId, EventId, Id, MailId, UserId)
+import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import MailEditor exposing (MailStatus)
 import Point2d exposing (Point2d)
+import Train exposing (TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import User exposing (FrontendUser)
 
@@ -45,6 +46,8 @@ type LocalChange
     | ChangeDisplayName DisplayName
     | SubmitMail { content : List MailEditor.Content, to : Id UserId }
     | UpdateDraft { content : List MailEditor.Content, to : Id UserId }
+    | TeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
+    | LeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
 
 
 type ClientChange
@@ -65,6 +68,9 @@ type ServerChange
     | ServerChangeDisplayName (Id UserId) DisplayName
     | ServerSubmitMail { from : Id UserId, to : Id UserId }
     | ServerMailStatusChanged (Id MailId) MailStatus
+    | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
+    | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
+    | ServerWorldUpdateBroadcast (IdDict TrainId TrainDiff)
 
 
 type alias Cow =

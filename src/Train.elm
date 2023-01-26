@@ -5,7 +5,6 @@ module Train exposing
     , TrainDiff(..)
     , applyDiff
     , canRemoveTiles
-    , cancelTeleportingHome
     , carryingMail
     , coachPosition
     , defaultMaxSpeed
@@ -1008,26 +1007,6 @@ startTeleportingHome time (Train train) =
 
                     TeleportingHome _ ->
                         train.status
-
-                    WaitingAtHome ->
-                        train.status
-
-                    StoppedAtPostOffice _ ->
-                        train.status
-        }
-
-
-cancelTeleportingHome : Effect.Time.Posix -> Train -> Train
-cancelTeleportingHome time (Train train) =
-    Train
-        { train
-            | status =
-                case status time (Train train) of
-                    Travelling ->
-                        train.status
-
-                    TeleportingHome _ ->
-                        Travelling
 
                     WaitingAtHome ->
                         train.status

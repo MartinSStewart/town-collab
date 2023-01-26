@@ -366,9 +366,6 @@ type ToBackend
     = ConnectToBackend (Bounds CellUnit) (Maybe LoginOrInviteToken)
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
-    | TeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
-    | CancelTeleportHomeTrainRequest (Id TrainId)
-    | LeaveHomeTrainRequest (Id TrainId)
     | PingRequest
     | SendLoginEmailRequest (Untrusted EmailAddress)
     | SendInviteEmailRequest (Untrusted EmailAddress)
@@ -387,7 +384,6 @@ type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | WorldUpdateBroadcast (IdDict TrainId TrainDiff)
     | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
     | DebugResponse String

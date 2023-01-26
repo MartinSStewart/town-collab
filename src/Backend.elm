@@ -225,7 +225,7 @@ update isProduction msg model =
                                                                         state2.mail
                                                                 , mailChanges =
                                                                     ( mailId, MailWaitingPickup ) :: state2.mailChanges
-                                                                , diff = diff
+                                                                , diff = state2.diff
                                                                 }
 
                                                             else
@@ -234,7 +234,7 @@ update isProduction msg model =
                                                         _ ->
                                                             state2
                                                 )
-                                                state
+                                                { state | diff = diff }
                                                 (IdDict.toList state.mail)
 
                                         ( StoppedAtPostOffice _, _ ) ->
@@ -291,19 +291,14 @@ update isProduction msg model =
                         , lastWorldUpdateTrains = model.trains
                         , mail = mergeTrains.mail
                       }
-                    , Command.batch
-                        [ WorldUpdateBroadcast mergeTrains.diff |> Effect.Lamdera.broadcast
-                        , case Nonempty.fromList mergeTrains.mailChanges of
-                            Just nonempty ->
-                                Nonempty.map
-                                    (\( mailId, status ) -> ServerMailStatusChanged mailId status |> Change.ServerChange)
-                                    nonempty
-                                    |> ChangeBroadcast
-                                    |> Effect.Lamdera.broadcast
-
-                            Nothing ->
-                                Command.none
-                        ]
+                    , Nonempty
+                        (Change.ServerChange (ServerWorldUpdateBroadcast mergeTrains.diff))
+                        (List.map
+                            (\( mailId, status ) -> ServerMailStatusChanged mailId status |> Change.ServerChange)
+                            mergeTrains.mailChanges
+                        )
+                        |> ChangeBroadcast
+                        |> Effect.Lamdera.broadcast
                     )
 
                 Nothing ->
@@ -514,27 +509,6 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                 Nothing ->
                     ( model, Command.none )
-
-        TeleportHomeTrainRequest trainId teleportTime ->
-            ( { model
-                | trains =
-                    IdDict.update
-                        trainId
-                        (Maybe.map (Train.startTeleportingHome (adjustEventTime currentTime teleportTime)))
-                        model.trains
-              }
-            , Command.none
-            )
-
-        CancelTeleportHomeTrainRequest trainId ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.cancelTeleportingHome currentTime)) model.trains }
-            , Command.none
-            )
-
-        LeaveHomeTrainRequest trainId ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome currentTime)) model.trains }
-            , Command.none
-            )
 
         PingRequest ->
             ( model, PingResponse currentTime |> Effect.Lamdera.sendToFrontend clientId )
@@ -985,6 +959,32 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
               }
             , originalChange
             , Nothing
+            )
+
+        TeleportHomeTrainRequest trainId teleportTime ->
+            let
+                adjustedTime =
+                    adjustEventTime time teleportTime
+            in
+            ( { model
+                | trains =
+                    IdDict.update
+                        trainId
+                        (Maybe.map (Train.startTeleportingHome adjustedTime))
+                        model.trains
+              }
+            , ( eventId, TeleportHomeTrainRequest trainId adjustedTime )
+            , ServerTeleportHomeTrainRequest trainId adjustedTime |> Just
+            )
+
+        LeaveHomeTrainRequest trainId leaveTime ->
+            let
+                adjustedTime =
+                    adjustEventTime time leaveTime
+            in
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome adjustedTime)) model.trains }
+            , ( eventId, LeaveHomeTrainRequest trainId adjustedTime )
+            , ServerLeaveHomeTrainRequest trainId adjustedTime |> Just
             )
 
 

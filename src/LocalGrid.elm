@@ -20,7 +20,7 @@ import Dict exposing (Dict)
 import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell
-import Id exposing (CowId, Id, MailId, UserId)
+import Id exposing (CowId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
@@ -30,6 +30,7 @@ import Quantity exposing (Quantity(..))
 import Random
 import Terrain
 import Tile exposing (Tile)
+import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 import User exposing (FrontendUser)
@@ -47,6 +48,7 @@ type alias LocalGrid_ =
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
     , mail : IdDict MailId FrontendMail
+    , trains : IdDict TrainId Train
     }
 
 
@@ -70,9 +72,10 @@ init :
         , cursors : IdDict UserId Cursor
         , users : IdDict UserId FrontendUser
         , mail : IdDict MailId FrontendMail
+        , trains : IdDict TrainId Train
     }
     -> LocalModel Change LocalGrid
-init { grid, userStatus, viewBounds, cows, cursors, users, mail } =
+init { grid, userStatus, viewBounds, cows, cursors, users, mail, trains } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
@@ -81,6 +84,7 @@ init { grid, userStatus, viewBounds, cows, cursors, users, mail } =
         , cursors = cursors
         , users = users
         , mail = mail
+        , trains = trains
         }
         |> LocalModel.init
 
@@ -123,6 +127,9 @@ type OutMsg
     | HandColorChanged
     | RailToggledBySelf (Coord WorldUnit)
     | RailToggledByAnother (Coord WorldUnit)
+    | TeleportTrainHome (Id TrainId)
+    | TrainLeaveHome (Id TrainId)
+    | TrainsUpdated (IdDict TrainId Train.TrainDiff)
 
 
 updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -309,6 +316,16 @@ updateLocalChange localChange model =
                 NotLoggedIn ->
                     ( model, NoOutMsg )
 
+        TeleportHomeTrainRequest trainId time ->
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome time)) model.trains }
+            , TeleportTrainHome trainId
+            )
+
+        LeaveHomeTrainRequest trainId time ->
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome time)) model.trains }
+            , TrainLeaveHome trainId
+            )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -395,6 +412,34 @@ updateServerChange serverChange model =
         ServerMailStatusChanged mailId mailStatus ->
             ( { model | mail = IdDict.update mailId (Maybe.map (\mail -> { mail | status = mailStatus })) model.mail }
             , NoOutMsg
+            )
+
+        ServerTeleportHomeTrainRequest trainId time ->
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome time)) model.trains }
+            , TeleportTrainHome trainId
+            )
+
+        ServerLeaveHomeTrainRequest trainId time ->
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome time)) model.trains }
+            , TrainLeaveHome trainId
+            )
+
+        ServerWorldUpdateBroadcast diff ->
+            ( { model
+                | trains =
+                    IdDict.toList diff
+                        |> List.filterMap
+                            (\( trainId, diff_ ) ->
+                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
+                                    Just newTrain ->
+                                        Just ( trainId, newTrain )
+
+                                    Nothing ->
+                                        Nothing
+                            )
+                        |> IdDict.fromList
+              }
+            , TrainsUpdated diff
             )
 
 

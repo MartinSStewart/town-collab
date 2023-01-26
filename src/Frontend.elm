@@ -2273,10 +2273,10 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                 Just ( trainId, train ) ->
                     case Train.status model.time train of
                         WaitingAtHome ->
-                            Just (\() -> clickLeaveHomeTrain trainId train model)
+                            Just (\() -> ( clickLeaveHomeTrain trainId model, Command.none ))
 
                         _ ->
-                            Just (\() -> clickTeleportHomeTrain trainId train model)
+                            Just (\() -> ( clickTeleportHomeTrain trainId model, Command.none ))
 
                 Nothing ->
                     Nothing
@@ -2476,19 +2476,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
                     TrainHover { trainId, train } ->
                         case Train.status model.time train of
                             WaitingAtHome ->
-                                clickLeaveHomeTrain trainId train model2
+                                ( clickLeaveHomeTrain trainId model2, Command.none )
 
                             TeleportingHome _ ->
-                                ( { model2
-                                    | viewPoint = actualViewPoint model2 |> NormalViewPoint
-                                    , trains =
-                                        IdDict.update
-                                            trainId
-                                            (\_ -> Train.leaveHome model2.time train |> Just)
-                                            model2.trains
-                                  }
-                                , CancelTeleportHomeTrainRequest trainId |> Effect.Lamdera.sendToBackend
-                                )
+                                ( model2, Command.none )
 
                             _ ->
                                 case Train.isStuck model2.time train of
@@ -2497,7 +2488,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                             ( setTrainViewPoint trainId model2, Command.none )
 
                                         else
-                                            clickTeleportHomeTrain trainId train model2
+                                            ( clickTeleportHomeTrain trainId model2, Command.none )
 
                                     Nothing ->
                                         ( setTrainViewPoint trainId model2, Command.none )
@@ -2774,32 +2765,16 @@ setFocus newFocus model =
     }
 
 
-clickLeaveHomeTrain : Id TrainId -> Train -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend frontendMsg )
-clickLeaveHomeTrain trainId train model =
-    ( { model
-        | viewPoint = actualViewPoint model |> NormalViewPoint
-        , trains =
-            IdDict.update
-                trainId
-                (\_ -> Train.cancelTeleportingHome model.time train |> Just)
-                model.trains
-      }
-    , LeaveHomeTrainRequest trainId |> Effect.Lamdera.sendToBackend
-    )
+clickLeaveHomeTrain : Id TrainId -> FrontendLoaded -> FrontendLoaded
+clickLeaveHomeTrain trainId model =
+    updateLocalModel (Change.LeaveHomeTrainRequest trainId model.time) model
+        |> handleOutMsg False
 
 
-clickTeleportHomeTrain : Id TrainId -> Train -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend frontendMsg )
-clickTeleportHomeTrain trainId train model =
-    ( { model
-        | viewPoint = actualViewPoint model |> NormalViewPoint
-        , trains =
-            IdDict.update
-                trainId
-                (\_ -> Train.startTeleportingHome model.time train |> Just)
-                model.trains
-      }
-    , TeleportHomeTrainRequest trainId model.time |> Effect.Lamdera.sendToBackend
-    )
+clickTeleportHomeTrain : Id TrainId -> FrontendLoaded -> FrontendLoaded
+clickTeleportHomeTrain trainId model =
+    updateLocalModel (Change.TeleportHomeTrainRequest trainId model.time) model
+        |> handleOutMsg False
 
 
 setTrainViewPoint : Id TrainId -> FrontendLoaded -> FrontendLoaded
@@ -3060,9 +3035,6 @@ placeTile isDragPlacement tileGroup index model =
                     removedTiles : List RemovedTileParticle
                     removedTiles =
                         case outMsg of
-                            LocalGrid.NoOutMsg ->
-                                []
-
                             LocalGrid.TilesRemoved tiles ->
                                 List.map
                                     (\removedTile ->
@@ -3074,16 +3046,7 @@ placeTile isDragPlacement tileGroup index model =
                                     )
                                     tiles
 
-                            LocalGrid.OtherUserCursorMoved _ ->
-                                []
-
-                            LocalGrid.HandColorChanged ->
-                                []
-
-                            LocalGrid.RailToggledBySelf _ ->
-                                []
-
-                            LocalGrid.RailToggledByAnother _ ->
+                            _ ->
                                 []
                 in
                 { model3
@@ -3654,6 +3617,28 @@ handleOutMsg isFromBackend ( model, outMsg ) =
             else
                 handleRailToggleSound position model
 
+        LocalGrid.TeleportTrainHome trainId ->
+            { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome model.time)) model.trains }
+
+        LocalGrid.TrainLeaveHome trainId ->
+            { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome model.time)) model.trains }
+
+        LocalGrid.TrainsUpdated diff ->
+            { model
+                | trains =
+                    IdDict.toList diff
+                        |> List.filterMap
+                            (\( trainId, diff_ ) ->
+                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
+                                    Just newTrain ->
+                                        Just ( trainId, newTrain )
+
+                                    Nothing ->
+                                        Nothing
+                            )
+                        |> IdDict.fromList
+            }
+
 
 handleRailToggleSound position model =
     { model
@@ -3688,24 +3673,6 @@ updateLoadedFromBackend msg model =
 
         UnsubscribeEmailConfirmed ->
             ( model, Command.none )
-
-        WorldUpdateBroadcast diff ->
-            ( { model
-                | trains =
-                    IdDict.toList diff
-                        |> List.filterMap
-                            (\( trainId, diff_ ) ->
-                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
-                                    Just newTrain ->
-                                        Just ( trainId, newTrain )
-
-                                    Nothing ->
-                                        Nothing
-                            )
-                        |> IdDict.fromList
-              }
-            , Command.none
-            )
 
         PingResponse serverTime ->
             case model.pingStartTime of
