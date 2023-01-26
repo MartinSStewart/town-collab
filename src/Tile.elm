@@ -279,7 +279,7 @@ getTileGroupData tileGroup =
             }
 
         HospitalGroup ->
-            { defaultColors = ZeroDefaultColors
+            { defaultColors = defaultHospitalColor
             , tiles = Nonempty Hospital []
             , name = "Hospital"
             }
@@ -915,6 +915,11 @@ defaultRoadColor =
 defaultBusStopColor : DefaultColor
 defaultBusStopColor =
     TwoDefaultColors { primaryColor = sidewalkColor, secondaryColor = Color.rgb255 250 202 16 }
+
+
+defaultHospitalColor : DefaultColor
+defaultHospitalColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 245 245 245, secondaryColor = Color.rgb255 163 224 223 }
 
 
 getData : Tile -> TileData unit
@@ -1968,8 +1973,15 @@ getData tile =
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 14 46 }
             , size = Coord.xy 3 5
             , collisionMask =
-                [ ( 0, 1 )
-                , ( 1, 1 )
+                [ ( 0, 2 )
+                , ( 1, 2 )
+                , ( 2, 2 )
+                , ( 0, 3 )
+                , ( 1, 3 )
+                , ( 2, 3 )
+                , ( 0, 4 )
+                , ( 1, 4 )
+                , ( 2, 4 )
                 ]
                     |> Set.fromList
                     |> CustomCollision
