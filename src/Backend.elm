@@ -85,7 +85,6 @@ init =
             , mail = IdDict.empty
             , pendingLoginTokens = AssocList.empty
             , invites = AssocList.empty
-            , dummyField = 0
             }
     in
     case Env.adminEmail of
@@ -617,7 +616,6 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                 let
                                     --_ =
                                     --    Debug.log "inviteUrl" inviteUrl
-
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
