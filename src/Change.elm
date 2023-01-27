@@ -49,6 +49,7 @@ type LocalChange
     | UpdateDraft { content : List MailEditor.Content, to : Id UserId }
     | TeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | LeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
+    | ViewedMail (Id MailId)
 
 
 type ClientChange
@@ -72,7 +73,13 @@ type ServerChange
     | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerWorldUpdateBroadcast (IdDict TrainId TrainDiff)
-    | ServerReceivedMail (Id MailId) (Id UserId) (List MailEditor.Content) Effect.Time.Posix
+    | ServerReceivedMail
+        { mailId : Id MailId
+        , from : Id UserId
+        , content : List MailEditor.Content
+        , deliveryTime : Effect.Time.Posix
+        }
+    | ServerViewedMail (Id MailId) (Id UserId)
 
 
 type alias Cow =

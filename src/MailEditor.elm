@@ -234,6 +234,7 @@ type OutMsg
     = NoOutMsg
     | SubmitMail { to : Id UserId, content : List Content }
     | UpdateDraft { to : Id UserId, content : List Content }
+    | ViewedMail (Id MailId)
 
 
 uiUpdate :
@@ -375,7 +376,17 @@ uiUpdate config elementPosition mousePosition msg model =
             ( Nothing, NoOutMsg )
 
         PressedInboxRow mailId ->
-            ( Just { model | inboxMailViewed = Just mailId }, NoOutMsg )
+            ( Just
+                { model
+                    | inboxMailViewed =
+                        if model.inboxMailViewed == Just mailId then
+                            Nothing
+
+                        else
+                            Just mailId
+                }
+            , ViewedMail mailId
+            )
 
 
 currentImage : ImagePlacer_ -> Image
@@ -916,18 +927,9 @@ yourPostOffice =
         }
 
 
-editorView :
-    (Hover -> id)
-    -> (Msg -> msg)
-    -> ( Id UserId, DisplayName )
-    -> Coord Pixels
-    -> Model
-    -> List (Ui.Element id msg)
-editorView idMap msgMap userIdAndName windowSize model =
+mailView : Int -> List Content -> Ui.Element id msg
+mailView mailScale mailContent =
     let
-        mailScale =
-            mailZoomFactor windowSize
-
         stampSize =
             Coord.xy 46 46
 
@@ -939,6 +941,58 @@ editorView idMap msgMap userIdAndName windowSize model =
                     |> Coord.plus position
                 )
                 (Coord.xy 180 2 |> Coord.scalar mailScale)
+    in
+    Ui.el
+        { padding = Ui.noPadding
+        , borderAndFill =
+            BorderAndFill
+                { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+        , inFront = []
+        }
+        (Ui.quads
+            { size = Coord.scalar mailScale mailSize
+            , vertices =
+                \position ->
+                    Sprite.rectangle
+                        Color.outlineColor
+                        (Coord.xy (mailWidth - Coord.xRaw stampSize - 20) 20
+                            |> Coord.scalar mailScale
+                            |> Coord.plus position
+                        )
+                        (Coord.scalar mailScale stampSize)
+                        ++ Sprite.rectangle
+                            Color.fillColor
+                            (Coord.xy (mailWidth - Coord.xRaw stampSize - 18) 22
+                                |> Coord.scalar mailScale
+                                |> Coord.plus position
+                            )
+                            (stampSize |> Coord.minus (Coord.xy 4 4) |> Coord.scalar mailScale)
+                        ++ line position 120
+                        ++ line position 170
+                        ++ line position 220
+                        ++ List.concatMap
+                            (\content ->
+                                imageMesh
+                                    (Coord.plus position (Coord.scalar mailScale content.position))
+                                    mailScale
+                                    content.image
+                            )
+                            mailContent
+            }
+        )
+
+
+editorView :
+    (Hover -> id)
+    -> (Msg -> msg)
+    -> ( Id UserId, DisplayName )
+    -> Coord Pixels
+    -> Model
+    -> List (Ui.Element id msg)
+editorView idMap msgMap userIdAndName windowSize model =
+    let
+        mailScale =
+            mailZoomFactor windowSize
     in
     [ Ui.bottomCenter
         { size = windowSize, inFront = [] }
@@ -953,44 +1007,10 @@ editorView idMap msgMap userIdAndName windowSize model =
                 , inFront = []
                 , onPress = msgMap PressedMail
                 , onMouseDown = msgMap MouseDownMail |> Just
-                , borderAndFill =
-                    BorderAndFill
-                        { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
-                , borderAndFillFocus =
-                    BorderAndFill
-                        { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                , borderAndFill = NoBorderOrFill
+                , borderAndFillFocus = NoBorderOrFill
                 }
-                (Ui.quads
-                    { size = Coord.scalar mailScale mailSize
-                    , vertices =
-                        \position ->
-                            Sprite.rectangle
-                                Color.outlineColor
-                                (Coord.xy (mailWidth - Coord.xRaw stampSize - 20) 20
-                                    |> Coord.scalar mailScale
-                                    |> Coord.plus position
-                                )
-                                (Coord.scalar mailScale stampSize)
-                                ++ Sprite.rectangle
-                                    Color.fillColor
-                                    (Coord.xy (mailWidth - Coord.xRaw stampSize - 18) 22
-                                        |> Coord.scalar mailScale
-                                        |> Coord.plus position
-                                    )
-                                    (stampSize |> Coord.minus (Coord.xy 4 4) |> Coord.scalar mailScale)
-                                ++ line position 120
-                                ++ line position 170
-                                ++ line position 220
-                                ++ List.concatMap
-                                    (\content ->
-                                        imageMesh
-                                            (Coord.plus position (Coord.scalar mailScale content.position))
-                                            mailScale
-                                            content.image
-                                    )
-                                    model.current.content
-                    }
-                )
+                (mailView mailScale model.current.content)
             , Ui.el
                 { padding = Ui.paddingXY 2 2
                 , inFront = []
@@ -1075,19 +1095,29 @@ monthToString month =
 
 date : Effect.Time.Posix -> String
 date time =
-    String.fromInt (Time.toDay Time.utc time)
+    String.padLeft 2 '0' (String.fromInt (Time.toHour Time.utc time))
+        ++ ":"
+        ++ String.padLeft 2 '0' (String.fromInt (Time.toMinute Time.utc time))
+        ++ " "
+        ++ String.fromInt (Time.toDay Time.utc time)
         ++ "/"
         ++ monthToString (Time.toMonth Time.utc time)
         ++ "/"
         ++ String.fromInt (Time.toYear Time.utc time)
 
 
-inboxView : (Hover -> id) -> (Msg -> msg) -> IdDict UserId FrontendUser -> IdDict MailId ReceivedMail -> Ui.Element id msg
-inboxView idMap msgMap users inbox =
+inboxView :
+    (Hover -> id)
+    -> (Msg -> msg)
+    -> IdDict UserId FrontendUser
+    -> IdDict MailId ReceivedMail
+    -> Model
+    -> Ui.Element id msg
+inboxView idMap msgMap users inbox model =
     let
         rows =
             IdDict.toList inbox
-                |> List.sortBy (\( _, mail ) -> Effect.Time.posixToMillis mail.deliveryTime)
+                |> List.sortBy (\( _, mail ) -> Effect.Time.posixToMillis mail.deliveryTime |> negate)
                 |> List.map
                     (\( mailId, mail ) ->
                         Ui.row
@@ -1113,7 +1143,7 @@ inboxView idMap msgMap users inbox =
                                     Ui.text "Not found"
                             , highlightButton
                                 (Ui.paddingXY 8 0)
-                                False
+                                (model.inboxMailViewed == Just mailId)
                                 (InboxRowButton mailId |> idMap)
                                 (PressedInboxRow mailId |> msgMap)
                                 (Ui.text "View")
@@ -1123,23 +1153,37 @@ inboxView idMap msgMap users inbox =
         fromText =
             String.padRight 15 ' ' "From"
     in
-    Ui.el
-        { padding = Ui.paddingXY 16 8
-        , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
-        , inFront = []
-        }
-        (Ui.column
-            { spacing = 16, padding = Ui.noPadding }
-            [ Ui.scaledText 3 "Inbox"
-            , if IdDict.isEmpty inbox then
-                Ui.wrappedText 500 "Here you can view all the mail you've received.\n\nCurrently you don't have any mail but you can send letters to other people by clicking on their post office."
+    Ui.column
+        { spacing = 16, padding = Ui.noPadding }
+        [ Ui.el
+            { padding = Ui.paddingXY 16 8
+            , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+            , inFront = []
+            }
+            (Ui.column
+                { spacing = 16, padding = Ui.noPadding }
+                [ Ui.scaledText 3 "Inbox"
+                , if IdDict.isEmpty inbox then
+                    Ui.wrappedText 500 "Here you can view all the mail you've received.\n\nCurrently you don't have any mail but you can send letters to other people by clicking on their post office."
 
-              else
-                Ui.column
-                    { spacing = 0, padding = Ui.noPadding }
-                    (Ui.text ("      " ++ fromText ++ "Delivered at(UTC)") :: rows)
-            ]
-        )
+                  else
+                    Ui.column
+                        { spacing = 0, padding = Ui.noPadding }
+                        (Ui.text ("      " ++ fromText ++ "Delivered at(UTC)") :: rows)
+                ]
+            )
+        , case model.inboxMailViewed of
+            Just mailId ->
+                case IdDict.get mailId inbox of
+                    Just mail ->
+                        mailView 2 mail.content
+
+                    Nothing ->
+                        Ui.text "Mail not found"
+
+            Nothing ->
+                Ui.none
+        ]
 
 
 ui :
@@ -1163,7 +1207,7 @@ ui windowSize idMap msgMap users inbox model =
                     editorView idMap msgMap userIdAndName windowSize model
 
                 ( _, Nothing ) ->
-                    [ Ui.center { size = windowSize } (inboxView idMap msgMap users inbox) ]
+                    [ Ui.center { size = windowSize } (inboxView idMap msgMap users inbox model) ]
         }
         (Ui.customButton
             { id = idMap BackgroundHover

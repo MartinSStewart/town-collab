@@ -45,6 +45,7 @@ type Sound
     | Moo5
     | Moo6
     | RailToggleSound
+    | Meow
 
 
 allSounds =
@@ -74,6 +75,7 @@ allSounds =
     , Moo5
     , Moo6
     , RailToggleSound
+    , Meow
     ]
 
 
@@ -221,6 +223,9 @@ load onLoad =
 
                         RailToggleSound ->
                             "rail-toggle.mp3"
+
+                        Meow ->
+                            "meow.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)

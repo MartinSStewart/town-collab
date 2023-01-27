@@ -302,6 +302,12 @@ audioLoaded audioData model =
     , playSound PopSound (Duration.addTo model.startTime (Duration.milliseconds 100))
         -- Increase the volume on this sound effect to compensate for the volume fade in at the start of the game
         |> Audio.scaleVolume 2
+    , case model.lastReceivedMail of
+        Just time ->
+            playSound Meow time |> Audio.scaleVolume 0.8
+
+        Nothing ->
+            Audio.silence
     , case currentUserId model of
         Just userId ->
             case IdDict.get userId localModel.cursors of
@@ -532,6 +538,7 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
             , railToggles = []
             , debugText = ""
+            , lastReceivedMail = Nothing
             }
                 |> setCurrentTool HandToolButton
                 |> (\state -> handleOutMsg False ( state, LocalGrid.HandColorChanged ))
@@ -1359,6 +1366,9 @@ updateLoaded audioData msg model =
                                             MailEditorHover mailEditorHover ->
                                                 model2
 
+                                            YouGotMailButton ->
+                                                model2
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1549,6 +1559,9 @@ updateLoaded audioData msg model =
                                 MailEditorHover _ ->
                                     False
 
+                                YouGotMailButton ->
+                                    True
+
                 model2 =
                     { model
                         | time = time
@@ -1716,6 +1729,9 @@ updateLoaded audioData msg model =
                                     ( model, Command.none )
 
                         MailEditorHover mailEditorHover ->
+                            ( model, Command.none )
+
+                        YouGotMailButton ->
                             ( model, Command.none )
 
         GotUserAgentPlatform _ ->
@@ -2623,6 +2639,9 @@ uiUpdate elementPosition msg model =
 
                         MailEditor.UpdateDraft updateDraft ->
                             updateLocalModel (Change.UpdateDraft updateDraft) model2
+
+                        MailEditor.ViewedMail mailId ->
+                            updateLocalModel (Change.ViewedMail mailId) model2
                       )
                         |> handleOutMsg False
                     , Command.none
@@ -2630,6 +2649,9 @@ uiUpdate elementPosition msg model =
 
                 Nothing ->
                     ( model, Command.none )
+
+        PressedYouGotMail ->
+            ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -3610,6 +3632,9 @@ handleOutMsg isFromBackend ( model, outMsg ) =
                         |> IdDict.fromList
             }
 
+        LocalGrid.ReceivedMail ->
+            { model | lastReceivedMail = Just model.time }
+
 
 handleRailToggleSound position model =
     { model
@@ -3744,6 +3769,23 @@ updateLoadedFromBackend msg model =
 
         DebugResponse debugText ->
             ( { model | debugText = debugText }, Command.none )
+
+        PostOfficePositionResponse maybePosition ->
+            case maybePosition of
+                Just position ->
+                    let
+                        postOfficeSize =
+                            Tile.getData PostOffice |> .size |> Coord.toVector2d |> Vector2d.scaleBy 0.5
+                    in
+                    ( { model
+                        | viewPoint =
+                            Coord.toPoint2d position |> Point2d.translateBy postOfficeSize |> NormalViewPoint
+                      }
+                    , Command.none
+                    )
+
+                Nothing ->
+                    ( model, Command.none )
 
 
 actualTime : FrontendLoaded -> Effect.Time.Posix

@@ -130,6 +130,7 @@ type OutMsg
     | TeleportTrainHome (Id TrainId)
     | TrainLeaveHome (Id TrainId)
     | TrainsUpdated (IdDict TrainId Train.TrainDiff)
+    | ReceivedMail
 
 
 updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -326,6 +327,45 @@ updateLocalChange localChange model =
             , TrainLeaveHome trainId
             )
 
+        ViewedMail mailId ->
+            ( { model
+                | mail =
+                    IdDict.update
+                        mailId
+                        (Maybe.map
+                            (\mail ->
+                                { mail
+                                    | status =
+                                        case mail.status of
+                                            MailReceived data ->
+                                                MailReceivedAndViewed data
+
+                                            _ ->
+                                                mail.status
+                                }
+                            )
+                        )
+                        model.mail
+                , userStatus =
+                    case model.userStatus of
+                        LoggedIn loggedIn ->
+                            { loggedIn
+                                | inbox =
+                                    IdDict.update
+                                        mailId
+                                        (Maybe.map
+                                            (\mail -> { mail | isViewed = True })
+                                        )
+                                        loggedIn.inbox
+                            }
+                                |> LoggedIn
+
+                        NotLoggedIn ->
+                            model.userStatus
+              }
+            , NoOutMsg
+            )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -442,7 +482,7 @@ updateServerChange serverChange model =
             , TrainsUpdated diff
             )
 
-        ServerReceivedMail mailId from content deliveryTime ->
+        ServerReceivedMail { mailId, from, content, deliveryTime } ->
             case model.userStatus of
                 LoggedIn loggedIn ->
                     ( { model
@@ -465,11 +505,54 @@ updateServerChange serverChange model =
                                 (Maybe.map (\mail -> { mail | status = MailReceived { deliveryTime = deliveryTime } }))
                                 model.mail
                       }
-                    , NoOutMsg
+                    , ReceivedMail
                     )
 
                 NotLoggedIn ->
                     ( model, NoOutMsg )
+
+        ServerViewedMail mailId userId ->
+            ( { model
+                | mail =
+                    IdDict.update
+                        mailId
+                        (Maybe.map
+                            (\mail ->
+                                { mail
+                                    | status =
+                                        case mail.status of
+                                            MailReceived data ->
+                                                MailReceivedAndViewed data
+
+                                            _ ->
+                                                mail.status
+                                }
+                            )
+                        )
+                        model.mail
+                , userStatus =
+                    case model.userStatus of
+                        LoggedIn loggedIn ->
+                            if userId == loggedIn.userId then
+                                { loggedIn
+                                    | inbox =
+                                        IdDict.update
+                                            mailId
+                                            (Maybe.map
+                                                (\mail -> { mail | isViewed = True })
+                                            )
+                                            loggedIn.inbox
+                                }
+                                    |> LoggedIn
+
+                            else
+                                model.userStatus
+
+                        NotLoggedIn ->
+                            model.userStatus
+              }
+            , NoOutMsg
+            )
 
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )

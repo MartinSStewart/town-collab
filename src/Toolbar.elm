@@ -101,6 +101,49 @@ view data =
 
                             NotLoggedIn ->
                                 Ui.none
+                        , case data.userStatus of
+                            LoggedIn loggedIn ->
+                                let
+                                    unviewedMail =
+                                        IdDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
+                                in
+                                if IdDict.isEmpty unviewedMail then
+                                    Ui.none
+
+                                else
+                                    Ui.customButton
+                                        { id = YouGotMailButton
+                                        , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
+                                        , onPress = PressedYouGotMail
+                                        , onMouseDown = Nothing
+                                        , borderAndFill =
+                                            BorderAndFill
+                                                { borderWidth = 2
+                                                , borderColor = Color.outlineColor
+                                                , fillColor = Color.fillColor2
+                                                }
+                                        , borderAndFillFocus =
+                                            BorderAndFill
+                                                { borderWidth = 2
+                                                , borderColor = Color.outlineColor
+                                                , fillColor = Color.fillColor2
+                                                }
+                                        , inFront = []
+                                        }
+                                        (Ui.row
+                                            { spacing = 4, padding = Ui.noPadding }
+                                            [ Ui.text "You got mail"
+                                            , Ui.el
+                                                { padding = Ui.paddingXY 8 0
+                                                , inFront = []
+                                                , borderAndFill = FillOnly (Color.rgb255 255 50 50)
+                                                }
+                                                (Ui.colorText Color.white (String.fromInt (IdDict.size unviewedMail)))
+                                            ]
+                                        )
+
+                            NotLoggedIn ->
+                                Ui.none
                         ]
                     ]
                 }

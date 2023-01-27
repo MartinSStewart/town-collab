@@ -16,6 +16,7 @@ module Grid exposing
     , foregroundMesh
     , from
     , getCell
+    , getPostOffice
     , getTile
     , localChangeToChange
     , localTileCoordPlusWorld
@@ -813,3 +814,20 @@ toggleRailSplit coord grid =
 
         Nothing ->
             grid
+
+
+getPostOffice : Id UserId -> Grid -> Maybe (Coord WorldUnit)
+getPostOffice userId (Grid grid) =
+    Dict.toList grid
+        |> List.findMap
+            (\( position, cell ) ->
+                GridCell.getPostOffices cell
+                    |> List.findMap
+                        (\postOffice ->
+                            if postOffice.userId == userId then
+                                Just (cellAndLocalCoordToWorld ( Coord.tuple position, postOffice.position ))
+
+                            else
+                                Nothing
+                        )
+            )

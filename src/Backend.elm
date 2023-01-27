@@ -301,7 +301,12 @@ update isProduction msg model =
                                     (\( mailId, mail ) ->
                                         (case ( Just mail.to == maybeUserId, mail.status ) of
                                             ( True, MailReceived { deliveryTime } ) ->
-                                                ServerReceivedMail mailId mail.from mail.content deliveryTime
+                                                ServerReceivedMail
+                                                    { mailId = mailId
+                                                    , from = mail.from
+                                                    , content = mail.content
+                                                    , deliveryTime = deliveryTime
+                                                    }
 
                                             _ ->
                                                 ServerMailStatusChanged mailId mail.status
@@ -671,6 +676,18 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                 Invalid ->
                     ( model, Command.none )
 
+        PostOfficePositionRequest ->
+            asUser
+                sessionId
+                model
+                (\userId _ model2 ->
+                    ( model2
+                    , Grid.getPostOffice userId model2.grid
+                        |> PostOfficePositionResponse
+                        |> Effect.Lamdera.sendToFrontend clientId
+                    )
+                )
+
 
 {-| Allow a client to say when something happened but restrict how far it can be away from the current time.
 -}
@@ -997,6 +1014,25 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             , ( eventId, LeaveHomeTrainRequest trainId adjustedTime )
             , ServerLeaveHomeTrainRequest trainId adjustedTime |> Just
             )
+
+        ViewedMail mailId ->
+            case IdDict.get mailId model.mail of
+                Just mail ->
+                    case ( mail.to == userId, mail.status ) of
+                        ( True, MailReceived data ) ->
+                            ( { model
+                                | mail =
+                                    IdDict.insert mailId { mail | status = MailReceivedAndViewed data } model.mail
+                              }
+                            , originalChange
+                            , ServerViewedMail mailId userId |> Just
+                            )
+
+                        _ ->
+                            ( model, invalidChange, Nothing )
+
+                Nothing ->
+                    ( model, invalidChange, Nothing )
 
 
 removeTrain : Id TrainId -> BackendModel -> BackendModel

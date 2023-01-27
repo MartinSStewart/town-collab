@@ -189,6 +189,7 @@ type alias FrontendLoaded =
     , inviteSubmitStatus : SubmitStatus EmailAddress
     , railToggles : List ( Time.Posix, Coord WorldUnit )
     , debugText : String
+    , lastReceivedMail : Maybe Time.Posix
     }
 
 
@@ -249,6 +250,7 @@ type UiHover
     | CloseSettings
     | DisplayNameTextInput
     | MailEditorHover MailEditor.Hover
+    | YouGotMailButton
 
 
 type UiMsg
@@ -269,6 +271,7 @@ type UiMsg
     | PressedCloseSettings
     | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
     | MailEditorUiMsg MailEditor.Msg
+    | PressedYouGotMail
 
 
 type alias BackendModel =
@@ -369,6 +372,7 @@ type ToBackend
     | PingRequest
     | SendLoginEmailRequest (Untrusted EmailAddress)
     | SendInviteEmailRequest (Untrusted EmailAddress)
+    | PostOfficePositionRequest
 
 
 type BackendMsg
@@ -388,6 +392,7 @@ type ToFrontend
     | SendLoginEmailResponse EmailAddress
     | DebugResponse String
     | SendInviteEmailResponse EmailAddress
+    | PostOfficePositionResponse (Maybe (Coord WorldUnit))
 
 
 type EmailEvent
