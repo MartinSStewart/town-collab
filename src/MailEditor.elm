@@ -12,6 +12,7 @@ module MailEditor exposing
     , Tool(..)
     , backendMailToFrontend
     , backgroundLayer
+    , disconnectWarning
     , drawMail
     , getImageData
     , getMailFrom
@@ -348,7 +349,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                 ( Just { model | lastErase = Just config.time }, NoOutMsg )
 
                         ImagePicker ->
-                            (Just model, NoOutMsg)
+                            ( Just model, NoOutMsg )
 
                 Nothing ->
                     ( Just model, NoOutMsg )
@@ -1187,27 +1188,35 @@ inboxView idMap msgMap users inbox model =
 
 
 ui :
-    Coord Pixels
+    Bool
+    -> Coord Pixels
     -> (Hover -> uiHover)
     -> (Msg -> msg)
     -> IdDict UserId FrontendUser
     -> IdDict MailId ReceivedMail
     -> Model
     -> Ui.Element uiHover msg
-ui windowSize idMap msgMap users inbox model =
+ui isDisconnected windowSize idMap msgMap users inbox model =
     Ui.el
         { padding = Ui.noPadding
         , borderAndFill = NoBorderOrFill
         , inFront =
-            case ( model.submitStatus, model.to ) of
-                ( Submitted, Just ( _, name ) ) ->
-                    [ Ui.center { size = windowSize } (submittedView idMap msgMap name) ]
+            (if isDisconnected then
+                [ disconnectWarning windowSize ]
 
-                ( NotSubmitted, Just userIdAndName ) ->
-                    editorView idMap msgMap userIdAndName windowSize model
+             else
+                []
+            )
+                ++ (case ( model.submitStatus, model.to ) of
+                        ( Submitted, Just ( _, name ) ) ->
+                            [ Ui.center { size = windowSize } (submittedView idMap msgMap name) ]
 
-                ( _, Nothing ) ->
-                    [ Ui.center { size = windowSize } (inboxView idMap msgMap users inbox model) ]
+                        ( NotSubmitted, Just userIdAndName ) ->
+                            editorView idMap msgMap userIdAndName windowSize model
+
+                        ( _, Nothing ) ->
+                            [ Ui.center { size = windowSize } (inboxView idMap msgMap users inbox model) ]
+                   )
         }
         (Ui.customButton
             { id = idMap BackgroundHover
@@ -1219,6 +1228,16 @@ ui windowSize idMap msgMap users inbox model =
             , borderAndFillFocus = NoBorderOrFill
             }
             Ui.none
+        )
+
+
+disconnectWarning : Coord Pixels -> Ui.Element id msg
+disconnectWarning windowSize =
+    Ui.topRight
+        { size = windowSize }
+        (Ui.el
+            { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+            (Ui.colorText Color.white "No connection to server! Changes you make might be lost.")
         )
 
 

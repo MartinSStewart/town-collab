@@ -539,6 +539,8 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , railToggles = []
             , debugText = ""
             , lastReceivedMail = Nothing
+            , isReconnecting = False
+            , lastCheckConnection = time
             }
                 |> setCurrentTool HandToolButton
                 |> (\state -> handleOutMsg False ( state, LocalGrid.HandColorChanged ))
@@ -1944,6 +1946,7 @@ getViewModel model =
     , soundEffectVolume = model.soundEffectVolume
     , mailEditor = model.mailEditor
     , users = localModel.users
+    , isDisconnected = isDisconnected model
     }
 
 
@@ -3370,8 +3373,7 @@ getUiHover hover =
             Nothing
 
 
-viewBoundsUpdate : ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ) -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-viewBoundsUpdate ( model, cmd ) =
+visibleCellBounds model =
     let
         { minX, minY, maxX, maxY } =
             viewBoundingBox model |> BoundingBox2d.extrema
@@ -3388,6 +3390,15 @@ viewBoundsUpdate ( model, cmd ) =
 
         bounds =
             Bounds.bounds min_ max_
+    in
+    bounds
+
+
+viewBoundsUpdate : ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ) -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+viewBoundsUpdate ( model, cmd ) =
+    let
+        bounds =
+            visibleCellBounds model
 
         newBounds =
             Bounds.expand (Units.cellUnit 1) bounds
@@ -3652,8 +3663,15 @@ handleRailToggleSound position model =
 updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 updateLoadedFromBackend msg model =
     case msg of
-        LoadingData _ ->
-            ( model, Command.none )
+        LoadingData loadingData ->
+            ( { model
+                | localModel = LocalGrid.init loadingData
+                , trains = loadingData.trains
+                , isReconnecting = False
+                , pendingChanges = []
+              }
+            , Command.none
+            )
 
         ChangeBroadcast changes ->
             let
@@ -3787,6 +3805,21 @@ updateLoadedFromBackend msg model =
                 Nothing ->
                     ( model, Command.none )
 
+        ClientConnected ->
+            let
+                bounds =
+                    visibleCellBounds model
+
+                newBounds =
+                    Bounds.expand (Units.cellUnit 1) bounds
+            in
+            ( { model | isReconnecting = True }
+            , ConnectToBackend newBounds Nothing |> Effect.Lamdera.sendToBackend
+            )
+
+        CheckConnectionBroadcast ->
+            ( { model | lastCheckConnection = model.time }, Command.none )
+
 
 actualTime : FrontendLoaded -> Effect.Time.Posix
 actualTime model =
@@ -3797,9 +3830,24 @@ debugTimeOffset =
     Duration.seconds 0
 
 
+isDisconnected : FrontendLoaded -> Bool
+isDisconnected model =
+    Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 10)
+
+
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
 view audioData model =
-    { title = "Town Collab"
+    { title =
+        case model of
+            Loading _ ->
+                "Town Collab"
+
+            Loaded loaded ->
+                if isDisconnected loaded then
+                    "Town Collab (disconnected)"
+
+                else
+                    "Town Collab"
     , body =
         [ case model of
             Loading loadingModel ->

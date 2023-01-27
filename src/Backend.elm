@@ -64,7 +64,9 @@ subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
 subscriptions _ =
     Subscription.batch
         [ Effect.Lamdera.onDisconnect UserDisconnected
+        , Effect.Lamdera.onConnect UserConnected
         , Effect.Time.every Duration.second WorldUpdateTimeElapsed
+        , Effect.Time.every (Duration.seconds 5) (\_ -> CheckConnectionTimeElapsed)
         ]
 
 
@@ -164,6 +166,9 @@ update isProduction msg model =
     case msg of
         UserDisconnected sessionId clientId ->
             asUser sessionId model (disconnectClient sessionId clientId)
+
+        UserConnected _ clientId ->
+            ( model, Effect.Lamdera.sendToFrontend clientId ClientConnected )
 
         NotifyAdminEmailSent ->
             ( model, Command.none )
@@ -345,6 +350,9 @@ update isProduction msg model =
               }
             , Command.none
             )
+
+        CheckConnectionTimeElapsed ->
+            ( model, Effect.Lamdera.broadcast CheckConnectionBroadcast )
 
 
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel

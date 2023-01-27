@@ -191,6 +191,8 @@ type alias FrontendLoaded =
     , railToggles : List ( Time.Posix, Coord WorldUnit )
     , debugText : String
     , lastReceivedMail : Maybe Time.Posix
+    , isReconnecting : Bool
+    , lastCheckConnection : Time.Posix
     }
 
 
@@ -377,11 +379,13 @@ type ToBackend
 
 type BackendMsg
     = UserDisconnected SessionId ClientId
+    | UserConnected SessionId ClientId
     | NotifyAdminEmailSent
     | SentLoginEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | UpdateFromFrontend SessionId ClientId ToBackend Effect.Time.Posix
     | WorldUpdateTimeElapsed Effect.Time.Posix
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
+    | CheckConnectionTimeElapsed
 
 
 type ToFrontend
@@ -393,6 +397,8 @@ type ToFrontend
     | DebugResponse String
     | SendInviteEmailResponse EmailAddress
     | PostOfficePositionResponse (Maybe (Coord WorldUnit))
+    | ClientConnected
+    | CheckConnectionBroadcast
 
 
 type EmailEvent

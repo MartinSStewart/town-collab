@@ -56,15 +56,21 @@ type alias ViewData =
     , topMenuOpened : Maybe TopMenu
     , mailEditor : Maybe MailEditor.Model
     , users : IdDict UserId FrontendUser
+    , isDisconnected : Bool
     }
 
 
 view : ViewData -> Ui.Element UiHover UiMsg
 view data =
+    let
+        windowSize =
+            Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
+    in
     case ( data.userStatus, data.mailEditor ) of
         ( LoggedIn loggedIn, Just mailEditor ) ->
             MailEditor.ui
-                (Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize)
+                data.isDisconnected
+                windowSize
                 MailEditorHover
                 MailEditorUiMsg
                 data.users
@@ -73,9 +79,14 @@ view data =
 
         _ ->
             Ui.bottomCenter
-                { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
+                { size = windowSize
                 , inFront =
-                    [ Ui.row
+                    [ if data.isDisconnected then
+                        MailEditor.disconnectWarning windowSize
+
+                      else
+                        Ui.none
+                    , Ui.row
                         { padding = Ui.noPadding, spacing = 4 }
                         [ case data.topMenuOpened of
                             Just (SettingsMenu nameTextInput) ->

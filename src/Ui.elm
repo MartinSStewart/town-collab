@@ -30,6 +30,7 @@ module Ui exposing
     , tabForward
     , text
     , textInput
+    , topRight
     , view
     , wrappedText
     )
@@ -366,6 +367,27 @@ center data element2 =
         { padding =
             { topLeft = topLeft
             , bottomRight = data.size |> Coord.minus size2 |> Coord.minus topLeft
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , cachedSize = data.size
+        }
+        element2
+
+
+topRight : { size : Coord Pixels } -> Element id msg -> Element id msg
+topRight data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy (sizeX - childSizeX) 0
+            , bottomRight = Coord.xy 0 (sizeY - childSizeY)
             }
         , inFront = []
         , borderAndFill = NoBorderOrFill
