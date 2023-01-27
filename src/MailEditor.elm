@@ -348,7 +348,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                 ( Just { model | lastErase = Just config.time }, NoOutMsg )
 
                         ImagePicker ->
-                            Debug.todo ""
+                            (Just model, NoOutMsg)
 
                 Nothing ->
                     ( Just model, NoOutMsg )
