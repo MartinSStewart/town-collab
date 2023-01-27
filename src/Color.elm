@@ -1,5 +1,5 @@
 module Color exposing
-    ( Color
+    ( Color(..)
     , Colors
     , black
     , errorColor

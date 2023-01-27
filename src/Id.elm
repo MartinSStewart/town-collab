@@ -1,9 +1,9 @@
 module Id exposing
     ( CowId
     , EventId
-    , Id
+    , Id(..)
     , MailId
-    , SecretId
+    , SecretId(..)
     , TrainId
     , UserId
     , fromInt

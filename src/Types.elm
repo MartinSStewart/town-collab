@@ -12,6 +12,7 @@ module Types exposing
     , FrontendMsg
     , FrontendMsg_(..)
     , Hover(..)
+    , Invite
     , LoadedLocalModel_
     , LoadingData_
     , LoadingLocalModel(..)

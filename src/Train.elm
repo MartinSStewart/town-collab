@@ -1,5 +1,6 @@
 module Train exposing
     ( FieldChanged(..)
+    , PreviousPath
     , Status(..)
     , Train(..)
     , TrainDiff(..)

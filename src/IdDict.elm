@@ -1,11 +1,11 @@
 module IdDict exposing
-    ( IdDict
+    ( IdDict(..)
     , empty, singleton, insert, update, remove
     , isEmpty, member, get, size
     , keys, values, toList, fromList
     , map, foldl, foldr, filter, partition
     , union, intersect, diff, merge
-    , filterMap, nextId
+    , NColor(..), filterMap, nextId
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any comparable
