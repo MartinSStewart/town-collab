@@ -29,15 +29,23 @@ treeSize =
     Tile.getData PineTree |> .size
 
 
-randomTreePosition : Coord CellLocalUnit -> Random.Generator (Coord CellLocalUnit)
-randomTreePosition offset =
-    Random.map2 (\x y -> Coord.xy x y |> Coord.plus offset)
+randomSceneryItem : Coord CellLocalUnit -> Random.Generator ( Tile, Coord CellLocalUnit )
+randomSceneryItem offset =
+    Random.map3 (\x y tile -> ( tile, Coord.xy x y |> Coord.plus offset ))
         (Random.int 0 (terrainSize - Coord.xRaw treeSize))
         (Random.int -1 (terrainSize - Coord.yRaw treeSize))
+        (Random.weighted
+            ( 0.99, PineTree )
+            [ ( 0.0025, RockDown )
+            , ( 0.0025, RockLeft )
+            , ( 0.0025, RockUp )
+            , ( 0.0025, RockRight )
+            ]
+        )
 
 
-randomTrees : Float -> Coord CellLocalUnit -> Random.Generator (List (Coord CellLocalUnit))
-randomTrees chance offset =
+randomScenery : Float -> Coord CellLocalUnit -> Random.Generator (List ( Tile, Coord CellLocalUnit ))
+randomScenery chance offset =
     let
         chance2 : Float
         chance2 =
@@ -47,8 +55,8 @@ randomTrees chance offset =
         ( 0.98, 0 )
         [ ( 0.02, 1 ) ]
         |> Random.andThen
-            (\extraTree ->
-                Random.list (round chance2 + extraTree) (randomTreePosition offset)
+            (\extraItem ->
+                Random.list (round chance2 + extraItem) (randomSceneryItem offset)
             )
 
 

@@ -10,6 +10,7 @@ module Tile exposing
     , TileGroup(..)
     , allTileGroups
     , defaultPostOfficeColor
+    , defaultRockColor
     , defaultToPrimaryAndSecondary
     , defaultTreeColor
     , getData
@@ -82,6 +83,11 @@ allTileGroups : List TileGroup
 allTileGroups =
     [ EmptyTileGroup
     , HouseGroup
+    , LogCabinGroup
+    , ApartmentGroup
+    , HospitalGroup
+    , PostOfficeGroup
+    , StatueGroup
     , RailStraightGroup
     , RailTurnGroup
     , RailTurnLargeGroup
@@ -93,9 +99,6 @@ allTileGroups =
     , SidewalkRailGroup
     , RailTurnSplitGroup
     , RailTurnSplitMirrorGroup
-    , PostOfficeGroup
-    , PineTreeGroup
-    , LogCabinGroup
     , RoadStraightGroup
     , RoadTurnGroup
     , Road4WayGroup
@@ -103,13 +106,11 @@ allTileGroups =
     , Road3WayGroup
     , RoadRailCrossingGroup
     , RoadDeadendGroup
-    , FenceStraightGroup
     , BusStopGroup
-    , HospitalGroup
-    , StatueGroup
+    , FenceStraightGroup
     , HedgeRowGroup
     , HedgeCornerGroup
-    , ApartmentGroup
+    , PineTreeGroup
     , RockGroup
     , FlowersGroup
     ]
