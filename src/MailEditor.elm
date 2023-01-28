@@ -201,35 +201,46 @@ scroll :
 scroll scrollUp audioData config model =
     case model.currentTool of
         ImagePlacer imagePlacer ->
-            { model
-                | currentTool =
-                    ImagePlacer
-                        { imagePlacer
-                            | rotationIndex =
-                                imagePlacer.rotationIndex
-                                    + (if scrollUp then
-                                        1
-
-                                       else
-                                        -1
-                                      )
-                        }
-                , lastRotation =
-                    config.time
-                        :: List.filter
-                            (\time ->
-                                Duration.from time config.time
-                                    |> Quantity.lessThan (Sound.length audioData config.sounds WhooshSound)
-                            )
-                            model.lastRotation
-            }
-                |> updateCurrentImageMesh
+            rotateImage audioData config imagePlacer scrollUp model
 
         ImagePicker ->
             model
 
         EraserTool ->
             model
+
+
+rotateImage :
+    AudioData
+    -> { a | time : Time.Posix, sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source) }
+    -> ImagePlacer_
+    -> Bool
+    -> Model
+    -> Model
+rotateImage audioData config imagePlacer scrollUp model =
+    { model
+        | currentTool =
+            ImagePlacer
+                { imagePlacer
+                    | rotationIndex =
+                        imagePlacer.rotationIndex
+                            + (if scrollUp then
+                                1
+
+                               else
+                                -1
+                              )
+                }
+        , lastRotation =
+            config.time
+                :: List.filter
+                    (\time ->
+                        Duration.from time config.time
+                            |> Quantity.lessThan (Sound.length audioData config.sounds WhooshSound)
+                    )
+                    model.lastRotation
+    }
+        |> updateCurrentImageMesh
 
 
 type OutMsg
@@ -626,8 +637,14 @@ toData to model =
     { to = to, content = model.current.content }
 
 
-handleKeyDown : Bool -> Key -> Model -> Maybe Model
-handleKeyDown ctrlHeld key model =
+handleKeyDown :
+    AudioData
+    -> { a | time : Time.Posix, sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source) }
+    -> Bool
+    -> Key
+    -> Model
+    -> Maybe Model
+handleKeyDown audioData config ctrlHeld key model =
     case key of
         Escape ->
             Nothing
@@ -637,7 +654,32 @@ handleKeyDown ctrlHeld key model =
                 undo model
 
              else
+                case model.currentTool of
+                    ImagePlacer imagePlacer ->
+                        rotateImage audioData config imagePlacer True model
+
+                    ImagePicker ->
+                        model
+
+                    EraserTool ->
+                        model
+            )
+                |> Just
+
+        Character "x" ->
+            (if ctrlHeld then
                 model
+
+             else
+                case model.currentTool of
+                    ImagePlacer imagePlacer ->
+                        rotateImage audioData config imagePlacer False model
+
+                    ImagePicker ->
+                        model
+
+                    EraserTool ->
+                        model
             )
                 |> Just
 

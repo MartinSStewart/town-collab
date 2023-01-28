@@ -811,7 +811,7 @@ updateLoaded audioData msg model =
                         Just mailEditor ->
                             let
                                 newMailEditor =
-                                    MailEditor.handleKeyDown (ctrlOrMeta model) key mailEditor
+                                    MailEditor.handleKeyDown audioData model (ctrlOrMeta model) key mailEditor
                             in
                             ( { model
                                 | mailEditor = newMailEditor
@@ -982,7 +982,7 @@ updateLoaded audioData msg model =
                                             ( model, Command.none )
 
                                 _ ->
-                                    keyMsgCanvasUpdate key model
+                                    keyMsgCanvasUpdate audioData key model
 
                 Nothing ->
                     ( model, Command.none )
@@ -1153,36 +1153,6 @@ updateLoaded audioData msg model =
 
         MouseWheel event ->
             let
-                rotationHelper : Int -> { a | tileGroup : TileGroup, index : Int } -> FrontendLoaded
-                rotationHelper offset tile =
-                    if Tile.getTileGroupData tile.tileGroup |> .tiles |> List.Nonempty.length |> (==) 1 then
-                        model
-
-                    else
-                        { model
-                            | currentTool =
-                                { tileGroup = tile.tileGroup
-                                , index = tile.index + offset
-                                , mesh =
-                                    Grid.tileMesh
-                                        (Toolbar.getTileGroupTile tile.tileGroup (tile.index + offset))
-                                        Coord.origin
-                                        1
-                                        (getTileColor tile.tileGroup model)
-                                        |> Sprite.toMesh
-                                }
-                                    |> TilePlacerTool
-                            , lastTileRotation =
-                                model.time
-                                    :: List.filter
-                                        (\time ->
-                                            Duration.from time model.time
-                                                |> Quantity.lessThan (Sound.length audioData model.sounds WhooshSound)
-                                        )
-                                        model.lastTileRotation
-                            , scrollThreshold = 0
-                        }
-
                 scrollThreshold : Float
                 scrollThreshold =
                     model.scrollThreshold + event.deltaY
@@ -1212,10 +1182,10 @@ updateLoaded audioData msg model =
                         else
                             case ( scrollThreshold > 0, model.currentTool ) of
                                 ( True, TilePlacerTool currentTile ) ->
-                                    rotationHelper 1 currentTile
+                                    tileRotationHelper audioData 1 currentTile model
 
                                 ( False, TilePlacerTool currentTile ) ->
-                                    rotationHelper -1 currentTile
+                                    tileRotationHelper audioData -1 currentTile model
 
                                 _ ->
                                     { model | scrollThreshold = 0 }
@@ -1761,6 +1731,37 @@ updateLoaded audioData msg model =
             )
 
 
+tileRotationHelper : AudioData -> Int -> { a | tileGroup : TileGroup, index : Int } -> FrontendLoaded -> FrontendLoaded
+tileRotationHelper audioData offset tile model =
+    if Tile.getTileGroupData tile.tileGroup |> .tiles |> List.Nonempty.length |> (==) 1 then
+        model
+
+    else
+        { model
+            | currentTool =
+                { tileGroup = tile.tileGroup
+                , index = tile.index + offset
+                , mesh =
+                    Grid.tileMesh
+                        (Toolbar.getTileGroupTile tile.tileGroup (tile.index + offset))
+                        Coord.origin
+                        1
+                        (getTileColor tile.tileGroup model)
+                        |> Sprite.toMesh
+                }
+                    |> TilePlacerTool
+            , lastTileRotation =
+                model.time
+                    :: List.filter
+                        (\time ->
+                            Duration.from time model.time
+                                |> Quantity.lessThan (Sound.length audioData model.sounds WhooshSound)
+                        )
+                        model.lastTileRotation
+            , scrollThreshold = 0
+        }
+
+
 previousFocus : FrontendLoaded -> Hover
 previousFocus model =
     case model.focus of
@@ -2097,9 +2098,35 @@ ctrlOrMeta model =
     keyDown Keyboard.Control model || keyDown Keyboard.Meta model
 
 
-keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-keyMsgCanvasUpdate key model =
+keyMsgCanvasUpdate : AudioData -> Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+keyMsgCanvasUpdate audioData key model =
     case ( key, ctrlOrMeta model ) of
+        ( Keyboard.Character "z", False ) ->
+            ( case model.currentTool of
+                TilePlacerTool tilePlacer ->
+                    tileRotationHelper audioData 1 tilePlacer model
+
+                HandTool ->
+                    model
+
+                TilePickerTool ->
+                    model
+            , Command.none
+            )
+
+        ( Keyboard.Character "x", False ) ->
+            ( case model.currentTool of
+                TilePlacerTool tilePlacer ->
+                    tileRotationHelper audioData -1 tilePlacer model
+
+                HandTool ->
+                    model
+
+                TilePickerTool ->
+                    model
+            , Command.none
+            )
+
         ( Keyboard.Character "z", True ) ->
             ( updateLocalModel Change.LocalUndo model |> Tuple.first, Command.none )
 
