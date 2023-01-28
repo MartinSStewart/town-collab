@@ -43,7 +43,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
-import Html.Events.Extra.Wheel
+import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Id exposing (CowId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Json.Decode
@@ -1155,7 +1155,17 @@ updateLoaded audioData msg model =
             let
                 scrollThreshold : Float
                 scrollThreshold =
-                    model.scrollThreshold + event.deltaY
+                    model.scrollThreshold
+                        + (case event.deltaMode of
+                            DeltaPixel ->
+                                event.deltaY
+
+                            DeltaLine ->
+                                event.deltaY * 30
+
+                            DeltaPage ->
+                                event.deltaY * 1000
+                          )
             in
             ( if abs scrollThreshold > 50 then
                 case model.mailEditor of
