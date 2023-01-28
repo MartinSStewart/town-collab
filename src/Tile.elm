@@ -73,6 +73,7 @@ type TileGroup
     | StatueGroup
     | HedgeRowGroup
     | HedgeCornerGroup
+    | ApartmentGroup
 
 
 allTileGroups : List TileGroup
@@ -106,6 +107,7 @@ allTileGroups =
     , StatueGroup
     , HedgeRowGroup
     , HedgeCornerGroup
+    , ApartmentGroup
     ]
 
 
@@ -308,6 +310,12 @@ getTileGroupData tileGroup =
             , name = "Hedge corner"
             }
 
+        ApartmentGroup ->
+            { defaultColors = defaultApartmentColor
+            , tiles = Nonempty ApartmentDown [ ApartmentLeft, ApartmentUp, ApartmentRight ]
+            , name = "Apartment"
+            }
+
 
 type Tile
     = EmptyTile
@@ -390,6 +398,10 @@ type Tile
     | HedgeCornerDownRight
     | HedgeCornerUpLeft
     | HedgeCornerUpRight
+    | ApartmentDown
+    | ApartmentLeft
+    | ApartmentRight
+    | ApartmentUp
 
 
 type Direction
@@ -962,6 +974,10 @@ defaultStatueColor =
 
 defaultHedgeBushColor =
     OneDefaultColor (Color.rgb255 74 148 74)
+
+
+defaultApartmentColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 127 53 53, secondaryColor = Color.rgb255 202 170 105 }
 
 
 getData : Tile -> TileData unit
@@ -2135,6 +2151,66 @@ getData tile =
             , size = Coord.xy 3 2
             , collisionMask =
                 [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        ApartmentDown ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 28 40 }
+            , size = Coord.xy 2 5
+            , collisionMask =
+                [ ( 0, 3 )
+                , ( 1, 3 )
+                , ( 0, 4 )
+                , ( 1, 4 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        ApartmentLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 30 45 }
+            , size = Coord.xy 2 5
+            , collisionMask =
+                [ ( 0, 3 )
+                , ( 1, 3 )
+                , ( 0, 4 )
+                , ( 1, 4 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        ApartmentRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 28 45 }
+            , size = Coord.xy 2 5
+            , collisionMask =
+                [ ( 0, 3 )
+                , ( 1, 3 )
+                , ( 0, 4 )
+                , ( 1, 4 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        ApartmentUp ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 30 40 }
+            , size = Coord.xy 2 5
+            , collisionMask =
+                [ ( 0, 3 )
+                , ( 1, 3 )
+                , ( 0, 4 )
+                , ( 1, 4 )
                 ]
                     |> Set.fromList
                     |> CustomCollision
