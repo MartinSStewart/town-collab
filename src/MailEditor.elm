@@ -31,7 +31,7 @@ import Array exposing (Array)
 import AssocList
 import Audio exposing (AudioData)
 import Bounds
-import Color exposing (Colors)
+import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
 import Cursor
@@ -189,6 +189,7 @@ type Image
     | DefaultCursor Colors
     | DragCursor Colors
     | PinchCursor Colors
+    | Line Int Color
 
 
 scroll :
@@ -285,6 +286,10 @@ uiUpdate config elementPosition mousePosition msg model =
                                                             |> Coord.minus elementPosition
                                                             |> Coord.divide (Coord.xy mailScale mailScale)
                                                             |> Coord.minus (Coord.divide (Coord.xy 2 2) imageData.textureSize)
+                                                            |> Coord.toVector2d
+                                                            |> Vector2d.scaleBy 0.5
+                                                            |> Coord.roundVector
+                                                            |> Coord.scalar 2
                                                      , image = currentImage imagePlacer
                                                      }
                                                    ]
@@ -399,6 +404,9 @@ currentImage imagePlacer =
                     TileImage tileGroup _ colors ->
                         TileImage tileGroup imagePlacer.rotationIndex colors
 
+                    Line _ color ->
+                        Line imagePlacer.rotationIndex color
+
                     _ ->
                         a
            )
@@ -421,6 +429,7 @@ images =
     , DefaultCursor Cursor.defaultColors
     , DragCursor Cursor.defaultColors
     , PinchCursor Cursor.defaultColors
+    , Line 0 Color.black
     ]
         ++ List.map
             (\group ->
@@ -586,6 +595,29 @@ getImageData image =
             { textureSize = Coord.xy 10 17
             , texturePosition = [ Coord.xy 494 0 ]
             , colors = colors
+            }
+
+        Line rotationIndex color ->
+            let
+                rotationIndex2 =
+                    modBy 4 rotationIndex
+
+                ( texturePosition, textureSize ) =
+                    if rotationIndex2 == 0 then
+                        ( Coord.xy 604 0, Coord.xy 20 2 )
+
+                    else if rotationIndex2 == 1 then
+                        ( Coord.xy 606 2, Coord.xy 16 16 )
+
+                    else if rotationIndex2 == 2 then
+                        ( Coord.xy 604 0, Coord.xy 2 20 )
+
+                    else
+                        ( Coord.xy 622 2, Coord.xy 16 16 )
+            in
+            { textureSize = textureSize
+            , texturePosition = [ texturePosition ]
+            , colors = { primaryColor = color, secondaryColor = Color.black }
             }
 
 

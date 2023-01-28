@@ -17,6 +17,7 @@ module Coord exposing
     , origin
     , plus
     , roundPoint
+    , roundVector
     , scalar
     , toPoint2d
     , toTuple
@@ -147,6 +148,15 @@ roundPoint point2d =
     let
         point =
             Point2d.unwrap point2d
+    in
+    tuple ( round point.x, round point.y )
+
+
+roundVector : Vector2d units coordinate -> Coord units
+roundVector point2d =
+    let
+        point =
+            Vector2d.unwrap point2d
     in
     tuple ( round point.x, round point.y )
 

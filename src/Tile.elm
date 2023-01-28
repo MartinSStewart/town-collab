@@ -74,6 +74,8 @@ type TileGroup
     | HedgeRowGroup
     | HedgeCornerGroup
     | ApartmentGroup
+    | RockGroup
+    | FlowersGroup
 
 
 allTileGroups : List TileGroup
@@ -108,6 +110,8 @@ allTileGroups =
     , HedgeRowGroup
     , HedgeCornerGroup
     , ApartmentGroup
+    , RockGroup
+    , FlowersGroup
     ]
 
 
@@ -316,6 +320,18 @@ getTileGroupData tileGroup =
             , name = "Apartment"
             }
 
+        RockGroup ->
+            { defaultColors = defaultRockColor
+            , tiles = Nonempty RockDown [ RockLeft, RockUp, RockRight ]
+            , name = "Rock"
+            }
+
+        FlowersGroup ->
+            { defaultColors = defaultFlowerColor
+            , tiles = Nonempty Flowers []
+            , name = "Flowers"
+            }
+
 
 type Tile
     = EmptyTile
@@ -402,6 +418,11 @@ type Tile
     | ApartmentLeft
     | ApartmentRight
     | ApartmentUp
+    | RockDown
+    | RockLeft
+    | RockRight
+    | RockUp
+    | Flowers
 
 
 type Direction
@@ -978,6 +999,14 @@ defaultHedgeBushColor =
 
 defaultApartmentColor =
     TwoDefaultColors { primaryColor = Color.rgb255 127 53 53, secondaryColor = Color.rgb255 202 170 105 }
+
+
+defaultRockColor =
+    OneDefaultColor (Color.rgb255 160 160 160)
+
+
+defaultFlowerColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 242 210 81, secondaryColor = Color.rgb255 242 146 0 }
 
 
 getData : Tile -> TileData unit
@@ -2211,6 +2240,50 @@ getData tile =
                 , ( 1, 3 )
                 , ( 0, 4 )
                 , ( 1, 4 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        RockDown ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 12 48 }
+            , size = Coord.xy 1 1
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RockLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 13 48 }
+            , size = Coord.xy 1 1
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RockRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 12 49 }
+            , size = Coord.xy 1 1
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        RockUp ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 13 49 }
+            , size = Coord.xy 1 1
+            , collisionMask = DefaultCollision
+            , railPath = NoRailPath
+            }
+
+        Flowers ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 28 50 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
                 ]
                     |> Set.fromList
                     |> CustomCollision
