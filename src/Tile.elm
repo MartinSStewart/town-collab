@@ -71,6 +71,8 @@ type TileGroup
     | BusStopGroup
     | HospitalGroup
     | StatueGroup
+    | HedgeRowGroup
+    | HedgeCornerGroup
 
 
 allTileGroups : List TileGroup
@@ -102,6 +104,8 @@ allTileGroups =
     , BusStopGroup
     , HospitalGroup
     , StatueGroup
+    , HedgeRowGroup
+    , HedgeCornerGroup
     ]
 
 
@@ -292,6 +296,18 @@ getTileGroupData tileGroup =
             , name = "Statue"
             }
 
+        HedgeRowGroup ->
+            { defaultColors = defaultHedgeBushColor
+            , tiles = Nonempty HedgeRowDown [ HedgeRowLeft, HedgeRowUp, HedgeRowRight ]
+            , name = "Hedge row"
+            }
+
+        HedgeCornerGroup ->
+            { defaultColors = defaultHedgeBushColor
+            , tiles = Nonempty HedgeCornerDownLeft [ HedgeCornerUpLeft, HedgeCornerUpRight, HedgeCornerDownRight ]
+            , name = "Hedge corner"
+            }
+
 
 type Tile
     = EmptyTile
@@ -366,6 +382,14 @@ type Tile
     | BusStopUp
     | Hospital
     | Statue
+    | HedgeRowDown
+    | HedgeRowLeft
+    | HedgeRowRight
+    | HedgeRowUp
+    | HedgeCornerDownLeft
+    | HedgeCornerDownRight
+    | HedgeCornerUpLeft
+    | HedgeCornerUpRight
 
 
 type Direction
@@ -934,6 +958,10 @@ defaultHospitalColor =
 defaultStatueColor : DefaultColor
 defaultStatueColor =
     TwoDefaultColors { primaryColor = Color.rgb255 208 195 173, secondaryColor = Color.rgb255 171 129 128 }
+
+
+defaultHedgeBushColor =
+    OneDefaultColor (Color.rgb255 74 148 74)
 
 
 getData : Tile -> TileData unit
@@ -2011,6 +2039,102 @@ getData tile =
                 , ( 1, 1 )
                 , ( 0, 2 )
                 , ( 1, 2 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeRowDown ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 17 46 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeRowLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 17 48 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeRowRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 17 50 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeRowUp ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 17 52 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeCornerDownLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 14 54 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeCornerDownRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 17 54 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeCornerUpLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 7 41 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgeCornerUpRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 14 52 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
                 ]
                     |> Set.fromList
                     |> CustomCollision
