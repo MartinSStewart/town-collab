@@ -79,6 +79,7 @@ type TileGroup
     | RockGroup
     | FlowersGroup
     | ElmTreeGroup
+    | DirtPathGroup
 
 
 allTileGroups : List TileGroup
@@ -117,6 +118,7 @@ allTileGroups =
     , RockGroup
     , FlowersGroup
     , ElmTreeGroup
+    , DirtPathGroup
     ]
 
 
@@ -349,6 +351,12 @@ getTileGroupData tileGroup =
             , name = "Elm tree"
             }
 
+        DirtPathGroup ->
+            { defaultColors = defaultDirtPathColor
+            , tiles = Nonempty DirtPathHorizontal [ DirtPathVertical ]
+            , name = "Dirt path"
+            }
+
 
 type Tile
     = EmptyTile
@@ -446,6 +454,8 @@ type Tile
     | Flowers1
     | Flowers2
     | ElmTree
+    | DirtPathHorizontal
+    | DirtPathVertical
 
 
 type Direction
@@ -944,7 +954,7 @@ hasCollision positionA tileA positionB tileB =
 
 
 isFence tile =
-    tile == FenceHorizontal || tile == FenceVertical || tile == FenceDiagonal || tile == FenceAntidiagonal
+    tile == FenceHorizontal || tile == FenceVertical || tile == FenceDiagonal || tile == FenceAntidiagonal || tile == DirtPathHorizontal || tile == DirtPathVertical
 
 
 hasCollisionWithCoord : Coord CellLocalUnit -> Coord CellLocalUnit -> TileData unit -> Bool
@@ -1039,6 +1049,10 @@ defaultFlowerColor =
 
 defaultElmTreeColor =
     TwoDefaultColors { primaryColor = Color.rgb255 39 171 82, secondaryColor = Color.rgb255 141 96 65 }
+
+
+defaultDirtPathColor =
+    OneDefaultColor (Color.rgb255 211 183 132)
 
 
 getData : Tile -> TileData unit
@@ -1328,6 +1342,12 @@ getData tile =
 
         ElmTree ->
             elmTree
+
+        DirtPathHorizontal ->
+            dirtPathHorizontal
+
+        DirtPathVertical ->
+            dirtPathVertical
 
 
 emptyTile =
@@ -2773,6 +2793,24 @@ elmTree =
     }
 
 
+dirtPathHorizontal =
+    { texturePosition = Just (Coord.xy 34 50)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 2 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+dirtPathVertical =
+    { texturePosition = Just (Coord.xy 34 51)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 2
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
 yOffset : Tile -> Float
 yOffset tile =
     case List.elemIndex tile zOrderBackToFront of
@@ -2783,12 +2821,18 @@ yOffset tile =
             0
 
 
+tileCount : Int
 tileCount =
     List.length zOrderBackToFront
 
 
+zOrderBackToFront : List Tile
 zOrderBackToFront =
     [ PostOffice
+    , FenceHorizontal
+    , FenceVertical
+    , FenceDiagonal
+    , FenceAntidiagonal
     , EmptyTile
     , HouseDown
     , HouseRight
@@ -2848,10 +2892,6 @@ zOrderBackToFront =
     , Road3WayRight
     , RoadRailCrossingHorizontal
     , RoadRailCrossingVertical
-    , FenceHorizontal
-    , FenceVertical
-    , FenceDiagonal
-    , FenceAntidiagonal
     , RoadDeadendUp
     , RoadDeadendDown
     , BusStopDown
@@ -2861,6 +2901,10 @@ zOrderBackToFront =
     , Statue
     , Flowers1
     , Flowers2
+    , ApartmentDown
+    , ApartmentLeft
+    , ApartmentRight
+    , ApartmentUp
     , HedgeRowDown
     , HedgeRowLeft
     , HedgeRowRight
@@ -2873,10 +2917,6 @@ zOrderBackToFront =
     , HedgePillarDownRight
     , HedgePillarUpLeft
     , HedgePillarUpRight
-    , ApartmentDown
-    , ApartmentLeft
-    , ApartmentRight
-    , ApartmentUp
     , RockDown
     , RockLeft
     , RockRight
@@ -2886,11 +2926,12 @@ zOrderBackToFront =
     ]
 
 
+postOfficeCollision : CollisionMask
 postOfficeCollision =
-    collsionRectangle 0 1 4 4
+    collisionRectangle 0 1 4 4
 
 
-collsionRectangle x y width height =
+collisionRectangle x y width height =
     List.range x (x + width - 1)
         |> List.concatMap
             (\x2 ->

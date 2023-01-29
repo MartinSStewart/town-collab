@@ -3441,6 +3441,7 @@ getUiHover hover =
             Nothing
 
 
+visibleCellBounds : FrontendLoaded -> Bounds CellUnit
 visibleCellBounds model =
     let
         { minX, minY, maxX, maxY } =
