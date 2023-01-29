@@ -74,6 +74,7 @@ type TileGroup
     | StatueGroup
     | HedgeRowGroup
     | HedgeCornerGroup
+    | HedgePillarGroup
     | ApartmentGroup
     | RockGroup
     | FlowersGroup
@@ -110,6 +111,7 @@ allTileGroups =
     , FenceStraightGroup
     , HedgeRowGroup
     , HedgeCornerGroup
+    , HedgePillarGroup
     , PineTreeGroup
     , RockGroup
     , FlowersGroup
@@ -315,6 +317,12 @@ getTileGroupData tileGroup =
             , name = "Hedge corner"
             }
 
+        HedgePillarGroup ->
+            { defaultColors = defaultHedgeBushColor
+            , tiles = Nonempty HedgePillarDownLeft [ HedgePillarUpLeft, HedgePillarUpRight, HedgePillarDownRight ]
+            , name = "Hedge pillar"
+            }
+
         ApartmentGroup ->
             { defaultColors = defaultApartmentColor
             , tiles = Nonempty ApartmentDown [ ApartmentLeft, ApartmentUp, ApartmentRight ]
@@ -415,6 +423,10 @@ type Tile
     | HedgeCornerDownRight
     | HedgeCornerUpLeft
     | HedgeCornerUpRight
+    | HedgePillarDownLeft
+    | HedgePillarDownRight
+    | HedgePillarUpLeft
+    | HedgePillarUpRight
     | ApartmentDown
     | ApartmentLeft
     | ApartmentRight
@@ -2178,6 +2190,54 @@ getData tile =
         HedgeCornerUpRight ->
             { texturePosition = Nothing
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 14 52 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgePillarDownLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 28 52 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgePillarDownRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 28 54 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgePillarUpLeft ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 31 52 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        HedgePillarUpRight ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 31 54 }
             , size = Coord.xy 3 2
             , collisionMask =
                 [ ( 1, 1 )

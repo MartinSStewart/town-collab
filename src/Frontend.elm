@@ -458,9 +458,10 @@ defaultTileHotkeys =
         , ( "o", FenceStraightGroup )
         , ( "l", HedgeRowGroup )
         , ( "0", HedgeCornerGroup )
-        , ( "p", PineTreeGroup )
-        , ( ";", RockGroup )
-        , ( "-", FlowersGroup )
+        , ( "p", HedgePillarGroup )
+        , ( ";", PineTreeGroup )
+        , ( "-", RockGroup )
+        , ( "=", FlowersGroup )
         ]
 
 
