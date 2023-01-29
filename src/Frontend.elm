@@ -417,12 +417,11 @@ tryLoading frontendLoading =
             Nothing
 
         LoadedLocalModel loadedLocalModel ->
-            Maybe.map3
-                (\time devicePixelRatio texture () ->
-                    loadedInit time devicePixelRatio frontendLoading texture loadedLocalModel
+            Maybe.map2
+                (\time texture () ->
+                    loadedInit time frontendLoading texture loadedLocalModel
                 )
                 frontendLoading.time
-                frontendLoading.devicePixelRatio
                 frontendLoading.texture
 
 
@@ -467,12 +466,11 @@ defaultTileHotkeys =
 
 loadedInit :
     Effect.Time.Posix
-    -> Float
     -> FrontendLoading
     -> Texture
     -> LoadedLocalModel_
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
-loadedInit time devicePixelRatio loading texture loadedLocalModel =
+loadedInit time loading texture loadedLocalModel =
     let
         currentTile =
             HandTool
@@ -495,7 +493,9 @@ loadedInit time devicePixelRatio loading texture loadedLocalModel =
             , trainTexture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
-            , devicePixelRatio = devicePixelRatio
+            , cssWindowSize = loading.cssWindowSize
+            , cssCanvasSize = loading.cssCanvasSize
+            , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
             , mouseLeft = MouseButtonUp { current = loading.mousePosition }
             , mouseMiddle = MouseButtonUp { current = loading.mousePosition }
@@ -617,7 +617,9 @@ init url key =
     ( Loading
         { key = key
         , windowSize = ( Pixels.pixels 1920, Pixels.pixels 1080 )
-        , devicePixelRatio = Nothing
+        , cssWindowSize = Coord.xy 1920 1080
+        , cssCanvasSize = Coord.xy 1920 1080
+        , devicePixelRatio = 1
         , zoomFactor = 2
         , time = Nothing
         , viewPoint = data.viewPoint
@@ -634,12 +636,7 @@ init url key =
         [ Effect.Lamdera.sendToBackend (ConnectToBackend bounds data.loginOrInviteToken)
         , Command.sendToJs "user_agent_to_js" Ports.user_agent_to_js Json.Encode.null
         , Effect.Task.perform
-            (\{ viewport } ->
-                WindowResized
-                    ( round viewport.width |> Pixels.pixels
-                    , round viewport.height |> Pixels.pixels
-                    )
-            )
+            (\{ viewport } -> WindowResized (Coord.xy (round viewport.width) (round viewport.height)))
             Effect.Browser.Dom.getViewport
         , Effect.Task.perform (\time -> Duration.addTo time (PingData.pingOffset { pingData = Nothing }) |> ShortIntervalElapsed) Effect.Time.now
         , cmd
@@ -667,7 +664,8 @@ update audioData msg model =
                     windowResizedUpdate windowSize loadingModel |> Tuple.mapFirst Loading
 
                 GotDevicePixelRatio devicePixelRatio ->
-                    ( Loading { loadingModel | devicePixelRatio = Just devicePixelRatio }, Command.none )
+                    devicePixelRatioChanged devicePixelRatio loadingModel
+                        |> Tuple.mapFirst Loading
 
                 SoundLoaded sound result ->
                     ( Loading { loadingModel | sounds = AssocList.insert sound result loadingModel.sounds }, Command.none )
@@ -992,7 +990,7 @@ updateLoaded audioData msg model =
             windowResizedUpdate windowSize model
 
         GotDevicePixelRatio devicePixelRatio ->
-            ( { model | devicePixelRatio = devicePixelRatio }, Command.none )
+            devicePixelRatioChanged devicePixelRatio model
 
         MouseDown button mousePosition ->
             let
@@ -1002,7 +1000,6 @@ updateLoaded audioData msg model =
                 mousePosition2 : Coord Pixels
                 mousePosition2 =
                     mousePosition
-                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                         |> Coord.roundPoint
             in
             if button == MainButton then
@@ -1228,7 +1225,6 @@ updateLoaded audioData msg model =
                 mousePosition2 : Coord Pixels
                 mousePosition2 =
                     mousePosition
-                        |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                         |> Coord.roundPoint
 
                 placeTileHelper model2 =
@@ -1953,8 +1949,7 @@ getViewModel model =
         localModel =
             LocalGrid.localModel model.localModel
     in
-    { devicePixelRatio = model.devicePixelRatio
-    , windowSize = model.windowSize
+    { windowSize = model.windowSize
     , pressedSubmitEmail = model.pressedSubmitEmail
     , loginTextInput = model.loginTextInput
     , hasCmdKey = model.hasCmdKey
@@ -1984,7 +1979,6 @@ hoverAt model mousePosition =
         mousePosition2 : Coord Pixels
         mousePosition2 =
             mousePosition
-                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                 |> Coord.roundPoint
     in
     case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
@@ -2670,7 +2664,6 @@ uiUpdate elementPosition msg model =
                         mousePosition2 : Coord Pixels
                         mousePosition2 =
                             mouseScreenPosition model
-                                |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                                 |> Coord.roundPoint
 
                         ( newMailEditor, outMsg ) =
@@ -2944,19 +2937,40 @@ point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
         |> Point2d.unsafe
 
 
+scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float b )
 scaleForScreenToWorld model =
-    ( model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
-    , model.devicePixelRatio / (toFloat model.zoomFactor * toFloat (Coord.yRaw Units.tileSize)) |> Quantity
+    ( 1 / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
+    , 1 / (toFloat model.zoomFactor * toFloat (Coord.yRaw Units.tileSize)) |> Quantity
     )
 
 
-windowResizedUpdate : Coord Pixels -> { b | windowSize : Coord Pixels } -> ( { b | windowSize : Coord Pixels }, Command FrontendOnly ToBackend msg )
-windowResizedUpdate windowSize model =
-    ( { model | windowSize = windowSize }
+windowResizedUpdate :
+    Coord CssPixel
+    -> { b | cssWindowSize : Coord CssPixel, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixel, devicePixelRatio : Float }
+    ->
+        ( { b | cssWindowSize : Coord CssPixel, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixel, devicePixelRatio : Float }
+        , Command FrontendOnly ToBackend msg
+        )
+windowResizedUpdate cssWindowSize model =
+    let
+        { cssCanvasSize, windowSize } =
+            findPixelPerfectSize2 { devicePixelRatio = model.devicePixelRatio, cssWindowSize = cssWindowSize }
+    in
+    ( { model | cssWindowSize = cssWindowSize, cssCanvasSize = cssCanvasSize, windowSize = windowSize }
     , Command.sendToJs
         "martinsstewart_elm_device_pixel_ratio_to_js"
         Ports.martinsstewart_elm_device_pixel_ratio_to_js
         Json.Encode.null
+    )
+
+
+devicePixelRatioChanged devicePixelRatio model =
+    let
+        { cssCanvasSize, windowSize } =
+            findPixelPerfectSize2 { devicePixelRatio = devicePixelRatio, cssWindowSize = model.cssWindowSize }
+    in
+    ( { model | devicePixelRatio = devicePixelRatio, cssCanvasSize = cssCanvasSize, windowSize = windowSize }
+    , Command.none
     )
 
 
@@ -3500,7 +3514,7 @@ offsetViewPoint :
     -> Point2d Pixels Pixels
     -> Point2d Pixels Pixels
     -> Point2d WorldUnit WorldUnit
-offsetViewPoint ({ windowSize, zoomFactor } as model) hover mouseStart mouseCurrent =
+offsetViewPoint model hover mouseStart mouseCurrent =
     if canDragView hover then
         let
             delta : Vector2d WorldUnit WorldUnit
@@ -3905,12 +3919,7 @@ view audioData model =
     , body =
         [ case model of
             Loading loadingModel ->
-                case loadingModel.devicePixelRatio of
-                    Just devicePixelRatio ->
-                        loadingCanvasView devicePixelRatio loadingModel
-
-                    Nothing ->
-                        Html.text ""
+                loadingCanvasView loadingModel
 
             Loaded loadedModel ->
                 canvasView audioData loadedModel
@@ -3935,15 +3944,15 @@ currentUserId model =
             Nothing
 
 
-findPixelPerfectSize :
-    { a | devicePixelRatio : Float, windowSize : ( Quantity Int Pixels, Quantity Int Pixels ) }
-    -> { canvasSize : ( Int, Int ), actualCanvasSize : ( Int, Int ) }
-findPixelPerfectSize frontendModel =
+findPixelPerfectSize2 :
+    { devicePixelRatio : Float, cssWindowSize : Coord CssPixel }
+    -> { cssCanvasSize : Coord CssPixel, windowSize : Coord Pixels }
+findPixelPerfectSize2 frontendModel =
     let
-        findValue : Quantity Int Pixels -> ( Int, Int )
+        findValue : Quantity Int CssPixel -> ( Int, Int )
         findValue value =
             List.range 0 9
-                |> List.map ((+) (Pixels.inPixels value))
+                |> List.map ((+) (Quantity.unwrap value))
                 |> List.find
                     (\v ->
                         let
@@ -3953,15 +3962,15 @@ findPixelPerfectSize frontendModel =
                         a == toFloat (round a) && modBy 2 (round a) == 0
                     )
                 |> Maybe.map (\v -> ( v, toFloat v * frontendModel.devicePixelRatio |> round ))
-                |> Maybe.withDefault ( Pixels.inPixels value, toFloat (Pixels.inPixels value) * frontendModel.devicePixelRatio |> round )
+                |> Maybe.withDefault ( Quantity.unwrap value, toFloat (Quantity.unwrap value) * frontendModel.devicePixelRatio |> round )
 
         ( w, actualW ) =
-            findValue (Tuple.first frontendModel.windowSize)
+            findValue (Tuple.first frontendModel.cssWindowSize)
 
         ( h, actualH ) =
-            findValue (Tuple.second frontendModel.windowSize)
+            findValue (Tuple.second frontendModel.cssWindowSize)
     in
-    { canvasSize = ( w, h ), actualCanvasSize = ( actualW, actualH ) }
+    { cssCanvasSize = Coord.xy w h, windowSize = Coord.xy actualW actualH }
 
 
 viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
@@ -3986,20 +3995,17 @@ viewBoundingBox_ model =
     BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
-loadingCanvasView : Float -> FrontendLoading -> Html FrontendMsg_
-loadingCanvasView devicePixelRatio model =
+loadingCanvasView : FrontendLoading -> Html FrontendMsg_
+loadingCanvasView model =
     let
         ( windowWidth, windowHeight ) =
-            actualCanvasSize
+            Coord.toTuple model.windowSize
 
         ( cssWindowWidth, cssWindowHeight ) =
-            canvasSize
-
-        { canvasSize, actualCanvasSize } =
-            findPixelPerfectSize { devicePixelRatio = devicePixelRatio, windowSize = model.windowSize }
+            Coord.toTuple model.cssCanvasSize
 
         loadingTextPosition2 =
-            loadingTextPosition devicePixelRatio model.windowSize
+            loadingTextPosition model.windowSize
 
         isHovering =
             insideStartButton model.mousePosition model
@@ -4012,30 +4018,20 @@ loadingCanvasView devicePixelRatio model =
         , Effect.WebGL.clearColor 1 1 1 1
         , Effect.WebGL.depth 1
         ]
-        [ Html.Attributes.width windowWidth
-        , Html.Attributes.height windowHeight
-        , Html.Attributes.style "cursor"
+        ([ Html.Attributes.width windowWidth
+         , Html.Attributes.height windowHeight
+         , Html.Attributes.style "cursor"
             (if showMousePointer then
                 "pointer"
 
              else
                 "default"
             )
-        , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
-        , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
-        , Html.Events.Extra.Mouse.onDown
-            (\{ clientPos, button } ->
-                MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-            )
-        , Html.Events.Extra.Mouse.onMove
-            (\{ clientPos } ->
-                MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-            )
-        , Html.Events.Extra.Mouse.onUp
-            (\{ clientPos, button } ->
-                MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-            )
-        ]
+         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
+         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
+         ]
+            ++ mouseListeners model
+        )
         (case Maybe.andThen Effect.WebGL.Texture.unwrap model.texture of
             Just texture ->
                 let
@@ -4053,7 +4049,7 @@ loadingCanvasView devicePixelRatio model =
                             (-2 / toFloat windowHeight)
                             1
                             |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                            |> Coord.translateMat4 (touchDevicesNotSupportedPosition devicePixelRatio model.windowSize)
+                            |> Coord.translateMat4 (touchDevicesNotSupportedPosition model.windowSize)
                     , texture = texture
                     , textureSize = textureSize
                     , color = Vec4.vec4 1 1 1 1
@@ -4096,7 +4092,7 @@ loadingCanvasView devicePixelRatio model =
                                             1
                                             |> Coord.translateMat4
                                                 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                            |> Coord.translateMat4 (loadingTextPosition devicePixelRatio model.windowSize)
+                                            |> Coord.translateMat4 (loadingTextPosition model.windowSize)
                                     , texture = texture
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
@@ -4109,30 +4105,23 @@ loadingCanvasView devicePixelRatio model =
         )
 
 
-insideStartButton : Point2d Pixels Pixels -> { a | devicePixelRatio : Maybe Float, windowSize : Coord Pixels } -> Bool
+insideStartButton : Point2d Pixels Pixels -> { a | devicePixelRatio : Float, windowSize : Coord Pixels } -> Bool
 insideStartButton mousePosition model =
-    case model.devicePixelRatio of
-        Just devicePixelRatio ->
-            let
-                mousePosition2 : Coord Pixels
-                mousePosition2 =
-                    mousePosition
-                        |> Point2d.scaleAbout Point2d.origin devicePixelRatio
-                        |> Coord.roundPoint
+    let
+        mousePosition2 : Coord Pixels
+        mousePosition2 =
+            mousePosition
+                |> Coord.roundPoint
 
-                loadingTextPosition2 =
-                    loadingTextPosition devicePixelRatio model.windowSize
-            in
-            Bounds.fromCoordAndSize loadingTextPosition2 loadingTextSize |> Bounds.contains mousePosition2
-
-        Nothing ->
-            False
+        loadingTextPosition2 =
+            loadingTextPosition model.windowSize
+    in
+    Bounds.fromCoordAndSize loadingTextPosition2 loadingTextSize |> Bounds.contains mousePosition2
 
 
-loadingTextPosition : Float -> Coord units -> Coord units
-loadingTextPosition devicePixelRatio windowSize =
+loadingTextPosition : Coord units -> Coord units
+loadingTextPosition windowSize =
     windowSize
-        |> Coord.multiplyTuple_ ( devicePixelRatio, devicePixelRatio )
         |> Coord.divide (Coord.xy 2 2)
         |> Coord.minus (Coord.divide (Coord.xy 2 2) loadingTextSize)
 
@@ -4148,9 +4137,9 @@ loadingTextMesh =
         |> Sprite.toMesh
 
 
-touchDevicesNotSupportedPosition : Float -> Coord units -> Coord units
-touchDevicesNotSupportedPosition devicePixelRatio windowSize =
-    loadingTextPosition devicePixelRatio windowSize |> Coord.plus (Coord.yOnly loadingTextSize |> Coord.multiply (Coord.xy 1 2))
+touchDevicesNotSupportedPosition : Coord units -> Coord units
+touchDevicesNotSupportedPosition windowSize =
+    loadingTextPosition windowSize |> Coord.plus (Coord.yOnly loadingTextSize |> Coord.multiply (Coord.xy 1 2))
 
 
 touchDevicesNotSupportedMesh : Effect.WebGL.Mesh Vertex
@@ -4390,6 +4379,33 @@ getHandColor userId model =
             Cursor.defaultColors
 
 
+mouseListeners model =
+    [ Html.Events.Extra.Mouse.onDown
+        (\{ clientPos, button } ->
+            MouseDown
+                button
+                (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos)
+                    |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                )
+        )
+    , Html.Events.Extra.Mouse.onMove
+        (\{ clientPos } ->
+            MouseMove
+                (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos)
+                    |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                )
+        )
+    , Html.Events.Extra.Mouse.onUp
+        (\{ clientPos, button } ->
+            MouseUp
+                button
+                (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos)
+                    |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
+                )
+        )
+    ]
+
+
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
     case Effect.WebGL.Texture.unwrap model.texture of
@@ -4399,13 +4415,10 @@ canvasView audioData model =
                     viewBoundingBox model
 
                 ( windowWidth, windowHeight ) =
-                    actualCanvasSize
+                    Coord.toTuple model.windowSize
 
                 ( cssWindowWidth, cssWindowHeight ) =
-                    canvasSize
-
-                { canvasSize, actualCanvasSize } =
-                    findPixelPerfectSize model
+                    Coord.toTuple model.cssCanvasSize
 
                 { x, y } =
                     Point2d.unwrap (actualViewPoint model)
@@ -4441,26 +4454,16 @@ canvasView audioData model =
                 , Effect.WebGL.clearColor 1 1 1 1
                 , Effect.WebGL.depth 1
                 ]
-                [ Html.Attributes.width windowWidth
-                , Html.Attributes.height windowHeight
-                , Cursor.htmlAttribute showMousePointer
-                , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
-                , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
-                , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
-                , Html.Events.Extra.Mouse.onDown
-                    (\{ clientPos, button } ->
-                        MouseDown button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                    )
-                , Html.Events.Extra.Mouse.onMove
-                    (\{ clientPos } ->
-                        MouseMove (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                    )
-                , Html.Events.Extra.Mouse.onUp
-                    (\{ clientPos, button } ->
-                        MouseUp button (Point2d.pixels (Tuple.first clientPos) (Tuple.second clientPos))
-                    )
-                , Html.Events.Extra.Wheel.onWheel MouseWheel
-                ]
+                ([ Html.Attributes.width windowWidth
+                 , Html.Attributes.height windowHeight
+                 , Cursor.htmlAttribute showMousePointer
+                 , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
+                 , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
+                 , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
+                 , Html.Events.Extra.Wheel.onWheel MouseWheel
+                 ]
+                    ++ mouseListeners model
+                )
                 (case Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture of
                     Just trainTexture ->
                         let
@@ -5025,7 +5028,7 @@ subscriptions _ model =
                     |> Result.withDefault 1
                     |> GotDevicePixelRatio
             )
-        , Effect.Browser.Events.onResize (\width height -> WindowResized ( Pixels.pixels width, Pixels.pixels height ))
+        , Effect.Browser.Events.onResize (\width height -> WindowResized (Coord.xy width height))
         , Effect.Browser.Events.onAnimationFrame AnimationFrame
         , Keyboard.downs KeyDown
         , Ports.readFromClipboardResponse PastedText

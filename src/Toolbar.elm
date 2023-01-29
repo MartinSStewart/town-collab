@@ -35,8 +35,7 @@ import User exposing (FrontendUser)
 
 
 type alias ViewData =
-    { devicePixelRatio : Float
-    , windowSize : Coord Pixels
+    { windowSize : Coord Pixels
     , pressedSubmitEmail : SubmitStatus EmailAddress
     , loginTextInput : TextInput.Model
     , hasCmdKey : Bool
@@ -62,15 +61,11 @@ type alias ViewData =
 
 view : ViewData -> Ui.Element UiHover UiMsg
 view data =
-    let
-        windowSize =
-            Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
-    in
     case ( data.userStatus, data.mailEditor ) of
         ( LoggedIn loggedIn, Just mailEditor ) ->
             MailEditor.ui
                 data.isDisconnected
-                windowSize
+                data.windowSize
                 MailEditorHover
                 MailEditorUiMsg
                 data.users
@@ -79,10 +74,10 @@ view data =
 
         _ ->
             Ui.bottomCenter
-                { size = windowSize
+                { size = data.windowSize
                 , inFront =
                     [ if data.isDisconnected then
-                        MailEditor.disconnectWarning windowSize
+                        MailEditor.disconnectWarning data.windowSize
 
                       else
                         Ui.none

@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , CssPixel
     , EmailEvent(..)
     , EmailResult(..)
     , FrontendLoaded
@@ -88,7 +89,9 @@ type FrontendModel_
 type alias FrontendLoading =
     { key : Effect.Browser.Navigation.Key
     , windowSize : Coord Pixels
-    , devicePixelRatio : Maybe Float
+    , cssWindowSize : Coord CssPixel
+    , cssCanvasSize : Coord CssPixel
+    , devicePixelRatio : Float
     , zoomFactor : Int
     , time : Maybe Effect.Time.Posix
     , viewPoint : Coord WorldUnit
@@ -143,6 +146,8 @@ type alias FrontendLoaded =
     , trainTexture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
+    , cssWindowSize : Coord CssPixel
+    , cssCanvasSize : Coord CssPixel
     , devicePixelRatio : Float
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
@@ -341,6 +346,10 @@ type alias FrontendMsg =
     Audio.Msg FrontendMsg_
 
 
+type CssPixel
+    = CssPixel Never
+
+
 type FrontendMsg_
     = UrlClicked Browser.UrlRequest
     | UrlChanged Url
@@ -349,7 +358,7 @@ type FrontendMsg_
     | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | KeyMsg Keyboard.Msg
     | KeyDown Keyboard.RawKey
-    | WindowResized (Coord Pixels)
+    | WindowResized (Coord CssPixel)
     | GotDevicePixelRatio Float
     | MouseDown Button (Point2d Pixels Pixels)
     | MouseUp Button (Point2d Pixels Pixels)
