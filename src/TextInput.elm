@@ -328,10 +328,6 @@ keyMsg ctrlDown shiftDown key model =
 
 setCursorSize : Int -> State -> State
 setCursorSize newCursorSize state =
-    let
-        _ =
-            Debug.log "size" newCursorSize
-    in
     { state
         | cursorSize =
             if newCursorSize > 0 then
@@ -344,7 +340,11 @@ setCursorSize newCursorSize state =
 
 paste : String -> Model -> Model
 paste text model =
-    pushState (insertText text) model
+    if text == "" then
+        model
+
+    else
+        pushState (insertText text) model
 
 
 insertText : String -> State -> State

@@ -1013,7 +1013,7 @@ startTeleportingHome time (Train train) =
                         train.status
 
                     StoppedAtPostOffice _ ->
-                        train.status
+                        TeleportingHome time
         }
 
 

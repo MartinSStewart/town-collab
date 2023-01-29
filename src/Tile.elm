@@ -337,7 +337,7 @@ getTileGroupData tileGroup =
 
         FlowersGroup ->
             { defaultColors = defaultFlowerColor
-            , tiles = Nonempty Flowers []
+            , tiles = Nonempty Flowers1 [ Flowers2 ]
             , name = "Flowers"
             }
 
@@ -435,7 +435,8 @@ type Tile
     | RockLeft
     | RockRight
     | RockUp
-    | Flowers
+    | Flowers1
+    | Flowers2
 
 
 type Direction
@@ -2339,9 +2340,21 @@ getData tile =
             , railPath = NoRailPath
             }
 
-        Flowers ->
+        Flowers1 ->
             { texturePosition = Nothing
             , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 28 50 }
+            , size = Coord.xy 3 2
+            , collisionMask =
+                [ ( 1, 1 )
+                ]
+                    |> Set.fromList
+                    |> CustomCollision
+            , railPath = NoRailPath
+            }
+
+        Flowers2 ->
+            { texturePosition = Nothing
+            , texturePositionTopLayer = Just { yOffset = 0, texturePosition = Coord.xy 31 50 }
             , size = Coord.xy 3 2
             , collisionMask =
                 [ ( 1, 1 )
