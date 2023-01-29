@@ -263,7 +263,7 @@ addTrees : ( Quantity Int CellUnit, Quantity Int CellUnit ) -> List Value
 addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
     let
         treeColor =
-            Tile.defaultToPrimaryAndSecondary Tile.defaultTreeColor
+            Tile.defaultToPrimaryAndSecondary Tile.defaultPineTreeColor
 
         rockColor =
             Tile.defaultToPrimaryAndSecondary Tile.defaultRockColor
