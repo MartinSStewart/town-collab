@@ -233,7 +233,7 @@ getTileGroupData tileGroup =
 
         PineTreeGroup ->
             { defaultColors = defaultPineTreeColor
-            , tiles = Nonempty PineTree []
+            , tiles = Nonempty PineTree1 [ PineTree2 ]
             , name = "Pine tree"
             }
 
@@ -399,7 +399,8 @@ type Tile
     | PostOffice
     | MowedGrass1
     | MowedGrass4
-    | PineTree
+    | PineTree1
+    | PineTree2
     | LogCabinDown
     | LogCabinRight
     | LogCabinUp
@@ -1178,8 +1179,11 @@ getData tile =
         MowedGrass4 ->
             mowedGrass4
 
-        PineTree ->
-            pineTree
+        PineTree1 ->
+            pineTree1
+
+        PineTree2 ->
+            pineTree2
 
         LogCabinDown ->
             logCabinDown
@@ -2133,9 +2137,18 @@ mowedGrass4 =
     }
 
 
-pineTree =
+pineTree1 =
     { texturePosition = Nothing
-    , texturePositionTopLayer = Just { yOffset = yOffset PineTree, texturePosition = Coord.xy 11 24 }
+    , texturePositionTopLayer = Just { yOffset = yOffset PineTree1, texturePosition = Coord.xy 11 24 }
+    , size = Coord.xy 1 2
+    , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+pineTree2 =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset PineTree1, texturePosition = Coord.xy 12 24 }
     , size = Coord.xy 1 2
     , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
     , railPath = NoRailPath
@@ -2872,7 +2885,8 @@ zOrderBackToFront =
     , RailTopToLeft_SplitDown
     , MowedGrass1
     , MowedGrass4
-    , PineTree
+    , PineTree1
+    , PineTree2
     , LogCabinDown
     , LogCabinRight
     , LogCabinUp

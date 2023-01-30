@@ -297,7 +297,7 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                                 , position = itemPosition
                                 , value = item
                                 , colors =
-                                    if item == PineTree then
+                                    if item == PineTree1 || item == PineTree2 then
                                         treeColor
 
                                     else

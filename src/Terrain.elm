@@ -2,6 +2,7 @@ module Terrain exposing (..)
 
 import Array2D exposing (Array2D)
 import Coord exposing (Coord)
+import List.Extra as List
 import Quantity exposing (Quantity(..))
 import Random
 import Simplex
@@ -26,7 +27,7 @@ localCoordToTerrain coord =
 
 treeSize : Coord unit
 treeSize =
-    Tile.getData PineTree |> .size
+    Tile.getData PineTree1 |> .size
 
 
 randomSceneryItem : Coord CellLocalUnit -> Random.Generator ( Tile, Coord CellLocalUnit )
@@ -35,8 +36,9 @@ randomSceneryItem offset =
         (Random.int 0 (terrainSize - Coord.xRaw treeSize))
         (Random.int -1 (terrainSize - Coord.yRaw treeSize))
         (Random.weighted
-            ( 0.99, PineTree )
-            [ ( 0.0025, RockDown )
+            ( 0.5, PineTree1 )
+            [ ( 0.49, PineTree2 )
+            , ( 0.0025, RockDown )
             , ( 0.0025, RockLeft )
             , ( 0.0025, RockUp )
             , ( 0.0025, RockRight )

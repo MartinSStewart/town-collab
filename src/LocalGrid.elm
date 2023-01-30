@@ -616,15 +616,29 @@ update_ msg model =
 
         ClientChange (ViewBoundsChange bounds newCells) ->
             let
-                newCells2 : List ( ( Int, Int ), GridCell.Cell )
+                newCells2 : Dict ( Int, Int ) GridCell.Cell
                 newCells2 =
                     List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
+                        |> Dict.fromList
             in
             ( { model
                 | grid =
-                    Grid.allCellsDict model.grid
-                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
-                        |> Dict.union (Dict.fromList newCells2)
+                    Bounds.coordRangeFold
+                        (\coord state ->
+                            ( Coord.toTuple coord
+                            , case Dict.get (Coord.toTuple coord) newCells2 of
+                                Just newCell3 ->
+                                    newCell3
+
+                                Nothing ->
+                                    GridCell.empty coord
+                            )
+                                :: state
+                        )
+                        identity
+                        bounds
+                        []
+                        |> Dict.fromList
                         |> Grid.from
                 , viewBounds = bounds
               }
