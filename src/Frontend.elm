@@ -37,6 +37,7 @@ import EmailAddress
 import Env
 import EverySet
 import Flag
+import Geometry.Interop.LinearAlgebra.Point2d as Point2d
 import Grid exposing (Grid)
 import GridCell
 import Html exposing (Html)
@@ -4849,10 +4850,16 @@ canvasView audioData model =
                                             square
                                             { view =
                                                 Mat4.makeScale3
-                                                    (512 * 2 / toFloat windowWidth)
-                                                    (3 * -2 / toFloat windowHeight)
+                                                    (1024 * 2 / toFloat windowWidth)
+                                                    (1024 * -2 / toFloat windowHeight)
                                                     1
+                                                    |> Mat4.translate3 -0.5 -0.5 -0.5
                                             , texture = simplexNoiseLookup
+                                            , cellPosition =
+                                                actualViewPoint model
+                                                    |> Grid.worldToCellPoint
+                                                    |> Point2d.unwrap
+                                                    |> Vec2.fromRecord
                                             }
                                         ]
 
@@ -5230,17 +5237,21 @@ cowActualPosition cowId model =
 
 square : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
 square =
+    let
+        size =
+            10
+    in
     Shaders.triangleFan
         [ { position = Vec2.vec2 0 0
-          , vcoord2 = Vec2.vec2 0 0
+          , vcoord2 = Vec2.vec2 -size -size
           }
         , { position = Vec2.vec2 1 0
-          , vcoord2 = Vec2.vec2 511 0
+          , vcoord2 = Vec2.vec2 size -size
           }
         , { position = Vec2.vec2 1 1
-          , vcoord2 = Vec2.vec2 511 2
+          , vcoord2 = Vec2.vec2 size size
           }
         , { position = Vec2.vec2 0 1
-          , vcoord2 = Vec2.vec2 0 2
+          , vcoord2 = Vec2.vec2 -size size
           }
         ]

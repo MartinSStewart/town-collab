@@ -31,6 +31,7 @@ module Grid exposing
     , toggleRailSplit
     , worldToCellAndLocalCoord
     , worldToCellAndLocalPoint
+    , worldToCellPoint
     )
 
 import Array2D exposing (Array2D)
@@ -125,6 +126,11 @@ worldToCellAndLocalCoord ( Quantity x, Quantity y ) =
         , modBy Units.cellSize y
         )
     )
+
+
+worldToCellPoint : Point2d WorldUnit WorldUnit -> Point2d CellUnit CellUnit
+worldToCellPoint point =
+    Point2d.scaleAbout Point2d.origin (1 / Units.cellSize) point |> Point2d.unwrap |> Point2d.unsafe
 
 
 worldToCellAndLocalPoint : Point2d WorldUnit WorldUnit -> ( Coord CellUnit, Point2d CellLocalUnit CellLocalUnit )
