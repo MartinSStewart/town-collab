@@ -1415,6 +1415,9 @@ updateLoaded audioData msg model =
                                             ShowMapButton ->
                                                 model2
 
+                                            AllowEmailNotificationsCheckbox ->
+                                                model2
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1611,6 +1614,9 @@ updateLoaded audioData msg model =
                                 ShowMapButton ->
                                     True
 
+                                AllowEmailNotificationsCheckbox ->
+                                    True
+
                 model2 =
                     { model
                         | time = time
@@ -1784,6 +1790,9 @@ updateLoaded audioData msg model =
                             ( model, Command.none )
 
                         ShowMapButton ->
+                            ( model, Command.none )
+
+                        AllowEmailNotificationsCheckbox ->
                             ( model, Command.none )
 
         GotUserAgentPlatform _ ->
@@ -2005,6 +2014,9 @@ getViewModel model =
     let
         localModel =
             LocalGrid.localModel model.localModel
+
+        maybeUserId =
+            currentUserId model
     in
     { windowSize = model.windowSize
     , pressedSubmitEmail = model.pressedSubmitEmail
@@ -2018,7 +2030,7 @@ getViewModel model =
     , tileHotkeys = model.tileHotkeys
     , currentTool = model.currentTool
     , pingData = model.pingData
-    , userId = currentUserId model
+    , userId = maybeUserId
     , topMenuOpened = model.topMenuOpened
     , inviteTextInput = model.inviteTextInput
     , inviteSubmitStatus = model.inviteSubmitStatus
@@ -2028,6 +2040,13 @@ getViewModel model =
     , users = localModel.users
     , isDisconnected = isDisconnected model
     , showMap = model.showMap
+    , otherUsersOnline =
+        case maybeUserId of
+            Just userId ->
+                IdDict.remove userId localModel.cursors |> IdDict.size
+
+            Nothing ->
+                IdDict.size localModel.cursors
     }
 
 
@@ -2200,31 +2219,35 @@ keyMsgCanvasUpdate audioData key model =
             ( updateLocalModel Change.LocalRedo model |> Tuple.first, Command.none )
 
         ( Keyboard.Escape, _ ) ->
-            ( case model.currentTool of
-                TilePlacerTool _ ->
-                    setCurrentTool HandToolButton model
+            if model.showMap then
+                ( { model | showMap = False }, Command.none )
 
-                TilePickerTool ->
-                    setCurrentTool HandToolButton model
+            else
+                ( case model.currentTool of
+                    TilePlacerTool _ ->
+                        setCurrentTool HandToolButton model
 
-                HandTool ->
-                    case isHoldingCow model of
-                        Just { cowId } ->
-                            updateLocalModel (Change.DropCow cowId (mouseWorldPosition model) model.time) model
-                                |> Tuple.first
+                    TilePickerTool ->
+                        setCurrentTool HandToolButton model
 
-                        Nothing ->
-                            { model
-                                | viewPoint =
-                                    case model.viewPoint of
-                                        TrainViewPoint _ ->
-                                            actualViewPoint model |> NormalViewPoint
+                    HandTool ->
+                        case isHoldingCow model of
+                            Just { cowId } ->
+                                updateLocalModel (Change.DropCow cowId (mouseWorldPosition model) model.time) model
+                                    |> Tuple.first
 
-                                        NormalViewPoint _ ->
-                                            model.viewPoint
-                            }
-            , Command.none
-            )
+                            Nothing ->
+                                { model
+                                    | viewPoint =
+                                        case model.viewPoint of
+                                            TrainViewPoint _ ->
+                                                actualViewPoint model |> NormalViewPoint
+
+                                            NormalViewPoint _ ->
+                                                model.viewPoint
+                                }
+                , Command.none
+                )
 
         ( Keyboard.Spacebar, True ) ->
             ( { model | tileHotkeys = Dict.update " " (\_ -> currentTileGroup model) model.tileHotkeys }
@@ -2763,6 +2786,19 @@ uiUpdate elementPosition msg model =
 
         PressedShowMap ->
             ( { model | showMap = not model.showMap }, Command.none )
+
+        PressedAllowEmailNotifications ->
+            ( case LocalGrid.localModel model.localModel |> .userStatus of
+                LoggedIn loggedIn ->
+                    updateLocalModel
+                        (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
+                        model
+                        |> handleOutMsg False
+
+                NotLoggedIn ->
+                    model
+            , Command.none
+            )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )

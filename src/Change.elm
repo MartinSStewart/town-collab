@@ -50,6 +50,7 @@ type LocalChange
     | TeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | LeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ViewedMail (Id MailId)
+    | SetAllowEmailNotifications Bool
 
 
 type ClientChange
@@ -100,4 +101,5 @@ type alias LoggedIn_ =
     , mailDrafts : IdDict UserId (List MailEditor.Content)
     , emailAddress : EmailAddress
     , inbox : IdDict MailId MailEditor.ReceivedMail
+    , allowEmailNotifications : Bool
     }

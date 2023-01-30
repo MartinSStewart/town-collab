@@ -263,6 +263,7 @@ type UiHover
     | MailEditorHover MailEditor.Hover
     | YouGotMailButton
     | ShowMapButton
+    | AllowEmailNotificationsCheckbox
 
 
 type UiMsg
@@ -285,6 +286,7 @@ type UiMsg
     | MailEditorUiMsg MailEditor.Msg
     | PressedYouGotMail
     | PressedShowMap
+    | PressedAllowEmailNotifications
 
 
 type alias BackendModel =
@@ -343,7 +345,7 @@ type alias BackendUserData =
     , emailAddress : EmailAddress
     , acceptedInvites : IdDict UserId ()
     , name : DisplayName
-    , sendEmailWhenReceivingALetter : Bool
+    , allowEmailNotifications : Bool
     }
 
 

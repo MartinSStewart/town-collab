@@ -366,6 +366,16 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
+        SetAllowEmailNotifications allow ->
+            ( case model.userStatus of
+                LoggedIn loggedIn ->
+                    { model | userStatus = LoggedIn { loggedIn | allowEmailNotifications = allow } }
+
+                NotLoggedIn ->
+                    model
+            , NoOutMsg
+            )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =

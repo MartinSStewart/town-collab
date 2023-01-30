@@ -11,11 +11,13 @@ module Ui exposing
     , colorText
     , column
     , customButton
+    , defaultButtonBorderAndFill
     , el
     , findButton
     , findTextInput
     , handleKeyDown
     , hover
+    , ignoreInputs
     , noPadding
     , none
     , outlinedText
@@ -90,6 +92,7 @@ type Element id msg
         , borderAndFill : BorderAndFill
         , inFront : List (Element id msg)
         , cachedSize : Coord Pixels
+        , ignoreInputs : Bool
         }
         (Element id msg)
     | Quads { size : Coord Pixels, vertices : Coord Pixels -> List Vertex }
@@ -262,12 +265,7 @@ button data child =
         { id = data.id
         , padding = data.padding
         , inFront = []
-        , borderAndFill =
-            BorderAndFill
-                { borderWidth = 2
-                , borderColor = Color.outlineColor
-                , fillColor = Color.fillColor2
-                }
+        , borderAndFill = defaultButtonBorderAndFill
         , borderAndFillFocus =
             BorderAndFill
                 { borderWidth = 2
@@ -282,6 +280,15 @@ button data child =
         , onMouseDown = Nothing
         }
         child
+
+
+defaultButtonBorderAndFill : BorderAndFill
+defaultButtonBorderAndFill =
+    BorderAndFill
+        { borderWidth = 2
+        , borderColor = Color.outlineColor
+        , fillColor = Color.fillColor2
+        }
 
 
 customButton :
@@ -348,6 +355,7 @@ el data element2 =
         , borderAndFill = data.borderAndFill
         , inFront = data.inFront
         , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
+        , ignoreInputs = False
         }
         element2
 
@@ -371,6 +379,7 @@ center data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , ignoreInputs = False
         }
         element2
 
@@ -392,6 +401,7 @@ topRight data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , ignoreInputs = False
         }
         element2
 
@@ -413,6 +423,7 @@ bottomLeft data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , ignoreInputs = False
         }
         element2
 
@@ -437,6 +448,19 @@ bottomCenter data element2 =
         , inFront = data.inFront
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , ignoreInputs = False
+        }
+        element2
+
+
+ignoreInputs : Element id msg -> Element id msg
+ignoreInputs element2 =
+    Single
+        { padding = noPadding
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , cachedSize = size element2
+        , ignoreInputs = True
         }
         element2
 
@@ -502,46 +526,50 @@ hoverHelper point elementPosition element2 =
             hoverRowColumnHelper False point elementPosition data children
 
         Single data child ->
-            let
-                hover2 : HoverType id msg
-                hover2 =
-                    List.foldl
-                        (\inFront hover4 ->
-                            case hover4 of
-                                NoHover ->
-                                    hoverHelper point elementPosition inFront
+            if data.ignoreInputs then
+                NoHover
 
-                                InputHover _ ->
-                                    hover4
+            else
+                let
+                    hover2 : HoverType id msg
+                    hover2 =
+                        List.foldl
+                            (\inFront hover4 ->
+                                case hover4 of
+                                    NoHover ->
+                                        hoverHelper point elementPosition inFront
 
-                                BackgroundHover ->
-                                    hover4
-                        )
-                        NoHover
-                        data.inFront
+                                    InputHover _ ->
+                                        hover4
 
-                hover3 : HoverType id msg
-                hover3 =
-                    case hover2 of
-                        NoHover ->
-                            hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
+                                    BackgroundHover ->
+                                        hover4
+                            )
+                            NoHover
+                            data.inFront
 
-                        InputHover _ ->
-                            hover2
+                    hover3 : HoverType id msg
+                    hover3 =
+                        case hover2 of
+                            NoHover ->
+                                hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
 
-                        BackgroundHover ->
-                            hover2
-            in
-            case ( data.borderAndFill, hover3 ) of
-                ( BorderAndFill _, NoHover ) ->
-                    if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                        BackgroundHover
+                            InputHover _ ->
+                                hover2
 
-                    else
-                        NoHover
+                            BackgroundHover ->
+                                hover2
+                in
+                case ( data.borderAndFill, hover3 ) of
+                    ( BorderAndFill _, NoHover ) ->
+                        if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
+                            BackgroundHover
 
-                _ ->
-                    hover3
+                        else
+                            NoHover
+
+                    _ ->
+                        hover3
 
         Quads _ ->
             NoHover

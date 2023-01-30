@@ -1041,6 +1041,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                 Nothing ->
                     ( model, invalidChange, Nothing )
 
+        SetAllowEmailNotifications allow ->
+            ( { model | users = IdDict.insert userId { user | allowEmailNotifications = allow } model.users }
+            , originalChange
+            , Nothing
+            )
+
 
 removeTrain : Id TrainId -> BackendModel -> BackendModel
 removeTrain trainId model =
@@ -1150,6 +1156,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , mailDrafts = user.mailDrafts
                         , emailAddress = user.emailAddress
                         , inbox = getUserInbox userId model
+                        , allowEmailNotifications = user.allowEmailNotifications
                         }
 
                 Nothing ->
@@ -1174,6 +1181,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , mailDrafts = user.mailDrafts
                                             , emailAddress = user.emailAddress
                                             , inbox = getUserInbox data.userId model
+                                            , allowEmailNotifications = user.allowEmailNotifications
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , Just data.requestedBy
@@ -1207,6 +1215,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , mailDrafts = newUser.mailDrafts
                                 , emailAddress = newUser.emailAddress
                                 , inbox = getUserInbox userId model
+                                , allowEmailNotifications = newUser.allowEmailNotifications
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites
@@ -1350,7 +1359,7 @@ createUser userId emailAddress model =
             , emailAddress = emailAddress
             , acceptedInvites = IdDict.empty
             , name = DisplayName.default
-            , sendEmailWhenReceivingALetter = True
+            , allowEmailNotifications = True
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

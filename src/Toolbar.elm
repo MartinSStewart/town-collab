@@ -58,6 +58,7 @@ type alias ViewData =
     , users : IdDict UserId FrontendUser
     , isDisconnected : Bool
     , showMap : Bool
+    , otherUsersOnline : Int
     }
 
 
@@ -82,12 +83,39 @@ view data =
                         MailEditor.disconnectWarning data.windowSize
 
                       else
-                        Ui.none
+                        Ui.topRight
+                            { size = data.windowSize }
+                            (Ui.el
+                                { padding = Ui.paddingXY 10 4
+                                , borderAndFill =
+                                    BorderAndFill
+                                        { borderWidth = 2
+                                        , borderColor = Color.outlineColor
+                                        , fillColor = Color.fillColor
+                                        }
+                                , inFront = []
+                                }
+                                (if data.otherUsersOnline == 1 then
+                                    Ui.text "1 user online"
+
+                                 else
+                                    Ui.text (String.fromInt data.otherUsersOnline ++ " users online")
+                                )
+                            )
                     , Ui.row
                         { padding = Ui.noPadding, spacing = 4 }
                         [ case data.topMenuOpened of
                             Just (SettingsMenu nameTextInput) ->
-                                settingsView data.musicVolume data.soundEffectVolume nameTextInput
+                                case data.userStatus of
+                                    LoggedIn loggedIn ->
+                                        settingsView
+                                            data.musicVolume
+                                            data.soundEffectVolume
+                                            nameTextInput
+                                            loggedIn.allowEmailNotifications
+
+                                    NotLoggedIn ->
+                                        Ui.none
 
                             Just LoggedOutSettingsMenu ->
                                 loggedOutSettingsView data.musicVolume data.soundEffectVolume
@@ -137,18 +165,8 @@ view data =
                                         , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
                                         , onPress = PressedYouGotMail
                                         , onMouseDown = Nothing
-                                        , borderAndFill =
-                                            BorderAndFill
-                                                { borderWidth = 2
-                                                , borderColor = Color.outlineColor
-                                                , fillColor = Color.fillColor2
-                                                }
-                                        , borderAndFillFocus =
-                                            BorderAndFill
-                                                { borderWidth = 2
-                                                , borderColor = Color.outlineColor
-                                                , fillColor = Color.fillColor2
-                                                }
+                                        , borderAndFill = Ui.defaultButtonBorderAndFill
+                                        , borderAndFillFocus = Ui.defaultButtonBorderAndFill
                                         , inFront = []
                                         }
                                         (Ui.row
@@ -171,23 +189,22 @@ view data =
                             mapSize2 =
                                 mapSize data.windowSize
                         in
-                        Ui.center
-                            { size = data.windowSize }
-                            (Ui.el
-                                { padding =
-                                    { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
-                                    , bottomRight = Coord.origin
-                                    }
-                                , borderAndFill =
-                                    BorderAndFill
-                                        { borderWidth = 2
-                                        , borderColor = Color.outlineColor
-                                        , fillColor = Color.fillColor
-                                        }
-                                , inFront = []
+                        Ui.el
+                            { padding =
+                                { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
+                                , bottomRight = Coord.origin
                                 }
-                                Ui.none
-                            )
+                            , borderAndFill =
+                                BorderAndFill
+                                    { borderWidth = 2
+                                    , borderColor = Color.outlineColor
+                                    , fillColor = Color.fillColor
+                                    }
+                            , inFront = []
+                            }
+                            Ui.none
+                            |> Ui.ignoreInputs
+                            |> Ui.center { size = data.windowSize }
 
                       else
                         Ui.none
@@ -220,8 +237,8 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> Ui.Element UiHover UiMsg
-settingsView musicVolume soundEffectVolume nameTextInput =
+settingsView : Int -> Int -> TextInput.Model -> Bool -> Ui.Element UiHover UiMsg
+settingsView musicVolume soundEffectVolume nameTextInput allowEmailNotifications =
     let
         musicVolumeInput =
             volumeControl
@@ -238,7 +255,7 @@ settingsView musicVolume soundEffectVolume nameTextInput =
         , borderAndFill = borderAndFill
         }
         (Ui.column
-            { spacing = 8
+            { spacing = 16
             , padding = Ui.noPadding
             }
             [ Ui.button
@@ -276,6 +293,40 @@ settingsView musicVolume soundEffectVolume nameTextInput =
                         nameTextInput
                     ]
                 ]
+            , checkbox AllowEmailNotificationsCheckbox PressedAllowEmailNotifications allowEmailNotifications "Allow email notifications"
+            ]
+        )
+
+
+checkbox : id -> msg -> Bool -> String -> Ui.Element id msg
+checkbox id onPress isChecked text =
+    Ui.customButton
+        { id = id
+        , padding = Ui.noPadding
+        , inFront = []
+        , onPress = onPress
+        , onMouseDown = Nothing
+        , borderAndFill = NoBorderOrFill
+        , borderAndFillFocus = NoBorderOrFill
+        }
+        (Ui.row
+            { spacing = 8, padding = Ui.noPadding }
+            [ if isChecked then
+                Ui.colorSprite
+                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
+                    , size = Coord.xy 36 36
+                    , texturePosition = Coord.xy 591 72
+                    , textureSize = Coord.xy 36 36
+                    }
+
+              else
+                Ui.colorSprite
+                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
+                    , size = Coord.xy 36 36
+                    , texturePosition = Coord.xy 627 72
+                    , textureSize = Coord.xy 36 36
+                    }
+            , Ui.text text
             ]
         )
 
