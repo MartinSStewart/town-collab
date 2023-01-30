@@ -46,6 +46,7 @@ import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Id exposing (CowId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
+import Image
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -70,6 +71,7 @@ import Set exposing (Set)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
+import Terrain
 import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
 import Time
@@ -417,12 +419,13 @@ tryLoading frontendLoading =
             Nothing
 
         LoadedLocalModel loadedLocalModel ->
-            Maybe.map2
-                (\time texture () ->
-                    loadedInit time frontendLoading texture loadedLocalModel
+            Maybe.map3
+                (\time texture simplexNoiseLookup () ->
+                    loadedInit time frontendLoading texture simplexNoiseLookup loadedLocalModel
                 )
                 frontendLoading.time
                 frontendLoading.texture
+                frontendLoading.simplexNoiseLookup
 
 
 defaultTileHotkeys : Dict String TileGroup
@@ -468,9 +471,10 @@ loadedInit :
     Effect.Time.Posix
     -> FrontendLoading
     -> Texture
+    -> Texture
     -> LoadedLocalModel_
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
-loadedInit time loading texture loadedLocalModel =
+loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
     let
         currentTile =
             HandTool
@@ -490,6 +494,7 @@ loadedInit time loading texture loadedLocalModel =
             , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
             , viewPointLastInterval = Point2d.origin
             , texture = texture
+            , simplexNoiseLookup = simplexNoiseLookup
             , trainTexture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
@@ -629,6 +634,7 @@ init url key =
         , musicVolume = 0
         , soundEffectVolume = 0
         , texture = Nothing
+        , simplexNoiseLookup = Nothing
         , localModel = LoadingLocalModel []
         , hasCmdKey = False
         }
@@ -649,10 +655,39 @@ init url key =
             }
             "/texture.png"
             |> Effect.Task.attempt TextureLoaded
+        , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
         , Ports.getLocalStorage
         ]
     , Sound.load SoundLoaded
     )
+
+
+loadSimplexTexture : Effect.Task.Task FrontendOnly Effect.WebGL.Texture.Error Texture
+loadSimplexTexture =
+    let
+        table =
+            Terrain.permutationTable
+
+        {- Copied from Simplex.grad3 -}
+        grad3 : List Int
+        grad3 =
+            [ 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1 ]
+                |> List.map (\a -> a + 1)
+    in
+    Effect.WebGL.Texture.loadWith
+        { magnify = Effect.WebGL.Texture.nearest
+        , minify = Effect.WebGL.Texture.nearest
+        , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+        , verticalWrap = Effect.WebGL.Texture.clampToEdge
+        , flipY = False
+        }
+        (Image.fromList2d
+            [ Array.toList table.perm
+            , Array.toList table.permMod12
+            , grad3 ++ List.repeat (512 - List.length grad3) 0
+            ]
+            |> Image.toPngUrl
+        )
 
 
 update : AudioData -> FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -674,6 +709,14 @@ update audioData msg model =
                     case result of
                         Ok texture ->
                             ( Loading { loadingModel | texture = Just texture }, Command.none )
+
+                        Err _ ->
+                            ( model, Command.none )
+
+                SimplexLookupTextureLoaded result ->
+                    case result of
+                        Ok texture ->
+                            ( Loading { loadingModel | simplexNoiseLookup = Just texture }, Command.none )
 
                         Err _ ->
                             ( model, Command.none )
@@ -798,6 +841,9 @@ updateLoaded audioData msg model =
             ( model, Command.none )
 
         TextureLoaded _ ->
+            ( model, Command.none )
+
+        SimplexLookupTextureLoaded _ ->
             ( model, Command.none )
 
         KeyMsg keyMsg ->
@@ -4795,6 +4841,24 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
+                            ++ (case Effect.WebGL.Texture.unwrap model.simplexNoiseLookup of
+                                    Just simplexNoiseLookup ->
+                                        [ Effect.WebGL.entity
+                                            Shaders.worldMapVertexShader
+                                            Shaders.worldMapFragmentShader
+                                            square
+                                            { view =
+                                                Mat4.makeScale3
+                                                    (512 * 2 / toFloat windowWidth)
+                                                    (3 * -2 / toFloat windowHeight)
+                                                    1
+                                            , texture = simplexNoiseLookup
+                                            }
+                                        ]
+
+                                    Nothing ->
+                                        []
+                               )
                             ++ (case model.mailEditor of
                                     Just mailEditor ->
                                         MailEditor.drawMail
@@ -5162,3 +5226,21 @@ cowActualPosition cowId model =
 
                 Nothing ->
                     Nothing
+
+
+square : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
+square =
+    Shaders.triangleFan
+        [ { position = Vec2.vec2 0 0
+          , vcoord2 = Vec2.vec2 0 0
+          }
+        , { position = Vec2.vec2 1 0
+          , vcoord2 = Vec2.vec2 511 0
+          }
+        , { position = Vec2.vec2 1 1
+          , vcoord2 = Vec2.vec2 511 2
+          }
+        , { position = Vec2.vec2 0 1
+          , vcoord2 = Vec2.vec2 0 2
+          }
+        ]

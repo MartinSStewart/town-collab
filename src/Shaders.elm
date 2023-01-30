@@ -7,6 +7,8 @@ module Shaders exposing
     , indexedTriangles
     , triangleFan
     , vertexShader
+    , worldMapFragmentShader
+    , worldMapVertexShader
     )
 
 import Effect.WebGL exposing (Shader)
@@ -25,19 +27,19 @@ type alias Vertex =
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Effect.WebGL.Mesh attributes
 indexedTriangles vertices indices =
-    --let
-    --    _ =
-    --        Debug.log "new indexedTriangles" ""
-    --in
+    let
+        _ =
+            Debug.log "new indexedTriangles" ""
+    in
     Effect.WebGL.indexedTriangles vertices indices
 
 
 triangleFan : List attributes -> Effect.WebGL.Mesh attributes
 triangleFan vertices =
-    --let
-    --    _ =
-    --        Debug.log "new triangleFan" ""
-    --in
+    let
+        _ =
+            Debug.log "new triangleFan" ""
+    in
     Effect.WebGL.triangleFan vertices
 
 
@@ -169,4 +171,35 @@ void main () {
 
     primaryColor2 = primaryColor;
     secondaryColor2 = secondaryColor;
+}|]
+
+
+worldMapVertexShader :
+    Shader
+        { position : Vec2, vcoord2 : Vec2 }
+        { u | view : Mat4 }
+        { vcoord : Vec2 }
+worldMapVertexShader =
+    [glsl|
+attribute vec2 position;
+attribute vec2 vcoord2;
+uniform mat4 view;
+varying vec2 vcoord;
+
+void main () {
+    gl_Position = view * vec4(position, 0.0, 1.0);
+    vcoord = vcoord2;
+}|]
+
+
+worldMapFragmentShader : Shader {} { u | texture : WebGL.Texture.Texture } { vcoord : Vec2 }
+worldMapFragmentShader =
+    [glsl|
+precision mediump float;
+varying vec2 vcoord;
+uniform sampler2D texture;
+
+void main () {
+    vec4 textureColor = texture2D(texture, vec2(vcoord.x / 511.0, vcoord.y / 2.0));
+    gl_FragColor = vec4(0.0, 0.0, 0.0, textureColor.w);
 }|]

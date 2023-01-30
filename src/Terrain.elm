@@ -89,11 +89,30 @@ type TerrainUnit
 
 getTerrainValue : Coord TerrainUnit -> Coord CellUnit -> Float
 getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
-    Simplex.fractal2d
-        fractalConfig
-        permutationTable
-        (toFloat x / terrainDivisionsPerCell + toFloat cellX)
-        (toFloat y / terrainDivisionsPerCell + toFloat cellY)
+    let
+        persistence =
+            2
+
+        persistence2 =
+            1 + persistence
+
+        scale =
+            5
+
+        scale2 =
+            14 * scale
+
+        x2 =
+            toFloat x / terrainDivisionsPerCell + toFloat cellX
+
+        y2 =
+            toFloat y / terrainDivisionsPerCell + toFloat cellY
+
+        noise1 =
+            Simplex.noise2d permutationTable (x2 / scale) (y2 / scale)
+                + (persistence * Simplex.noise2d permutationTable (x2 / scale2) (y2 / scale2))
+    in
+    noise1 / persistence2
 
 
 isGroundTerrain : Coord TerrainUnit -> Coord CellUnit -> Bool
