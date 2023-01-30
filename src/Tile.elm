@@ -1052,7 +1052,7 @@ defaultElmTreeColor =
 
 
 defaultDirtPathColor =
-    OneDefaultColor (Color.rgb255 211 183 132)
+    OneDefaultColor (Color.rgb255 192 146 117)
 
 
 getData : Tile -> TileData unit
