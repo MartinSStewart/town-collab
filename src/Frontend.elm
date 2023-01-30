@@ -564,6 +564,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , lastReceivedMail = Nothing
             , isReconnecting = False
             , lastCheckConnection = time
+            , showMap = False
             }
                 |> setCurrentTool HandToolButton
                 |> (\state -> handleOutMsg False ( state, LocalGrid.HandColorChanged ))
@@ -1411,6 +1412,9 @@ updateLoaded audioData msg model =
                                             YouGotMailButton ->
                                                 model2
 
+                                            ShowMapButton ->
+                                                model2
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1604,6 +1608,9 @@ updateLoaded audioData msg model =
                                 YouGotMailButton ->
                                     True
 
+                                ShowMapButton ->
+                                    True
+
                 model2 =
                     { model
                         | time = time
@@ -1774,6 +1781,9 @@ updateLoaded audioData msg model =
                             ( model, Command.none )
 
                         YouGotMailButton ->
+                            ( model, Command.none )
+
+                        ShowMapButton ->
                             ( model, Command.none )
 
         GotUserAgentPlatform _ ->
@@ -2017,6 +2027,7 @@ getViewModel model =
     , mailEditor = model.mailEditor
     , users = localModel.users
     , isDisconnected = isDisconnected model
+    , showMap = model.showMap
     }
 
 
@@ -2749,6 +2760,9 @@ uiUpdate elementPosition msg model =
 
         PressedYouGotMail ->
             ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )
+
+        PressedShowMap ->
+            ( { model | showMap = not model.showMap }, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -4842,16 +4856,21 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
-                            ++ (case Effect.WebGL.Texture.unwrap model.simplexNoiseLookup of
-                                    Just simplexNoiseLookup ->
-                                        [ Effect.WebGL.entity
+                            ++ (case ( model.showMap, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
+                                    ( True, Just simplexNoiseLookup ) ->
+                                        let
+                                            mapSize =
+                                                Toolbar.mapSize model.windowSize |> toFloat
+                                        in
+                                        [ Effect.WebGL.entityWith
+                                            []
                                             Shaders.worldMapVertexShader
                                             Shaders.worldMapFragmentShader
                                             square
                                             { view =
                                                 Mat4.makeScale3
-                                                    (1024 * 2 / toFloat windowWidth)
-                                                    (1024 * -2 / toFloat windowHeight)
+                                                    (mapSize * 2 / toFloat windowWidth)
+                                                    (mapSize * -2 / toFloat windowHeight)
                                                     1
                                                     |> Mat4.translate3 -0.5 -0.5 -0.5
                                             , texture = simplexNoiseLookup
@@ -4863,7 +4882,7 @@ canvasView audioData model =
                                             }
                                         ]
 
-                                    Nothing ->
+                                    _ ->
                                         []
                                )
                             ++ (case model.mailEditor of
@@ -5239,7 +5258,7 @@ square : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
 square =
     let
         size =
-            10
+            11
     in
     Shaders.triangleFan
         [ { position = Vec2.vec2 0 0

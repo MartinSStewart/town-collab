@@ -312,7 +312,9 @@ void main () {
     float mix = floor(min(1.0, 8.0 * pow(max(0.0, value), 3.0)) * colorLevels) / colorLevels;
 
     gl_FragColor =
-        value > 0.0
-            ? vec4( 0.525, 0.796, 0.384, 1.0) * (1.0 - mix) + treeColor * mix
-            : vec4( 0.6, 0.8, 1.0, 1.0);
+        vcoord.x > -0.1 && vcoord.y > -0.1 && vcoord.x < 0.1 && vcoord.y < 0.1
+            ? vec4(1.0, 1.0, 1.0, 1.0)
+            : value > 0.0
+                ? vec4( 0.525, 0.796, 0.384, 1.0) * (1.0 - mix) + treeColor * mix
+                : vec4( 0.6, 0.8, 1.0, 1.0);
 }|]

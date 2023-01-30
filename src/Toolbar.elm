@@ -1,6 +1,7 @@
 module Toolbar exposing
     ( ViewData
     , getTileGroupTile
+    , mapSize
     , showColorTextInputs
     , validateInviteEmailAddress
     , view
@@ -56,6 +57,7 @@ type alias ViewData =
     , mailEditor : Maybe MailEditor.Model
     , users : IdDict UserId FrontendUser
     , isDisconnected : Bool
+    , showMap : Bool
     }
 
 
@@ -107,6 +109,19 @@ view data =
 
                             NotLoggedIn ->
                                 Ui.none
+                        , Ui.button
+                            { id = ShowMapButton
+                            , padding = Ui.paddingXY 10 4
+                            , onPress = PressedShowMap
+                            }
+                            (Ui.text
+                                (if data.showMap then
+                                    "Hide map"
+
+                                 else
+                                    "Show map"
+                                )
+                            )
                         , case data.userStatus of
                             LoggedIn loggedIn ->
                                 let
@@ -151,6 +166,31 @@ view data =
                             NotLoggedIn ->
                                 Ui.none
                         ]
+                    , if data.showMap then
+                        let
+                            mapSize2 =
+                                mapSize data.windowSize
+                        in
+                        Ui.center
+                            { size = data.windowSize }
+                            (Ui.el
+                                { padding =
+                                    { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
+                                    , bottomRight = Coord.origin
+                                    }
+                                , borderAndFill =
+                                    BorderAndFill
+                                        { borderWidth = 2
+                                        , borderColor = Color.outlineColor
+                                        , fillColor = Color.fillColor
+                                        }
+                                , inFront = []
+                                }
+                                Ui.none
+                            )
+
+                      else
+                        Ui.none
                     ]
                 }
                 (Ui.el
@@ -173,6 +213,11 @@ view data =
                             loginToolbarUi data.pressedSubmitEmail data.loginTextInput
                     )
                 )
+
+
+mapSize : Coord Pixels -> Int
+mapSize ( Quantity windowWidth, Quantity windowHeight ) =
+    toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
 settingsView : Int -> Int -> TextInput.Model -> Ui.Element UiHover UiMsg

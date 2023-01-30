@@ -200,6 +200,7 @@ type alias FrontendLoaded =
     , lastReceivedMail : Maybe Time.Posix
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
+    , showMap : Bool
     }
 
 
@@ -261,6 +262,7 @@ type UiHover
     | DisplayNameTextInput
     | MailEditorHover MailEditor.Hover
     | YouGotMailButton
+    | ShowMapButton
 
 
 type UiMsg
@@ -282,6 +284,7 @@ type UiMsg
     | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
     | MailEditorUiMsg MailEditor.Msg
     | PressedYouGotMail
+    | PressedShowMap
 
 
 type alias BackendModel =
