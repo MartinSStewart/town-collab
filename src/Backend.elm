@@ -187,143 +187,7 @@ update isProduction msg model =
         WorldUpdateTimeElapsed time ->
             case model.lastWorldUpdate of
                 Just oldTime ->
-                    let
-                        newTrains : IdDict TrainId Train
-                        newTrains =
-                            case model.lastWorldUpdate of
-                                Just lastWorldUpdate ->
-                                    IdDict.map
-                                        (\trainId train ->
-                                            Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
-                                        )
-                                        model.trains
-
-                                Nothing ->
-                                    model.trains
-
-                        mergeTrains :
-                            { mail : IdDict MailId BackendMail
-                            , mailChanges : List ( Id MailId, BackendMail )
-                            , diff : IdDict TrainId TrainDiff
-                            }
-                        mergeTrains =
-                            IdDict.merge
-                                (\_ _ a -> a)
-                                (\trainId oldTrain newTrain state ->
-                                    let
-                                        diff : IdDict TrainId TrainDiff
-                                        diff =
-                                            IdDict.insert trainId (Train.diff oldTrain newTrain) state.diff
-                                    in
-                                    case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
-                                        ( TeleportingHome _, WaitingAtHome ) ->
-                                            List.foldl
-                                                (\( mailId, mail ) state2 ->
-                                                    case mail.status of
-                                                        MailInTransit mailTrainId ->
-                                                            if trainId == mailTrainId then
-                                                                let
-                                                                    mail2 =
-                                                                        { mail | status = MailWaitingPickup }
-                                                                in
-                                                                { mail = IdDict.insert mailId mail2 state2.mail
-                                                                , mailChanges = ( mailId, mail2 ) :: state2.mailChanges
-                                                                , diff = state2.diff
-                                                                }
-
-                                                            else
-                                                                state2
-
-                                                        _ ->
-                                                            state2
-                                                )
-                                                { state | diff = diff }
-                                                (IdDict.toList state.mail)
-
-                                        ( StoppedAtPostOffice _, _ ) ->
-                                            { state | diff = diff }
-
-                                        ( _, StoppedAtPostOffice { userId } ) ->
-                                            case Train.carryingMail state.mail trainId of
-                                                Just ( mailId, mail ) ->
-                                                    if mail.to == userId then
-                                                        let
-                                                            mail2 =
-                                                                { mail | status = MailReceived { deliveryTime = time } }
-                                                        in
-                                                        { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
-                                                        , mailChanges = ( mailId, mail2 ) :: state.mailChanges
-                                                        , diff = diff
-                                                        }
-
-                                                    else
-                                                        { state | diff = diff }
-
-                                                Nothing ->
-                                                    case
-                                                        MailEditor.getMailFrom userId state.mail
-                                                            |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
-                                                    of
-                                                        ( mailId, mail ) :: _ ->
-                                                            let
-                                                                mail2 =
-                                                                    { mail | status = MailInTransit trainId }
-                                                            in
-                                                            { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
-                                                            , mailChanges = ( mailId, mail2 ) :: state.mailChanges
-                                                            , diff = diff
-                                                            }
-
-                                                        [] ->
-                                                            { state | diff = diff }
-
-                                        _ ->
-                                            { state | diff = diff }
-                                )
-                                (\trainId train state ->
-                                    { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
-                                )
-                                model.lastWorldUpdateTrains
-                                newTrains
-                                { mailChanges = [], mail = model.mail, diff = IdDict.empty }
-                    in
-                    ( { model
-                        | lastWorldUpdate = Just time
-                        , trains = newTrains
-                        , lastWorldUpdateTrains = model.trains
-                        , mail = mergeTrains.mail
-                      }
-                    , broadcast
-                        (\sessionId clientId ->
-                            let
-                                maybeUserId =
-                                    getUserFromSessionId sessionId model |> Maybe.map Tuple.first
-                            in
-                            Nonempty
-                                (Change.ServerChange (ServerWorldUpdateBroadcast mergeTrains.diff))
-                                (List.map
-                                    (\( mailId, mail ) ->
-                                        (case ( Just mail.to == maybeUserId, mail.status ) of
-                                            ( True, MailReceived { deliveryTime } ) ->
-                                                ServerReceivedMail
-                                                    { mailId = mailId
-                                                    , from = mail.from
-                                                    , content = mail.content
-                                                    , deliveryTime = deliveryTime
-                                                    }
-
-                                            _ ->
-                                                ServerMailStatusChanged mailId mail.status
-                                        )
-                                            |> Change.ServerChange
-                                    )
-                                    mergeTrains.mailChanges
-                                )
-                                |> ChangeBroadcast
-                                |> Just
-                        )
-                        model
-                    )
+                    handleWorldUpdate isProduction oldTime time model
 
                 Nothing ->
                     ( { model | lastWorldUpdate = Just time }, Command.none )
@@ -353,6 +217,233 @@ update isProduction msg model =
 
         CheckConnectionTimeElapsed ->
             ( model, Effect.Lamdera.broadcast CheckConnectionBroadcast )
+
+        SentMailNotification sendTime emailAddress result ->
+            case result of
+                Ok _ ->
+                    ( model, Command.none )
+
+                Err error ->
+                    ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
+
+
+handleWorldUpdate isProduction oldTime time model =
+    let
+        newTrains : IdDict TrainId Train
+        newTrains =
+            case model.lastWorldUpdate of
+                Just lastWorldUpdate ->
+                    IdDict.map
+                        (\trainId train ->
+                            Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
+                        )
+                        model.trains
+
+                Nothing ->
+                    model.trains
+
+        mergeTrains :
+            { mail : IdDict MailId BackendMail
+            , mailChanges : List ( Id MailId, BackendMail )
+            , diff : IdDict TrainId TrainDiff
+            }
+        mergeTrains =
+            IdDict.merge
+                (\_ _ a -> a)
+                (\trainId oldTrain newTrain state ->
+                    let
+                        diff : IdDict TrainId TrainDiff
+                        diff =
+                            IdDict.insert trainId (Train.diff oldTrain newTrain) state.diff
+                    in
+                    case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
+                        ( TeleportingHome _, WaitingAtHome ) ->
+                            List.foldl
+                                (\( mailId, mail ) state2 ->
+                                    case mail.status of
+                                        MailInTransit mailTrainId ->
+                                            if trainId == mailTrainId then
+                                                let
+                                                    mail2 =
+                                                        { mail | status = MailWaitingPickup }
+                                                in
+                                                { mail = IdDict.insert mailId mail2 state2.mail
+                                                , mailChanges = ( mailId, mail2 ) :: state2.mailChanges
+                                                , diff = state2.diff
+                                                }
+
+                                            else
+                                                state2
+
+                                        _ ->
+                                            state2
+                                )
+                                { state | diff = diff }
+                                (IdDict.toList state.mail)
+
+                        ( StoppedAtPostOffice _, _ ) ->
+                            { state | diff = diff }
+
+                        ( _, StoppedAtPostOffice { userId } ) ->
+                            case Train.carryingMail state.mail trainId of
+                                Just ( mailId, mail ) ->
+                                    if mail.to == userId then
+                                        let
+                                            mail2 =
+                                                { mail | status = MailReceived { deliveryTime = time } }
+                                        in
+                                        { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                        , mailChanges = ( mailId, mail2 ) :: state.mailChanges
+                                        , diff = diff
+                                        }
+
+                                    else
+                                        { state | diff = diff }
+
+                                Nothing ->
+                                    case
+                                        MailEditor.getMailFrom userId state.mail
+                                            |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
+                                    of
+                                        ( mailId, mail ) :: _ ->
+                                            let
+                                                mail2 =
+                                                    { mail | status = MailInTransit trainId }
+                                            in
+                                            { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                            , mailChanges = ( mailId, mail2 ) :: state.mailChanges
+                                            , diff = diff
+                                            }
+
+                                        [] ->
+                                            { state | diff = diff }
+
+                        _ ->
+                            { state | diff = diff }
+                )
+                (\trainId train state ->
+                    { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
+                )
+                model.lastWorldUpdateTrains
+                newTrains
+                { mailChanges = [], mail = model.mail, diff = IdDict.empty }
+
+        emailNotifications =
+            List.foldl
+                (\( _, mail ) state ->
+                    case ( IdDict.get mail.to model.users, mail.status ) of
+                        ( Just user, MailReceived { deliveryTime } ) ->
+                            case user.cursor of
+                                Just _ ->
+                                    state
+
+                                Nothing ->
+                                    if user.allowEmailNotifications then
+                                        let
+                                            ( loginToken, model2 ) =
+                                                generateSecretId time model
+
+                                            _ =
+                                                Debug.log "notification" loginEmailUrl
+
+                                            loginEmailUrl : String
+                                            loginEmailUrl =
+                                                Env.domain
+                                                    ++ Route.encode
+                                                        (InternalRoute
+                                                            { viewPoint =
+                                                                Grid.getPostOffice mail.to model.grid
+                                                                    |> Maybe.withDefault Coord.origin
+                                                            , showInbox = True
+                                                            , loginOrInviteToken = LoginToken2 loginToken |> Just
+                                                            }
+                                                        )
+                                        in
+                                        { model =
+                                            { model2
+                                                | pendingLoginTokens =
+                                                    AssocList.insert
+                                                        loginToken
+                                                        { requestTime = time
+                                                        , userId = mail.to
+                                                        , requestedBy = LoginRequestedByBackend
+                                                        }
+                                                        model2.pendingLoginTokens
+                                            }
+                                        , cmds =
+                                            sendEmail
+                                                isProduction
+                                                (SentMailNotification time user.emailAddress)
+                                                (NonemptyString 'Y' "ou got a letter!")
+                                                ("You received a letter. You can view it directly by clicking on this link "
+                                                    ++ loginEmailUrl
+                                                )
+                                                (Email.Html.div
+                                                    []
+                                                    [ Email.Html.text "You received a letter. You can view it directly by "
+                                                    , Email.Html.a
+                                                        [ Email.Html.Attributes.href loginEmailUrl ]
+                                                        [ Email.Html.text "clicking here" ]
+                                                    , Email.Html.text "."
+                                                    ]
+                                                )
+                                                user.emailAddress
+                                                :: state.cmds
+                                        }
+
+                                    else
+                                        state
+
+                        _ ->
+                            state
+                )
+                { model = model, cmds = [] }
+                mergeTrains.mailChanges
+
+        model3 =
+            emailNotifications.model
+
+        broadcastChanges : Command BackendOnly ToFrontend BackendMsg
+        broadcastChanges =
+            broadcast
+                (\sessionId _ ->
+                    let
+                        maybeUserId =
+                            getUserFromSessionId sessionId model3 |> Maybe.map Tuple.first
+                    in
+                    Nonempty
+                        (Change.ServerChange (ServerWorldUpdateBroadcast mergeTrains.diff))
+                        (List.map
+                            (\( mailId, mail ) ->
+                                (case ( Just mail.to == maybeUserId, mail.status ) of
+                                    ( True, MailReceived { deliveryTime } ) ->
+                                        ServerReceivedMail
+                                            { mailId = mailId
+                                            , from = mail.from
+                                            , content = mail.content
+                                            , deliveryTime = deliveryTime
+                                            }
+
+                                    _ ->
+                                        ServerMailStatusChanged mailId mail.status
+                                )
+                                    |> Change.ServerChange
+                            )
+                            mergeTrains.mailChanges
+                        )
+                        |> ChangeBroadcast
+                        |> Just
+                )
+                model3
+    in
+    ( { model3
+        | lastWorldUpdate = Just time
+        , trains = newTrains
+        , lastWorldUpdateTrains = model3.trains
+        , mail = mergeTrains.mail
+      }
+    , Command.batch [ Command.batch emailNotifications.cmds, broadcastChanges ]
+    )
 
 
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -560,15 +651,18 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            --let
-                            --    _ =
-                            --        Debug.log "loginUrl" loginEmailUrl
-                            --in
+                            let
+                                _ =
+                                    Debug.log "loginUrl" loginEmailUrl
+                            in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
                                         loginToken
-                                        { requestTime = currentTime, userId = userId, requestedBy = sessionId }
+                                        { requestTime = currentTime
+                                        , userId = userId
+                                        , requestedBy = LoginRequestedByFrontend sessionId
+                                        }
                                         model2.pendingLoginTokens
                               }
                             , Command.batch
@@ -622,8 +716,9 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    --_ =
-                                    --    Debug.log "inviteUrl" inviteUrl
+                                    _ =
+                                        Debug.log "inviteUrl" inviteUrl
+
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
@@ -1183,7 +1278,12 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , allowEmailNotifications = user.allowEmailNotifications
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
-                                        , Just data.requestedBy
+                                        , case data.requestedBy of
+                                            LoginRequestedByBackend ->
+                                                Nothing
+
+                                            LoginRequestedByFrontend requestedBy ->
+                                                Just requestedBy
                                         )
 
                                     Nothing ->

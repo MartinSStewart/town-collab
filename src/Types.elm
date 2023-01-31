@@ -17,6 +17,7 @@ module Types exposing
     , LoadedLocalModel_
     , LoadingData_
     , LoadingLocalModel(..)
+    , LoginRequestedBy(..)
     , MouseButtonState(..)
     , RemovedTileParticle
     , SubmitStatus(..)
@@ -310,10 +311,15 @@ type alias BackendModel =
             (SecretId LoginToken)
             { requestTime : Effect.Time.Posix
             , userId : Id UserId
-            , requestedBy : SessionId
+            , requestedBy : LoginRequestedBy
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     }
+
+
+type LoginRequestedBy
+    = LoginRequestedByBackend
+    | LoginRequestedByFrontend SessionId
 
 
 type alias Invite =
@@ -403,6 +409,7 @@ type BackendMsg
     | WorldUpdateTimeElapsed Effect.Time.Posix
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
     | CheckConnectionTimeElapsed
+    | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
 
 
 type ToFrontend

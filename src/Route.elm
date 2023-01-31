@@ -108,6 +108,12 @@ encode route =
                             Nothing ->
                                 []
                        )
+                    ++ (if internalRoute_.showInbox then
+                            [ Url.Builder.string showInbox "true" ]
+
+                        else
+                            []
+                       )
                 )
 
 
