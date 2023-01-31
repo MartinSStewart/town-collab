@@ -628,11 +628,8 @@ update_ msg model =
             let
                 newCells2 : Dict ( Int, Int ) GridCell.Cell
                 newCells2 =
-                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) (Debug.log "a" newCells)
+                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
                         |> Dict.fromList
-
-                _ =
-                    Debug.log "a" bounds
             in
             ( { model
                 | grid =
