@@ -251,7 +251,7 @@ type OutMsg
 
 
 uiUpdate :
-    { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
+    { a | windowSize : Coord Pixels, time : Effect.Time.Posix }
     -> Coord Pixels
     -> Coord Pixels
     -> Msg
@@ -278,7 +278,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                     getImageData (currentImage imagePlacer)
 
                                 windowSize =
-                                    Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
+                                    config.windowSize
 
                                 mailScale =
                                     mailZoomFactor windowSize
@@ -320,7 +320,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                         |> Coord.divide (Coord.xy mailScale mailScale)
 
                                 windowSize =
-                                    Coord.multiplyTuple_ ( config.devicePixelRatio, config.devicePixelRatio ) config.windowSize
+                                    config.windowSize
 
                                 mailScale =
                                     mailZoomFactor windowSize
@@ -775,7 +775,7 @@ mailZoomFactor windowSize =
 
 screenToWorld :
     Coord Pixels
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
+    -> { a | windowSize : Coord Pixels }
     -> Point2d Pixels Pixels
     -> Point2d UiPixelUnit UiPixelUnit
 screenToWorld windowSize model =
@@ -785,12 +785,12 @@ screenToWorld windowSize model =
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at (scaleForScreenToWorld windowSize model)
+        >> Point2d.at (scaleForScreenToWorld windowSize)
         >> Point2d.placeIn (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
-scaleForScreenToWorld windowSize model =
-    model.devicePixelRatio / toFloat (mailZoomFactor windowSize) |> Quantity
+scaleForScreenToWorld windowSize =
+    1 / toFloat (mailZoomFactor windowSize) |> Quantity
 
 
 backgroundLayer : WebGL.Texture.Texture -> Effect.WebGL.Entity
@@ -814,13 +814,7 @@ drawMail :
     -> Point2d Pixels Pixels
     -> Int
     -> Int
-    ->
-        { a
-            | windowSize : Coord Pixels
-            , devicePixelRatio : Float
-            , time : Effect.Time.Posix
-            , zoomFactor : Int
-        }
+    -> { a | windowSize : Coord Pixels, time : Effect.Time.Posix, zoomFactor : Int }
     -> Model
     -> List Effect.WebGL.Entity
 drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight config model =
@@ -844,11 +838,7 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
         mailHover : Bool
         mailHover =
             Bounds.fromCoordAndSize mailPosition mailSize2
-                |> Bounds.contains
-                    (mousePosition
-                        |> Point2d.scaleAbout Point2d.origin config.devicePixelRatio
-                        |> Coord.floorPoint
-                    )
+                |> Bounds.contains (Coord.floorPoint mousePosition)
 
         showHoverImage : Bool
         showHoverImage =
