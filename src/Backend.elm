@@ -343,9 +343,8 @@ handleWorldUpdate isProduction oldTime time model =
                                             ( loginToken, model2 ) =
                                                 generateSecretId time model
 
-                                            _ =
-                                                Debug.log "notification" loginEmailUrl
-
+                                            --_ =
+                                            --    Debug.log "notification" loginEmailUrl
                                             loginEmailUrl : String
                                             loginEmailUrl =
                                                 Env.domain
@@ -651,10 +650,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            let
-                                _ =
-                                    Debug.log "loginUrl" loginEmailUrl
-                            in
+                            --let
+                            --    _ =
+                            --        Debug.log "loginUrl" loginEmailUrl
+                            --in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
@@ -716,9 +715,8 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    _ =
-                                        Debug.log "inviteUrl" inviteUrl
-
+                                    --_ =
+                                    --    Debug.log "inviteUrl" inviteUrl
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
