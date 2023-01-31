@@ -41,6 +41,7 @@ type LocalChange
     | TeleportHomeTrainRequest (Evergreen.V50.Id.Id Evergreen.V50.Id.TrainId) Effect.Time.Posix
     | LeaveHomeTrainRequest (Evergreen.V50.Id.Id Evergreen.V50.Id.TrainId) Effect.Time.Posix
     | ViewedMail (Evergreen.V50.Id.Id Evergreen.V50.Id.MailId)
+    | SetAllowEmailNotifications Bool
 
 
 type alias LoggedIn_ =
@@ -51,6 +52,7 @@ type alias LoggedIn_ =
     , mailDrafts : Evergreen.V50.IdDict.IdDict Evergreen.V50.Id.UserId (List Evergreen.V50.MailEditor.Content)
     , emailAddress : Evergreen.V50.EmailAddress.EmailAddress
     , inbox : Evergreen.V50.IdDict.IdDict Evergreen.V50.Id.MailId Evergreen.V50.MailEditor.ReceivedMail
+    , allowEmailNotifications : Bool
     }
 
 

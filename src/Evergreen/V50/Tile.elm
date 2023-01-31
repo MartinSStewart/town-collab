@@ -42,7 +42,8 @@ type Tile
     | PostOffice
     | MowedGrass1
     | MowedGrass4
-    | PineTree
+    | PineTree1
+    | PineTree2
     | LogCabinDown
     | LogCabinRight
     | LogCabinUp
@@ -82,6 +83,10 @@ type Tile
     | HedgeCornerDownRight
     | HedgeCornerUpLeft
     | HedgeCornerUpRight
+    | HedgePillarDownLeft
+    | HedgePillarDownRight
+    | HedgePillarUpLeft
+    | HedgePillarUpRight
     | ApartmentDown
     | ApartmentLeft
     | ApartmentRight
@@ -90,7 +95,11 @@ type Tile
     | RockLeft
     | RockRight
     | RockUp
-    | Flowers
+    | Flowers1
+    | Flowers2
+    | ElmTree
+    | DirtPathHorizontal
+    | DirtPathVertical
 
 
 type TileGroup
@@ -123,9 +132,12 @@ type TileGroup
     | StatueGroup
     | HedgeRowGroup
     | HedgeCornerGroup
+    | HedgePillarGroup
     | ApartmentGroup
     | RockGroup
     | FlowersGroup
+    | ElmTreeGroup
+    | DirtPathGroup
 
 
 type RailPath

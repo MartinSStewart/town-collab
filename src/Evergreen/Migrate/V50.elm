@@ -271,7 +271,7 @@ migrateBackendUserData old =
     , emailAddress = migrateEmailAddress old.emailAddress
     , acceptedInvites = migrateIdDict identity old.acceptedInvites
     , name = migrateDisplayName old.name
-    , sendEmailWhenReceivingALetter = old.sendEmailWhenReceivingALetter
+    , allowEmailNotifications = old.sendEmailWhenReceivingALetter
     }
 
 
@@ -421,7 +421,7 @@ migrateTile old =
             Evergreen.V50.Tile.MowedGrass4
 
         Evergreen.V49.Tile.PineTree ->
-            Evergreen.V50.Tile.PineTree
+            Evergreen.V50.Tile.PineTree1
 
         Evergreen.V49.Tile.LogCabinDown ->
             Evergreen.V50.Tile.LogCabinDown
@@ -565,7 +565,7 @@ migrateTile old =
             Evergreen.V50.Tile.RockUp
 
         Evergreen.V49.Tile.Flowers ->
-            Evergreen.V50.Tile.Flowers
+            Evergreen.V50.Tile.Flowers1
 
 
 migrateTrain : Evergreen.V49.Train.Train -> Evergreen.V50.Train.Train

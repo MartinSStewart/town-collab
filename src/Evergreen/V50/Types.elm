@@ -46,6 +46,10 @@ import Url
 import WebGL
 
 
+type CssPixel
+    = CssPixel Never
+
+
 type alias UserSettings =
     { musicVolume : Int
     , soundEffectVolume : Int
@@ -57,10 +61,11 @@ type FrontendMsg_
     | UrlChanged Url.Url
     | NoOpFrontendMsg
     | TextureLoaded (Result Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture)
+    | SimplexLookupTextureLoaded (Result Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture)
     | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture)
     | KeyMsg Evergreen.V50.Keyboard.Msg
     | KeyDown Evergreen.V50.Keyboard.RawKey
-    | WindowResized (Evergreen.V50.Coord.Coord Pixels.Pixels)
+    | WindowResized (Evergreen.V50.Coord.Coord CssPixel)
     | GotDevicePixelRatio Float
     | MouseDown Html.Events.Extra.Mouse.Button (Evergreen.V50.Point2d.Point2d Pixels.Pixels Pixels.Pixels)
     | MouseUp Html.Events.Extra.Mouse.Button (Evergreen.V50.Point2d.Point2d Pixels.Pixels Pixels.Pixels)
@@ -93,7 +98,9 @@ type LoadingLocalModel
 type alias FrontendLoading =
     { key : Effect.Browser.Navigation.Key
     , windowSize : Evergreen.V50.Coord.Coord Pixels.Pixels
-    , devicePixelRatio : Maybe Float
+    , cssWindowSize : Evergreen.V50.Coord.Coord CssPixel
+    , cssCanvasSize : Evergreen.V50.Coord.Coord CssPixel
+    , devicePixelRatio : Float
     , zoomFactor : Int
     , time : Maybe Effect.Time.Posix
     , viewPoint : Evergreen.V50.Coord.Coord Evergreen.V50.Units.WorldUnit
@@ -103,6 +110,7 @@ type alias FrontendLoading =
     , musicVolume : Int
     , soundEffectVolume : Int
     , texture : Maybe Effect.WebGL.Texture.Texture
+    , simplexNoiseLookup : Maybe Effect.WebGL.Texture.Texture
     , localModel : LoadingLocalModel
     , hasCmdKey : Bool
     }
@@ -142,6 +150,8 @@ type UiHover
     | DisplayNameTextInput
     | MailEditorHover Evergreen.V50.MailEditor.Hover
     | YouGotMailButton
+    | ShowMapButton
+    | AllowEmailNotificationsCheckbox
 
 
 type Hover
@@ -224,9 +234,12 @@ type alias FrontendLoaded =
     , viewPoint : ViewPoint
     , viewPointLastInterval : Evergreen.V50.Point2d.Point2d Evergreen.V50.Units.WorldUnit Evergreen.V50.Units.WorldUnit
     , texture : Effect.WebGL.Texture.Texture
+    , simplexNoiseLookup : Effect.WebGL.Texture.Texture
     , trainTexture : Maybe Effect.WebGL.Texture.Texture
     , pressedKeys : List Evergreen.V50.Keyboard.Key
     , windowSize : Evergreen.V50.Coord.Coord Pixels.Pixels
+    , cssWindowSize : Evergreen.V50.Coord.Coord CssPixel
+    , cssCanvasSize : Evergreen.V50.Coord.Coord CssPixel
     , devicePixelRatio : Float
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
@@ -291,6 +304,7 @@ type alias FrontendLoaded =
     , lastReceivedMail : Maybe Time.Posix
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
+    , showMap : Bool
     }
 
 
@@ -313,7 +327,7 @@ type alias BackendUserData =
     , emailAddress : Evergreen.V50.EmailAddress.EmailAddress
     , acceptedInvites : Evergreen.V50.IdDict.IdDict Evergreen.V50.Id.UserId ()
     , name : Evergreen.V50.DisplayName.DisplayName
-    , sendEmailWhenReceivingALetter : Bool
+    , allowEmailNotifications : Bool
     }
 
 
