@@ -486,6 +486,9 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
         focus =
             MapHover
 
+        currentUserId2 =
+            currentUserId loadedLocalModel
+
         model : FrontendLoaded
         model =
             { key = loading.key
@@ -552,7 +555,20 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
                         |> Tuple.first
                 }
             , previousCursorPositions = IdDict.empty
-            , handMeshes = AssocList.empty
+            , handMeshes =
+                LocalGrid.localModel loadedLocalModel.localModel
+                    |> .users
+                    |> IdDict.map
+                        (\userId user ->
+                            Cursor.meshes
+                                (if currentUserId2 == Just userId then
+                                    Nothing
+
+                                 else
+                                    Just ( userId, user.name )
+                                )
+                                user.handColor
+                        )
             , hasCmdKey = loading.hasCmdKey
             , loginTextInput = TextInput.init
             , pressedSubmitEmail = NotSubmitted { pressedSubmit = False }
@@ -567,7 +583,6 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , showMap = False
             }
                 |> setCurrentTool HandToolButton
-                |> (\state -> handleOutMsg False ( state, LocalGrid.HandColorChanged ))
     in
     ( updateMeshes True model model
     , Command.batch
@@ -3753,29 +3768,31 @@ handleOutMsg isFromBackend ( model, outMsg ) =
                             IdDict.remove userId model.previousCursorPositions
             }
 
-        LocalGrid.HandColorChanged ->
+        LocalGrid.HandColorOrNameChanged userId ->
             let
-                colors : AssocList.Dict Colors ()
-                colors =
-                    LocalGrid.localModel model.localModel
-                        |> .users
-                        |> IdDict.toList
-                        |> List.map (\( _, { handColor } ) -> handColor)
-                        |> EverySet.fromList
-                        |> EverySet.toList
-                        |> List.map (\value -> ( value, () ))
-                        |> AssocList.fromList
+                _ =
+                    Debug.log "userId" userId
             in
-            { model
-                | handMeshes =
-                    AssocList.merge
-                        (\key _ result -> AssocList.remove key result)
-                        (\_ _ _ result -> result)
-                        (\key () result -> AssocList.insert key (Cursor.meshes key) result)
-                        model.handMeshes
-                        colors
-                        model.handMeshes
-            }
+            case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
+                Just user ->
+                    { model
+                        | handMeshes =
+                            IdDict.insert
+                                userId
+                                (Cursor.meshes
+                                    (if Just userId == currentUserId model then
+                                        Nothing
+
+                                     else
+                                        Just ( userId, user.name )
+                                    )
+                                    user.handColor
+                                )
+                                model.handMeshes
+                    }
+
+                Nothing ->
+                    model
 
         LocalGrid.RailToggledByAnother position ->
             handleRailToggleSound position model
@@ -4457,11 +4474,6 @@ isDraggingView hover model =
             Nothing
 
 
-getCursorMesh : Id UserId -> FrontendLoaded -> Maybe CursorMeshes
-getCursorMesh userId model =
-    AssocList.get (getHandColor userId model) model.handMeshes
-
-
 getHandColor : Id UserId -> { a | localModel : LocalModel b LocalGrid } -> Colors
 getHandColor userId model =
     let
@@ -4663,50 +4675,7 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
-                            ++ ((case currentUserId model of
-                                    Just userId ->
-                                        IdDict.remove userId localGrid.cursors
-
-                                    Nothing ->
-                                        localGrid.cursors
-                                )
-                                    |> IdDict.toList
-                                    |> List.filterMap
-                                        (\( userId, cursor ) ->
-                                            let
-                                                point : { x : Float, y : Float }
-                                                point =
-                                                    cursorActualPosition False userId cursor model |> Point2d.unwrap
-                                            in
-                                            case getCursorMesh userId model of
-                                                Just mesh ->
-                                                    Effect.WebGL.entityWith
-                                                        [ Shaders.blend ]
-                                                        Shaders.vertexShader
-                                                        Shaders.fragmentShader
-                                                        (Cursor.getSpriteMesh DefaultSpriteCursor mesh)
-                                                        { view =
-                                                            Mat4.makeTranslate3
-                                                                (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                                    |> toFloat
-                                                                    |> (*) (1 / toFloat model.zoomFactor)
-                                                                )
-                                                                (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
-                                                                    |> toFloat
-                                                                    |> (*) (1 / toFloat model.zoomFactor)
-                                                                )
-                                                                0
-                                                                |> Mat4.mul viewMatrix
-                                                        , texture = texture
-                                                        , textureSize = textureSize
-                                                        , color = Vec4.vec4 1 1 1 1
-                                                        }
-                                                        |> Just
-
-                                                Nothing ->
-                                                    Nothing
-                                        )
-                               )
+                            ++ drawOtherCursors texture viewMatrix model
                             ++ List.filterMap
                                 (\{ position, isRadio } ->
                                     let
@@ -4952,6 +4921,57 @@ canvasView audioData model =
             Html.text ""
 
 
+drawOtherCursors : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
+drawOtherCursors texture viewMatrix model =
+    let
+        localGrid =
+            LocalGrid.localModel model.localModel
+    in
+    (case currentUserId model of
+        Just userId ->
+            IdDict.remove userId localGrid.cursors
+
+        Nothing ->
+            localGrid.cursors
+    )
+        |> IdDict.toList
+        |> List.filterMap
+            (\( userId, cursor ) ->
+                let
+                    point : { x : Float, y : Float }
+                    point =
+                        cursorActualPosition False userId cursor model |> Point2d.unwrap
+                in
+                case IdDict.get userId model.handMeshes of
+                    Just mesh ->
+                        Effect.WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            (Cursor.getSpriteMesh DefaultSpriteCursor mesh)
+                            { view =
+                                Mat4.makeTranslate3
+                                    (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                        |> toFloat
+                                        |> (*) (1 / toFloat model.zoomFactor)
+                                    )
+                                    (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                        |> toFloat
+                                        |> (*) (1 / toFloat model.zoomFactor)
+                                    )
+                                    0
+                                    |> Mat4.mul viewMatrix
+                            , texture = texture
+                            , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                            , color = Vec4.vec4 1 1 1 1
+                            }
+                            |> Just
+
+                    Nothing ->
+                        Nothing
+            )
+
+
 drawCursor : CursorType -> WebGL.Texture.Texture -> Mat4 -> Id UserId -> FrontendLoaded -> List Effect.WebGL.Entity
 drawCursor showMousePointer texture viewMatrix userId model =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
@@ -4963,7 +4983,7 @@ drawCursor showMousePointer texture viewMatrix userId model =
                             cursorActualPosition True userId cursor model
                                 |> Point2d.unwrap
                     in
-                    case getCursorMesh userId model of
+                    case IdDict.get userId model.handMeshes of
                         Just mesh ->
                             [ Effect.WebGL.entityWith
                                 [ Shaders.blend ]

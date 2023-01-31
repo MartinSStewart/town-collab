@@ -189,7 +189,7 @@ type alias FrontendLoaded =
     , focus : Hover
     , music : { startTime : Effect.Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
-    , handMeshes : AssocList.Dict Colors CursorMeshes
+    , handMeshes : IdDict UserId CursorMeshes
     , hasCmdKey : Bool
     , loginTextInput : TextInput.Model
     , pressedSubmitEmail : SubmitStatus EmailAddress

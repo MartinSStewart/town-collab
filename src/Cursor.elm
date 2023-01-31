@@ -23,8 +23,10 @@ module Cursor exposing
 
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import DisplayName exposing (DisplayName)
 import Html
 import Html.Attributes
+import Id exposing (Id, UserId)
 import Shaders exposing (Vertex)
 import Sprite
 import Ui
@@ -41,15 +43,37 @@ type alias CursorMeshes =
     }
 
 
-meshes : Colors -> CursorMeshes
-meshes colors =
-    { defaultSprite = defaultCursorMesh colors
-    , pointerSprite = pointerCursorMesh colors
+meshes : Maybe ( Id UserId, DisplayName ) -> Colors -> CursorMeshes
+meshes showName colors =
+    let
+        nameTag2 : List Vertex
+        nameTag2 =
+            case showName of
+                Just showName2 ->
+                    nameTag showName2
+
+                Nothing ->
+                    []
+    in
+    { defaultSprite = nameTag2 ++ defaultCursorMesh colors |> Sprite.toMesh
+    , pointerSprite = nameTag2 ++ pointerCursorMesh colors |> Sprite.toMesh
     , dragScreenSprite = dragScreenCursorMesh colors
     , pinchSprite = pinchCursorMesh colors
     , eyeDropperSprite = eyeDropperCursorMesh
     , eraserSprite = Sprite.toMesh eraserCursorMesh
     }
+
+
+nameTag : ( Id UserId, DisplayName ) -> List Vertex
+nameTag ( userId, name ) =
+    let
+        text =
+            DisplayName.nameAndId name userId
+
+        textSize =
+            Sprite.textSize 1 text |> Coord.multiplyTuple_ ( -0.5, -1.4 ) |> Coord.plus (Coord.xy 12 0)
+    in
+    Sprite.outlinedText Color.outlineColor Color.white 1 text textSize
 
 
 type CursorType
@@ -161,7 +185,7 @@ dragCursorTextureSize =
     Coord.xy 28 26
 
 
-defaultCursorMesh : Colors -> WebGL.Mesh Vertex
+defaultCursorMesh : Colors -> List Vertex
 defaultCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
@@ -169,7 +193,6 @@ defaultCursorMesh colors =
         defaultCursorTextureSize
         defaultCursorTexturePosition
         defaultCursorTextureSize
-        |> Sprite.toMesh
 
 
 defaultCursorTexturePosition : Coord units
@@ -221,7 +244,7 @@ handPointerSize =
     Coord.xy 27 26
 
 
-pointerCursorMesh : Colors -> WebGL.Mesh Vertex
+pointerCursorMesh : Colors -> List Vertex
 pointerCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
@@ -229,4 +252,3 @@ pointerCursorMesh colors =
         handPointerSize
         (Coord.xy 563 28)
         handPointerSize
-        |> Sprite.toMesh

@@ -124,7 +124,7 @@ type OutMsg
         )
     | OtherUserCursorMoved { userId : Id UserId, previousPosition : Maybe (Point2d WorldUnit WorldUnit) }
     | NoOutMsg
-    | HandColorChanged
+    | HandColorOrNameChanged (Id UserId)
     | RailToggledBySelf (Coord WorldUnit)
     | RailToggledByAnother (Coord WorldUnit)
     | TeleportTrainHome (Id TrainId)
@@ -254,7 +254,7 @@ updateLocalChange localChange model =
                                 (Maybe.map (\user -> { user | handColor = colors }))
                                 model.users
                       }
-                    , HandColorChanged
+                    , HandColorOrNameChanged loggedIn.userId
                     )
 
                 NotLoggedIn ->
@@ -273,7 +273,7 @@ updateLocalChange localChange model =
                                 (Maybe.map (\user -> { user | name = displayName }))
                                 model.users
                       }
-                    , NoOutMsg
+                    , HandColorOrNameChanged loggedIn.userId
                     )
 
                 NotLoggedIn ->
@@ -422,18 +422,18 @@ updateServerChange serverChange model =
                         (Maybe.map (\user -> { user | handColor = colors }))
                         model.users
               }
-            , HandColorChanged
+            , HandColorOrNameChanged userId
             )
 
         ServerUserConnected userId user ->
-            ( { model | users = IdDict.insert userId user model.users }, HandColorChanged )
+            ( { model | users = IdDict.insert userId user model.users }, HandColorOrNameChanged userId )
 
         ServerYouLoggedIn loggedIn user ->
             ( { model
                 | userStatus = LoggedIn loggedIn
                 , users = IdDict.insert loggedIn.userId user model.users
               }
-            , HandColorChanged
+            , HandColorOrNameChanged loggedIn.userId
             )
 
         ServerToggleRailSplit coord ->
@@ -447,7 +447,7 @@ updateServerChange serverChange model =
                         (Maybe.map (\user -> { user | name = displayName }))
                         model.users
               }
-            , NoOutMsg
+            , HandColorOrNameChanged userId
             )
 
         ServerSubmitMail { to, from } ->

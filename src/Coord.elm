@@ -14,6 +14,7 @@ module Coord exposing
     , multiply
     , multiplyTuple
     , multiplyTuple_
+    , negate
     , origin
     , plus
     , roundPoint
@@ -64,6 +65,11 @@ translateMat4 ( Quantity x_, Quantity y_ ) =
 origin : Coord units
 origin =
     tuple ( 0, 0 )
+
+
+negate : Coord unit -> Coord unit
+negate ( Quantity x_, Quantity y_ ) =
+    ( Quantity -x_, Quantity -y_ )
 
 
 plus : Coord unit -> Coord unit -> Coord unit
