@@ -628,20 +628,26 @@ update_ msg model =
             let
                 newCells2 : Dict ( Int, Int ) GridCell.Cell
                 newCells2 =
-                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
+                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) (Debug.log "a" newCells)
                         |> Dict.fromList
+
+                _ =
+                    Debug.log "a" bounds
             in
             ( { model
                 | grid =
                     Bounds.coordRangeFold
                         (\coord state ->
                             ( Coord.toTuple coord
-                            , case Dict.get (Coord.toTuple coord) newCells2 of
-                                Just newCell3 ->
+                            , case ( Grid.getCell coord model.grid, Dict.get (Coord.toTuple coord) newCells2 ) of
+                                ( _, Just newCell3 ) ->
                                     newCell3
 
-                                Nothing ->
+                                ( Nothing, Nothing ) ->
                                     GridCell.empty coord
+
+                                ( Just oldCell, Nothing ) ->
+                                    oldCell
                             )
                                 :: state
                         )
