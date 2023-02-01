@@ -4,6 +4,7 @@ module LocalGrid exposing
     , LocalGrid_
     , OutMsg(..)
     , addCows
+    , getCowsForCell
     , incrementUndoCurrent
     , init
     , localModel
@@ -380,21 +381,6 @@ updateLocalChange localChange model =
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
-        ServerGridChange { gridChange, newCells } ->
-            ( (if
-                Bounds.contains
-                    (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first)
-                    model.viewBounds
-               then
-                { model | grid = Grid.addChange gridChange model.grid |> .grid }
-
-               else
-                model
-              )
-                |> addCows newCells
-            , NoOutMsg
-            )
-
         ServerUndoPoint undoPoint ->
             ( { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
             , NoOutMsg
@@ -425,8 +411,13 @@ updateServerChange serverChange model =
             , HandColorOrNameChanged userId
             )
 
-        ServerUserConnected userId user ->
-            ( { model | users = IdDict.insert userId user model.users }, HandColorOrNameChanged userId )
+        ServerUserConnected { userId, user, cowsSpawnedFromVisibleRegion } ->
+            ( { model
+                | users = IdDict.insert userId user model.users
+                , cows = IdDict.fromList cowsSpawnedFromVisibleRegion |> IdDict.union model.cows
+              }
+            , HandColorOrNameChanged userId
+            )
 
         ServerYouLoggedIn loggedIn user ->
             ( { model
@@ -564,6 +555,11 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
+        ServerNewCows newCows ->
+            ( { model | cows = List.Nonempty.toList newCows |> IdDict.fromList |> IdDict.union model.cows }
+            , NoOutMsg
+            )
+
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 pickupCow userId cowId position time model =
@@ -624,7 +620,7 @@ update_ msg model =
         ServerChange serverChange ->
             updateServerChange serverChange model
 
-        ClientChange (ViewBoundsChange bounds newCells) ->
+        ClientChange (ViewBoundsChange bounds newCells newCows) ->
             let
                 newCells2 : Dict ( Int, Int ) GridCell.Cell
                 newCells2 =
@@ -633,26 +629,33 @@ update_ msg model =
             in
             ( { model
                 | grid =
-                    Bounds.coordRangeFold
-                        (\coord state ->
-                            ( Coord.toTuple coord
-                            , case ( Grid.getCell coord model.grid, Dict.get (Coord.toTuple coord) newCells2 ) of
-                                ( _, Just newCell3 ) ->
-                                    newCell3
-
-                                ( Nothing, Nothing ) ->
-                                    GridCell.empty coord
-
-                                ( Just oldCell, Nothing ) ->
-                                    oldCell
-                            )
-                                :: state
-                        )
-                        identity
-                        bounds
-                        []
-                        |> Dict.fromList
+                    Grid.allCellsDict model.grid
+                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
+                        |> Dict.union newCells2
                         |> Grid.from
+                , cows = IdDict.fromList newCows |> IdDict.union model.cows
+
+                --Bounds.coordRangeFold
+                --    (\coord state ->
+                --        ( Coord.toTuple coord
+                --        , case ( Grid.getCell coord model.grid, Dict.get (Coord.toTuple coord) newCells2 ) of
+                --            ( _, Just newCell3 ) ->
+                --                newCell3
+                --
+                --            ( Nothing, Nothing ) ->
+                --                Debug.todo ""
+                --
+                --            --GridCell.empty coord
+                --            ( Just oldCell, Nothing ) ->
+                --                oldCell
+                --        )
+                --            :: state
+                --    )
+                --    identity
+                --    bounds
+                --    []
+                --    |> Dict.fromList
+                --    |> Grid.from
                 , viewBounds = bounds
               }
             , NoOutMsg
@@ -664,7 +667,7 @@ config =
     { msgEqual =
         \msg0 msg1 ->
             case ( msg0, msg1 ) of
-                ( ClientChange (ViewBoundsChange bounds0 _), ClientChange (ViewBoundsChange bounds1 _) ) ->
+                ( ClientChange (ViewBoundsChange bounds0 _ _), ClientChange (ViewBoundsChange bounds1 _ _) ) ->
                     bounds0 == bounds1
 
                 ( LocalChange eventId0 _, LocalChange eventId1 _ ) ->
@@ -708,28 +711,29 @@ addCows newCells model =
         | cows =
             List.foldl
                 (\newCell dict ->
-                    Random.step
-                        (randomCows newCell)
-                        (Random.initialSeed
-                            (Coord.xRaw newCell * 10000 + Coord.yRaw newCell)
-                        )
-                        |> Tuple.first
-                        |> List.foldl
-                            (\cow dict2 ->
-                                let
-                                    ( cellUnit, terrainUnit ) =
-                                        Coord.floorPoint cow.position
-                                            |> Grid.worldToCellAndLocalCoord
-                                            |> Tuple.mapSecond Terrain.localCoordToTerrain
-                                in
-                                if Terrain.isGroundTerrain terrainUnit cellUnit then
-                                    IdDict.insert (IdDict.nextId dict2) cow dict2
-
-                                else
-                                    dict2
-                            )
-                            dict
+                    getCowsForCell newCell
+                        |> List.foldl (\cow dict2 -> IdDict.insert (IdDict.nextId dict2) cow dict2) dict
                 )
                 model.cows
                 newCells
     }
+
+
+getCowsForCell : Coord CellUnit -> List Cow
+getCowsForCell newCell =
+    Random.step
+        (randomCows newCell)
+        (Random.initialSeed
+            (Coord.xRaw newCell * 10000 + Coord.yRaw newCell)
+        )
+        |> Tuple.first
+        |> List.filter
+            (\cow ->
+                let
+                    ( cellUnit, terrainUnit ) =
+                        Coord.floorPoint cow.position
+                            |> Grid.worldToCellAndLocalCoord
+                            |> Tuple.mapSecond Terrain.localCoordToTerrain
+                in
+                Terrain.isGroundTerrain terrainUnit cellUnit
+            )

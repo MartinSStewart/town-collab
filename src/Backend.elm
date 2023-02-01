@@ -2,7 +2,7 @@ module Backend exposing (app, app_)
 
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -23,7 +23,7 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Id exposing (EventId, Id, MailId, SecretId, TrainId, UserId)
+import Id exposing (CowId, EventId, Id, MailId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
 import List.Extra as List
@@ -343,8 +343,9 @@ handleWorldUpdate isProduction oldTime time model =
                                             ( loginToken, model2 ) =
                                                 generateSecretId time state.model
 
-                                            --_ =
-                                            --    Debug.log "notification" loginEmailUrl
+                                            _ =
+                                                Debug.log "notification" loginEmailUrl
+
                                             loginEmailUrl : String
                                             loginEmailUrl =
                                                 Env.domain
@@ -581,47 +582,53 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
             of
                 Just oldBounds ->
                     let
-                        newCells : List ( Coord CellUnit, GridCell.CellData )
-                        newCells =
-                            Bounds.coordRangeFold
-                                (\coord newCells_ ->
-                                    if Bounds.contains coord oldBounds then
-                                        newCells_
+                        ( newGrid, cells, newCows ) =
+                            generateVisibleRegion (Just oldBounds) bounds model
 
-                                    else
-                                        case Grid.getCell coord model.grid of
-                                            Just cell ->
-                                                ( coord, GridCell.cellToData cell ) :: newCells_
-
-                                            Nothing ->
-                                                newCells_
-                                )
-                                identity
-                                bounds
-                                []
+                        model2 =
+                            { model
+                                | userSessions =
+                                    Dict.update
+                                        (Effect.Lamdera.sessionIdToString sessionId)
+                                        (Maybe.map
+                                            (\session ->
+                                                { session
+                                                    | clientIds =
+                                                        AssocList.update
+                                                            clientId
+                                                            (\_ -> Just bounds)
+                                                            session.clientIds
+                                                }
+                                            )
+                                        )
+                                        model.userSessions
+                                , cows = IdDict.fromList newCows |> IdDict.union model.cows
+                                , grid = newGrid
+                            }
                     in
-                    ( { model
-                        | userSessions =
-                            Dict.update
-                                (Effect.Lamdera.sessionIdToString sessionId)
-                                (Maybe.map
-                                    (\session ->
-                                        { session
-                                            | clientIds =
-                                                AssocList.update
-                                                    clientId
-                                                    (\_ -> Just bounds)
-                                                    session.clientIds
-                                        }
-                                    )
-                                )
-                                model.userSessions
-                      }
-                    , ViewBoundsChange bounds newCells
-                        |> Change.ClientChange
-                        |> Nonempty.fromElement
-                        |> ChangeBroadcast
-                        |> Effect.Lamdera.sendToFrontend clientId
+                    ( model2
+                    , broadcast
+                        (\_ clientId2 ->
+                            if clientId2 == clientId then
+                                ViewBoundsChange bounds cells newCows
+                                    |> Change.ClientChange
+                                    |> Nonempty.fromElement
+                                    |> ChangeBroadcast
+                                    |> Just
+
+                            else
+                                case Nonempty.fromList newCows of
+                                    Just nonempty ->
+                                        ServerNewCows nonempty
+                                            |> Change.ServerChange
+                                            |> Nonempty.fromElement
+                                            |> ChangeBroadcast
+                                            |> Just
+
+                                    Nothing ->
+                                        Nothing
+                        )
+                        model2
                     )
 
                 Nothing ->
@@ -650,10 +657,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            --let
-                            --    _ =
-                            --        Debug.log "loginUrl" loginEmailUrl
-                            --in
+                            let
+                                _ =
+                                    Debug.log "loginUrl" loginEmailUrl
+                            in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
@@ -715,8 +722,9 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    --_ =
-                                    --    Debug.log "inviteUrl" inviteUrl
+                                    _ =
+                                        Debug.log "inviteUrl" inviteUrl
+
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
@@ -887,6 +895,14 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
 
                 { grid, removed, newCells } =
                     Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+
+                nextCowId =
+                    IdDict.nextId model.cows |> Id.toInt
+
+                newCows : List ( Id CowId, Cow )
+                newCows =
+                    List.concatMap LocalGrid.getCowsForCell newCells
+                        |> List.indexedMap (\index cow -> ( Id.fromInt (nextCowId + index), cow ))
             in
             case Train.canRemoveTiles time removed model.trains of
                 Ok trainsToRemove ->
@@ -904,8 +920,8 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
 
                                         Nothing ->
                                             model.trains
+                                , cows = IdDict.fromList newCows |> IdDict.union model.cows
                             }
-                        |> LocalGrid.addCows newCells
                         |> updateUser
                             userId
                             (always
@@ -915,9 +931,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                                 }
                             )
                     , originalChange
-                    , ServerGridChange
-                        { gridChange = Grid.localChangeToChange userId localChange, newCells = newCells }
-                        |> Just
+                    , case Nonempty.fromList newCows of
+                        Just nonempty ->
+                            ServerNewCows nonempty |> Just
+
+                        Nothing ->
+                            Nothing
                     )
 
                 Err _ ->
@@ -1140,6 +1159,50 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             )
 
 
+generateVisibleRegion :
+    Maybe (Bounds CellUnit)
+    -> Bounds CellUnit
+    -> BackendModel
+    -> ( Grid, List ( Coord CellUnit, GridCell.CellData ), List ( Id d, Cow ) )
+generateVisibleRegion maybeOldBounds bounds model =
+    let
+        nextCowId =
+            IdDict.nextId model.cows |> Id.toInt
+
+        newCells =
+            Bounds.coordRangeFold
+                (\coord state ->
+                    if maybeOldBounds |> Maybe.map (Bounds.contains coord) |> Maybe.withDefault False then
+                        state
+
+                    else
+                        let
+                            data =
+                                Grid.getCell2 coord state.grid
+
+                            newCows : List Cow
+                            newCows =
+                                if data.isNew then
+                                    LocalGrid.getCowsForCell coord
+
+                                else
+                                    []
+                        in
+                        { grid = data.grid
+                        , cows = newCows ++ state.cows
+                        , cells = ( coord, GridCell.cellToData data.cell ) :: state.cells
+                        }
+                )
+                identity
+                bounds
+                { grid = model.grid, cows = [], cells = [] }
+    in
+    ( newCells.grid
+    , newCells.cells
+    , List.indexedMap (\index cow -> ( Id.fromInt (nextCowId + index), cow )) newCells.cows
+    )
+
+
 removeTrain : Id TrainId -> BackendModel -> BackendModel
 removeTrain trainId model =
     { model
@@ -1331,9 +1394,17 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                 Nothing ->
                     checkLogin ()
 
+        ( newGrid, cells, newCows ) =
+            generateVisibleRegion Nothing viewBounds model2
+
         model3 : BackendModel
         model3 =
-            addSession sessionId clientId viewBounds userStatus model2
+            addSession
+                sessionId
+                clientId
+                viewBounds
+                userStatus
+                { model2 | grid = newGrid, cows = IdDict.fromList newCows |> IdDict.union model.cows }
                 |> (case maybeRequestedBy of
                         Just requestedBy ->
                             addSession requestedBy clientId viewBounds userStatus
@@ -1344,7 +1415,10 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
 
         loadingData : LoadingData_
         loadingData =
-            { grid = Grid.region viewBounds model3.grid
+            { grid =
+                List.map (\( coord, cell ) -> ( Coord.toTuple coord, cell )) cells
+                    |> Dict.fromList
+                    |> Grid.fromData
             , userStatus = userStatus
             , viewBounds = viewBounds
             , trains = model3.trains
@@ -1385,7 +1459,11 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 |> Just
 
                         else
-                            ServerUserConnected loggedIn.userId frontendUser
+                            ServerUserConnected
+                                { userId = loggedIn.userId
+                                , user = frontendUser
+                                , cowsSpawnedFromVisibleRegion = newCows
+                                }
                                 |> Change.ServerChange
                                 |> Nonempty.singleton
                                 |> ChangeBroadcast

@@ -3591,7 +3591,7 @@ viewBoundsUpdate ( model, cmd ) =
         ( { model
             | localModel =
                 LocalGrid.update
-                    (ClientChange (Change.ViewBoundsChange newBounds []))
+                    (ClientChange (Change.ViewBoundsChange newBounds [] []))
                     model.localModel
                     |> Tuple.first
           }

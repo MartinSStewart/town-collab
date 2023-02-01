@@ -19,6 +19,7 @@ import Grid
 import GridCell
 import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
+import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (MailStatus)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -54,17 +55,20 @@ type LocalChange
 
 
 type ClientChange
-    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData ))
+    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData )) (List ( Id CowId, Cow ))
 
 
 type ServerChange
-    = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit) }
-    | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
+    = ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
     | ServerPickupCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | ServerDropCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
-    | ServerUserConnected (Id UserId) FrontendUser
+    | ServerUserConnected
+        { userId : Id UserId
+        , user : FrontendUser
+        , cowsSpawnedFromVisibleRegion : List ( Id CowId, Cow )
+        }
     | ServerYouLoggedIn LoggedIn_ FrontendUser
     | ServerChangeHandColor (Id UserId) Colors
     | ServerToggleRailSplit (Coord WorldUnit)
@@ -81,6 +85,7 @@ type ServerChange
         , deliveryTime : Effect.Time.Posix
         }
     | ServerViewedMail (Id MailId) (Id UserId)
+    | ServerNewCows (Nonempty ( Id CowId, Cow ))
 
 
 type alias Cow =

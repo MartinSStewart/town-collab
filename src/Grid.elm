@@ -15,7 +15,9 @@ module Grid exposing
     , empty
     , foregroundMesh
     , from
+    , fromData
     , getCell
+    , getCell2
     , getPostOffice
     , getTile
     , localChangeToChange
@@ -83,6 +85,11 @@ empty =
 from : Dict ( Int, Int ) Cell -> Grid
 from =
     Grid
+
+
+fromData : Dict ( Int, Int ) CellData -> GridData
+fromData =
+    GridData
 
 
 localTileCoordPlusWorld : Coord WorldUnit -> Coord TileLocalUnit -> Coord WorldUnit
@@ -419,6 +426,20 @@ addChange change grid =
                             neighborCells_
                 }
            )
+
+
+getCell2 : Coord CellUnit -> Grid -> { cell : Cell, isNew : Bool, grid : Grid }
+getCell2 coord (Grid grid) =
+    case Dict.get (Coord.toTuple coord) grid of
+        Just cell ->
+            { cell = cell, isNew = False, grid = Grid grid }
+
+        Nothing ->
+            let
+                newCell =
+                    GridCell.empty coord
+            in
+            { cell = newCell, isNew = True, grid = Dict.insert (Coord.toTuple coord) newCell grid |> Grid }
 
 
 maxTileSize : number
