@@ -341,17 +341,18 @@ handleWorldUpdate isProduction oldTime time model =
                                     if user.allowEmailNotifications then
                                         let
                                             ( loginToken, model2 ) =
-                                                generateSecretId time model
+                                                generateSecretId time state.model
 
-                                            --_ =
-                                            --    Debug.log "notification" loginEmailUrl
+                                            _ =
+                                                Debug.log "notification" loginEmailUrl
+
                                             loginEmailUrl : String
                                             loginEmailUrl =
                                                 Env.domain
                                                     ++ Route.encode
                                                         (InternalRoute
                                                             { viewPoint =
-                                                                Grid.getPostOffice mail.to model.grid
+                                                                Grid.getPostOffice mail.to state.model.grid
                                                                     |> Maybe.withDefault Coord.origin
                                                             , showInbox = True
                                                             , loginOrInviteToken = LoginToken2 loginToken |> Just
@@ -650,10 +651,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            --let
-                            --    _ =
-                            --        Debug.log "loginUrl" loginEmailUrl
-                            --in
+                            let
+                                _ =
+                                    Debug.log "loginUrl" loginEmailUrl
+                            in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
@@ -715,8 +716,9 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    --_ =
-                                    --    Debug.log "inviteUrl" inviteUrl
+                                    _ =
+                                        Debug.log "inviteUrl" inviteUrl
+
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
