@@ -686,10 +686,10 @@ randomCows coord =
             Grid.cellAndLocalCoordToWorld ( coord, Coord.origin )
     in
     Random.weighted
-        ( 0.93, 0 )
-        [ ( 0.05, 1 )
-        , ( 0.01, 2 )
-        , ( 0.01, 3 )
+        ( 0.98, 0 )
+        [ ( 0.01, 1 )
+        , ( 0.005, 2 )
+        , ( 0.005, 3 )
         ]
         |> Random.andThen
             (\amount ->
