@@ -3769,10 +3769,6 @@ handleOutMsg isFromBackend ( model, outMsg ) =
             }
 
         LocalGrid.HandColorOrNameChanged userId ->
-            let
-                _ =
-                    Debug.log "userId" userId
-            in
             case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
                 Just user ->
                     { model
