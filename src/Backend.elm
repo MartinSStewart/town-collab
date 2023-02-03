@@ -929,12 +929,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                                 }
                             )
                     , originalChange
-                    , case Nonempty.fromList newCows of
-                        Just nonempty ->
-                            ServerNewCows nonempty |> Just
-
-                        Nothing ->
-                            Nothing
+                    , ServerGridChange
+                        { gridChange = Grid.localChangeToChange userId localChange
+                        , newCells = newCells
+                        , newCows = newCows
+                        }
+                        |> Just
                     )
 
                 Err _ ->
