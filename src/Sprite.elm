@@ -14,6 +14,7 @@ module Sprite exposing
     , spriteWithZ
     , text
     , textSize
+    , textWithZ
     , toMesh
     )
 
@@ -236,6 +237,39 @@ charTexturePositionHelper =
 text : Color -> Int -> String -> Coord unit -> List Vertex
 text color charScale string position =
     let
+        charSize2 : Coord unit
+        charSize2 =
+            Coord.multiplyTuple ( charScale, charScale ) charSize
+    in
+    String.toList string
+        |> List.foldl
+            (\char state ->
+                if char == '\n' then
+                    { offsetX = 0
+                    , offsetY = state.offsetY + Coord.yRaw charSize2
+                    , vertices = state.vertices
+                    }
+
+                else
+                    { offsetX = state.offsetX + Coord.xRaw charSize2
+                    , offsetY = state.offsetY
+                    , vertices =
+                        spriteWithColor
+                            color
+                            (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
+                            charSize2
+                            (charTexturePosition char)
+                            charSize
+                            ++ state.vertices
+                    }
+            )
+            { offsetX = 0, offsetY = 0, vertices = [] }
+        |> .vertices
+
+
+textWithZ : Color -> Int -> String -> Int -> Coord unit -> Float -> List Vertex
+textWithZ color charScale string lineSpacing position z =
+    let
         charSize_ =
             Coord.multiplyTuple ( charScale, charScale ) charSize
     in
@@ -244,7 +278,7 @@ text color charScale string position =
             (\char state ->
                 if char == '\n' then
                     { offsetX = 0
-                    , offsetY = state.offsetY + Coord.yRaw charSize_
+                    , offsetY = state.offsetY + Coord.yRaw charSize_ + lineSpacing
                     , vertices = state.vertices
                     }
 
@@ -252,9 +286,11 @@ text color charScale string position =
                     { offsetX = state.offsetX + Coord.xRaw charSize_
                     , offsetY = state.offsetY
                     , vertices =
-                        spriteWithColor
+                        spriteWithZ
+                            color
                             color
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
+                            z
                             charSize_
                             (charTexturePosition char)
                             charSize
@@ -321,4 +357,4 @@ textSize charScale string =
         (List.map Coord.xRaw list |> List.maximum |> Maybe.withDefault 0)
         (List.map Coord.yRaw list |> List.sum |> max 1)
         |> Coord.multiply charSize
-        |> Coord.multiply (Coord.xy charScale charScale)
+        |> Coord.scalar charScale

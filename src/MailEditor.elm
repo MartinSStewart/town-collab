@@ -1,44 +1,53 @@
 module MailEditor exposing
     ( BackendMail
+    , Content
     , FrontendMail
     , Hover(..)
     , Image(..)
-    , MailEditorData
     , MailStatus(..)
     , Model
-    , ShowMailEditor(..)
-    , ToBackend(..)
-    , ToFrontend(..)
+    , Msg
+    , OutMsg(..)
+    , ReceivedMail
+    , Tool(..)
     , backendMailToFrontend
-    , close
+    , backgroundLayer
+    , disconnectWarning
     , drawMail
     , getImageData
     , getMailFrom
     , getMailTo
     , handleKeyDown
-    , handleMouseDown
-    , hoverAt
     , init
-    , initEditor
-    , isOpen
-    , open
     , openAnimationLength
     , redo
+    , scroll
+    , ui
+    , uiUpdate
     , undo
-    , updateFromBackend
     )
 
+import Array exposing (Array)
 import AssocList
+import Audio exposing (AudioData)
 import Bounds
-import Color
+import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import Cow
+import Cursor
+import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
+import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.Lamdera as Lamdera
 import Effect.Time
 import Effect.WebGL
-import Effect.WebGL.Texture
+import Flag
 import Frame2d
+import Grid
 import Id exposing (Id, MailId, TrainId, UserId)
+import IdDict exposing (IdDict)
 import Keyboard exposing (Key(..))
+import List.Nonempty exposing (Nonempty(..))
 import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
@@ -47,15 +56,28 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
+import Sound exposing (Sound(..))
 import Sprite
-import Tile
+import TextInput
+import Tile exposing (DefaultColor(..), Tile, TileData, TileGroup(..))
+import Time exposing (Month(..))
+import Ui exposing (BorderAndFill(..))
 import Units exposing (MailPixelUnit, WorldUnit)
+import User exposing (FrontendUser)
 import Vector2d
 import WebGL.Texture
 
 
+type alias ReceivedMail =
+    { content : List { position : Coord Pixels, image : Image }
+    , isViewed : Bool
+    , from : Id UserId
+    , deliveryTime : Effect.Time.Posix
+    }
+
+
 type alias BackendMail =
-    { content : List { position : Coord MailPixelUnit, image : Image }
+    { content : List { position : Coord Pixels, image : Image }
     , status : MailStatus
     , from : Id UserId
     , to : Id UserId
@@ -71,9 +93,12 @@ type alias FrontendMail =
 
 type Hover
     = BackgroundHover
-    | MailHover
-    | UserIdInputHover
-    | SubmitButtonHover
+    | ImageButton Int
+    | MailButton
+    | EraserButton
+    | SendLetterButton
+    | CloseSendLetterInstructionsButton
+    | InboxRowButton (Id MailId)
 
 
 backendMailToFrontend : BackendMail -> FrontendMail
@@ -81,12 +106,9 @@ backendMailToFrontend mail =
     { status = mail.status, from = mail.from, to = mail.to }
 
 
-getMailFrom :
-    Id UserId
-    -> AssocList.Dict (Id MailId) { a | from : Id UserId }
-    -> List ( Id MailId, { a | from : Id UserId } )
+getMailFrom : Id UserId -> IdDict MailId { a | from : Id UserId } -> List ( Id MailId, { a | from : Id UserId } )
 getMailFrom userId dict =
-    AssocList.toList dict
+    IdDict.toList dict
         |> List.filterMap
             (\( mailId, mail ) ->
                 if mail.from == userId then
@@ -97,12 +119,9 @@ getMailFrom userId dict =
             )
 
 
-getMailTo :
-    Id UserId
-    -> AssocList.Dict (Id MailId) { a | to : Id UserId }
-    -> List ( Id MailId, { a | to : Id UserId } )
+getMailTo : Id UserId -> IdDict MailId { a | to : Id UserId } -> List ( Id MailId, { a | to : Id UserId } )
 getMailTo userId dict =
-    AssocList.toList dict
+    IdDict.toList dict
         |> List.filterMap
             (\( mailId, mail ) ->
                 if mail.to == userId then
@@ -116,44 +135,331 @@ getMailTo userId dict =
 type MailStatus
     = MailWaitingPickup
     | MailInTransit (Id TrainId)
-    | MailReceived
-    | MailReceivedAndViewed
+    | MailReceived { deliveryTime : Effect.Time.Posix }
+    | MailReceivedAndViewed { deliveryTime : Effect.Time.Posix }
+
+
+type Tool
+    = ImagePlacer ImagePlacer_
+    | ImagePicker
+    | EraserTool
+
+
+type alias ImagePlacer_ =
+    { imageIndex : Int, rotationIndex : Int }
 
 
 type alias Model =
-    { mesh : Effect.WebGL.Mesh Vertex
-    , textInputMesh : Effect.WebGL.Mesh Vertex
-    , currentImage : Image
+    { currentImageMesh : Effect.WebGL.Mesh Vertex
+    , currentTool : Tool
+    , lastRotation : List Effect.Time.Posix
     , undo : List EditorState
     , current : EditorState
     , redo : List EditorState
-    , showMailEditor : ShowMailEditor
     , lastPlacedImage : Maybe Effect.Time.Posix
+    , lastErase : Maybe Effect.Time.Posix
     , submitStatus : SubmitStatus
-    , textInputFocused : Bool
+    , to : Maybe ( Id UserId, DisplayName )
+    , inboxMailViewed : Maybe (Id MailId)
     }
 
 
 type SubmitStatus
     = NotSubmitted
-    | Submitting
+    | Submitted
 
 
 type alias EditorState =
-    { content : List { position : Coord MailPixelUnit, image : Image }, to : String }
+    { content : List Content }
 
 
-type alias MailEditorData =
-    { to : String
-    , content : List { position : Coord MailPixelUnit, image : Image }
-    , currentImage : Image
-    }
+type alias Content =
+    { position : Coord Pixels, image : Image }
 
 
 type Image
-    = BlueStamp
-    | SunglassesSmiley
-    | NormalSmiley
+    = Stamp Colors
+    | SunglassesEmoji Colors
+    | NormalEmoji Colors
+    | SadEmoji Colors
+    | Cow Colors
+    | Man Colors
+    | TileImage TileGroup Int Colors
+    | Grass
+    | DefaultCursor Colors
+    | DragCursor Colors
+    | PinchCursor Colors
+    | Line Int Color
+
+
+scroll :
+    Bool
+    -> AudioData
+    -> { a | time : Effect.Time.Posix, sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source) }
+    -> Model
+    -> Model
+scroll scrollUp audioData config model =
+    case model.currentTool of
+        ImagePlacer imagePlacer ->
+            rotateImage audioData config imagePlacer scrollUp model
+
+        ImagePicker ->
+            model
+
+        EraserTool ->
+            model
+
+
+rotateImage :
+    AudioData
+    -> { a | time : Time.Posix, sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source) }
+    -> ImagePlacer_
+    -> Bool
+    -> Model
+    -> Model
+rotateImage audioData config imagePlacer scrollUp model =
+    { model
+        | currentTool =
+            ImagePlacer
+                { imagePlacer
+                    | rotationIndex =
+                        imagePlacer.rotationIndex
+                            + (if scrollUp then
+                                1
+
+                               else
+                                -1
+                              )
+                }
+        , lastRotation =
+            config.time
+                :: List.filter
+                    (\time ->
+                        Duration.from time config.time
+                            |> Quantity.lessThan (Sound.length audioData config.sounds WhooshSound)
+                    )
+                    model.lastRotation
+    }
+        |> updateCurrentImageMesh
+
+
+type OutMsg
+    = NoOutMsg
+    | SubmitMail { to : Id UserId, content : List Content }
+    | UpdateDraft { to : Id UserId, content : List Content }
+    | ViewedMail (Id MailId)
+
+
+uiUpdate :
+    { a | windowSize : Coord Pixels, time : Effect.Time.Posix }
+    -> Coord Pixels
+    -> Coord Pixels
+    -> Msg
+    -> Model
+    -> ( Maybe Model, OutMsg )
+uiUpdate config elementPosition mousePosition msg model =
+    case msg of
+        PressedImageButton index ->
+            ( updateCurrentImageMesh { model | currentTool = ImagePlacer { imageIndex = index, rotationIndex = 0 } } |> Just
+            , NoOutMsg
+            )
+
+        PressedBackground ->
+            ( Nothing, NoOutMsg )
+
+        MouseDownMail ->
+            case model.to of
+                Just ( to, _ ) ->
+                    case model.currentTool of
+                        ImagePlacer imagePlacer ->
+                            let
+                                imageData : ImageData units
+                                imageData =
+                                    getImageData (currentImage imagePlacer)
+
+                                windowSize =
+                                    config.windowSize
+
+                                mailScale =
+                                    mailZoomFactor windowSize
+
+                                oldEditorState : EditorState
+                                oldEditorState =
+                                    model.current
+
+                                newEditorState : EditorState
+                                newEditorState =
+                                    { oldEditorState
+                                        | content =
+                                            oldEditorState.content
+                                                ++ [ { position =
+                                                        mousePosition
+                                                            |> Coord.minus elementPosition
+                                                            |> Coord.divide (Coord.xy mailScale mailScale)
+                                                            |> Coord.minus (Coord.divide (Coord.xy 2 2) imageData.textureSize)
+                                                            |> Coord.toVector2d
+                                                            |> Vector2d.scaleBy 0.5
+                                                            |> Coord.roundVector
+                                                            |> Coord.scalar 2
+                                                     , image = currentImage imagePlacer
+                                                     }
+                                                   ]
+                                    }
+
+                                model2 =
+                                    addChange newEditorState { model | lastPlacedImage = Just config.time }
+                            in
+                            ( Just model2, UpdateDraft (toData to model2) )
+
+                        EraserTool ->
+                            let
+                                mailMousePosition : Coord Pixels
+                                mailMousePosition =
+                                    mousePosition
+                                        |> Coord.minus elementPosition
+                                        |> Coord.divide (Coord.xy mailScale mailScale)
+
+                                windowSize =
+                                    config.windowSize
+
+                                mailScale =
+                                    mailZoomFactor windowSize
+
+                                oldEditorState : EditorState
+                                oldEditorState =
+                                    model.current
+
+                                { newContent, erased } =
+                                    List.foldr
+                                        (\content state ->
+                                            let
+                                                imageData : ImageData units
+                                                imageData =
+                                                    getImageData content.image
+
+                                                isOverImage : Bool
+                                                isOverImage =
+                                                    Bounds.contains
+                                                        mailMousePosition
+                                                        (Bounds.fromCoordAndSize content.position imageData.textureSize)
+                                            in
+                                            if not state.erased && isOverImage then
+                                                { newContent = state.newContent, erased = True }
+
+                                            else
+                                                { newContent = content :: state.newContent, erased = state.erased }
+                                        )
+                                        { newContent = [], erased = False }
+                                        oldEditorState.content
+                            in
+                            if erased then
+                                let
+                                    model2 =
+                                        addChange { oldEditorState | content = newContent } model
+                                in
+                                ( Just { model2 | lastErase = Just config.time }
+                                , UpdateDraft (toData to model2)
+                                )
+
+                            else
+                                ( Just { model | lastErase = Just config.time }, NoOutMsg )
+
+                        ImagePicker ->
+                            ( Just model, NoOutMsg )
+
+                Nothing ->
+                    ( Just model, NoOutMsg )
+
+        PressedMail ->
+            ( Just model, NoOutMsg )
+
+        PressedEraserButton ->
+            ( { model | currentTool = EraserTool } |> updateCurrentImageMesh |> Just, NoOutMsg )
+
+        PressedSendLetter ->
+            case model.to of
+                Just ( userId, _ ) ->
+                    ( Just { model | submitStatus = Submitted }
+                    , SubmitMail { content = model.current.content, to = userId }
+                    )
+
+                Nothing ->
+                    ( Just model, NoOutMsg )
+
+        TypedToUser _ _ _ _ ->
+            ( Just model, NoOutMsg )
+
+        PressedCloseSendLetterInstructions ->
+            ( Nothing, NoOutMsg )
+
+        PressedInboxRow mailId ->
+            ( Just
+                { model
+                    | inboxMailViewed =
+                        if model.inboxMailViewed == Just mailId then
+                            Nothing
+
+                        else
+                            Just mailId
+                }
+            , ViewedMail mailId
+            )
+
+
+currentImage : ImagePlacer_ -> Image
+currentImage imagePlacer =
+    Array.get imagePlacer.imageIndex images
+        |> Maybe.withDefault defaultBlueStamp
+        |> (\a ->
+                case a of
+                    TileImage tileGroup _ colors ->
+                        TileImage tileGroup imagePlacer.rotationIndex colors
+
+                    Line _ color ->
+                        Line imagePlacer.rotationIndex color
+
+                    _ ->
+                        a
+           )
+
+
+defaultBlueStamp : Image
+defaultBlueStamp =
+    Stamp { primaryColor = Color.rgb255 140 160 250, secondaryColor = Color.black }
+
+
+images : Array Image
+images =
+    [ defaultBlueStamp
+    , SunglassesEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , NormalEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , SadEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
+    , Cow Cow.defaultColors
+    , Man { primaryColor = Color.rgb255 188 155 102, secondaryColor = Color.rgb255 63 63 93 }
+    , Grass
+    , DefaultCursor Cursor.defaultColors
+    , DragCursor Cursor.defaultColors
+    , PinchCursor Cursor.defaultColors
+    , Line 0 Color.black
+    ]
+        ++ List.map
+            (\group ->
+                let
+                    data =
+                        Tile.getTileGroupData group
+                in
+                TileImage group 0 (Tile.defaultToPrimaryAndSecondary data.defaultColors)
+            )
+            Tile.allTileGroups
+        |> List.sortBy
+            (\image ->
+                let
+                    data =
+                        getImageData image
+                in
+                data.textureSize |> Coord.xRaw |> (*) (imageButtonScale data.textureSize)
+            )
+        |> Array.fromList
 
 
 openAnimationLength : Duration
@@ -161,244 +467,242 @@ openAnimationLength =
     Duration.milliseconds 300
 
 
-isOpen : Model -> Bool
-isOpen { showMailEditor } =
-    case showMailEditor of
-        MailEditorClosed ->
-            False
+init : Maybe { userId : Id UserId, name : DisplayName, draft : List Content } -> Model
+init maybeUserIdAndName =
+    { current =
+        { content =
+            case maybeUserIdAndName of
+                Just { draft } ->
+                    draft
 
-        MailEditorOpening _ ->
-            True
-
-        MailEditorClosing _ ->
-            False
-
-
-type ShowMailEditor
-    = MailEditorClosed
-    | MailEditorOpening { startTime : Effect.Time.Posix, startPosition : Point2d Pixels Pixels }
-    | MailEditorClosing { startTime : Effect.Time.Posix, startPosition : Point2d Pixels Pixels }
-
-
-initEditor : MailEditorData -> Model
-initEditor data =
-    { current = { content = data.content, to = data.to }
+                Nothing ->
+                    []
+        }
     , undo = []
     , redo = []
-    , mesh = Shaders.triangleFan []
-    , textInputMesh = Shaders.triangleFan []
-    , currentImage = data.currentImage
-    , showMailEditor = MailEditorClosed
+    , currentImageMesh = Shaders.triangleFan []
+    , currentTool = ImagePlacer { imageIndex = 0, rotationIndex = 0 }
+    , lastRotation = []
     , lastPlacedImage = Nothing
+    , lastErase = Nothing
     , submitStatus = NotSubmitted
-    , textInputFocused = False
+    , to =
+        case maybeUserIdAndName of
+            Just { userId, name } ->
+                Just ( userId, name )
+
+            Nothing ->
+                Nothing
+    , inboxMailViewed = Nothing
     }
-        |> updateMailMesh
+        |> updateCurrentImageMesh
 
 
-init : MailEditorData
-init =
-    { to = ""
-    , content = []
-    , currentImage = BlueStamp
-    }
+updateCurrentImageMesh : Model -> Model
+updateCurrentImageMesh model =
+    case model.currentTool of
+        ImagePlacer imagePlacer ->
+            let
+                image : Image
+                image =
+                    currentImage imagePlacer
+
+                imageData : ImageData units
+                imageData =
+                    getImageData image
+            in
+            { model
+                | currentImageMesh =
+                    imageMesh (Coord.divide (Coord.xy -2 -2) imageData.textureSize) 1 image |> Sprite.toMesh
+            }
+
+        ImagePicker ->
+            { model
+                | currentImageMesh = Effect.WebGL.triangleFan []
+            }
+
+        EraserTool ->
+            model
 
 
-type alias ImageData =
-    { textureSize : ( Int, Int ), texturePosition : ( Int, Int ) }
+type alias ImageData units =
+    { textureSize : Coord units, texturePosition : List (Coord units), colors : Colors }
 
 
-type ToBackend
-    = SubmitMailRequest { content : List { position : Coord MailPixelUnit, image : Image }, to : Id UserId }
-    | UpdateMailEditorRequest MailEditorData
-
-
-type ToFrontend
-    = SubmitMailResponse
-
-
-getImageData : Image -> ImageData
+getImageData : Image -> ImageData units
 getImageData image =
     case image of
-        BlueStamp ->
-            { textureSize = ( 28, 28 ), texturePosition = ( 504, 0 ) }
+        Stamp colors ->
+            { textureSize = Coord.xy 48 48, texturePosition = [ Coord.xy 591 24 ], colors = colors }
 
-        SunglassesSmiley ->
-            { textureSize = ( 24, 24 ), texturePosition = ( 532, 0 ) }
+        SunglassesEmoji colors ->
+            { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 532 0 ], colors = colors }
 
-        NormalSmiley ->
-            { textureSize = ( 24, 24 ), texturePosition = ( 556, 0 ) }
+        NormalEmoji colors ->
+            { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 556 0 ], colors = colors }
 
+        SadEmoji colors ->
+            { textureSize = Coord.xy 24 24, texturePosition = [ Coord.xy 580 0 ], colors = colors }
 
-updateFromBackend : { a | time : Effect.Time.Posix } -> ToFrontend -> Model -> Model
-updateFromBackend config toFrontend mailEditor =
-    case toFrontend of
-        SubmitMailResponse ->
-            case mailEditor.submitStatus of
-                NotSubmitted ->
-                    mailEditor
+        TileImage tileGroup rotationIndex colors ->
+            let
+                tileGroupData =
+                    Tile.getTileGroupData tileGroup
 
-                Submitting ->
-                    { mailEditor
-                        | submitStatus = NotSubmitted
-                        , undo = []
-                        , redo = []
-                        , current = { content = [], to = "" }
-                    }
-                        |> updateMailMesh
-                        |> close config
+                tileData : TileData unit
+                tileData =
+                    Tile.getData (List.Nonempty.get rotationIndex tileGroupData.tiles)
+            in
+            { textureSize = Coord.multiply Units.tileSize tileData.size
+            , texturePosition =
+                (case tileData.texturePosition of
+                    Just texturePosition ->
+                        [ Coord.multiply Units.tileSize texturePosition ]
 
-
-handleMouseDown :
-    cmd
-    -> (ToBackend -> cmd)
-    -> Int
-    -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float, time : Effect.Time.Posix }
-    -> Point2d Pixels Pixels
-    -> Model
-    -> ( Model, cmd )
-handleMouseDown cmdNone sendToBackend windowWidth windowHeight config mousePosition model =
-    let
-        model2 =
-            { model | textInputFocused = False }
-
-        uiCoord : Coord UiPixelUnit
-        uiCoord =
-            screenToWorld windowWidth windowHeight config mousePosition
-                |> Coord.roundPoint
-
-        mailCoord : Coord MailPixelUnit
-        mailCoord =
-            uiCoord
-                |> Coord.minus
-                    (Coord.tuple imageData.textureSize
-                        |> Coord.divide (Coord.tuple ( 2, 2 ))
-                    )
-                |> uiPixelToMailPixel
-
-        imageData : ImageData
-        imageData =
-            getImageData model2.currentImage
-
-        oldEditorState : EditorState
-        oldEditorState =
-            model2.current
-
-        newEditorState : EditorState
-        newEditorState =
-            { oldEditorState
-                | content = oldEditorState.content ++ [ { position = mailCoord, image = model2.currentImage } ]
-            }
-    in
-    if Bounds.fromCoordAndSize textInputPosition textInputSize |> Bounds.contains uiCoord then
-        ( { model2 | textInputFocused = True }, cmdNone )
-
-    else if model.textInputFocused then
-        ( model2, cmdNone )
-
-    else if validImagePosition imageData mailCoord then
-        let
-            model3 =
-                addChange newEditorState { model2 | lastPlacedImage = Just config.time }
-        in
-        ( model3, UpdateMailEditorRequest (toData model3) |> sendToBackend )
-
-    else if Bounds.fromCoordAndSize submitButtonPosition submitButtonSize |> Bounds.contains uiCoord then
-        case ( model2.submitStatus, validateUserId model2.current.to ) of
-            ( NotSubmitted, Just recipient ) ->
-                ( { model2 | submitStatus = Submitting }
-                , sendToBackend (SubmitMailRequest { content = model2.current.content, to = recipient })
+                    Nothing ->
+                        []
                 )
+                    ++ (case tileData.texturePositionTopLayer of
+                            Just { texturePosition } ->
+                                [ Coord.multiply Units.tileSize texturePosition ]
 
-            _ ->
-                ( model2, cmdNone )
+                            Nothing ->
+                                []
+                       )
+            , colors = colors
+            }
 
-    else
-        ( close config model2, cmdNone )
+        Grass ->
+            { textureSize = Coord.xy 80 72
+            , texturePosition = [ Coord.xy 220 216 ]
+            , colors = Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
+            }
+
+        DefaultCursor colors ->
+            { textureSize = Cursor.defaultCursorTextureSize
+            , texturePosition = [ Cursor.defaultCursorTexturePosition ]
+            , colors = colors
+            }
+
+        DragCursor colors ->
+            { textureSize = Cursor.dragCursorTextureSize
+            , texturePosition = [ Cursor.dragCursorTexturePosition ]
+            , colors = colors
+            }
+
+        PinchCursor colors ->
+            { textureSize = Cursor.pinchCursorTextureSize
+            , texturePosition = [ Cursor.pinchCursorTexturePosition ]
+            , colors = colors
+            }
+
+        Cow colors ->
+            { textureSize = Cow.textureSize
+            , texturePosition = [ Cow.texturePosition ]
+            , colors = colors
+            }
+
+        Man colors ->
+            { textureSize = Coord.xy 10 17
+            , texturePosition = [ Coord.xy 494 0 ]
+            , colors = colors
+            }
+
+        Line rotationIndex color ->
+            let
+                rotationIndex2 =
+                    modBy 4 rotationIndex
+
+                ( texturePosition, textureSize ) =
+                    if rotationIndex2 == 0 then
+                        ( Coord.xy 604 0, Coord.xy 20 2 )
+
+                    else if rotationIndex2 == 1 then
+                        ( Coord.xy 606 2, Coord.xy 16 16 )
+
+                    else if rotationIndex2 == 2 then
+                        ( Coord.xy 604 0, Coord.xy 2 20 )
+
+                    else
+                        ( Coord.xy 622 2, Coord.xy 16 16 )
+            in
+            { textureSize = textureSize
+            , texturePosition = [ texturePosition ]
+            , colors = { primaryColor = color, secondaryColor = Color.black }
+            }
 
 
-validateUserId : String -> Maybe (Id UserId)
-validateUserId string =
-    case String.toInt string of
-        Just int ->
-            Id.fromInt int |> Just
+toData : Id UserId -> Model -> { to : Id UserId, content : List Content }
+toData to model =
+    { to = to, content = model.current.content }
 
-        Nothing ->
+
+handleKeyDown :
+    AudioData
+    -> { a | time : Time.Posix, sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source) }
+    -> Bool
+    -> Key
+    -> Model
+    -> Maybe Model
+handleKeyDown audioData config ctrlHeld key model =
+    case key of
+        Escape ->
             Nothing
 
+        Character "z" ->
+            (if ctrlHeld then
+                undo model
 
-toData : Model -> MailEditorData
-toData model =
-    { to = model.current.to
-    , content = model.current.content
-    , currentImage = model.currentImage
-    }
+             else
+                case model.currentTool of
+                    ImagePlacer imagePlacer ->
+                        rotateImage audioData config imagePlacer True model
 
+                    ImagePicker ->
+                        model
 
-handleKeyDown : { a | time : Effect.Time.Posix } -> Bool -> Key -> Model -> Model
-handleKeyDown config ctrlHeld key model =
-    if model.textInputFocused then
-        case key of
-            Escape ->
-                { model | textInputFocused = False }
+                    EraserTool ->
+                        model
+            )
+                |> Just
 
-            Character char ->
-                addChange_
-                    (\editorState ->
-                        { editorState
-                            | to = editorState.to ++ char
-                        }
-                    )
-                    model
-
-            Backspace ->
-                addChange_
-                    (\editorState ->
-                        { editorState | to = String.dropRight 1 editorState.to }
-                    )
-                    model
-
-            Spacebar ->
-                addChange_
-                    (\editorState ->
-                        { editorState
-                            | to = editorState.to ++ " "
-                        }
-                    )
-                    model
-
-            _ ->
+        Character "x" ->
+            (if ctrlHeld then
                 model
 
-    else
-        case key of
-            Escape ->
-                close config model
+             else
+                case model.currentTool of
+                    ImagePlacer imagePlacer ->
+                        rotateImage audioData config imagePlacer False model
 
-            Character "z" ->
-                if ctrlHeld then
-                    undo model
+                    ImagePicker ->
+                        model
 
-                else
-                    model
+                    EraserTool ->
+                        model
+            )
+                |> Just
 
-            Character "y" ->
-                if ctrlHeld then
-                    redo model
+        Character "y" ->
+            (if ctrlHeld then
+                redo model
 
-                else
-                    model
-
-            Character "Z" ->
-                if ctrlHeld then
-                    redo model
-
-                else
-                    model
-
-            _ ->
+             else
                 model
+            )
+                |> Just
+
+        Character "Z" ->
+            (if ctrlHeld then
+                redo model
+
+             else
+                model
+            )
+                |> Just
+
+        _ ->
+            Just model
 
 
 addChange : EditorState -> Model -> Model
@@ -408,54 +712,6 @@ addChange editorState model =
         , current = editorState
         , redo = []
     }
-        |> updateMailMesh
-
-
-addChange_ : (EditorState -> EditorState) -> Model -> Model
-addChange_ editorStateFunc model =
-    addChange (editorStateFunc model.current) model
-
-
-close : { a | time : Effect.Time.Posix } -> Model -> Model
-close config model =
-    { model
-        | showMailEditor =
-            case model.showMailEditor of
-                MailEditorOpening { startPosition } ->
-                    MailEditorClosing { startTime = config.time, startPosition = startPosition }
-
-                MailEditorClosing _ ->
-                    MailEditorClosed
-
-                MailEditorClosed ->
-                    MailEditorClosed
-        , textInputFocused = False
-    }
-
-
-open : { a | time : Effect.Time.Posix } -> Point2d Pixels Pixels -> Model -> Model
-open config startPosition model =
-    { model | showMailEditor = MailEditorOpening { startTime = config.time, startPosition = startPosition } }
-
-
-uiPixelToMailPixel : Coord UiPixelUnit -> Coord MailPixelUnit
-uiPixelToMailPixel coord =
-    coord |> Coord.plus (Coord.tuple ( mailWidth // 2, mailHeight // 2 )) |> Coord.toTuple |> Coord.tuple
-
-
-validImagePosition : ImageData -> Coord MailPixelUnit -> Bool
-validImagePosition imageData position =
-    let
-        ( w, h ) =
-            imageData.textureSize
-
-        ( x, y ) =
-            Coord.toTuple position
-    in
-    (x > round (toFloat w / -2))
-        && (x < mailWidth + round (toFloat w / -2))
-        && (y > round (toFloat h / -2))
-        && (y < mailHeight + round (toFloat h / -2))
 
 
 undo : Model -> Model
@@ -467,7 +723,6 @@ undo model =
                 , current = head
                 , redo = model.current :: model.redo
             }
-                |> updateMailMesh
 
         [] ->
             model
@@ -482,472 +737,686 @@ redo model =
                 , current = head
                 , undo = model.current :: model.undo
             }
-                |> updateMailMesh
 
         [] ->
             model
 
 
+mailWidth : number
 mailWidth =
-    270
+    500
 
 
+mailHeight : number
 mailHeight =
-    144
+    320
 
 
-updateMailMesh : Model -> Model
-updateMailMesh model =
-    { model
-        | mesh =
-            Shaders.indexedTriangles
-                (mailMesh ++ List.concatMap imageMesh model.current.content)
-                (List.range 0 (List.length model.current.content) |> List.concatMap Sprite.getIndices)
-        , textInputMesh =
-            Shaders.indexedTriangles
-                (Sprite.text Color.black 1 model.current.to (Coord.xy 15 7))
-                (List.range 0 (String.length model.current.to) |> List.concatMap Sprite.getIndices)
-    }
+mailSize : Coord units
+mailSize =
+    Coord.xy mailWidth mailHeight
 
 
-mailMesh : List Vertex
-mailMesh =
-    let
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.xy 234 0) (Coord.xy mailWidth mailHeight)
-    in
-    [ { position = Vec3.vec3 0 0 0
-      , texturePosition = topLeft
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    , { position = Vec3.vec3 mailWidth 0 0
-      , texturePosition = topRight
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    , { position = Vec3.vec3 mailWidth mailHeight 0
-      , texturePosition = bottomRight
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    , { position = Vec3.vec3 0 mailHeight 0
-      , texturePosition = bottomLeft
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    ]
-
-
-mailZoomFactor : Int -> Int -> Int
-mailZoomFactor windowWidth windowHeight =
+mailZoomFactor : Coord Pixels -> Int
+mailZoomFactor windowSize =
     min
-        (toFloat windowWidth / (30 + mailWidth))
-        (toFloat windowHeight / (30 + mailHeight))
+        (toFloat (Coord.xRaw windowSize) / (30 + mailWidth))
+        (toFloat
+            (Coord.yRaw windowSize
+                - toolbarMaxHeight
+                - (mainColumnSpacing * 2)
+                - Coord.yRaw (Ui.size (sendLetterButton identity identity ( Id.fromInt 0, DisplayName.default )))
+            )
+            / mailHeight
+        )
         |> floor
+        |> clamp 1 3
 
 
 screenToWorld :
-    Int
-    -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
+    Coord Pixels
+    -> { a | windowSize : Coord Pixels }
     -> Point2d Pixels Pixels
     -> Point2d UiPixelUnit UiPixelUnit
-screenToWorld windowWidth windowHeight model =
+screenToWorld windowSize model =
     let
         ( w, h ) =
             model.windowSize
     in
     Point2d.translateBy
         (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> Point2d.at (scaleForScreenToWorld windowWidth windowHeight model)
+        >> Point2d.at (scaleForScreenToWorld windowSize)
         >> Point2d.placeIn (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
-worldToScreen :
-    Int
-    -> Int
-    -> { a | windowSize : Coord Pixels, devicePixelRatio : Float }
-    -> Point2d UiPixelUnit UiPixelUnit
-    -> Point2d Pixels Pixels
-worldToScreen windowWidth windowHeight model =
-    let
-        ( w, h ) =
-            model.windowSize
-    in
-    Point2d.translateBy
-        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << Point2d.at_ (scaleForScreenToWorld windowWidth windowHeight model)
-        << Point2d.relativeTo (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
+scaleForScreenToWorld windowSize =
+    1 / toFloat (mailZoomFactor windowSize) |> Quantity
 
 
-scaleForScreenToWorld windowWidth windowHeight model =
-    model.devicePixelRatio / toFloat (mailZoomFactor windowWidth windowHeight) |> Quantity
+backgroundLayer : WebGL.Texture.Texture -> Effect.WebGL.Entity
+backgroundLayer texture =
+    Effect.WebGL.entityWith
+        [ Shaders.blend ]
+        Shaders.vertexShader
+        Shaders.fragmentShader
+        square
+        { color = Vec4.vec4 0.2 0.2 0.2 0.75
+        , view = Mat4.makeTranslate3 -1 -1 0 |> Mat4.scale3 2 2 1
+        , texture = texture
+        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        }
 
 
 drawMail :
-    WebGL.Texture.Texture
+    Coord Pixels
+    -> Coord Pixels
+    -> WebGL.Texture.Texture
     -> Point2d Pixels Pixels
     -> Int
     -> Int
-    ->
-        { a
-            | windowSize : Coord Pixels
-            , devicePixelRatio : Float
-            , time : Effect.Time.Posix
-            , zoomFactor : Int
-        }
-    -> Point2d WorldUnit WorldUnit
+    -> { a | windowSize : Coord Pixels, time : Effect.Time.Posix, zoomFactor : Int }
     -> Model
     -> List Effect.WebGL.Entity
-drawMail texture mousePosition windowWidth windowHeight config viewPoint model =
+drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight config model =
     let
-        isOpen_ =
-            case model.showMailEditor of
-                MailEditorOpening a ->
-                    Just a
+        zoomFactor : Float
+        zoomFactor =
+            mailZoomFactor (Coord.xy windowWidth windowHeight) |> toFloat
 
-                MailEditorClosed ->
-                    Nothing
+        mousePosition_ : Coord UiPixelUnit
+        mousePosition_ =
+            screenToWorld (Coord.xy windowWidth windowHeight) config mousePosition
+                |> Coord.roundPoint
 
-                MailEditorClosing a ->
-                    if Duration.from a.startTime config.time |> Quantity.lessThan openAnimationLength then
-                        Just a
+        tilePosition : Coord UiPixelUnit
+        tilePosition =
+            mousePosition_
+
+        ( tileX, tileY ) =
+            Coord.toTuple tilePosition
+
+        mailHover : Bool
+        mailHover =
+            Bounds.fromCoordAndSize mailPosition mailSize2
+                |> Bounds.contains (Coord.floorPoint mousePosition)
+
+        showHoverImage : Bool
+        showHoverImage =
+            case model.currentTool of
+                ImagePlacer _ ->
+                    mailHover
+
+                _ ->
+                    False
+
+        textureSize =
+            WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+    in
+    if showHoverImage then
+        [ Effect.WebGL.entityWith
+            [ Shaders.blend ]
+            Shaders.vertexShader
+            Shaders.fragmentShader
+            model.currentImageMesh
+            { texture = texture
+            , textureSize = textureSize
+            , color =
+                case model.currentTool of
+                    ImagePlacer _ ->
+                        Vec4.vec4 1 1 1 0.5
+
+                    ImagePicker ->
+                        Vec4.vec4 1 1 1 1
+
+                    EraserTool ->
+                        Vec4.vec4 1 1 1 1
+            , view =
+                Mat4.makeScale3
+                    (zoomFactor * 2 / toFloat windowWidth)
+                    (zoomFactor * -2 / toFloat windowHeight)
+                    1
+                    |> Mat4.translate3
+                        (toFloat tileX |> round |> toFloat)
+                        (toFloat tileY |> round |> toFloat)
+                        0
+            }
+        ]
+
+    else
+        []
+
+
+type Msg
+    = PressedImageButton Int
+    | PressedBackground
+    | MouseDownMail
+    | PressedMail
+    | PressedEraserButton
+    | PressedSendLetter
+    | TypedToUser Bool Bool Keyboard.Key TextInput.Model
+    | PressedCloseSendLetterInstructions
+    | PressedInboxRow (Id MailId)
+
+
+mainColumnSpacing =
+    40
+
+
+toolbarMaxHeight =
+    250
+
+
+sendLetterButton : (Hover -> id) -> (Msg -> msg) -> ( Id UserId, DisplayName ) -> Ui.Element id msg
+sendLetterButton idMap msgMap ( userId, name ) =
+    Ui.button
+        { id = idMap SendLetterButton
+        , padding = Ui.paddingXY 16 8
+        , onPress = msgMap PressedSendLetter
+        }
+        (Ui.text ("Send letter to " ++ DisplayName.nameAndId name userId))
+
+
+submittedView : (Hover -> id) -> (Msg -> msg) -> DisplayName -> Ui.Element id msg
+submittedView idMap msgMap name =
+    let
+        paragraph1 =
+            Ui.row
+                { padding = Ui.noPadding, spacing = 16 }
+                [ Ui.wrappedText 400 "Your letter is now waiting at your post office."
+                , yourPostOffice
+                ]
+    in
+    Ui.el
+        { padding = Ui.paddingXY 16 16
+        , borderAndFill =
+            BorderAndFill
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , fillColor = Color.fillColor
+                }
+        , inFront = []
+        }
+        (Ui.column
+            { spacing = 16, padding = Ui.noPadding }
+            [ paragraph1
+            , Ui.wrappedText
+                (Ui.size paragraph1 |> Coord.xRaw)
+                ("Send a train to pick it up and deliver it to "
+                    ++ DisplayName.toString name
+                    ++ "'s post office."
+                )
+            , Ui.button
+                { id = idMap CloseSendLetterInstructionsButton
+                , onPress = msgMap PressedCloseSendLetterInstructions
+                , padding = Ui.paddingXY 16 8
+                }
+                (Ui.text "Close")
+            ]
+        )
+
+
+grassSize : Coord Pixels
+grassSize =
+    Coord.xy 80 72
+
+
+yourPostOffice : Ui.Element id msg
+yourPostOffice =
+    Ui.quads
+        { size = Tile.getData Tile.PostOffice |> .size |> Coord.multiply Units.tileSize |> Coord.scalar 2
+        , vertices =
+            \position ->
+                Sprite.sprite
+                    (Coord.plus (Coord.yOnly Units.tileSize |> Coord.scalar 2) position)
+                    (Coord.scalar 2 grassSize)
+                    (Coord.xy 220 216)
+                    grassSize
+                    ++ Sprite.sprite
+                        position
+                        (Coord.scalar 2 grassSize)
+                        (Coord.xy 220 216)
+                        grassSize
+                    ++ Grid.tileMesh
+                        Tile.PostOffice
+                        position
+                        2
+                        (Tile.defaultToPrimaryAndSecondary Tile.defaultPostOfficeColor)
+                    ++ Flag.flagMesh
+                        (Coord.plus
+                            (Coord.scalar 2 Flag.postOfficeSendingMailFlagOffset2)
+                            position
+                        )
+                        2
+                        Flag.sendingMailFlagColor
+                        1
+        }
+
+
+mailView : Int -> List Content -> Ui.Element id msg
+mailView mailScale mailContent =
+    let
+        stampSize =
+            Coord.xy 46 46
+
+        line position y =
+            Sprite.rectangle
+                Color.outlineColor
+                (Coord.xy (mailWidth - 200) y
+                    |> Coord.scalar mailScale
+                    |> Coord.plus position
+                )
+                (Coord.xy 180 2 |> Coord.scalar mailScale)
+    in
+    Ui.el
+        { padding = Ui.noPadding
+        , borderAndFill =
+            BorderAndFill
+                { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+        , inFront = []
+        }
+        (Ui.quads
+            { size = Coord.scalar mailScale mailSize
+            , vertices =
+                \position ->
+                    Sprite.rectangle
+                        Color.outlineColor
+                        (Coord.xy (mailWidth - Coord.xRaw stampSize - 20) 20
+                            |> Coord.scalar mailScale
+                            |> Coord.plus position
+                        )
+                        (Coord.scalar mailScale stampSize)
+                        ++ Sprite.rectangle
+                            Color.fillColor
+                            (Coord.xy (mailWidth - Coord.xRaw stampSize - 18) 22
+                                |> Coord.scalar mailScale
+                                |> Coord.plus position
+                            )
+                            (stampSize |> Coord.minus (Coord.xy 4 4) |> Coord.scalar mailScale)
+                        ++ line position 120
+                        ++ line position 170
+                        ++ line position 220
+                        ++ List.concatMap
+                            (\content ->
+                                imageMesh
+                                    (Coord.plus position (Coord.scalar mailScale content.position))
+                                    mailScale
+                                    content.image
+                            )
+                            mailContent
+            }
+        )
+
+
+editorView :
+    (Hover -> id)
+    -> (Msg -> msg)
+    -> ( Id UserId, DisplayName )
+    -> Coord Pixels
+    -> Model
+    -> List (Ui.Element id msg)
+editorView idMap msgMap userIdAndName windowSize model =
+    let
+        mailScale =
+            mailZoomFactor windowSize
+    in
+    [ Ui.bottomCenter
+        { size = windowSize, inFront = [] }
+        (Ui.column
+            { spacing = mainColumnSpacing
+            , padding = Ui.noPadding
+            }
+            [ sendLetterButton idMap msgMap userIdAndName
+            , Ui.customButton
+                { id = idMap MailButton
+                , padding = Ui.noPadding
+                , inFront = []
+                , onPress = msgMap PressedMail
+                , onMouseDown = msgMap MouseDownMail |> Just
+                , borderAndFill = NoBorderOrFill
+                , borderAndFillFocus = NoBorderOrFill
+                }
+                (mailView mailScale model.current.content)
+            , Ui.el
+                { padding = Ui.paddingXY 2 2
+                , inFront = []
+                , borderAndFill =
+                    BorderAndFill
+                        { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                }
+                (Ui.row
+                    { spacing = 16
+                    , padding = Ui.noPadding
+                    }
+                    [ Ui.column
+                        { spacing = 8
+                        , padding = Ui.noPadding
+                        }
+                        [ highlightButton
+                            (Ui.paddingXY 4 4)
+                            (model.currentTool == EraserTool)
+                            (idMap EraserButton)
+                            (msgMap PressedEraserButton)
+                            (Ui.text "Eraser")
+                        ]
+                    , imageButtons
+                        idMap
+                        msgMap
+                        (case model.currentTool of
+                            ImagePlacer imagePlacer ->
+                                Just imagePlacer.imageIndex
+
+                            ImagePicker ->
+                                Nothing
+
+                            EraserTool ->
+                                Nothing
+                        )
+                    ]
+                )
+            ]
+        )
+    ]
+
+
+monthToString : Month -> String
+monthToString month =
+    case month of
+        Jan ->
+            "1"
+
+        Feb ->
+            "2"
+
+        Mar ->
+            "3"
+
+        Apr ->
+            "4"
+
+        May ->
+            "5"
+
+        Jun ->
+            "6"
+
+        Jul ->
+            "7"
+
+        Aug ->
+            "8"
+
+        Sep ->
+            "9"
+
+        Oct ->
+            "10"
+
+        Nov ->
+            "11"
+
+        Dec ->
+            "12"
+
+
+date : Effect.Time.Posix -> String
+date time =
+    String.padLeft 2 '0' (String.fromInt (Time.toHour Time.utc time))
+        ++ ":"
+        ++ String.padLeft 2 '0' (String.fromInt (Time.toMinute Time.utc time))
+        ++ " "
+        ++ String.fromInt (Time.toDay Time.utc time)
+        ++ "/"
+        ++ monthToString (Time.toMonth Time.utc time)
+        ++ "/"
+        ++ String.fromInt (Time.toYear Time.utc time)
+
+
+inboxView :
+    (Hover -> id)
+    -> (Msg -> msg)
+    -> IdDict UserId FrontendUser
+    -> IdDict MailId ReceivedMail
+    -> Model
+    -> Ui.Element id msg
+inboxView idMap msgMap users inbox model =
+    let
+        rows =
+            IdDict.toList inbox
+                |> List.sortBy (\( _, mail ) -> Effect.Time.posixToMillis mail.deliveryTime |> negate)
+                |> List.map
+                    (\( mailId, mail ) ->
+                        Ui.row
+                            { spacing = 8, padding = Ui.noPadding }
+                            [ case IdDict.get mail.from users of
+                                Just user ->
+                                    let
+                                        name =
+                                            DisplayName.nameAndId user.name mail.from |> String.padRight 15 ' '
+                                    in
+                                    Ui.text
+                                        ((if mail.isViewed then
+                                            "      "
+
+                                          else
+                                            "(new) "
+                                         )
+                                            ++ name
+                                            ++ date mail.deliveryTime
+                                        )
+
+                                Nothing ->
+                                    Ui.text "Not found"
+                            , highlightButton
+                                (Ui.paddingXY 8 0)
+                                (model.inboxMailViewed == Just mailId)
+                                (InboxRowButton mailId |> idMap)
+                                (PressedInboxRow mailId |> msgMap)
+                                (Ui.text "View")
+                            ]
+                    )
+
+        fromText =
+            String.padRight 15 ' ' "From"
+    in
+    Ui.column
+        { spacing = 16, padding = Ui.noPadding }
+        [ Ui.el
+            { padding = Ui.paddingXY 16 8
+            , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+            , inFront = []
+            }
+            (Ui.column
+                { spacing = 16, padding = Ui.noPadding }
+                [ Ui.scaledText 3 "Inbox"
+                , if IdDict.isEmpty inbox then
+                    Ui.wrappedText 500 "Here you can view all the mail you've received.\n\nCurrently you don't have any mail but you can send letters to other people by clicking on their post office."
+
+                  else
+                    Ui.column
+                        { spacing = 0, padding = Ui.noPadding }
+                        (Ui.text ("      " ++ fromText ++ "Delivered at(UTC)") :: rows)
+                ]
+            )
+        , case model.inboxMailViewed of
+            Just mailId ->
+                case IdDict.get mailId inbox of
+                    Just mail ->
+                        mailView 2 mail.content
+
+                    Nothing ->
+                        Ui.text "Mail not found"
+
+            Nothing ->
+                Ui.none
+        ]
+
+
+ui :
+    Bool
+    -> Coord Pixels
+    -> (Hover -> uiHover)
+    -> (Msg -> msg)
+    -> IdDict UserId FrontendUser
+    -> IdDict MailId ReceivedMail
+    -> Model
+    -> Ui.Element uiHover msg
+ui isDisconnected windowSize idMap msgMap users inbox model =
+    Ui.el
+        { padding = Ui.noPadding
+        , borderAndFill = NoBorderOrFill
+        , inFront =
+            (if isDisconnected then
+                [ disconnectWarning windowSize ]
+
+             else
+                []
+            )
+                ++ (case ( model.submitStatus, model.to ) of
+                        ( Submitted, Just ( _, name ) ) ->
+                            [ Ui.center { size = windowSize } (submittedView idMap msgMap name) ]
+
+                        ( NotSubmitted, Just userIdAndName ) ->
+                            editorView idMap msgMap userIdAndName windowSize model
+
+                        ( _, Nothing ) ->
+                            [ Ui.center { size = windowSize } (inboxView idMap msgMap users inbox model) ]
+                   )
+        }
+        (Ui.customButton
+            { id = idMap BackgroundHover
+            , inFront = []
+            , onPress = msgMap PressedBackground
+            , onMouseDown = Nothing
+            , padding = { topLeft = windowSize, bottomRight = Coord.origin }
+            , borderAndFill = NoBorderOrFill
+            , borderAndFillFocus = NoBorderOrFill
+            }
+            Ui.none
+        )
+
+
+disconnectWarning : Coord Pixels -> Ui.Element id msg
+disconnectWarning windowSize =
+    Ui.topRight
+        { size = windowSize }
+        (Ui.el
+            { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+            (Ui.colorText Color.white "No connection to server! Changes you make might be lost.")
+        )
+
+
+highlightButton : Ui.Padding -> Bool -> id -> msg -> Ui.Element id msg -> Ui.Element id msg
+highlightButton padding isSelected id onPress child =
+    Ui.customButton
+        { id = id
+        , padding = padding
+        , onPress = onPress
+        , inFront = []
+        , onMouseDown = Nothing
+        , borderAndFill =
+            BorderAndFill
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , fillColor =
+                    if isSelected then
+                        Color.highlightColor
 
                     else
-                        Nothing
-    in
-    case isOpen_ of
-        Just { startTime, startPosition } ->
-            let
-                startPosition_ : { x : Float, y : Float }
-                startPosition_ =
-                    screenToWorld windowWidth windowHeight config startPosition |> Point2d.unwrap
-
-                zoomFactor : Float
-                zoomFactor =
-                    mailZoomFactor windowWidth windowHeight |> toFloat
-
-                mousePosition_ : Coord UiPixelUnit
-                mousePosition_ =
-                    screenToWorld windowWidth windowHeight config mousePosition
-                        |> Coord.roundPoint
-
-                imageData =
-                    getImageData model.currentImage
-
-                ( imageWidth, imageHeight ) =
-                    imageData.textureSize
-
-                { topLeft, bottomRight, bottomLeft, topRight } =
-                    Tile.texturePositionPixels (Coord.tuple imageData.texturePosition) (Coord.xy imageWidth imageHeight)
-
-                tilePosition : Coord UiPixelUnit
-                tilePosition =
-                    mousePosition_
-                        |> Coord.plus (Coord.tuple ( imageWidth // -2, imageHeight // -2 ))
-
-                ( tileX, tileY ) =
-                    Coord.toTuple tilePosition
-
-                showHoverImage : Bool
-                showHoverImage =
-                    case model.showMailEditor of
-                        MailEditorOpening mailEditorOpening ->
-                            (Duration.from mailEditorOpening.startTime config.time
-                                |> Quantity.greaterThan openAnimationLength
-                            )
-                                && validImagePosition imageData (uiPixelToMailPixel tilePosition)
-                                && not model.textInputFocused
-
-                        MailEditorClosed ->
-                            False
-
-                        MailEditorClosing _ ->
-                            False
-
-                t =
-                    case model.showMailEditor of
-                        MailEditorOpening _ ->
-                            Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> min 1
-
-                        _ ->
-                            1 - Quantity.ratio (Duration.from startTime config.time) openAnimationLength |> max 0
-
-                endX =
-                    mailWidth / -2
-
-                endY =
-                    mailHeight / -2
-
-                mailX =
-                    (endX - startPosition_.x) * t + startPosition_.x
-
-                mailY =
-                    (endY - startPosition_.y) * t + startPosition_.y
-
-                scaleStart =
-                    0.13 * toFloat config.zoomFactor / zoomFactor
-
-                mailScale =
-                    (1 - scaleStart) * t * t + scaleStart
-
-                textureSize =
-                    WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-            in
-            Effect.WebGL.entityWith
-                [ Shaders.blend ]
-                Shaders.vertexShader
-                Shaders.fragmentShader
-                square
-                { color = Vec4.vec4 0.2 0.2 0.2 (t * t * 0.75)
-                , view = Mat4.makeTranslate3 -1 -1 0 |> Mat4.scale3 2 2 1
-                , texture = texture
-                , textureSize = textureSize
+                        Color.fillColor2
                 }
-                :: Effect.WebGL.entityWith
-                    [ Shaders.blend ]
-                    Shaders.vertexShader
-                    Shaders.fragmentShader
-                    model.mesh
-                    { texture = texture
-                    , textureSize = textureSize
-                    , view =
-                        Mat4.makeScale3
-                            (zoomFactor * 2 / toFloat windowWidth)
-                            (zoomFactor * -2 / toFloat windowHeight)
-                            1
-                            |> Mat4.translate3
-                                (mailX |> round |> toFloat)
-                                (mailY |> round |> toFloat)
-                                0
-                            |> Mat4.scale3 mailScale mailScale 0
-                    , color = Vec4.vec4 1 1 1 1
-                    }
-                :: Effect.WebGL.entityWith
-                    [ Shaders.blend ]
-                    Shaders.vertexShader
-                    Shaders.fragmentShader
-                    (if
-                        model.textInputFocused
-                            || Bounds.contains mousePosition_ (Bounds.fromCoordAndSize textInputPosition textInputSize)
-                     then
-                        textInputHoverMesh
-
-                     else
-                        textInputMesh
-                    )
-                    { texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-                    , view =
-                        Mat4.makeScale3
-                            (zoomFactor * 2 / toFloat windowWidth)
-                            (zoomFactor * -2 / toFloat windowHeight)
-                            1
-                            |> Coord.translateMat4 textInputPosition
-                    , color = Vec4.vec4 1 1 1 1
-                    }
-                :: Effect.WebGL.entityWith
-                    [ Shaders.blend ]
-                    Shaders.vertexShader
-                    Shaders.fragmentShader
-                    model.textInputMesh
-                    { texture = texture
-                    , textureSize = textureSize
-                    , view =
-                        Mat4.makeScale3
-                            (zoomFactor * 2 / toFloat windowWidth)
-                            (zoomFactor * -2 / toFloat windowHeight)
-                            1
-                            |> Coord.translateMat4 textInputPosition
-                    , color = Vec4.vec4 1 1 1 1
-                    }
-                :: (case validateUserId model.current.to of
-                        Just _ ->
-                            [ Effect.WebGL.entityWith
-                                [ Shaders.blend ]
-                                Shaders.vertexShader
-                                Shaders.fragmentShader
-                                (if model.submitStatus == Submitting then
-                                    submittingButtonMesh
-
-                                 else if Bounds.fromCoordAndSize submitButtonPosition submitButtonSize |> Bounds.contains mousePosition_ then
-                                    submitButtonHoverMesh
-
-                                 else
-                                    submitButtonMesh
-                                )
-                                { texture = texture
-                                , textureSize = textureSize
-                                , view =
-                                    Mat4.makeScale3
-                                        (zoomFactor * 2 / toFloat windowWidth)
-                                        (zoomFactor * -2 / toFloat windowHeight)
-                                        1
-                                        |> Coord.translateMat4 submitButtonPosition
-                                , color = Vec4.vec4 1 1 1 1
-                                }
-                            ]
-
-                        Nothing ->
-                            []
-                   )
-
-        --++ (if showHoverImage then
-        --        [ Effect.WebGL.entityWith
-        --            [ Shaders.blend ]
-        --            Shaders.vertexShader
-        --            Shaders.fragmentShader
-        --            square
-        --            { texture = texture
-        --            , textureSize = textureSize
-        --            , texturePosition = Coord.tuple imageData.texturePosition |> Coord.toVec2
-        --            , textureScale = Coord.tuple imageData.textureSize |> Coord.toVec2
-        --            , view =
-        --                Mat4.makeScale3
-        --                    (zoomFactor * 2 / toFloat windowWidth)
-        --                    (zoomFactor * -2 / toFloat windowHeight)
-        --                    1
-        --                    |> Mat4.translate3
-        --                        (toFloat tileX |> round |> toFloat)
-        --                        (toFloat tileY |> round |> toFloat)
-        --                        0
-        --            }
-        --        ]
-        --
-        --    else
-        --        []
-        --   )
-        Nothing ->
-            []
+        , borderAndFillFocus =
+            BorderAndFill
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , fillColor = Color.highlightColor
+                }
+        }
+        child
 
 
-submitButtonPosition : Coord UiPixelUnit
-submitButtonPosition =
-    Coord.tuple ( 75, 80 )
+imageButtons : (Hover -> uiHover) -> (Msg -> msg) -> Maybe Int -> Ui.Element uiHover msg
+imageButtons idMap msgMap currentImageIndex =
+    List.foldl
+        (\image state ->
+            let
+                button =
+                    imageButton idMap msgMap currentImageIndex state.index image
+
+                newHeight =
+                    state.height + Coord.yRaw (Ui.size button)
+            in
+            if newHeight > toolbarMaxHeight then
+                { index = state.index + 1
+                , height = Coord.yRaw (Ui.size button)
+                , columns = List.Nonempty.cons [ button ] state.columns
+                }
+
+            else
+                { index = state.index + 1
+                , height = newHeight
+                , columns =
+                    List.Nonempty.replaceHead (button :: List.Nonempty.head state.columns) state.columns
+                }
+        )
+        { index = 0, columns = Nonempty [] [], height = 0 }
+        (Array.toList images)
+        |> .columns
+        |> List.Nonempty.toList
+        |> List.map (Ui.column { padding = Ui.noPadding, spacing = 2 })
+        |> Ui.row { padding = Ui.noPadding, spacing = 2 }
 
 
-submitButtonSize : Coord UiPixelUnit
-submitButtonSize =
-    Coord.tuple ( 50, 19 )
+imageButtonScale : Coord units -> number
+imageButtonScale size =
+    if Coord.xRaw size < 36 && Coord.yRaw size < 36 then
+        2
+
+    else
+        1
+
+
+imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Maybe Int -> Int -> Image -> Ui.Element uiHover msg
+imageButton idMap msgMap selectedIndex index image =
+    let
+        imageData : ImageData units
+        imageData =
+            getImageData image
+
+        scale =
+            imageButtonScale imageData.textureSize
+    in
+    highlightButton
+        (Ui.paddingXY 4 4)
+        (selectedIndex == Just index)
+        (ImageButton index |> idMap)
+        (PressedImageButton index |> msgMap)
+        (Ui.quads
+            { size = Coord.scalar scale imageData.textureSize
+            , vertices = \position -> imageMesh position scale image
+            }
+        )
 
 
 type UiPixelUnit
     = UiPixelUnit Never
 
 
-submitButtonMesh : Effect.WebGL.Mesh Vertex
-submitButtonMesh =
-    let
-        vertices =
-            Sprite.sprite Coord.origin submitButtonSize (Coord.xy 380 153) (Coord.xy 1 1)
-                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 381 153) (Coord.xy 1 1)
-                ++ Sprite.text Color.black 1 "SUBMIT" (Coord.xy 12 7)
-    in
-    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
-
-
-submittingButtonMesh : Effect.WebGL.Mesh Vertex
-submittingButtonMesh =
-    let
-        vertices =
-            Sprite.sprite Coord.origin submitButtonSize (Coord.xy 380 153) (Coord.xy 1 1)
-                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 379 153) (Coord.xy 1 1)
-                ++ Sprite.text Color.black 1 "SUBMITTING" (Coord.xy 2 7)
-    in
-    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
-
-
-submitButtonHoverMesh : Effect.WebGL.Mesh Vertex
-submitButtonHoverMesh =
-    let
-        vertices =
-            Sprite.sprite Coord.origin submitButtonSize (Coord.xy 380 153) (Coord.xy 1 1)
-                ++ Sprite.sprite (Coord.xy 1 1) (submitButtonSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 379 153) (Coord.xy 1 1)
-                ++ Sprite.text Color.black 1 "SUBMIT" (Coord.xy 12 7)
-    in
-    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
-
-
-textInputPosition =
-    Coord.tuple ( 0, 80 )
-
-
-textInputSize =
-    Coord.tuple ( 70, 19 )
-
-
-textInputMesh : Effect.WebGL.Mesh Vertex
-textInputMesh =
-    let
-        vertices =
-            Sprite.sprite Coord.origin textInputSize (Coord.xy 380 153) (Coord.xy 1 1)
-                ++ Sprite.sprite (Coord.xy 1 1) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 381 153) (Coord.xy 1 1)
-                ++ Sprite.text Color.black 1 "TO:" (Coord.xy 3 7)
-    in
-    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
-
-
-textInputHoverMesh : Effect.WebGL.Mesh Vertex
-textInputHoverMesh =
-    let
-        vertices =
-            Sprite.sprite Coord.origin textInputSize (Coord.xy 380 153) (Coord.xy 1 1)
-                ++ Sprite.sprite (Coord.xy 1 1) (textInputSize |> Coord.minusTuple_ ( 2, 2 )) (Coord.xy 379 153) (Coord.xy 1 1)
-                ++ Sprite.text Color.black 1 "TO:" (Coord.xy 3 7)
-    in
-    Shaders.indexedTriangles vertices (Sprite.getQuadIndices vertices)
-
-
-charSize : Coord UiPixelUnit
-charSize =
-    Coord.tuple ( 5, 5 )
-
-
-imageMesh : { position : Coord MailPixelUnit, image : Image } -> List Vertex
-imageMesh { position, image } =
+imageMesh : Coord units -> Int -> Image -> List Vertex
+imageMesh position scale image =
     let
         imageData =
             getImageData image
-
-        ( width, height ) =
-            imageData.textureSize
-
-        ( Quantity x, Quantity y ) =
-            position
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels (Coord.tuple imageData.texturePosition) (Coord.xy width height)
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) 0
-      , texturePosition = topLeft
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) 0
-      , texturePosition = topRight
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) 0
-      , texturePosition = bottomRight
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) 0
-      , texturePosition = bottomLeft
-      , opacity = 1
-      , primaryColor = Vec3.vec3 0 0 0
-      , secondaryColor = Vec3.vec3 0 0 0
-      }
-    ]
+    List.concatMap
+        (\texturePosition ->
+            Sprite.spriteWithTwoColors
+                imageData.colors
+                position
+                (Coord.scalar scale imageData.textureSize)
+                texturePosition
+                imageData.textureSize
+        )
+        imageData.texturePosition
 
 
 square : Effect.WebGL.Mesh Vertex
@@ -978,8 +1447,3 @@ square =
           , texturePosition = Vec2.vec2 512 28
           }
         ]
-
-
-hoverAt : Model -> Hover
-hoverAt model =
-    BackgroundHover

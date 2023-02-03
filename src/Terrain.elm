@@ -2,6 +2,7 @@ module Terrain exposing (..)
 
 import Array2D exposing (Array2D)
 import Coord exposing (Coord)
+import List.Extra as List
 import Quantity exposing (Quantity(..))
 import Random
 import Simplex
@@ -26,18 +27,27 @@ localCoordToTerrain coord =
 
 treeSize : Coord unit
 treeSize =
-    Tile.getData PineTree |> .size
+    Tile.getData PineTree1 |> .size
 
 
-randomTreePosition : Coord CellLocalUnit -> Random.Generator (Coord CellLocalUnit)
-randomTreePosition offset =
-    Random.map2 (\x y -> Coord.xy x y |> Coord.plus offset)
+randomSceneryItem : Coord CellLocalUnit -> Random.Generator ( Tile, Coord CellLocalUnit )
+randomSceneryItem offset =
+    Random.map3 (\x y tile -> ( tile, Coord.xy x y |> Coord.plus offset ))
         (Random.int 0 (terrainSize - Coord.xRaw treeSize))
         (Random.int -1 (terrainSize - Coord.yRaw treeSize))
+        (Random.weighted
+            ( 0.5, PineTree1 )
+            [ ( 0.49, PineTree2 )
+            , ( 0.0025, RockDown )
+            , ( 0.0025, RockLeft )
+            , ( 0.0025, RockUp )
+            , ( 0.0025, RockRight )
+            ]
+        )
 
 
-randomTrees : Float -> Coord CellLocalUnit -> Random.Generator (List (Coord CellLocalUnit))
-randomTrees chance offset =
+randomScenery : Float -> Coord CellLocalUnit -> Random.Generator (List ( Tile, Coord CellLocalUnit ))
+randomScenery chance offset =
     let
         chance2 : Float
         chance2 =
@@ -47,8 +57,8 @@ randomTrees chance offset =
         ( 0.98, 0 )
         [ ( 0.02, 1 ) ]
         |> Random.andThen
-            (\extraTree ->
-                Random.list (round chance2 + extraTree) (randomTreePosition offset)
+            (\extraItem ->
+                Random.list (round chance2 + extraItem) (randomSceneryItem offset)
             )
 
 
@@ -79,11 +89,30 @@ type TerrainUnit
 
 getTerrainValue : Coord TerrainUnit -> Coord CellUnit -> Float
 getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
-    Simplex.fractal2d
-        fractalConfig
-        permutationTable
-        (toFloat x / terrainDivisionsPerCell + toFloat cellX)
-        (toFloat y / terrainDivisionsPerCell + toFloat cellY)
+    let
+        persistence =
+            2
+
+        persistence2 =
+            1 + persistence
+
+        scale =
+            5
+
+        scale2 =
+            14 * scale
+
+        x2 =
+            toFloat x / terrainDivisionsPerCell + toFloat cellX
+
+        y2 =
+            toFloat y / terrainDivisionsPerCell + toFloat cellY
+
+        noise1 =
+            Simplex.noise2d permutationTable (x2 / scale) (y2 / scale)
+                + (persistence * Simplex.noise2d permutationTable (x2 / scale2) (y2 / scale2))
+    in
+    noise1 / persistence2
 
 
 isGroundTerrain : Coord TerrainUnit -> Coord CellUnit -> Bool

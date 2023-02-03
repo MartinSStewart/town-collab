@@ -10,6 +10,19 @@ exports.init = async function(app) {
         }
     });
 
+  window.addEventListener("mouseout", (event) => app.ports.mouse_leave.send());
+
+  app.ports.get_local_storage.subscribe(() => {
+    try {
+        app.ports.got_local_storage.send(JSON.parse(window.localStorage.getItem("user-settings")));
+    }
+    catch {
+        app.ports.got_local_storage.send("");
+    }
+
+  });
+  app.ports.set_local_storage.subscribe((json) => window.localStorage.setItem("user-settings", JSON.stringify(json) ));
+
   app.ports.supermario_read_from_clipboard_to_js.subscribe(function() {
     try {
         navigator.clipboard.readText().then((clipText) => app.ports.supermario_read_from_clipboard_from_js.send(clipText));

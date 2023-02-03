@@ -14,9 +14,12 @@ module Coord exposing
     , multiply
     , multiplyTuple
     , multiplyTuple_
+    , negate
     , origin
     , plus
     , roundPoint
+    , roundVector
+    , scalar
     , toPoint2d
     , toTuple
     , toVec2
@@ -64,6 +67,11 @@ origin =
     tuple ( 0, 0 )
 
 
+negate : Coord unit -> Coord unit
+negate ( Quantity x_, Quantity y_ ) =
+    ( Quantity -x_, Quantity -y_ )
+
+
 plus : Coord unit -> Coord unit -> Coord unit
 plus ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.plus x0 x1, Quantity.plus y0 y1 )
@@ -106,6 +114,11 @@ multiply ( Quantity x0, Quantity y0 ) ( x1, y1 ) =
     ( Quantity.multiplyBy x0 x1, Quantity.multiplyBy y0 y1 )
 
 
+scalar : Int -> Coord unit -> Coord unit
+scalar a ( x1, y1 ) =
+    ( Quantity.multiplyBy a x1, Quantity.multiplyBy a y1 )
+
+
 divide : Coord unit -> Coord unit -> Coord unit
 divide ( Quantity x0, Quantity y0 ) ( Quantity x1, Quantity y1 ) =
     ( x1 // x0 |> Quantity, y1 // y0 |> Quantity )
@@ -141,6 +154,15 @@ roundPoint point2d =
     let
         point =
             Point2d.unwrap point2d
+    in
+    tuple ( round point.x, round point.y )
+
+
+roundVector : Vector2d units coordinate -> Coord units
+roundVector point2d =
+    let
+        point =
+            Vector2d.unwrap point2d
     in
     tuple ( round point.x, round point.y )
 

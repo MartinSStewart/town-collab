@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , CssPixel
     , EmailEvent(..)
     , EmailResult(..)
     , FrontendLoaded
@@ -12,9 +13,11 @@ module Types exposing
     , FrontendMsg
     , FrontendMsg_(..)
     , Hover(..)
+    , Invite
     , LoadedLocalModel_
     , LoadingData_
     , LoadingLocalModel(..)
+    , LoginRequestedBy(..)
     , MouseButtonState(..)
     , RemovedTileParticle
     , SubmitStatus(..)
@@ -22,8 +25,10 @@ module Types exposing
     , ToFrontend(..)
     , Tool(..)
     , ToolButton(..)
+    , TopMenu(..)
     , UiHover(..)
     , UiMsg(..)
+    , UserSettings
     , ViewPoint(..)
     )
 
@@ -36,6 +41,7 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (CursorMeshes)
 import Dict exposing (Dict)
+import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Browser.Navigation
 import Effect.Http
@@ -53,7 +59,7 @@ import Lamdera
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (Cursor, LocalGrid)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (BackendMail, FrontendMail, MailEditorData, Model, ShowMailEditor)
+import MailEditor exposing (BackendMail, FrontendMail, Model)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -68,6 +74,7 @@ import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
+import User exposing (FrontendUser)
 import WebGL
 
 
@@ -83,13 +90,19 @@ type FrontendModel_
 type alias FrontendLoading =
     { key : Effect.Browser.Navigation.Key
     , windowSize : Coord Pixels
-    , devicePixelRatio : Maybe Float
+    , cssWindowSize : Coord CssPixel
+    , cssCanvasSize : Coord CssPixel
+    , devicePixelRatio : Float
     , zoomFactor : Int
     , time : Maybe Effect.Time.Posix
     , viewPoint : Coord WorldUnit
+    , showInbox : Bool
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
+    , musicVolume : Int
+    , soundEffectVolume : Int
     , texture : Maybe Texture
+    , simplexNoiseLookup : Maybe Texture
     , localModel : LoadingLocalModel
     , hasCmdKey : Bool
     }
@@ -103,7 +116,7 @@ type LoadingLocalModel
 type alias LoadedLocalModel_ =
     { localModel : LocalModel Change LocalGrid
     , trains : IdDict TrainId Train
-    , mail : AssocList.Dict (Id MailId) FrontendMail
+    , mail : IdDict MailId FrontendMail
     }
 
 
@@ -132,9 +145,12 @@ type alias FrontendLoaded =
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
     , texture : Texture
+    , simplexNoiseLookup : Texture
     , trainTexture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
+    , cssWindowSize : Coord CssPixel
+    , cssCanvasSize : Coord CssPixel
     , devicePixelRatio : Float
     , zoomFactor : Int
     , mouseLeft : MouseButtonState
@@ -148,11 +164,13 @@ type alias FrontendLoaded =
     , ignoreNextUrlChanged : Bool
     , lastTilePlaced : Maybe { time : Effect.Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
+    , musicVolume : Int
+    , soundEffectVolume : Int
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Effect.Time.Posix
-    , mail : AssocList.Dict (Id MailId) FrontendMail
-    , mailEditor : Model
+    , mailEditor : Maybe Model
+    , lastMailEditorToggle : Maybe Effect.Time.Posix
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix
@@ -171,15 +189,26 @@ type alias FrontendLoaded =
     , focus : Hover
     , music : { startTime : Effect.Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
-    , handMeshes : AssocList.Dict Colors CursorMeshes
+    , handMeshes : IdDict UserId CursorMeshes
     , hasCmdKey : Bool
     , loginTextInput : TextInput.Model
     , pressedSubmitEmail : SubmitStatus EmailAddress
-    , showInvite : Bool
+    , topMenuOpened : Maybe TopMenu
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
     , railToggles : List ( Time.Posix, Coord WorldUnit )
+    , debugText : String
+    , lastReceivedMail : Maybe Time.Posix
+    , isReconnecting : Bool
+    , lastCheckConnection : Time.Posix
+    , showMap : Bool
     }
+
+
+type TopMenu
+    = InviteMenu
+    | SettingsMenu TextInput.Model
+    | LoggedOutSettingsMenu
 
 
 type SubmitStatus a
@@ -202,11 +231,14 @@ type MouseButtonState
         }
 
 
+type alias UserSettings =
+    { musicVolume : Int, soundEffectVolume : Int }
+
+
 type Hover
     = TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
-    | MailEditorHover MailEditor.Hover
     | CowHover { cowId : Id CowId, cow : Cow }
     | UiBackgroundHover
     | UiHover UiHover { position : Coord Pixels }
@@ -222,6 +254,17 @@ type UiHover
     | CloseInviteUser
     | SubmitInviteUser
     | InviteEmailAddressTextInput
+    | LowerMusicVolume
+    | RaiseMusicVolume
+    | LowerSoundEffectVolume
+    | RaiseSoundEffectVolume
+    | SettingsButton
+    | CloseSettings
+    | DisplayNameTextInput
+    | MailEditorHover MailEditor.Hover
+    | YouGotMailButton
+    | ShowMapButton
+    | AllowEmailNotificationsCheckbox
 
 
 type UiMsg
@@ -234,6 +277,17 @@ type UiMsg
     | KeyDownEmailAddressTextInputHover Bool Bool Keyboard.Key TextInput.Model
     | ChangedPrimaryColorInput Bool Bool Keyboard.Key TextInput.Model
     | ChangedSecondaryColorInput Bool Bool Keyboard.Key TextInput.Model
+    | PressedLowerMusicVolume
+    | PressedRaiseMusicVolume
+    | PressedLowerSoundEffectVolume
+    | PressedRaiseSoundEffectVolume
+    | PressedSettingsButton
+    | PressedCloseSettings
+    | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
+    | MailEditorUiMsg MailEditor.Msg
+    | PressedYouGotMail
+    | PressedShowMap
+    | PressedAllowEmailNotifications
 
 
 type alias BackendModel =
@@ -251,16 +305,21 @@ type alias BackendModel =
     , cows : IdDict CowId Cow
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
-    , mail : AssocList.Dict (Id MailId) BackendMail
+    , mail : IdDict MailId BackendMail
     , pendingLoginTokens :
         AssocList.Dict
             (SecretId LoginToken)
             { requestTime : Effect.Time.Posix
             , userId : Id UserId
-            , requestedBy : SessionId
+            , requestedBy : LoginRequestedBy
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     }
+
+
+type LoginRequestedBy
+    = LoginRequestedByBackend
+    | LoginRequestedByFrontend SessionId
 
 
 type alias Invite =
@@ -286,11 +345,13 @@ type alias BackendUserData =
     { undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
-    , mailEditor : MailEditorData
+    , mailDrafts : IdDict UserId (List MailEditor.Content)
     , cursor : Maybe Cursor
     , handColor : Colors
     , emailAddress : EmailAddress
     , acceptedInvites : IdDict UserId ()
+    , name : DisplayName
+    , allowEmailNotifications : Bool
     }
 
 
@@ -298,20 +359,26 @@ type alias FrontendMsg =
     Audio.Msg FrontendMsg_
 
 
+type CssPixel
+    = CssPixel Never
+
+
 type FrontendMsg_
     = UrlClicked Browser.UrlRequest
     | UrlChanged Url
     | NoOpFrontendMsg
     | TextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | SimplexLookupTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | KeyMsg Keyboard.Msg
     | KeyDown Keyboard.RawKey
-    | WindowResized (Coord Pixels)
+    | WindowResized (Coord CssPixel)
     | GotDevicePixelRatio Float
     | MouseDown Button (Point2d Pixels Pixels)
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
     | MouseWheel Html.Events.Extra.Wheel.Event
+    | MouseLeave
     | ShortIntervalElapsed Effect.Time.Posix
     | ZoomFactorPressed Int
     | ToggleAdminEnabledPressed
@@ -320,40 +387,42 @@ type FrontendMsg_
     | VisibilityChanged
     | PastedText String
     | GotUserAgentPlatform String
+    | LoadedUserSettings UserSettings
 
 
 type ToBackend
     = ConnectToBackend (Bounds CellUnit) (Maybe LoginOrInviteToken)
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
     | ChangeViewBounds (Bounds CellUnit)
-    | MailEditorToBackend MailEditor.ToBackend
-    | TeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
-    | CancelTeleportHomeTrainRequest (Id TrainId)
-    | LeaveHomeTrainRequest (Id TrainId)
     | PingRequest
     | SendLoginEmailRequest (Untrusted EmailAddress)
     | SendInviteEmailRequest (Untrusted EmailAddress)
+    | PostOfficePositionRequest
 
 
 type BackendMsg
     = UserDisconnected SessionId ClientId
+    | UserConnected SessionId ClientId
     | NotifyAdminEmailSent
     | SentLoginEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | UpdateFromFrontend SessionId ClientId ToBackend Effect.Time.Posix
     | WorldUpdateTimeElapsed Effect.Time.Posix
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
+    | CheckConnectionTimeElapsed
+    | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
 
 
 type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
     | UnsubscribeEmailConfirmed
-    | WorldUpdateBroadcast (IdDict TrainId TrainDiff)
-    | MailEditorToFrontend MailEditor.ToFrontend
-    | MailBroadcast (AssocList.Dict (Id MailId) FrontendMail)
     | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
+    | DebugResponse String
     | SendInviteEmailResponse EmailAddress
+    | PostOfficePositionResponse (Maybe (Coord WorldUnit))
+    | ClientConnected
+    | CheckConnectionBroadcast
 
 
 type EmailEvent
@@ -365,8 +434,8 @@ type alias LoadingData_ =
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
     , trains : IdDict TrainId Train
-    , mail : AssocList.Dict (Id MailId) FrontendMail
+    , mail : IdDict MailId FrontendMail
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
-    , handColors : IdDict UserId Colors
+    , users : IdDict UserId FrontendUser
     }

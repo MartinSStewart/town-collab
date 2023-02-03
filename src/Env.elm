@@ -18,14 +18,14 @@ adminUserId =
     String.toInt adminUserId_ |> Maybe.map Id.fromInt
 
 
-isProduction_ : String
-isProduction_ =
+isProduction2 : String
+isProduction2 =
     "False"
 
 
 isProduction : Bool
 isProduction =
-    case String.toLower isProduction_ |> String.trim of
+    case String.toLower isProduction2 |> String.trim of
         "true" ->
             True
 
@@ -36,14 +36,14 @@ isProduction =
             False
 
 
-adminEmail_ : String
-adminEmail_ =
+adminEmail2 : String
+adminEmail2 =
     "a@a.se"
 
 
 adminEmail : Maybe EmailAddress
 adminEmail =
-    EmailAddress.fromString adminEmail_
+    EmailAddress.fromString adminEmail2
 
 
 postmarkApiKey_ : String

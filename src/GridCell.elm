@@ -1,7 +1,6 @@
 module GridCell exposing
     ( Cell(..)
     , CellData
-    , SplitDirection(..)
     , Value
     , addValue
     , cellToData
@@ -54,11 +53,6 @@ type Cell
         , cache : List Value
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
         }
-
-
-type SplitDirection
-    = SplitLeft
-    | SplitRight
 
 
 type alias Value =
@@ -268,8 +262,11 @@ getToggledRailSplit (Cell cell) =
 addTrees : ( Quantity Int CellUnit, Quantity Int CellUnit ) -> List Value
 addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
     let
-        colors =
-            Tile.defaultToPrimaryAndSecondary Tile.defaultTreeColor
+        treeColor =
+            Tile.defaultToPrimaryAndSecondary Tile.defaultPineTreeColor
+
+        rockColor =
+            Tile.defaultToPrimaryAndSecondary Tile.defaultRockColor
     in
     List.range 0 (Terrain.terrainDivisionsPerCell - 1)
         |> List.concatMap
@@ -292,14 +289,19 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                         Terrain.getTerrainValue terrainCoord_ cellPosition
                 in
                 if treeDensity > 0 then
-                    Random.step (Terrain.randomTrees treeDensity position) seed
+                    Random.step (Terrain.randomScenery treeDensity position) seed
                         |> Tuple.first
                         |> List.foldl
-                            (\treePosition cell2 ->
+                            (\( item, itemPosition ) cell2 ->
                                 { userId = Id.fromInt -1
-                                , position = treePosition
-                                , value = PineTree
-                                , colors = colors
+                                , position = itemPosition
+                                , value = item
+                                , colors =
+                                    if item == PineTree1 || item == PineTree2 then
+                                        treeColor
+
+                                    else
+                                        rockColor
                                 }
                                     :: cell2
                             )

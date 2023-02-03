@@ -1,40 +1,47 @@
 module Toolbar exposing
     ( ViewData
     , getTileGroupTile
+    , mapSize
     , showColorTextInputs
+    , validateInviteEmailAddress
     , view
     )
 
 import AssocList
+import Change exposing (UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
 import Dict exposing (Dict)
+import DisplayName
 import Duration
 import EmailAddress exposing (EmailAddress)
-import Env
-import Id exposing (Id, UserId)
+import Id exposing (Id, MailId, UserId)
+import IdDict exposing (IdDict)
 import Keyboard
 import List.Extra as List
 import List.Nonempty
+import MailEditor
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
+import Sound
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), UiHover(..), UiMsg(..))
+import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), UiMsg(..))
 import Ui exposing (BorderAndFill(..))
 import Units
+import User exposing (FrontendUser)
 
 
 type alias ViewData =
-    { devicePixelRatio : Float
-    , windowSize : Coord Pixels
+    { windowSize : Coord Pixels
     , pressedSubmitEmail : SubmitStatus EmailAddress
     , loginTextInput : TextInput.Model
     , hasCmdKey : Bool
     , handColor : Maybe Colors
+    , userStatus : UserStatus
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
     , tileColors : AssocList.Dict TileGroup Colors
@@ -42,48 +49,362 @@ type alias ViewData =
     , currentTool : Tool
     , pingData : Maybe PingData
     , userId : Maybe (Id UserId)
-    , showInvite : Bool
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
+    , musicVolume : Int
+    , soundEffectVolume : Int
+    , topMenuOpened : Maybe TopMenu
+    , mailEditor : Maybe MailEditor.Model
+    , users : IdDict UserId FrontendUser
+    , isDisconnected : Bool
+    , showMap : Bool
+    , otherUsersOnline : Int
     }
 
 
 view : ViewData -> Ui.Element UiHover UiMsg
 view data =
-    Ui.bottomCenter
-        { size = Coord.multiplyTuple_ ( data.devicePixelRatio, data.devicePixelRatio ) data.windowSize
-        , inFront =
-            case data.handColor of
-                Just _ ->
-                    [ inviteView data.showInvite data.inviteTextInput data.inviteSubmitStatus ]
+    case ( data.userStatus, data.mailEditor ) of
+        ( LoggedIn loggedIn, Just mailEditor ) ->
+            MailEditor.ui
+                data.isDisconnected
+                data.windowSize
+                MailEditorHover
+                MailEditorUiMsg
+                data.users
+                loggedIn.inbox
+                mailEditor
 
-                Nothing ->
-                    []
+        _ ->
+            Ui.bottomCenter
+                { size = data.windowSize
+                , inFront =
+                    [ if data.isDisconnected then
+                        MailEditor.disconnectWarning data.windowSize
+
+                      else
+                        Ui.topRight
+                            { size = data.windowSize }
+                            (Ui.el
+                                { padding = Ui.paddingXY 10 4
+                                , borderAndFill =
+                                    BorderAndFill
+                                        { borderWidth = 2
+                                        , borderColor = Color.outlineColor
+                                        , fillColor = Color.fillColor
+                                        }
+                                , inFront = []
+                                }
+                                (if data.otherUsersOnline == 1 then
+                                    Ui.text "1 user online"
+
+                                 else
+                                    Ui.text (String.fromInt data.otherUsersOnline ++ " users online")
+                                )
+                            )
+                    , Ui.row
+                        { padding = Ui.noPadding, spacing = 4 }
+                        [ case data.topMenuOpened of
+                            Just (SettingsMenu nameTextInput) ->
+                                case data.userStatus of
+                                    LoggedIn loggedIn ->
+                                        settingsView
+                                            data.musicVolume
+                                            data.soundEffectVolume
+                                            nameTextInput
+                                            loggedIn.allowEmailNotifications
+
+                                    NotLoggedIn ->
+                                        Ui.none
+
+                            Just LoggedOutSettingsMenu ->
+                                loggedOutSettingsView data.musicVolume data.soundEffectVolume
+
+                            _ ->
+                                Ui.button
+                                    { id = SettingsButton
+                                    , padding = Ui.paddingXY 10 4
+                                    , onPress = PressedSettingsButton
+                                    }
+                                    (Ui.text "Settings")
+                        , case data.userStatus of
+                            LoggedIn loggedIn ->
+                                inviteView
+                                    (data.topMenuOpened == Just InviteMenu)
+                                    loggedIn.emailAddress
+                                    data.inviteTextInput
+                                    data.inviteSubmitStatus
+
+                            NotLoggedIn ->
+                                Ui.none
+                        , Ui.button
+                            { id = ShowMapButton
+                            , padding = Ui.paddingXY 10 4
+                            , onPress = PressedShowMap
+                            }
+                            (Ui.text
+                                (if data.showMap then
+                                    "Hide map"
+
+                                 else
+                                    "Show map"
+                                )
+                            )
+                        , case data.userStatus of
+                            LoggedIn loggedIn ->
+                                let
+                                    unviewedMail =
+                                        IdDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
+                                in
+                                if IdDict.isEmpty unviewedMail then
+                                    Ui.none
+
+                                else
+                                    Ui.customButton
+                                        { id = YouGotMailButton
+                                        , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
+                                        , onPress = PressedYouGotMail
+                                        , onMouseDown = Nothing
+                                        , borderAndFill = Ui.defaultButtonBorderAndFill
+                                        , borderAndFillFocus = Ui.defaultButtonBorderAndFill
+                                        , inFront = []
+                                        }
+                                        (Ui.row
+                                            { spacing = 4, padding = Ui.noPadding }
+                                            [ Ui.text "You got mail"
+                                            , Ui.el
+                                                { padding = Ui.paddingXY 8 0
+                                                , inFront = []
+                                                , borderAndFill = FillOnly (Color.rgb255 255 50 50)
+                                                }
+                                                (Ui.colorText Color.white (String.fromInt (IdDict.size unviewedMail)))
+                                            ]
+                                        )
+
+                            NotLoggedIn ->
+                                Ui.none
+                        ]
+                    , if data.showMap then
+                        let
+                            mapSize2 =
+                                mapSize data.windowSize
+                        in
+                        Ui.el
+                            { padding =
+                                { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
+                                , bottomRight = Coord.origin
+                                }
+                            , borderAndFill =
+                                BorderAndFill
+                                    { borderWidth = 2
+                                    , borderColor = Color.outlineColor
+                                    , fillColor = Color.fillColor
+                                    }
+                            , inFront = []
+                            }
+                            Ui.none
+                            |> Ui.ignoreInputs
+                            |> Ui.center { size = data.windowSize }
+
+                      else
+                        Ui.none
+                    ]
+                }
+                (Ui.el
+                    { padding = Ui.noPadding
+                    , inFront = []
+                    , borderAndFill = borderAndFill
+                    }
+                    (case data.handColor of
+                        Just handColor ->
+                            toolbarUi
+                                data.hasCmdKey
+                                handColor
+                                data.primaryColorTextInput
+                                data.secondaryColorTextInput
+                                data.tileColors
+                                data.tileHotkeys
+                                data.currentTool
+
+                        Nothing ->
+                            loginToolbarUi data.pressedSubmitEmail data.loginTextInput
+                    )
+                )
+
+
+mapSize : Coord Pixels -> Int
+mapSize ( Quantity windowWidth, Quantity windowHeight ) =
+    toFloat (min windowWidth windowHeight) * 0.7 |> round
+
+
+settingsView : Int -> Int -> TextInput.Model -> Bool -> Ui.Element UiHover UiMsg
+settingsView musicVolume soundEffectVolume nameTextInput allowEmailNotifications =
+    let
+        musicVolumeInput =
+            volumeControl
+                "Music volume "
+                LowerMusicVolume
+                RaiseMusicVolume
+                PressedLowerMusicVolume
+                PressedRaiseMusicVolume
+                musicVolume
+    in
+    Ui.el
+        { padding = Ui.paddingXY 8 8
+        , inFront = []
+        , borderAndFill = borderAndFill
         }
-        (Ui.el
-            { padding = Ui.noPadding
-            , inFront = []
-            , borderAndFill = borderAndFill
+        (Ui.column
+            { spacing = 16
+            , padding = Ui.noPadding
             }
-            (case data.handColor of
-                Just handColor ->
-                    toolbarUi
-                        data.hasCmdKey
-                        handColor
-                        data.primaryColorTextInput
-                        data.secondaryColorTextInput
-                        data.tileColors
-                        data.tileHotkeys
-                        data.currentTool
+            [ Ui.button
+                { id = CloseSettings, onPress = PressedCloseSettings, padding = Ui.paddingXY 10 4 }
+                (Ui.text "Close")
+            , Ui.column
+                { spacing = 6
+                , padding = Ui.noPadding
+                }
+                [ musicVolumeInput
+                , volumeControl
+                    "Sound effects"
+                    LowerSoundEffectVolume
+                    RaiseSoundEffectVolume
+                    PressedLowerSoundEffectVolume
+                    PressedRaiseSoundEffectVolume
+                    soundEffectVolume
+                , Ui.column
+                    { spacing = 4
+                    , padding = Ui.noPadding
+                    }
+                    [ Ui.text "Display name"
+                    , Ui.textInput
+                        { id = DisplayNameTextInput
+                        , width = Ui.size musicVolumeInput |> Coord.xRaw
+                        , isValid =
+                            case DisplayName.fromString nameTextInput.current.text of
+                                Ok _ ->
+                                    True
 
-                Nothing ->
-                    loginToolbarUi data.pressedSubmitEmail data.loginTextInput
-            )
+                                Err _ ->
+                                    False
+                        , onKeyDown = ChangedDisplayNameTextInput
+                        }
+                        nameTextInput
+                    ]
+                ]
+            , checkbox AllowEmailNotificationsCheckbox PressedAllowEmailNotifications allowEmailNotifications "Allow email notifications"
+            ]
         )
 
 
-inviteView : Bool -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
-inviteView showInvite inviteTextInput inviteSubmitStatus =
+checkbox : id -> msg -> Bool -> String -> Ui.Element id msg
+checkbox id onPress isChecked text =
+    Ui.customButton
+        { id = id
+        , padding = Ui.noPadding
+        , inFront = []
+        , onPress = onPress
+        , onMouseDown = Nothing
+        , borderAndFill = NoBorderOrFill
+        , borderAndFillFocus = NoBorderOrFill
+        }
+        (Ui.row
+            { spacing = 8, padding = Ui.noPadding }
+            [ if isChecked then
+                Ui.colorSprite
+                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
+                    , size = Coord.xy 36 36
+                    , texturePosition = Coord.xy 591 72
+                    , textureSize = Coord.xy 36 36
+                    }
+
+              else
+                Ui.colorSprite
+                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
+                    , size = Coord.xy 36 36
+                    , texturePosition = Coord.xy 627 72
+                    , textureSize = Coord.xy 36 36
+                    }
+            , Ui.text text
+            ]
+        )
+
+
+volumeControl : String -> id -> id -> msg -> msg -> Int -> Ui.Element id msg
+volumeControl name lowerId raiseId pressedLower pressedRaise volume =
+    Ui.row
+        { spacing = 8, padding = Ui.noPadding }
+        [ Ui.text name
+        , Ui.button
+            { id = lowerId
+            , padding = { topLeft = Coord.xy 6 0, bottomRight = Coord.xy 4 2 }
+            , onPress = pressedLower
+            }
+            (Ui.text "-")
+        , Ui.text (String.padLeft 2 ' ' (String.fromInt volume) ++ "/" ++ String.fromInt Sound.maxVolume)
+        , Ui.button
+            { id = raiseId
+            , padding = { topLeft = Coord.xy 6 0, bottomRight = Coord.xy 4 2 }
+            , onPress = pressedRaise
+            }
+            (Ui.text "+")
+        ]
+
+
+loggedOutSettingsView : Int -> Int -> Ui.Element UiHover UiMsg
+loggedOutSettingsView musicVolume soundEffectVolume =
+    Ui.el
+        { padding = Ui.paddingXY 8 8
+        , inFront = []
+        , borderAndFill = borderAndFill
+        }
+        (Ui.column
+            { spacing = 8
+            , padding = Ui.noPadding
+            }
+            [ Ui.button
+                { id = CloseSettings, onPress = PressedCloseSettings, padding = Ui.paddingXY 10 4 }
+                (Ui.text "Close")
+            , Ui.column
+                { spacing = 6
+                , padding = Ui.noPadding
+                }
+                [ volumeControl
+                    "Music volume "
+                    LowerMusicVolume
+                    RaiseMusicVolume
+                    PressedLowerMusicVolume
+                    PressedRaiseMusicVolume
+                    musicVolume
+                , volumeControl
+                    "Sound effects"
+                    LowerSoundEffectVolume
+                    RaiseSoundEffectVolume
+                    PressedLowerSoundEffectVolume
+                    PressedRaiseSoundEffectVolume
+                    soundEffectVolume
+                ]
+            ]
+        )
+
+
+validateInviteEmailAddress : EmailAddress -> String -> Result String EmailAddress
+validateInviteEmailAddress emailAddress inviteEmailAddressText =
+    case EmailAddress.fromString inviteEmailAddressText of
+        Just inviteEmailAddress ->
+            if emailAddress == inviteEmailAddress then
+                Err "You can't invite yourself"
+
+            else
+                Ok inviteEmailAddress
+
+        Nothing ->
+            Err "Invalid email"
+
+
+inviteView : Bool -> EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
+inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
     if showInvite then
         let
             inviteForm : Ui.Element UiHover UiMsg
@@ -93,7 +414,14 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                     [ Ui.button
                         { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
                         (Ui.text "Cancel")
-                    , Ui.column
+                    , content
+                    ]
+
+            content : Ui.Element UiHover UiMsg
+            content =
+                Ui.column
+                    { spacing = 0, padding = Ui.noPadding }
+                    [ Ui.column
                         { spacing = 0, padding = Ui.noPadding }
                         [ Ui.text "Enter email address to send an invite to"
                         , Ui.textInput
@@ -105,7 +433,7 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                             inviteTextInput
                         ]
                     , Ui.row
-                        { spacing = 4, padding = Ui.noPadding }
+                        { spacing = 4, padding = { topLeft = Coord.xy 0 8, bottomRight = Coord.origin } }
                         [ Ui.button
                             { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
                             (case inviteSubmitStatus of
@@ -118,11 +446,15 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
                                 Submitted _ ->
                                     Ui.text "Submitting "
                             )
-                        , case ( pressedSubmit inviteSubmitStatus, EmailAddress.fromString inviteTextInput.current.text ) of
-                            ( True, Nothing ) ->
+                        , case
+                            ( pressedSubmit inviteSubmitStatus
+                            , validateInviteEmailAddress emailAddress inviteTextInput.current.text
+                            )
+                          of
+                            ( True, Err error ) ->
                                 Ui.el
                                     { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
-                                    (Ui.colorText Color.errorColor "Invalid email")
+                                    (Ui.colorText Color.errorColor error)
 
                             _ ->
                                 Ui.none
@@ -132,46 +464,31 @@ inviteView showInvite inviteTextInput inviteSubmitStatus =
         Ui.el
             { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = borderAndFill }
             (case inviteSubmitStatus of
-                Submitted emailAddress ->
-                    Ui.center
-                        { size = Ui.size inviteForm }
-                        (Ui.column
-                            { spacing = 8, padding = Ui.noPadding }
-                            [ Ui.wrappedText
-                                (Ui.size inviteForm |> Coord.xRaw |> (+) -16)
-                                ("An invite email as been sent to " ++ EmailAddress.toString emailAddress)
-                            ]
-                        )
+                Submitted inviteEmailAddress ->
+                    Ui.column
+                        { spacing = 0, padding = Ui.noPadding }
+                        [ Ui.button
+                            { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                            (Ui.text "Close")
+                        , Ui.center
+                            { size = Ui.size content }
+                            (Ui.wrappedText
+                                (Ui.size content |> Coord.xRaw |> (+) -16)
+                                ("An invite email as been sent to " ++ EmailAddress.toString inviteEmailAddress)
+                            )
+                        ]
 
                 _ ->
                     inviteForm
             )
 
     else
-        Ui.row
-            { spacing = 10, padding = Ui.noPadding }
-            [ Ui.button
-                { id = ShowInviteUser
-                , onPress = PressedShowInviteUser
-                , padding = Ui.paddingXY 10 4
-                }
-                (Ui.text "Invite")
-            , Ui.text
-                (if Env.isProduction then
-                    "True"
-
-                 else
-                    "False"
-                )
-            , Ui.text
-                (case Env.adminEmail of
-                    Just email ->
-                        EmailAddress.toString email
-
-                    Nothing ->
-                        "Invalid email!"
-                )
-            ]
+        Ui.button
+            { id = ShowInviteUser
+            , onPress = PressedShowInviteUser
+            , padding = Ui.paddingXY 10 4
+            }
+            (Ui.text "Invite")
 
 
 borderAndFill : BorderAndFill
@@ -472,6 +789,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     Ui.customButton
         { id = ToolButtonHover tool
         , onPress = PressedTool tool
+        , onMouseDown = Nothing
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of
@@ -496,7 +814,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                         Color.highlightColor
 
                     else
-                        Color.fillColor
+                        Color.fillColor2
                 }
         , borderAndFillFocus =
             BorderAndFill

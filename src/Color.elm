@@ -1,9 +1,11 @@
 module Color exposing
-    ( Color
+    ( Color(..)
     , Colors
     , black
     , errorColor
     , fillColor
+    , fillColor2
+    , fillColor3
     , fromHexCode
     , getBlue
     , getGreen
@@ -75,12 +77,22 @@ outlineColor =
 
 fillColor : Color
 fillColor =
+    rgb255 220 210 199
+
+
+fillColor2 : Color
+fillColor2 =
     rgb255 199 185 175
+
+
+fillColor3 : Color
+fillColor3 =
+    rgb255 213 202 192
 
 
 highlightColor : Color
 highlightColor =
-    rgb255 241 231 223
+    rgb255 251 241 233
 
 
 toInt : Color -> Int

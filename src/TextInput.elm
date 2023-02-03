@@ -171,13 +171,14 @@ keyMsg ctrlDown shiftDown key model =
                 (\state ->
                     { state
                         | cursorPosition = state.cursorPosition - 1 |> max 0
-                        , cursorSize =
-                            if state.cursorPosition > 0 then
+                    }
+                        |> setCursorSize
+                            (if state.cursorPosition > 0 then
                                 state.cursorSize + 1
 
-                            else
+                             else
                                 state.cursorSize
-                    }
+                            )
                 )
                 model
             , NoOutMsg
@@ -222,13 +223,14 @@ keyMsg ctrlDown shiftDown key model =
                 (\state ->
                     { state
                         | cursorPosition = state.cursorPosition + 1 |> min (String.length state.text)
-                        , cursorSize =
-                            if state.cursorPosition < String.length state.text then
+                    }
+                        |> setCursorSize
+                            (if state.cursorPosition < String.length state.text then
                                 state.cursorSize - 1
 
-                            else
+                             else
                                 state.cursorSize
-                    }
+                            )
                 )
                 model
             , NoOutMsg
@@ -324,9 +326,25 @@ keyMsg ctrlDown shiftDown key model =
             ( model, NoOutMsg )
 
 
+setCursorSize : Int -> State -> State
+setCursorSize newCursorSize state =
+    { state
+        | cursorSize =
+            if newCursorSize > 0 then
+                min (String.length state.text - state.cursorPosition) newCursorSize
+
+            else
+                max -state.cursorPosition newCursorSize
+    }
+
+
 paste : String -> Model -> Model
 paste text model =
-    pushState (insertText text) model
+    if text == "" then
+        model
+
+    else
+        pushState (insertText text) model
 
 
 insertText : String -> State -> State
@@ -336,10 +354,7 @@ insertText text state =
             String.left (selectionMin state) state.text
                 ++ text
                 ++ String.dropLeft (selectionMax state) state.text
-        , cursorPosition =
-            state.cursorPosition
-                + String.length text
-                - (selectionMax state - selectionMin state)
+        , cursorPosition = selectionMin state + String.length text
         , cursorSize = 0
     }
 
@@ -394,10 +409,8 @@ mouseDownMove mousePosition position model =
                 cursorPosition2 =
                     cursorPosition mousePosition position state
             in
-            { state
-                | cursorPosition = cursorPosition2
-                , cursorSize = state.cursorSize + (state.cursorPosition - cursorPosition2)
-            }
+            { state | cursorPosition = cursorPosition2 }
+                |> setCursorSize (state.cursorSize + (state.cursorPosition - cursorPosition2))
         )
         model
 
@@ -426,28 +439,29 @@ view offset width hasFocus isValid model =
     in
     Sprite.spriteWithColor
         (if not isValid then
-            Color.rgb255 255 0 0
+            Color.errorColor
 
          else if hasFocus then
-            Color.rgb255 241 231 223
+            Color.highlightColor
 
          else
-            Color.rgb255 157 143 134
+            Color.outlineColor
         )
         offset
         (size width)
         (Coord.xy 508 28)
         (Coord.xy 1 1)
-        ++ Sprite.sprite
+        ++ Sprite.spriteWithColor
+            (if hasFocus then
+                Color.highlightColor
+
+             else
+                Color.fillColor3
+            )
             (offset |> Coord.plus padding)
             (size width |> Coord.minus (Coord.multiplyTuple ( 2, 2 ) padding))
             (Coord.xy
-                (if hasFocus then
-                    505
-
-                 else
-                    507
-                )
+                508
                 28
             )
             (Coord.xy 1 1)
@@ -456,7 +470,7 @@ view offset width hasFocus isValid model =
 
             else
                 Sprite.spriteWithColor
-                    (Color.rgb255 120 170 255)
+                    (Color.rgb255 170 210 255)
                     (offset
                         |> Coord.plus
                             (Coord.xy
