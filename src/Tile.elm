@@ -22,7 +22,6 @@ module Tile exposing
     , railPathData
     , reverseDirection
     , texturePositionPixels
-    , texturePosition_
     , tileToTileGroup
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
@@ -819,22 +818,6 @@ railPathData railPath =
 
         RailPathStrafeRightSmall ->
             railPathStrafeRightSmall
-
-
-texturePosition_ : Coord unit -> Coord unit -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
-texturePosition_ position textureSize =
-    let
-        ( x, y ) =
-            Coord.toTuple position
-
-        ( w, h ) =
-            Coord.multiply Units.tileSize textureSize |> Coord.toTuple
-    in
-    { topLeft = Math.Vector2.vec2 (toFloat x) (toFloat y)
-    , topRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat y)
-    , bottomRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat (y + h))
-    , bottomLeft = Math.Vector2.vec2 (toFloat x) (toFloat (y + h))
-    }
 
 
 texturePositionPixels : Coord b -> Coord b -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }

@@ -778,7 +778,15 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
-                    tileMesh tileColors (getTileGroupTile tileGroup 0)
+                    tileMesh tileColors
+                        (getTileGroupTile tileGroup
+                            (if tileGroup == BigTextGroup then
+                                77
+
+                             else
+                                0
+                            )
+                        )
 
                 HandToolButton ->
                     Cursor.defaultCursorMesh2 handColor
@@ -881,7 +889,13 @@ tileMesh colors tile =
                                 position3
                                 spriteSize
                                 texturePosition
-                                size
+                                (case tile of
+                                    BigText _ ->
+                                        size |> Coord.divide (Coord.xy 2 2)
+
+                                    _ ->
+                                        size
+                                )
 
                         Nothing ->
                             []

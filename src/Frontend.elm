@@ -60,6 +60,7 @@ import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
+import Math.Vector3 exposing (Vec3)
 import Math.Vector4 as Vec4
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
@@ -3305,7 +3306,20 @@ createDebrisMesh appStartTime removedTiles =
             in
             (case data.texturePosition of
                 Just texturePosition ->
-                    createDebrisMeshHelper position texturePosition data.size colors appStartTime time
+                    createDebrisMeshHelper
+                        position
+                        texturePosition
+                        data.size
+                        colors
+                        (case tile of
+                            BigText _ ->
+                                2
+
+                            _ ->
+                                1
+                        )
+                        appStartTime
+                        time
 
                 Nothing ->
                     []
@@ -3317,6 +3331,7 @@ createDebrisMesh appStartTime removedTiles =
                                 topLayer.texturePosition
                                 data.size
                                 colors
+                                1
                                 appStartTime
                                 time
 
@@ -3334,47 +3349,89 @@ createDebrisMeshHelper :
     -> Coord unit
     -> Coord unit
     -> Colors
+    -> Int
     -> Effect.Time.Posix
     -> Effect.Time.Posix
     -> List DebrisVertex
-createDebrisMeshHelper ( Quantity x, Quantity y ) texturePosition ( Quantity textureW, Quantity textureH ) colors appStartTime time =
+createDebrisMeshHelper position texturePosition ( Quantity textureW, Quantity textureH ) colors scale appStartTime time =
+    let
+        primaryColor2 : Vec3
+        primaryColor2 =
+            Color.toVec3 colors.primaryColor
+
+        secondaryColor2 : Vec3
+        secondaryColor2 =
+            Color.toVec3 colors.secondaryColor
+
+        time2 =
+            Duration.from appStartTime time |> Duration.inSeconds
+    in
     List.concatMap
         (\x2 ->
             List.concatMap
                 (\y2 ->
                     let
-                        { topLeft, topRight, bottomLeft, bottomRight } =
-                            Tile.texturePosition_ (texturePosition |> Coord.plus (Coord.xy x2 y2)) (Coord.xy 1 1)
+                        ( x3, y3 ) =
+                            Coord.xy x2 y2 |> Coord.multiply Units.tileSize |> Coord.toTuple
 
-                        ( ( randomX, randomY ), _ ) =
+                        initialSpeed : Vec2
+                        initialSpeed =
                             Random.step
-                                (Random.map2 Tuple.pair (Random.float -40 40) (Random.float -40 40))
+                                (Random.map2
+                                    (\randomX randomY ->
+                                        Vec2.vec2
+                                            ((toFloat x2 + 0.5 - toFloat textureW / 2) * 100 + randomX)
+                                            (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
+                                    )
+                                    (Random.float -40 40)
+                                    (Random.float -40 40)
+                                )
                                 (Random.initialSeed (Effect.Time.posixToMillis time + x2 * 3 + y2 * 5))
+                                |> Tuple.first
+
+                        ( w, h ) =
+                            Units.tileSize |> Coord.divide (Coord.xy scale scale) |> Coord.toTuple
+
+                        ( tx, ty ) =
+                            Coord.plus (Coord.xy x3 y3 |> Coord.divide (Coord.xy scale scale)) texturePosition |> Coord.toTuple
+
+                        ( x4, y4 ) =
+                            Coord.multiply Units.tileSize position
+                                |> Coord.plus (Coord.xy x3 y3)
+                                |> Coord.toTuple
+
+                        ( width, height ) =
+                            Coord.toTuple Units.tileSize
                     in
-                    List.map
-                        (\uv ->
-                            let
-                                offset =
-                                    Vec2.vec2
-                                        ((x + x2) * Coord.xRaw Units.tileSize |> toFloat)
-                                        ((y + y2) * Coord.yRaw Units.tileSize |> toFloat)
-                            in
-                            { position = Vec2.sub (Vec2.add offset uv) topLeft
-                            , initialSpeed =
-                                Vec2.vec2
-                                    ((toFloat x2 + 0.5 - toFloat textureW / 2) * 100 + randomX)
-                                    (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
-                            , texturePosition = uv
-                            , startTime = Duration.from appStartTime time |> Duration.inSeconds
-                            , primaryColor = Color.toVec3 colors.primaryColor
-                            , secondaryColor = Color.toVec3 colors.secondaryColor
-                            }
-                        )
-                        [ topLeft
-                        , topRight
-                        , bottomRight
-                        , bottomLeft
-                        ]
+                    [ { position = Vec2.vec2 (toFloat x4) (toFloat y4)
+                      , texturePosition = Vec2.vec2 (toFloat tx) (toFloat ty)
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    , { position = Vec2.vec2 (toFloat (x4 + width)) (toFloat y4)
+                      , texturePosition = Vec2.vec2 (toFloat (tx + w)) (toFloat ty)
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    , { position = Vec2.vec2 (toFloat (x4 + width)) (toFloat (y4 + height))
+                      , texturePosition = Vec2.vec2 (toFloat (tx + w)) (toFloat (ty + h))
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    , { position = Vec2.vec2 (toFloat x4) (toFloat (y4 + height))
+                      , texturePosition = Vec2.vec2 (toFloat tx) (toFloat (ty + h))
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    ]
                 )
                 (List.range 0 (textureH - 1))
         )

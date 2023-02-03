@@ -518,7 +518,21 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
                 _ ->
                     case data.texturePosition of
                         Just texturePosition ->
-                            tileMeshHelper opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
+                            tileMeshHelper
+                                opacity
+                                colors
+                                False
+                                0
+                                (Coord.multiply Units.tileSize position2)
+                                (case value of
+                                    BigText _ ->
+                                        2
+
+                                    _ ->
+                                        1
+                                )
+                                texturePosition
+                                data.size
 
                         Nothing ->
                             []
@@ -608,6 +622,7 @@ backgroundMesh cellPosition =
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.spriteWithZ
+                                        1
                                         Color.black
                                         Color.black
                                         (Coord.xy
@@ -728,7 +743,21 @@ tileMesh tile position scale colors =
     else
         (case data.texturePosition of
             Just texturePosition ->
-                tileMeshHelper 1 colors False 0 position scale texturePosition data.size
+                tileMeshHelper
+                    1
+                    colors
+                    False
+                    0
+                    position
+                    (case tile of
+                        BigText _ ->
+                            2 * scale
+
+                        _ ->
+                            scale
+                    )
+                    texturePosition
+                    data.size
 
             Nothing ->
                 []
@@ -754,40 +783,46 @@ tileMeshHelper :
     -> List Vertex
 tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer yOffset position scale texturePosition size =
     let
-        { topLeft, topRight, bottomLeft, bottomRight } =
-            Tile.texturePosition_ texturePosition size
-
-        topLeftRecord =
-            Vec2.toRecord topLeft
-
-        ( Quantity x, Quantity y ) =
-            position
-
         (Quantity height) =
             Tuple.second size
+
+        ( x, y ) =
+            Coord.toTuple position
     in
-    List.map
-        (\uv ->
-            let
-                uvRecord =
-                    Vec2.toRecord uv
-            in
-            { position =
-                Vec3.vec3
-                    ((uvRecord.x - topLeftRecord.x) * toFloat scale + toFloat x)
-                    ((uvRecord.y - topLeftRecord.y) * toFloat scale + toFloat y)
-                    (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
-            , texturePosition = uv
-            , opacity = opacity
-            , primaryColor = Color.toVec3 primaryColor
-            , secondaryColor = Color.toVec3 secondaryColor
-            }
-        )
-        [ topLeft
-        , topRight
-        , bottomRight
-        , bottomLeft
-        ]
+    Sprite.spriteWithZ
+        opacity
+        primaryColor
+        secondaryColor
+        position
+        (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
+        (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
+        texturePosition
+        (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
+
+
+
+--List.map
+--    (\uv ->
+--        let
+--            uvRecord =
+--                Vec2.toRecord uv
+--        in
+--        { position =
+--            Vec3.vec3
+--                ((uvRecord.x - topLeftRecord.x) * toFloat scale + toFloat x)
+--                ((uvRecord.y - topLeftRecord.y) * toFloat scale + toFloat y)
+--                (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
+--        , texturePosition = uv
+--        , opacity = opacity
+--        , primaryColor = Color.toVec3 primaryColor
+--        , secondaryColor = Color.toVec3 secondaryColor
+--        }
+--    )
+--    [ topLeft
+--    , topRight
+--    , bottomRight
+--    , bottomLeft
+--    ]
 
 
 tileZ : Bool -> Float -> Int -> Float

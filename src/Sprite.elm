@@ -123,21 +123,21 @@ rectangle color topLeft size =
 
 sprite : Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
 sprite position size texturePosition textureSize =
-    spriteWithZ Color.black Color.black position 0 size texturePosition textureSize
+    spriteWithZ 1 Color.black Color.black position 0 size texturePosition textureSize
 
 
 spriteWithColor : Color -> Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithColor color position size texturePosition textureSize =
-    spriteWithZ color color position 0 size texturePosition textureSize
+    spriteWithZ 1 color color position 0 size texturePosition textureSize
 
 
 spriteWithTwoColors : Colors -> Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithTwoColors { primaryColor, secondaryColor } position size texturePosition textureSize =
-    spriteWithZ primaryColor secondaryColor position 0 size texturePosition textureSize
+    spriteWithZ 1 primaryColor secondaryColor position 0 size texturePosition textureSize
 
 
-spriteWithZ : Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
-spriteWithZ primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
+spriteWithZ : Float -> Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
+spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
     let
         ( tx, ty ) =
             Coord.toTuple texturePosition
@@ -153,25 +153,25 @@ spriteWithZ primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity 
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
       , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat ty)
-      , opacity = 1
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
       , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat ty)
-      , opacity = 1
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
       , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat (ty + h))
-      , opacity = 1
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
       , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat (ty + h))
-      , opacity = 1
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
@@ -287,6 +287,7 @@ textWithZ color charScale string lineSpacing position z =
                     , offsetY = state.offsetY
                     , vertices =
                         spriteWithZ
+                            1
                             color
                             color
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
