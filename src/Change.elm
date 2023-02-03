@@ -59,7 +59,8 @@ type ClientChange
 
 
 type ServerChange
-    = ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
+    = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit), newCows : List ( Id CowId, Cow ) }
+    | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
     | ServerPickupCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | ServerDropCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)

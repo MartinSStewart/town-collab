@@ -381,6 +381,23 @@ updateLocalChange localChange model =
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
+        ServerGridChange { gridChange, newCells, newCows } ->
+            let
+                model2 =
+                    { model | cows = IdDict.fromList newCows |> IdDict.union model.cows }
+            in
+            ( if
+                Bounds.contains
+                    (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first)
+                    model2.viewBounds
+              then
+                { model2 | grid = Grid.addChange gridChange model2.grid |> .grid }
+
+              else
+                model2
+            , NoOutMsg
+            )
+
         ServerUndoPoint undoPoint ->
             ( { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
             , NoOutMsg
