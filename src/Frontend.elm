@@ -1045,7 +1045,7 @@ updateLoaded audioData msg model =
                                             ( model, Command.none )
 
                                 _ ->
-                                    keyMsgCanvasUpdate audioData key model
+                                    keyMsgCanvasUpdate key model
 
                 Nothing ->
                     ( model, Command.none )
@@ -1090,14 +1090,17 @@ updateLoaded audioData msg model =
                                             ( model2, Command.none )
 
                                         TextTool _ ->
+                                            let
+                                                position : Coord WorldUnit
+                                                position =
+                                                    mouseWorldPosition model
+                                                        |> Coord.floorPoint
+                                            in
                                             ( { model2
                                                 | currentTool =
-                                                    TextTool
-                                                        { cursorPosition =
-                                                            mouseWorldPosition model
-                                                                |> Coord.floorPoint
-                                                                |> Just
-                                                        }
+                                                    { cursorPosition = position, startColumn = Tuple.first position }
+                                                        |> Just
+                                                        |> TextTool
                                               }
                                             , Command.none
                                             )
@@ -2094,7 +2097,19 @@ getViewModel model =
     , secondaryColorTextInput = model.secondaryColorTextInput
     , tileColors = model.tileColors
     , tileHotkeys = model.tileHotkeys
-    , currentTool = model.currentTool
+    , currentTool =
+        case model.currentTool of
+            HandTool ->
+                HandToolButton
+
+            TilePlacerTool { tileGroup } ->
+                TilePlacerToolButton tileGroup
+
+            TilePickerTool ->
+                TilePickerToolButton
+
+            TextTool _ ->
+                TextToolButton
     , userId = maybeUserId
     , topMenuOpened = model.topMenuOpened
     , inviteTextInput = model.inviteTextInput
@@ -2254,41 +2269,9 @@ ctrlOrMeta model =
     keyDown Keyboard.Control model || keyDown Keyboard.Meta model
 
 
-keyMsgCanvasUpdate : AudioData -> Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-keyMsgCanvasUpdate audioData key model =
+keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+keyMsgCanvasUpdate key model =
     case ( key, ctrlOrMeta model ) of
-        ( Keyboard.Character "z", False ) ->
-            ( case model.currentTool of
-                TilePlacerTool tilePlacer ->
-                    tileRotationHelper audioData 1 tilePlacer model
-
-                HandTool ->
-                    model
-
-                TilePickerTool ->
-                    model
-
-                TextTool _ ->
-                    model
-            , Command.none
-            )
-
-        ( Keyboard.Character "x", False ) ->
-            ( case model.currentTool of
-                TilePlacerTool tilePlacer ->
-                    tileRotationHelper audioData -1 tilePlacer model
-
-                HandTool ->
-                    model
-
-                TilePickerTool ->
-                    model
-
-                TextTool record ->
-                    model
-            , Command.none
-            )
-
         ( Keyboard.Character "z", True ) ->
             ( updateLocalModel Change.LocalUndo model |> Tuple.first, Command.none )
 
@@ -2328,36 +2311,62 @@ keyMsgCanvasUpdate audioData key model =
                                 }
 
                     TextTool _ ->
-                        { model | currentTool = TextTool { cursorPosition = Nothing } }
+                        setCurrentTool TextToolButton model
                 , Command.none
                 )
 
-        ( Keyboard.Spacebar, True ) ->
-            ( { model | tileHotkeys = Dict.update " " (\_ -> currentTileGroup model) model.tileHotkeys }
-            , Command.none
-            )
-
-        ( Keyboard.Character string, True ) ->
-            ( { model | tileHotkeys = Dict.update string (\_ -> currentTileGroup model) model.tileHotkeys }
-            , Command.none
-            )
-
         ( Keyboard.Spacebar, False ) ->
-            ( case Dict.get " " model.tileHotkeys of
-                Just tile ->
-                    setCurrentTool (TilePlacerToolButton tile) model
-
-                Nothing ->
-                    model
-            , Command.none
-            )
+            setTileFromHotkey " " model
 
         ( Keyboard.Character string, False ) ->
-            ( case Dict.get string model.tileHotkeys of
-                Just tile ->
-                    setCurrentTool (TilePlacerToolButton tile) model
+            case model.currentTool of
+                TextTool (Just textTool) ->
+                    ( case String.toList string |> List.head of
+                        Just char ->
+                            case Dict.get char Sprite.charToInt of
+                                Just charInt ->
+                                    placeTileAt
+                                        textTool.cursorPosition
+                                        False
+                                        BigTextGroup
+                                        charInt
+                                        { model
+                                            | currentTool =
+                                                { textTool
+                                                    | cursorPosition =
+                                                        Coord.plus (Coord.xy 1 0) textTool.cursorPosition
+                                                }
+                                                    |> Just
+                                                    |> TextTool
+                                        }
 
-                Nothing ->
+                                Nothing ->
+                                    model
+
+                        Nothing ->
+                            model
+                    , Command.none
+                    )
+
+                _ ->
+                    setTileFromHotkey string model
+
+        ( Keyboard.Enter, False ) ->
+            ( case model.currentTool of
+                TextTool (Just textTool) ->
+                    { model
+                        | currentTool =
+                            { textTool
+                                | cursorPosition =
+                                    ( textTool.startColumn
+                                    , Tuple.second textTool.cursorPosition |> Quantity.plus (Units.tileUnit 2)
+                                    )
+                            }
+                                |> Just
+                                |> TextTool
+                    }
+
+                _ ->
                     model
             , Command.none
             )
@@ -2366,10 +2375,19 @@ keyMsgCanvasUpdate audioData key model =
             ( model, Command.none )
 
 
-getTileColor :
-    TileGroup
-    -> { a | tileColors : AssocList.Dict TileGroup Colors }
-    -> Colors
+setTileFromHotkey : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
+setTileFromHotkey string model =
+    ( case Dict.get string model.tileHotkeys of
+        Just tile ->
+            setCurrentTool (TilePlacerToolButton tile) model
+
+        Nothing ->
+            model
+    , Command.none
+    )
+
+
+getTileColor : TileGroup -> { a | tileColors : AssocList.Dict TileGroup Colors } -> Colors
 getTileColor tileGroup model =
     case AssocList.get tileGroup model.tileColors of
         Just a ->
@@ -2428,7 +2446,7 @@ setCurrentToolWithColors tool colors model =
                             model.currentTool
 
                         _ ->
-                            TextTool { cursorPosition = Nothing }
+                            TextTool Nothing
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
         , tileColors =
@@ -3206,18 +3224,23 @@ cursorPosition tileData model =
 
 placeTile : Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
 placeTile isDragPlacement tileGroup index model =
+    let
+        tile =
+            Toolbar.getTileGroupTile tileGroup index
+
+        tileData =
+            Tile.getData tile
+    in
+    placeTileAt (cursorPosition tileData model) isDragPlacement tileGroup index model
+
+
+placeTileAt : Coord WorldUnit -> Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
+placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
     case currentUserId model of
         Just userId ->
             let
                 tile =
                     Toolbar.getTileGroupTile tileGroup index
-
-                tileData =
-                    Tile.getData tile
-
-                cursorPosition_ : Coord WorldUnit
-                cursorPosition_ =
-                    cursorPosition tileData model
 
                 hasCollision : Bool
                 hasCollision =
@@ -4576,16 +4599,16 @@ cursorSprite hover model =
                                                 DefaultCursor
 
                                             TileHover _ ->
-                                                NoCursor
+                                                CursorSprite PointerSpriteCursor
 
                                             TrainHover _ ->
-                                                NoCursor
+                                                CursorSprite PointerSpriteCursor
 
                                             MapHover ->
-                                                NoCursor
+                                                CursorSprite PointerSpriteCursor
 
                                             CowHover _ ->
-                                                NoCursor
+                                                CursorSprite PointerSpriteCursor
 
                                             UiHover _ _ ->
                                                 PointerCursor
@@ -4852,6 +4875,26 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
+                            ++ (case model.currentTool of
+                                    TextTool (Just textTool) ->
+                                        [ Effect.WebGL.entityWith
+                                            [ Shaders.blend ]
+                                            Shaders.vertexShader
+                                            Shaders.fragmentShader
+                                            textCursorMesh
+                                            { view =
+                                                Coord.translateMat4
+                                                    (Coord.multiply Units.tileSize textTool.cursorPosition)
+                                                    viewMatrix
+                                            , texture = texture
+                                            , textureSize = textureSize
+                                            , color = Vec4.vec4 1 1 1 1
+                                            }
+                                        ]
+
+                                    _ ->
+                                        []
+                               )
                             ++ drawOtherCursors texture viewMatrix model
                             ++ List.filterMap
                                 (\{ position, isRadio } ->
@@ -5048,7 +5091,7 @@ canvasView audioData model =
                                             []
                                             Shaders.worldMapVertexShader
                                             Shaders.worldMapFragmentShader
-                                            square
+                                            mapSquare
                                             { view =
                                                 Mat4.makeScale3
                                                     (mapSize * 2 / toFloat windowWidth)
@@ -5487,8 +5530,8 @@ cowActualPosition cowId model =
                     Nothing
 
 
-square : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
-square =
+mapSquare : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
+mapSquare =
     let
         size =
             11
@@ -5507,3 +5550,9 @@ square =
           , vcoord2 = Vec2.vec2 -size size
           }
         ]
+
+
+textCursorMesh : Effect.WebGL.Mesh Vertex
+textCursorMesh =
+    Sprite.rectangleWithOpacity 0.5 Color.black Coord.origin (Coord.multiply Units.tileSize (Coord.xy 1 2))
+        |> Sprite.toMesh

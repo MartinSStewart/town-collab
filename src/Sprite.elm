@@ -2,11 +2,13 @@ module Sprite exposing
     ( asciiChars
     , charSize
     , charTexturePosition
+    , charToInt
     , getIndices
     , getQuadIndices
     , nineSlice
     , outlinedText
     , rectangle
+    , rectangleWithOpacity
     , shiverText
     , sprite
     , spriteWithColor
@@ -118,7 +120,12 @@ nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bot
 
 rectangle : Color -> Coord unit -> Coord unit -> List Vertex
 rectangle color topLeft size =
-    spriteWithColor color topLeft size (Coord.xy 508 28) (Coord.xy 1 1)
+    spriteWithZ 1 color color topLeft 0 size (Coord.xy 508 28) (Coord.xy 1 1)
+
+
+rectangleWithOpacity : Float -> Color -> Coord unit -> Coord unit -> List Vertex
+rectangleWithOpacity opacity color topLeft size =
+    spriteWithZ opacity color color topLeft 0 size (Coord.xy 508 28) (Coord.xy 1 1)
 
 
 sprite : Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
@@ -217,7 +224,7 @@ charSize =
 
 charTexturePosition : Char -> Coord unit
 charTexturePosition char =
-    case Dict.get char charTexturePositionHelper of
+    case Dict.get char charToInt of
         Just index ->
             Coord.xy
                 (768 + modBy charsPerRow index * Coord.xRaw charSize)
@@ -227,8 +234,8 @@ charTexturePosition char =
             Coord.xy 0 0
 
 
-charTexturePositionHelper : Dict Char Int
-charTexturePositionHelper =
+charToInt : Dict Char Int
+charToInt =
     List.Nonempty.toList asciiChars
         |> List.indexedMap (\index char -> ( char, index ))
         |> Dict.fromList

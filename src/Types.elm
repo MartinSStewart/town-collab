@@ -64,6 +64,7 @@ import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
+import Quantity exposing (Quantity)
 import Route exposing (ConfirmEmailKey, InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
@@ -136,7 +137,7 @@ type Tool
     = HandTool
     | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
     | TilePickerTool
-    | TextTool { cursorPosition : Maybe (Coord WorldUnit) }
+    | TextTool (Maybe { cursorPosition : Coord WorldUnit, startColumn : Quantity Int WorldUnit })
 
 
 type alias FrontendLoaded =
