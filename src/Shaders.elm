@@ -285,27 +285,26 @@ float noise2d(float xin, float yin) {
     return 70.0 * (n0 + n1 + n2);
 }
 
-float getTerrainValue(float x2, float y2) {
-    float terrainDivisionsPerCell = 4.0;
 
-    float persistence = 2.0;
-
-    float persistence2 = 1.0 + persistence;
-
-    float scale = 5.0;
-
-    float scale2 = 14.0 * scale;
-
-    float noise1 = noise2d(x2 / scale, y2 / scale) + (persistence * noise2d(x2 / scale2, y2 / scale2));
-    return noise1 / persistence2;
-}
 
 void main () {
     float detail = 4.0;
 
     vec2 vcoord2 = cellPosition + vcoord;
 
-    float value = getTerrainValue(floor(vcoord2.x * detail) / detail, floor(vcoord2.y * detail) / detail);
+    float x2 = floor(vcoord2.x * detail) / detail;
+    float y2 = floor(vcoord2.y * detail) / detail;
+
+    float terrainDivisionsPerCell = 4.0;
+    float persistence = 2.0;
+    float persistence2 = 1.0 + persistence;
+    float scale = 5.0;
+    float scale2 = 14.0 * scale;
+    float lowFrequency = noise2d(x2 / scale2, y2 / scale2);
+    float highFrequency = noise2d(x2 / scale, y2 / scale);
+    float noise1 = highFrequency + (persistence * lowFrequency);
+    float value = noise1 / persistence2;
+    float value2 = (-highFrequency + (5.0 * lowFrequency)) / 6.0;
 
     vec4 treeColor = vec4(0.075, 0.471, 0.204, 1.0);
     float colorLevels = 4.0;
@@ -314,7 +313,9 @@ void main () {
     gl_FragColor =
         vcoord.x > -0.1 && vcoord.y > -0.1 && vcoord.x < 0.1 && vcoord.y < 0.1
             ? vec4(1.0, 1.0, 1.0, 1.0)
-            : value > 0.0
-                ? vec4( 0.525, 0.796, 0.384, 1.0) * (1.0 - mix) + treeColor * mix
-                : vec4( 0.6, 0.8, 1.0, 1.0);
+            : value <= 0.0
+                ? vec4( 0.6, 0.8, 1.0, 1.0)
+                : (value2 > 0.45 && value2 < 0.47)
+                    ? vec4( 0.8, 0.5, 0.2, 1.0)
+                    : vec4( 0.525, 0.796, 0.384, 1.0) * (1.0 - mix) + treeColor * mix;
 }|]

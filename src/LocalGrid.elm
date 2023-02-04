@@ -29,7 +29,7 @@ import MailEditor exposing (FrontendMail, MailStatus(..))
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
-import Terrain
+import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile)
 import Train exposing (Train)
 import Undo
@@ -752,5 +752,5 @@ getCowsForCell newCell =
                             |> Grid.worldToCellAndLocalCoord
                             |> Tuple.mapSecond Terrain.localCoordToTerrain
                 in
-                Terrain.isGroundTerrain terrainUnit cellUnit
+                Terrain.getTerrainValue terrainUnit cellUnit |> .terrainType |> (==) Ground
             )
