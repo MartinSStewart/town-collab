@@ -61,12 +61,19 @@ app_ isProduction =
 
 
 subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
-subscriptions _ =
+subscriptions model =
     Subscription.batch
         [ Effect.Lamdera.onDisconnect UserDisconnected
         , Effect.Lamdera.onConnect UserConnected
-        , Effect.Time.every Duration.second WorldUpdateTimeElapsed
-        , Effect.Time.every (Duration.seconds 5) (\_ -> CheckConnectionTimeElapsed)
+        , Effect.Time.every
+            (if Dict.toList model.userSessions |> List.all (\( _, { clientIds } ) -> AssocList.isEmpty clientIds) then
+                Duration.minute
+
+             else
+                Duration.second
+            )
+            WorldUpdateTimeElapsed
+        , Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
         ]
 
 
@@ -227,6 +234,7 @@ update isProduction msg model =
                     ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
 
 
+handleWorldUpdate : Bool -> Effect.Time.Posix -> Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 handleWorldUpdate isProduction oldTime time model =
     let
         newTrains : IdDict TrainId Train

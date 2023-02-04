@@ -4068,7 +4068,7 @@ debugTimeOffset =
 
 isDisconnected : FrontendLoaded -> Bool
 isDisconnected model =
-    Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 10)
+    Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 20)
 
 
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
