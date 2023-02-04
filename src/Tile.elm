@@ -8,7 +8,7 @@ module Tile exposing
     , Tile(..)
     , TileData
     , TileGroup(..)
-    , allTileGroups
+    , allTileGroupsExceptText
     , defaultPineTreeColor
     , defaultPostOfficeColor
     , defaultRockColor
@@ -83,10 +83,9 @@ type TileGroup
     | BigTextGroup
 
 
-allTileGroups : List TileGroup
-allTileGroups =
+allTileGroupsExceptText : List TileGroup
+allTileGroupsExceptText =
     [ EmptyTileGroup
-    , BigTextGroup
     , HouseGroup
     , LogCabinGroup
     , ApartmentGroup
@@ -130,7 +129,7 @@ tileToTileGroup tile =
         (\tileGroup ->
             getTileGroupData tileGroup |> .tiles |> List.Nonempty.any ((==) tile)
         )
-        allTileGroups
+        allTileGroupsExceptText
 
 
 type alias TileGroupData =
@@ -1908,7 +1907,7 @@ railBottomToRight_SplitLeft =
         RailSplitPath
             { primary = RailPathHorizontal { offsetX = 1, offsetY = 0, length = 3 }
             , secondary = RailPathBottomToRight
-            , texturePosition = Coord.xy 20 40
+            , texturePosition = Coord.xy 20 40 |> Coord.multiply Units.tileSize
             }
     }
 
@@ -1936,7 +1935,7 @@ railBottomToLeft_SplitUp =
         RailSplitPath
             { primary = RailPathVertical { offsetX = 3, offsetY = 1, length = 3 }
             , secondary = RailPathBottomToLeft
-            , texturePosition = Coord.xy 24 40
+            , texturePosition = Coord.xy 24 40 |> Coord.multiply Units.tileSize
             }
     }
 
@@ -1964,7 +1963,7 @@ railTopToRight_SplitDown =
         RailSplitPath
             { primary = RailPathVertical { offsetX = 0, offsetY = 0, length = 3 }
             , secondary = RailPathTopToRight
-            , texturePosition = Coord.xy 20 44
+            , texturePosition = Coord.xy 20 44 |> Coord.multiply Units.tileSize
             }
     }
 
@@ -1992,7 +1991,7 @@ railTopToLeft_SplitRight =
         RailSplitPath
             { primary = RailPathHorizontal { offsetX = 0, offsetY = 3, length = 3 }
             , secondary = RailPathTopToLeft
-            , texturePosition = Coord.xy 24 44
+            , texturePosition = Coord.xy 24 44 |> Coord.multiply Units.tileSize
             }
     }
 
@@ -2020,7 +2019,7 @@ railBottomToRight_SplitUp =
         RailSplitPath
             { primary = RailPathVertical { offsetX = 0, offsetY = 1, length = 3 }
             , secondary = RailPathBottomToRight
-            , texturePosition = Coord.xy 20 48
+            , texturePosition = Coord.xy 20 48 |> Coord.multiply Units.tileSize
             }
     }
 
@@ -2048,7 +2047,7 @@ railBottomToLeft_SplitRight =
         RailSplitPath
             { primary = RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 }
             , secondary = RailPathBottomToLeft
-            , texturePosition = Coord.xy 24 48
+            , texturePosition = Coord.xy 24 48 |> Coord.multiply Units.tileSize
             }
     }
 
@@ -2076,7 +2075,7 @@ railTopToRight_SplitLeft =
         RailSplitPath
             { primary = RailPathHorizontal { offsetX = 1, offsetY = 3, length = 3 }
             , secondary = RailPathTopToRight
-            , texturePosition = Coord.xy 20 52
+            , texturePosition = Coord.xy 20 52 |> Coord.multiply Units.tileSize
             }
     }
 
@@ -2104,7 +2103,7 @@ railTopToLeft_SplitDown =
         RailSplitPath
             { primary = RailPathVertical { offsetX = 3, offsetY = 0, length = 3 }
             , secondary = RailPathTopToLeft
-            , texturePosition = Coord.xy 24 52
+            , texturePosition = Coord.xy 24 52 |> Coord.multiply Units.tileSize
             }
     }
 

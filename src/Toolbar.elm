@@ -47,7 +47,6 @@ type alias ViewData =
     , tileColors : AssocList.Dict TileGroup Colors
     , tileHotkeys : Dict String TileGroup
     , currentTool : Tool
-    , pingData : Maybe PingData
     , userId : Maybe (Id UserId)
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
@@ -607,6 +606,9 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
 
                 TilePickerTool ->
                     TilePickerToolButton
+
+                TextTool ->
+                    TextToolButton
     in
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
@@ -642,6 +644,9 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
 
                 TilePlacerTool { tileGroup } ->
                     Tile.getTileGroupData tileGroup |> .name
+
+                TextTool ->
+                    "Text"
             )
         , Ui.row
             { spacing = 10, padding = Ui.noPadding }
@@ -696,6 +701,9 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                         Cursor.eyeDropperCursor2
 
                     HandTool ->
+                        Cursor.defaultCursorMesh2 handColor
+
+                    TextTool ->
                         Cursor.defaultCursorMesh2 handColor
                 )
             ]
@@ -758,6 +766,14 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                 TilePickerToolButton ->
                     Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
 
+                TextToolButton ->
+                    case AssocList.get BigTextGroup colors of
+                        Just a ->
+                            a
+
+                        Nothing ->
+                            Tile.getTileGroupData BigTextGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
+
         hotkeyText : Maybe String
         hotkeyText =
             case tool of
@@ -774,25 +790,23 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                     else
                         Just "Ctrl"
 
+                TextToolButton ->
+                    Nothing
+
         label : Ui.Element UiHover UiMsg
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
-                    tileMesh tileColors
-                        (getTileGroupTile tileGroup
-                            (if tileGroup == BigTextGroup then
-                                77
-
-                             else
-                                0
-                            )
-                        )
+                    tileMesh tileColors (getTileGroupTile tileGroup 0)
 
                 HandToolButton ->
                     Cursor.defaultCursorMesh2 handColor
 
                 TilePickerToolButton ->
                     Cursor.eyeDropperCursor2
+
+                TextToolButton ->
+                    tileMesh tileColors (getTileGroupTile BigTextGroup 77)
     in
     Ui.customButton
         { id = ToolButtonHover tool
@@ -839,7 +853,7 @@ buttonTiles =
     [ HandToolButton
     , TilePickerToolButton
     ]
-        ++ List.map TilePlacerToolButton Tile.allTileGroups
+        ++ List.map TilePlacerToolButton Tile.allTileGroupsExceptText
 
 
 toolbarRowCount : number
@@ -960,6 +974,27 @@ showColorTextInputs handColor tileColors tool =
 
         TilePickerTool ->
             { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
+
+        TextTool ->
+            case ( AssocList.get BigTextGroup tileColors, Tile.getTileGroupData BigTextGroup |> .defaultColors ) of
+                ( _, ZeroDefaultColors ) ->
+                    { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
+
+                ( Just colors, OneDefaultColor _ ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor, showSecondaryColorTextInput = Nothing }
+
+                ( Nothing, OneDefaultColor color ) ->
+                    { showPrimaryColorTextInput = Just color, showSecondaryColorTextInput = Nothing }
+
+                ( Just colors, TwoDefaultColors _ ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor
+                    , showSecondaryColorTextInput = Just colors.secondaryColor
+                    }
+
+                ( Nothing, TwoDefaultColors colors ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor
+                    , showSecondaryColorTextInput = Just colors.secondaryColor
+                    }
 
 
 getTileGroupTile : TileGroup -> Int -> Tile

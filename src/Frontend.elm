@@ -1089,6 +1089,19 @@ updateLoaded audioData msg model =
                                         TilePickerTool ->
                                             ( model2, Command.none )
 
+                                        TextTool _ ->
+                                            ( { model2
+                                                | currentTool =
+                                                    TextTool
+                                                        { cursorPosition =
+                                                            mouseWorldPosition model
+                                                                |> Coord.floorPoint
+                                                                |> Just
+                                                        }
+                                              }
+                                            , Command.none
+                                            )
+
                                 UiHover id data ->
                                     case id of
                                         PrimaryColorInput ->
@@ -1300,6 +1313,9 @@ updateLoaded audioData msg model =
                             model2
 
                         TilePickerTool ->
+                            model2
+
+                        TextTool _ ->
                             model2
             in
             ( { model
@@ -1873,6 +1889,9 @@ currentTileGroup model =
         TilePickerTool ->
             Nothing
 
+        TextTool record ->
+            Nothing
+
 
 nextFocus : FrontendLoaded -> Hover
 nextFocus model =
@@ -1991,6 +2010,34 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
 
         TilePickerTool ->
             ( model, Command.none )
+
+        TextTool _ ->
+            ( { model
+                | tileColors =
+                    case maybeNewColor of
+                        Just color ->
+                            AssocList.update
+                                BigTextGroup
+                                (\maybeColor ->
+                                    (case maybeColor of
+                                        Just colors ->
+                                            updateColor color colors
+
+                                        Nothing ->
+                                            Tile.getTileGroupData BigTextGroup
+                                                |> .defaultColors
+                                                |> Tile.defaultToPrimaryAndSecondary
+                                                |> updateColor color
+                                    )
+                                        |> Just
+                                )
+                                model.tileColors
+
+                        Nothing ->
+                            model.tileColors
+              }
+            , Command.none
+            )
     )
         |> Tuple.mapFirst (setTextInputModel newTextInput)
         |> Tuple.mapFirst
@@ -2017,6 +2064,9 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
                                         m.currentTool
 
                                     TilePickerTool ->
+                                        m.currentTool
+
+                                    TextTool record ->
                                         m.currentTool
                         }
 
@@ -2045,7 +2095,6 @@ getViewModel model =
     , tileColors = model.tileColors
     , tileHotkeys = model.tileHotkeys
     , currentTool = model.currentTool
-    , pingData = model.pingData
     , userId = maybeUserId
     , topMenuOpened = model.topMenuOpened
     , inviteTextInput = model.inviteTextInput
@@ -2262,6 +2311,9 @@ keyMsgCanvasUpdate audioData key model =
                                             NormalViewPoint _ ->
                                                 model.viewPoint
                                 }
+
+
+                    TextTool record ->
                 , Command.none
                 )
 
@@ -2330,6 +2382,9 @@ setCurrentTool tool model =
 
                 TilePickerToolButton ->
                     { primaryColor = Color.white, secondaryColor = Color.black }
+
+                TextToolButton ->
+                    getTileColor BigTextGroup model
     in
     setCurrentToolWithColors tool colors model
 
@@ -2351,6 +2406,14 @@ setCurrentToolWithColors tool colors model =
 
                 TilePickerToolButton ->
                     TilePickerTool
+
+                TextToolButton ->
+                    case model.currentTool of
+                        TextTool _ ->
+                            model.currentTool
+
+                        _ ->
+                            TextTool { cursorPosition = Nothing }
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
         , tileColors =
@@ -2363,6 +2426,9 @@ setCurrentToolWithColors tool colors model =
 
                 TilePickerToolButton ->
                     model.tileColors
+
+                TextToolButton ->
+                    AssocList.insert BigTextGroup colors model.tileColors
     }
 
 

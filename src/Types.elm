@@ -129,12 +129,14 @@ type ToolButton
     = HandToolButton
     | TilePlacerToolButton TileGroup
     | TilePickerToolButton
+    | TextToolButton
 
 
 type Tool
     = HandTool
     | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
     | TilePickerTool
+    | TextTool { cursorPosition : Maybe (Coord WorldUnit) }
 
 
 type alias FrontendLoaded =
