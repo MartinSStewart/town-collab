@@ -607,7 +607,7 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
                 TilePickerTool ->
                     TilePickerToolButton
 
-                TextTool ->
+                TextTool _ ->
                     TextToolButton
     in
     Ui.row
@@ -645,7 +645,7 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                 TilePlacerTool { tileGroup } ->
                     Tile.getTileGroupData tileGroup |> .name
 
-                TextTool ->
+                TextTool _ ->
                     "Text"
             )
         , Ui.row
@@ -703,7 +703,7 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                     HandTool ->
                         Cursor.defaultCursorMesh2 handColor
 
-                    TextTool ->
+                    TextTool _ ->
                         Cursor.defaultCursorMesh2 handColor
                 )
             ]
@@ -852,6 +852,7 @@ buttonTiles : List ToolButton
 buttonTiles =
     [ HandToolButton
     , TilePickerToolButton
+    , TextToolButton
     ]
         ++ List.map TilePlacerToolButton Tile.allTileGroupsExceptText
 
@@ -975,7 +976,7 @@ showColorTextInputs handColor tileColors tool =
         TilePickerTool ->
             { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
 
-        TextTool ->
+        TextTool _ ->
             case ( AssocList.get BigTextGroup tileColors, Tile.getTileGroupData BigTextGroup |> .defaultColors ) of
                 ( _, ZeroDefaultColors ) ->
                     { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }

@@ -2159,6 +2159,9 @@ hoverAt model mousePosition =
                                     else
                                         Nothing
 
+                                TextTool _ ->
+                                    Nothing
+
                         Nothing ->
                             Nothing
 
@@ -2186,6 +2189,9 @@ hoverAt model mousePosition =
                                             Nothing
                                     )
                                 |> Quantity.minimumBy Tuple.second
+
+                        TextTool _ ->
+                            Nothing
 
                 localGrid : LocalGrid_
                 localGrid =
@@ -2216,6 +2222,9 @@ hoverAt model mousePosition =
                                                 False
                                     )
                                 |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+
+                        TextTool _ ->
+                            Nothing
             in
             case trainHovers of
                 Just ( train, _ ) ->
@@ -2258,6 +2267,9 @@ keyMsgCanvasUpdate audioData key model =
 
                 TilePickerTool ->
                     model
+
+                TextTool _ ->
+                    model
             , Command.none
             )
 
@@ -2270,6 +2282,9 @@ keyMsgCanvasUpdate audioData key model =
                     model
 
                 TilePickerTool ->
+                    model
+
+                TextTool record ->
                     model
             , Command.none
             )
@@ -2312,8 +2327,8 @@ keyMsgCanvasUpdate audioData key model =
                                                 model.viewPoint
                                 }
 
-
-                    TextTool record ->
+                    TextTool _ ->
+                        { model | currentTool = TextTool { cursorPosition = Nothing } }
                 , Command.none
                 )
 
@@ -2616,6 +2631,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         mousePosition
                                         |> NormalViewPoint
 
+                                TextTool _ ->
+                                    model.viewPoint
+
                         _ ->
                             model.viewPoint
             }
@@ -2669,6 +2687,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         )
 
                                     TilePlacerTool _ ->
+                                        ( model2, Command.none )
+
+                                    TextTool _ ->
                                         ( model2, Command.none )
 
                             Nothing ->
@@ -2951,6 +2972,10 @@ setFocus newFocus model =
                                     (Color.toHexCode (getHandColor userId model).primaryColor)
                                     model.primaryColorTextInput
 
+                            TextTool _ ->
+                                model.primaryColorTextInput
+                                    |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).primaryColor)
+
                     else if not (isPrimaryColorInput model.focus) && isPrimaryColorInput newFocus then
                         TextInput.selectAll model.primaryColorTextInput
 
@@ -2975,6 +3000,10 @@ setFocus newFocus model =
                                 TextInput.withText
                                     (Color.toHexCode (getHandColor userId model).secondaryColor)
                                     model.secondaryColorTextInput
+
+                            TextTool _ ->
+                                model.secondaryColorTextInput
+                                    |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).secondaryColor)
 
                     else if not (isSecondaryColorInput model.focus) && isSecondaryColorInput newFocus then
                         TextInput.selectAll model.secondaryColorTextInput
@@ -3559,6 +3588,9 @@ updateMeshes forceUpdate oldModel newModel =
                 TilePickerTool ->
                     Nothing
 
+                TextTool _ ->
+                    Nothing
+
         oldCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
         oldCurrentTile =
             currentTile oldModel
@@ -3784,6 +3816,9 @@ actualViewPoint model =
 
                 HandTool ->
                     offsetViewPoint model hover start current
+
+                TextTool _ ->
+                    actualViewPointHelper model
 
         _ ->
             actualViewPointHelper model
@@ -4534,6 +4569,26 @@ cursorSprite hover model =
 
                                             UiHover _ _ ->
                                                 PointerCursor
+
+                                    TextTool _ ->
+                                        case hover of
+                                            UiBackgroundHover ->
+                                                DefaultCursor
+
+                                            TileHover _ ->
+                                                NoCursor
+
+                                            TrainHover _ ->
+                                                NoCursor
+
+                                            MapHover ->
+                                                NoCursor
+
+                                            CowHover _ ->
+                                                NoCursor
+
+                                            UiHover _ _ ->
+                                                PointerCursor
             in
             case isDraggingView hover model of
                 Just mouse ->
@@ -4588,6 +4643,9 @@ isDraggingView hover model =
 
                     else
                         Nothing
+
+                TextTool _ ->
+                    Nothing
 
         _ ->
             Nothing
