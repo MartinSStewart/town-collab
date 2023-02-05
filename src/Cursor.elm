@@ -1,8 +1,11 @@
 module Cursor exposing
-    ( CursorMeshes
+    ( Cursor
+    , CursorMeshes
     , CursorSprite(..)
     , CursorType(..)
+    , OtherUsersTool(..)
     , defaultColors
+    , defaultCursor
     , defaultCursorMesh
     , defaultCursorMesh2
     , defaultCursorTexturePosition
@@ -24,13 +27,40 @@ module Cursor exposing
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import DisplayName exposing (DisplayName)
+import Effect.Time
 import Html
 import Html.Attributes
-import Id exposing (Id, UserId)
+import Id exposing (CowId, Id, UserId)
+import Pixels exposing (Pixels)
+import Point2d exposing (Point2d)
 import Shaders exposing (Vertex)
 import Sprite
 import Ui
+import Units exposing (WorldUnit)
 import WebGL
+
+
+type alias Cursor =
+    { position : Point2d WorldUnit WorldUnit
+    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Effect.Time.Posix }
+    , currentTool : OtherUsersTool
+    }
+
+
+defaultCursor : Point2d WorldUnit WorldUnit -> Maybe { cowId : Id CowId, pickupTime : Effect.Time.Posix } -> Cursor
+defaultCursor position holdingCow =
+    { position = position
+    , holdingCow = holdingCow
+    , currentTool = HandTool
+    }
+
+
+type OtherUsersTool
+    = HandTool
+    | TilePlacerTool
+    | TilePickerTool
+    | EraserTool
+    | TextTool (Maybe { cursorPosition : Coord WorldUnit })
 
 
 type alias CursorMeshes =
@@ -40,40 +70,45 @@ type alias CursorMeshes =
     , pinchSprite : WebGL.Mesh Vertex
     , eyeDropperSprite : WebGL.Mesh Vertex
     , eraserSprite : WebGL.Mesh Vertex
+    , textSprite : WebGL.Mesh Vertex
     }
 
 
 meshes : Maybe ( Id UserId, DisplayName ) -> Colors -> CursorMeshes
 meshes showName colors =
     let
-        nameTag2 : List Vertex
-        nameTag2 =
+        nameTag2 : Coord Pixels -> List Vertex
+        nameTag2 offset =
             case showName of
                 Just showName2 ->
-                    nameTag showName2
+                    nameTag offset showName2
 
                 Nothing ->
                     []
     in
-    { defaultSprite = nameTag2 ++ defaultCursorMesh colors |> Sprite.toMesh
-    , pointerSprite = nameTag2 ++ pointerCursorMesh colors |> Sprite.toMesh
+    { defaultSprite = nameTag2 Coord.origin ++ defaultCursorMesh colors |> Sprite.toMesh
+    , pointerSprite = nameTag2 Coord.origin ++ pointerCursorMesh colors |> Sprite.toMesh
     , dragScreenSprite = dragScreenCursorMesh colors
-    , pinchSprite = pinchCursorMesh colors
-    , eyeDropperSprite = eyeDropperCursorMesh
-    , eraserSprite = Sprite.toMesh eraserCursorMesh
+    , pinchSprite = nameTag2 (Coord.xy 0 -16) ++ pinchCursorMesh colors |> Sprite.toMesh
+    , eyeDropperSprite = nameTag2 (Coord.xy 0 -16) ++ eyeDropperCursorMesh |> Sprite.toMesh
+    , eraserSprite = nameTag2 (Coord.xy 0 -16) ++ eraserCursorMesh |> Sprite.toMesh
+    , textSprite = nameTag2 Coord.origin ++ textCursorMesh |> Sprite.toMesh
     }
 
 
-nameTag : ( Id UserId, DisplayName ) -> List Vertex
-nameTag ( userId, name ) =
+nameTag : Coord Pixels -> ( Id UserId, DisplayName ) -> List Vertex
+nameTag offset ( userId, name ) =
     let
         text =
             DisplayName.nameAndId name userId
 
-        textSize =
-            Sprite.textSize 1 text |> Coord.multiplyTuple_ ( -0.5, -1.4 ) |> Coord.plus (Coord.xy 12 0)
+        textOffset =
+            Sprite.textSize 1 text
+                |> Coord.multiplyTuple_ ( -0.5, -1.4 )
+                |> Coord.plus (Coord.xy 12 0)
+                |> Coord.plus offset
     in
-    Sprite.outlinedText Color.outlineColor Color.white 1 text textSize
+    Sprite.outlinedText Color.outlineColor Color.white 1 text textOffset
 
 
 type CursorType
@@ -90,6 +125,7 @@ type CursorSprite
     | PinchSpriteCursor
     | EyeDropperSpriteCursor
     | EraserSpriteCursor
+    | TextSpriteCursor
 
 
 getSpriteMesh : CursorSprite -> CursorMeshes -> WebGL.Mesh Vertex
@@ -112,6 +148,9 @@ getSpriteMesh cursorSprite cursorMeshes =
 
         EraserSpriteCursor ->
             cursorMeshes.eraserSprite
+
+        TextSpriteCursor ->
+            cursorMeshes.textSprite
 
 
 htmlAttribute : CursorType -> Html.Attribute msg
@@ -143,7 +182,7 @@ defaultColors =
     { primaryColor = Color.rgb255 190 190 185, secondaryColor = Color.rgb255 165 165 160 }
 
 
-pinchCursorMesh : Colors -> WebGL.Mesh Vertex
+pinchCursorMesh : Colors -> List Vertex
 pinchCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors
@@ -151,7 +190,6 @@ pinchCursorMesh colors =
         pinchCursorTextureSize
         pinchCursorTexturePosition
         pinchCursorTextureSize
-        |> Sprite.toMesh
 
 
 pinchCursorTexturePosition : Coord units
@@ -215,14 +253,14 @@ eraserCursorMesh =
     Sprite.sprite (Coord.xy -2 -24) (Coord.xy 28 27) (Coord.xy 504 42) (Coord.xy 28 27)
 
 
-eyeDropperCursorMesh : WebGL.Mesh Vertex
+textCursorMesh : List Vertex
+textCursorMesh =
+    Sprite.sprite (Coord.xy -7 -9) (Coord.xy 14 33) (Coord.xy 560 74) (Coord.xy 14 33)
+
+
+eyeDropperCursorMesh : List Vertex
 eyeDropperCursorMesh =
-    Sprite.sprite
-        (Coord.xy 0 -19)
-        eyeDropperSize
-        (Coord.xy 534 78)
-        eyeDropperSize
-        |> Sprite.toMesh
+    Sprite.sprite (Coord.xy 0 -19) eyeDropperSize (Coord.xy 534 78) eyeDropperSize
 
 
 eyeDropperSize : Coord units

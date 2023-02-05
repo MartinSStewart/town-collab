@@ -688,7 +688,12 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                         Cursor.defaultCursorMesh2 handColor
 
                     TextToolButton ->
-                        Cursor.defaultCursorMesh2 handColor
+                        case AssocList.get BigTextGroup tileColors of
+                            Just color ->
+                                tileMesh color (BigText 'A')
+
+                            Nothing ->
+                                Ui.none
                 )
             ]
         ]

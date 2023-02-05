@@ -731,6 +731,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                 let
                                     _ =
                                         Debug.log "inviteUrl" inviteUrl
+
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
@@ -995,10 +996,17 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                     (\user2 ->
                         { user2
                             | cursor =
-                                { position = position
-                                , holdingCow = Just { cowId = cowId, pickupTime = time2 }
-                                }
-                                    |> Just
+                                case user2.cursor of
+                                    Just cursor ->
+                                        { cursor
+                                            | position = position
+                                            , holdingCow = Just { cowId = cowId, pickupTime = time2 }
+                                        }
+                                            |> Just
+
+                                    Nothing ->
+                                        Cursor.defaultCursor position (Just { cowId = cowId, pickupTime = time2 })
+                                            |> Just
                         }
                     )
                     model
@@ -1014,7 +1022,18 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                             if holdingCow.cowId == cowId then
                                 ( updateUser
                                     userId
-                                    (\user2 -> { user2 | cursor = Just { position = position, holdingCow = Nothing } })
+                                    (\user2 ->
+                                        { user2
+                                            | cursor =
+                                                case user2.cursor of
+                                                    Just cursor2 ->
+                                                        { cursor2 | position = position, holdingCow = Nothing }
+                                                            |> Just
+
+                                                    Nothing ->
+                                                        Cursor.defaultCursor position Nothing |> Just
+                                        }
+                                    )
                                     { model
                                         | cows =
                                             IdDict.update
@@ -1041,14 +1060,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                 (\user2 ->
                     { user2
                         | cursor =
-                            (case user2.cursor of
+                            case user2.cursor of
                                 Just cursor ->
-                                    { cursor | position = position }
+                                    { cursor | position = position } |> Just
 
                                 Nothing ->
-                                    { position = position, holdingCow = Nothing }
-                            )
-                                |> Just
+                                    Cursor.defaultCursor position Nothing |> Just
                     }
                 )
                 model
@@ -1162,6 +1179,25 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             ( { model | users = IdDict.insert userId { user | allowEmailNotifications = allow } model.users }
             , originalChange
             , Nothing
+            )
+
+        ChangeTool tool ->
+            ( { model
+                | users =
+                    IdDict.insert userId
+                        { user
+                            | cursor =
+                                case user.cursor of
+                                    Just cursor ->
+                                        Just { cursor | currentTool = tool }
+
+                                    Nothing ->
+                                        Nothing
+                        }
+                        model.users
+              }
+            , originalChange
+            , ServerChangeTool userId tool |> Just
             )
 
 
@@ -1442,10 +1478,16 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                             backendUserToFrontend user
 
                         Nothing ->
-                            { handColor = Cursor.defaultColors, name = DisplayName.default }
+                            { handColor = Cursor.defaultColors
+                            , name = DisplayName.default
+                            , cursor = Nothing
+                            }
 
                 NotLoggedIn ->
-                    { handColor = Cursor.defaultColors, name = DisplayName.default }
+                    { handColor = Cursor.defaultColors
+                    , name = DisplayName.default
+                    , cursor = Nothing
+                    }
     in
     ( model3
     , Command.batch
@@ -1487,6 +1529,7 @@ backendUserToFrontend : BackendUserData -> FrontendUser
 backendUserToFrontend user =
     { name = user.name
     , handColor = user.handColor
+    , cursor = user.cursor
     }
 
 

@@ -4,7 +4,7 @@ exports.init = async function(app) {
   document.addEventListener(
     "keydown",
     (event) => {
-        if (event.key === 'Tab')
+        if (event.key === 'Tab' || event.key === '\'' || event.key === '/')
         {
             event.preventDefault();
         }

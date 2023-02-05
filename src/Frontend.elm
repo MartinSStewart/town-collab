@@ -17,7 +17,7 @@ import Change exposing (Change(..), Cow, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
-import Cursor exposing (CursorMeshes, CursorSprite(..), CursorType(..))
+import Cursor exposing (Cursor, CursorMeshes, CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import DisplayName
 import Duration exposing (Duration)
@@ -35,9 +35,7 @@ import Effect.WebGL.Settings.DepthTest
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress
 import Env
-import EverySet
 import Flag
-import Geometry.Interop.LinearAlgebra.Point2d as Point2d
 import Grid exposing (Grid)
 import GridCell
 import Html exposing (Html)
@@ -55,7 +53,7 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_)
+import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -797,6 +795,41 @@ update audioData msg model =
                             removeLastCursorMove newModel
                                 |> updateLocalModel (Change.MoveCursor (mouseWorldPosition newModel))
                                 |> Tuple.first
+                        , cmd
+                        )
+                   )
+                |> (\( newModel, cmd ) ->
+                        let
+                            toolToCursorTool tool =
+                                case tool of
+                                    HandTool ->
+                                        Cursor.HandTool
+
+                                    TilePlacerTool { tileGroup } ->
+                                        if tileGroup == EmptyTileGroup then
+                                            Cursor.EraserTool
+
+                                        else
+                                            Cursor.TilePlacerTool
+
+                                    TilePickerTool ->
+                                        Cursor.TilePickerTool
+
+                                    TextTool (Just textTool) ->
+                                        Cursor.TextTool (Just { cursorPosition = textTool.cursorPosition })
+
+                                    TextTool Nothing ->
+                                        Cursor.TextTool Nothing
+
+                            newTool : Cursor.OtherUsersTool
+                            newTool =
+                                currentTool newModel |> toolToCursorTool
+                        in
+                        ( if toolToCursorTool (currentTool frontendLoaded) == newTool then
+                            newModel
+
+                          else
+                            updateLocalModel (Change.ChangeTool newTool) newModel |> Tuple.first
                         , cmd
                         )
                    )
@@ -2191,7 +2224,11 @@ hoverAt model mousePosition =
                                         Nothing
 
                                 TextTool _ ->
-                                    Nothing
+                                    if ctrlOrMeta model then
+                                        TileHover tile |> Just
+
+                                    else
+                                        Nothing
 
                         Nothing ->
                             Nothing
@@ -4726,16 +4763,16 @@ cursorSprite hover model =
                                                 DefaultCursor
 
                                             TileHover _ ->
-                                                CursorSprite PointerSpriteCursor
+                                                CursorSprite TextSpriteCursor
 
                                             TrainHover _ ->
-                                                CursorSprite PointerSpriteCursor
+                                                CursorSprite TextSpriteCursor
 
                                             MapHover ->
-                                                CursorSprite PointerSpriteCursor
+                                                CursorSprite TextSpriteCursor
 
                                             CowHover _ ->
-                                                CursorSprite PointerSpriteCursor
+                                                CursorSprite TextSpriteCursor
 
                                             UiHover _ _ ->
                                                 PointerCursor
@@ -5295,7 +5332,33 @@ drawOtherCursors texture viewMatrix model =
                             [ Shaders.blend ]
                             Shaders.vertexShader
                             Shaders.fragmentShader
-                            (Cursor.getSpriteMesh DefaultSpriteCursor mesh)
+                            (Cursor.getSpriteMesh
+                                (case cursor.holdingCow of
+                                    Just _ ->
+                                        PinchSpriteCursor
+
+                                    Nothing ->
+                                        case cursor.currentTool of
+                                            Cursor.HandTool ->
+                                                DefaultSpriteCursor
+
+                                            Cursor.EraserTool ->
+                                                EraserSpriteCursor
+
+                                            Cursor.TilePlacerTool ->
+                                                DefaultSpriteCursor
+
+                                            Cursor.TilePickerTool ->
+                                                EyeDropperSpriteCursor
+
+                                            Cursor.TextTool (Just _) ->
+                                                TextSpriteCursor
+
+                                            Cursor.TextTool Nothing ->
+                                                DefaultSpriteCursor
+                                )
+                                mesh
+                            )
                             { view =
                                 Mat4.makeTranslate3
                                     (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
@@ -5371,8 +5434,12 @@ cursorActualPosition isCurrentUser userId cursor model =
         cursor.position
 
     else
-        case IdDict.get userId model.previousCursorPositions of
-            Just previous ->
+        case ( cursor.currentTool, IdDict.get userId model.previousCursorPositions ) of
+            ( Cursor.TextTool (Just textTool), _ ) ->
+                Coord.toPoint2d textTool.cursorPosition
+                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.5 })
+
+            ( _, Just previous ) ->
                 Point2d.interpolateFrom
                     previous.position
                     cursor.position
@@ -5382,7 +5449,7 @@ cursorActualPosition isCurrentUser userId cursor model =
                         |> clamp 0 1
                     )
 
-            Nothing ->
+            _ ->
                 cursor.position
 
 
