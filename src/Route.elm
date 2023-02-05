@@ -38,7 +38,7 @@ type LoginOrInviteToken
 
 startPointAt : Coord WorldUnit
 startPointAt =
-    Coord.tuple ( 0, 0 )
+    Coord.tuple ( 183, 54 )
 
 
 coordQueryParser : Url.Parser.Query.Parser Route

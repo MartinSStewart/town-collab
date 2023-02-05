@@ -643,7 +643,7 @@ init url key =
         , cssWindowSize = Coord.xy 1920 1080
         , cssCanvasSize = Coord.xy 1920 1080
         , devicePixelRatio = 1
-        , zoomFactor = 2
+        , zoomFactor = 1
         , time = Nothing
         , viewPoint = data.viewPoint
         , showInbox = data.showInbox
@@ -1574,83 +1574,88 @@ updateLoaded audioData msg model =
 
                 canMoveWithArrowKeys : Bool
                 canMoveWithArrowKeys =
-                    case model.focus of
-                        TileHover _ ->
-                            True
+                    case model.currentTool of
+                        TextTool (Just _) ->
+                            False
 
-                        TrainHover _ ->
-                            True
-
-                        MapHover ->
-                            True
-
-                        CowHover _ ->
-                            True
-
-                        UiBackgroundHover ->
-                            True
-
-                        UiHover uiHover _ ->
-                            case uiHover of
-                                EmailAddressTextInputHover ->
-                                    False
-
-                                SendEmailButtonHover ->
+                        _ ->
+                            case model.focus of
+                                TileHover _ ->
                                     True
 
-                                PrimaryColorInput ->
-                                    False
-
-                                SecondaryColorInput ->
-                                    False
-
-                                ToolButtonHover _ ->
+                                TrainHover _ ->
                                     True
 
-                                ShowInviteUser ->
+                                MapHover ->
                                     True
 
-                                CloseInviteUser ->
+                                CowHover _ ->
                                     True
 
-                                SubmitInviteUser ->
+                                UiBackgroundHover ->
                                     True
 
-                                InviteEmailAddressTextInput ->
-                                    False
+                                UiHover uiHover _ ->
+                                    case uiHover of
+                                        EmailAddressTextInputHover ->
+                                            False
 
-                                LowerMusicVolume ->
-                                    True
+                                        SendEmailButtonHover ->
+                                            True
 
-                                RaiseMusicVolume ->
-                                    True
+                                        PrimaryColorInput ->
+                                            False
 
-                                LowerSoundEffectVolume ->
-                                    True
+                                        SecondaryColorInput ->
+                                            False
 
-                                RaiseSoundEffectVolume ->
-                                    True
+                                        ToolButtonHover _ ->
+                                            True
 
-                                SettingsButton ->
-                                    True
+                                        ShowInviteUser ->
+                                            True
 
-                                CloseSettings ->
-                                    True
+                                        CloseInviteUser ->
+                                            True
 
-                                DisplayNameTextInput ->
-                                    False
+                                        SubmitInviteUser ->
+                                            True
 
-                                MailEditorHover _ ->
-                                    False
+                                        InviteEmailAddressTextInput ->
+                                            False
 
-                                YouGotMailButton ->
-                                    True
+                                        LowerMusicVolume ->
+                                            True
 
-                                ShowMapButton ->
-                                    True
+                                        RaiseMusicVolume ->
+                                            True
 
-                                AllowEmailNotificationsCheckbox ->
-                                    True
+                                        LowerSoundEffectVolume ->
+                                            True
+
+                                        RaiseSoundEffectVolume ->
+                                            True
+
+                                        SettingsButton ->
+                                            True
+
+                                        CloseSettings ->
+                                            True
+
+                                        DisplayNameTextInput ->
+                                            False
+
+                                        MailEditorHover _ ->
+                                            False
+
+                                        YouGotMailButton ->
+                                            True
+
+                                        ShowMapButton ->
+                                            True
+
+                                        AllowEmailNotificationsCheckbox ->
+                                            True
 
                 model2 =
                     { model
@@ -1717,21 +1722,32 @@ updateLoaded audioData msg model =
                     ( model, Command.none )
 
         PastedText text ->
+            let
+                pasteTextTool () =
+                    ( case model.currentTool of
+                        TextTool (Just _) ->
+                            String.foldl placeChar model (String.left 200 text)
+
+                        _ ->
+                            model
+                    , Command.none
+                    )
+            in
             case model.focus of
                 TileHover _ ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 TrainHover _ ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 MapHover ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 CowHover _ ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 UiBackgroundHover ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 UiHover uiHover _ ->
                     case uiHover of
@@ -1741,7 +1757,7 @@ updateLoaded audioData msg model =
                             )
 
                         SendEmailButtonHover ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         PrimaryColorInput ->
                             case currentUserId model of
@@ -1756,7 +1772,7 @@ updateLoaded audioData msg model =
                                             model
 
                                 Nothing ->
-                                    ( model, Command.none )
+                                    pasteTextTool ()
 
                         SecondaryColorInput ->
                             case currentUserId model of
@@ -1771,40 +1787,40 @@ updateLoaded audioData msg model =
                                             model
 
                                 Nothing ->
-                                    ( model, Command.none )
+                                    pasteTextTool ()
 
                         ToolButtonHover _ ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         ShowInviteUser ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         CloseInviteUser ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         SubmitInviteUser ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         InviteEmailAddressTextInput ->
                             ( { model | inviteTextInput = TextInput.paste text model.inviteTextInput }, Command.none )
 
                         LowerMusicVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         RaiseMusicVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         LowerSoundEffectVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         RaiseSoundEffectVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         SettingsButton ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         CloseSettings ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         DisplayNameTextInput ->
                             case model.topMenuOpened of
@@ -1816,19 +1832,19 @@ updateLoaded audioData msg model =
                                     )
 
                                 _ ->
-                                    ( model, Command.none )
+                                    pasteTextTool ()
 
                         MailEditorHover mailEditorHover ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         YouGotMailButton ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         ShowMapButton ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         AllowEmailNotificationsCheckbox ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -2315,36 +2331,71 @@ keyMsgCanvasUpdate key model =
                 , Command.none
                 )
 
+        ( Keyboard.Character "v", True ) ->
+            case model.currentTool of
+                TextTool (Just _) ->
+                    ( model, Ports.readFromClipboardRequest )
+
+                _ ->
+                    ( model, Command.none )
+
         ( Keyboard.Spacebar, False ) ->
-            setTileFromHotkey " " model
+            case model.currentTool of
+                TextTool (Just _) ->
+                    ( placeChar ' ' model, Command.none )
+
+                _ ->
+                    setTileFromHotkey " " model
+
+        ( Keyboard.Backspace, False ) ->
+            ( case model.currentTool of
+                TextTool (Just textTool) ->
+                    placeChar
+                        ' '
+                        { model
+                            | currentTool =
+                                { textTool | cursorPosition = Coord.plus (Coord.xy -1 0) textTool.cursorPosition }
+                                    |> Just
+                                    |> TextTool
+                        }
+                        |> (\m ->
+                                { m
+                                    | currentTool =
+                                        { textTool | cursorPosition = Coord.plus (Coord.xy -1 0) textTool.cursorPosition }
+                                            |> Just
+                                            |> TextTool
+                                }
+                           )
+
+                _ ->
+                    model
+            , Command.none
+            )
+
+        ( Keyboard.ArrowLeft, False ) ->
+            ( shiftTextCursor (Coord.xy -1 0) model
+            , Command.none
+            )
+
+        ( Keyboard.ArrowRight, False ) ->
+            ( shiftTextCursor (Coord.xy 1 0) model
+            , Command.none
+            )
+
+        ( Keyboard.ArrowUp, False ) ->
+            ( shiftTextCursor (Coord.xy 0 -1) model
+            , Command.none
+            )
+
+        ( Keyboard.ArrowDown, False ) ->
+            ( shiftTextCursor (Coord.xy 0 1) model
+            , Command.none
+            )
 
         ( Keyboard.Character string, False ) ->
             case model.currentTool of
-                TextTool (Just textTool) ->
-                    ( case String.toList string |> List.head of
-                        Just char ->
-                            case Dict.get char Sprite.charToInt of
-                                Just charInt ->
-                                    placeTileAt
-                                        textTool.cursorPosition
-                                        False
-                                        BigTextGroup
-                                        charInt
-                                        { model
-                                            | currentTool =
-                                                { textTool
-                                                    | cursorPosition =
-                                                        Coord.plus (Coord.xy 1 0) textTool.cursorPosition
-                                                }
-                                                    |> Just
-                                                    |> TextTool
-                                        }
-
-                                Nothing ->
-                                    model
-
-                        Nothing ->
-                            model
+                TextTool (Just _) ->
+                    ( String.foldl placeChar model string
                     , Command.none
                     )
 
@@ -2353,7 +2404,61 @@ keyMsgCanvasUpdate key model =
 
         ( Keyboard.Enter, False ) ->
             ( case model.currentTool of
-                TextTool (Just textTool) ->
+                TextTool (Just _) ->
+                    placeChar '\n' model
+
+                _ ->
+                    model
+            , Command.none
+            )
+
+        _ ->
+            ( model, Command.none )
+
+
+shiftTextCursor : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
+shiftTextCursor offset model =
+    case model.currentTool of
+        TextTool (Just textTool) ->
+            case BoundingBox2d.offsetBy (Units.tileUnit -8) (viewBoundingBox_ model) of
+                Just viewBounds ->
+                    let
+                        newCursorPosition =
+                            Coord.plus offset textTool.cursorPosition
+                    in
+                    { model
+                        | currentTool =
+                            { textTool | cursorPosition = newCursorPosition }
+                                |> Just
+                                |> TextTool
+                        , viewPoint =
+                            if BoundingBox2d.contains (Coord.toPoint2d newCursorPosition) viewBounds then
+                                model.viewPoint
+
+                            else
+                                actualViewPoint model
+                                    |> Point2d.translateBy (Coord.toVector2d offset)
+                                    |> NormalViewPoint
+                    }
+
+                Nothing ->
+                    { model
+                        | viewPoint =
+                            actualViewPoint model
+                                |> Point2d.translateBy (Coord.toVector2d offset)
+                                |> NormalViewPoint
+                    }
+
+        _ ->
+            model
+
+
+placeChar : Char -> FrontendLoaded -> FrontendLoaded
+placeChar char model =
+    case model.currentTool of
+        TextTool (Just textTool) ->
+            case char of
+                '\n' ->
                     { model
                         | currentTool =
                             { textTool
@@ -2367,12 +2472,28 @@ keyMsgCanvasUpdate key model =
                     }
 
                 _ ->
-                    model
-            , Command.none
-            )
+                    case Dict.get char Sprite.charToInt of
+                        Just charInt ->
+                            placeTileAt
+                                textTool.cursorPosition
+                                False
+                                BigTextGroup
+                                charInt
+                                { model
+                                    | currentTool =
+                                        { textTool
+                                            | cursorPosition =
+                                                Coord.plus (Coord.xy 1 0) textTool.cursorPosition
+                                        }
+                                            |> Just
+                                            |> TextTool
+                                }
+
+                        _ ->
+                            model
 
         _ ->
-            ( model, Command.none )
+            model
 
 
 setTileFromHotkey : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
@@ -2441,12 +2562,7 @@ setCurrentToolWithColors tool colors model =
                     TilePickerTool
 
                 TextToolButton ->
-                    case model.currentTool of
-                        TextTool _ ->
-                            model.currentTool
-
-                        _ ->
-                            TextTool Nothing
+                    TextTool Nothing
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
         , tileColors =
@@ -3163,7 +3279,7 @@ point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
         |> Point2d.unsafe
 
 
-scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float b )
+scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float units )
 scaleForScreenToWorld model =
     ( 1 / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
     , 1 / (toFloat model.zoomFactor * toFloat (Coord.yRaw Units.tileSize)) |> Quantity
