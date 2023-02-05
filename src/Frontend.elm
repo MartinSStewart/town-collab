@@ -3089,6 +3089,17 @@ setFocus : Hover -> FrontendLoaded -> FrontendLoaded
 setFocus newFocus model =
     { model
         | focus = newFocus
+        , currentTool =
+            case model.currentTool of
+                TextTool _ ->
+                    if newFocus == MapHover then
+                        model.currentTool
+
+                    else
+                        TextTool Nothing
+
+                _ ->
+                    model.currentTool
         , primaryColorTextInput =
             case currentUserId model of
                 Just userId ->
