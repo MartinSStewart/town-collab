@@ -4,6 +4,7 @@ module MailEditor exposing
     , FrontendMail
     , Hover(..)
     , Image(..)
+    , ImageOrText(..)
     , MailStatus(..)
     , Model
     , Msg
