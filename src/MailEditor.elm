@@ -166,6 +166,7 @@ type alias Model =
     , submitStatus : SubmitStatus
     , to : Maybe ( Id UserId, DisplayName )
     , inboxMailViewed : Maybe (Id MailId)
+    , textDebouncing : Int
     }
 
 
@@ -312,28 +313,17 @@ uiUpdate config elementPosition mousePosition msg model =
                                 imageData =
                                     getImageData (currentImage imagePlacer)
 
-                                oldEditorState : EditorState
-                                oldEditorState =
-                                    model.current
-
-                                newEditorState : EditorState
-                                newEditorState =
-                                    { oldEditorState
-                                        | content =
-                                            oldEditorState.content
-                                                ++ [ { position =
-                                                        mailMousePosition
-                                                            elementPosition
-                                                            (Just imageData)
-                                                            config.windowSize
-                                                            mousePosition
-                                                     , image = currentImage imagePlacer |> ImageType
-                                                     }
-                                                   ]
-                                    }
-
                                 model2 =
-                                    addChange newEditorState { model | lastPlacedImage = Just config.time }
+                                    addContent
+                                        { position =
+                                            mailMousePosition
+                                                elementPosition
+                                                (Just imageData)
+                                                config.windowSize
+                                                mousePosition
+                                        , image = currentImage imagePlacer |> ImageType
+                                        }
+                                        { model | lastPlacedImage = Just config.time }
                             in
                             ( Just model2, UpdateDraft (toData to model2) )
 
@@ -414,23 +404,14 @@ uiUpdate config elementPosition mousePosition msg model =
                             ( Just model, NoOutMsg )
 
                         TextTool _ ->
-                            let
-                                oldEditor =
-                                    model.current
-                            in
-                            ( addChange
-                                { oldEditor
-                                    | content =
-                                        oldEditor.content
-                                            ++ [ { position =
-                                                    mailMousePosition
-                                                        elementPosition
-                                                        Nothing
-                                                        config.windowSize
-                                                        mousePosition
-                                                 , image = TextType ""
-                                                 }
-                                               ]
+                            ( addContent
+                                { position =
+                                    mailMousePosition
+                                        elementPosition
+                                        Nothing
+                                        config.windowSize
+                                        mousePosition
+                                , image = TextType ""
                                 }
                                 { model | currentTool = TextTool Coord.origin }
                                 |> Just
@@ -477,6 +458,25 @@ uiUpdate config elementPosition mousePosition msg model =
 
         PressedTextToolButton ->
             ( { model | currentTool = TextTool Coord.origin } |> updateCurrentImageMesh |> Just, NoOutMsg )
+
+
+addContent : Content -> Model -> Model
+addContent newItem model =
+    let
+        oldEditor =
+            model.current
+    in
+    case List.unconsLast oldEditor.content of
+        Just ( last, rest ) ->
+            case last.image of
+                TextType "" ->
+                    replaceChange { oldEditor | content = rest ++ [ newItem ] } model
+
+                _ ->
+                    addChange { oldEditor | content = oldEditor.content ++ [ newItem ] } model
+
+        _ ->
+            addChange { oldEditor | content = oldEditor.content ++ [ newItem ] } model
 
 
 currentImage : ImagePlacer_ -> Image
@@ -567,6 +567,7 @@ init maybeUserIdAndName =
             Nothing ->
                 Nothing
     , inboxMailViewed = Nothing
+    , textDebouncing = 0
     }
         |> updateCurrentImageMesh
 
@@ -715,38 +716,20 @@ toData to model =
 
 handleKeyDown : Bool -> Key -> Model -> Maybe Model
 handleKeyDown ctrlHeld key model =
-    case key of
-        Escape ->
+    case ( key, ctrlHeld ) of
+        ( Escape, _ ) ->
             Nothing
 
-        Character "z" ->
-            (if ctrlHeld then
-                undo model
+        ( Character "z", True ) ->
+            undo model |> Just
 
-             else
-                model
-            )
-                |> Just
+        ( Character "y", True ) ->
+            redo model |> Just
 
-        Character "y" ->
-            (if ctrlHeld then
-                redo model
+        ( Character "Z", True ) ->
+            redo model |> Just
 
-             else
-                model
-            )
-                |> Just
-
-        Character "Z" ->
-            (if ctrlHeld then
-                redo model
-
-             else
-                model
-            )
-                |> Just
-
-        Character string ->
+        ( Character string, False ) ->
             case model.currentTool of
                 TextTool position ->
                     typeCharacter position string model.current model
@@ -760,7 +743,7 @@ handleKeyDown ctrlHeld key model =
                 EraserTool ->
                     Just model
 
-        Enter ->
+        ( Enter, _ ) ->
             case model.currentTool of
                 TextTool position ->
                     typeCharacter position "\n" model.current model
@@ -807,6 +790,14 @@ addChange editorState model =
     }
 
 
+replaceChange : EditorState -> Model -> Model
+replaceChange editorState model =
+    { model
+        | current = editorState
+        , redo = []
+    }
+
+
 undo : Model -> Model
 undo model =
     case model.undo of
@@ -815,6 +806,27 @@ undo model =
                 | undo = rest
                 , current = head
                 , redo = model.current :: model.redo
+                , currentTool =
+                    case List.last head.content of
+                        Just last ->
+                            case last.image of
+                                TextType text ->
+                                    let
+                                        lines =
+                                            String.lines text
+                                    in
+                                    case List.last lines of
+                                        Just lastLine ->
+                                            TextTool (Coord.xy (String.length lastLine) (List.length lines))
+
+                                        Nothing ->
+                                            model.currentTool
+
+                                ImageType _ ->
+                                    model.currentTool
+
+                        Nothing ->
+                            model.currentTool
             }
 
         [] ->
@@ -1089,8 +1101,8 @@ yourPostOffice =
         }
 
 
-mailView : Int -> List Content -> Ui.Element id msg
-mailView mailScale mailContent =
+mailView : Int -> List Content -> Maybe Tool -> Ui.Element id msg
+mailView mailScale mailContent maybeTool =
     let
         stampSize =
             Coord.xy 46 46
@@ -1147,6 +1159,22 @@ mailView mailScale mailContent =
                                         Sprite.text Color.black 2 text position2
                             )
                             mailContent
+                        ++ (case ( List.last mailContent, maybeTool ) of
+                                ( Just lastContent, Just (TextTool cursorPosition) ) ->
+                                    case lastContent.image of
+                                        TextType _ ->
+                                            Sprite.rectangleWithOpacity
+                                                0.5
+                                                Color.black
+                                                (Coord.plus position (Coord.scalar mailScale lastContent.position))
+                                                (Coord.scalar 2 Sprite.charSize)
+
+                                        ImageType _ ->
+                                            []
+
+                                _ ->
+                                    []
+                           )
             }
         )
 
@@ -1177,7 +1205,7 @@ editorView idMap msgMap userIdAndName windowSize model =
                 , borderAndFill = NoBorderOrFill
                 , borderAndFillFocus = NoBorderOrFill
                 }
-                (mailView mailScale model.current.content)
+                (mailView mailScale model.current.content (Just model.currentTool))
             , Ui.el
                 { padding = Ui.paddingXY 2 2
                 , inFront = []
@@ -1354,7 +1382,7 @@ inboxView idMap msgMap users inbox model =
             Just mailId ->
                 case IdDict.get mailId inbox of
                     Just mail ->
-                        mailView 2 mail.content
+                        mailView 2 mail.content Nothing
 
                     Nothing ->
                         Ui.text "Mail not found"
