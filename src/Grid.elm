@@ -573,7 +573,7 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
                                         topLayer.yOffset
                                         (Coord.multiply Units.tileSize position2)
                                         1
-                                        (Coord.xy 4 35)
+                                        (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
                                         data.size
 
                             else

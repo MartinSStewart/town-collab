@@ -907,7 +907,7 @@ updateLoaded audioData msg model =
                         Just mailEditor ->
                             let
                                 newMailEditor =
-                                    MailEditor.handleKeyDown audioData model (ctrlOrMeta model) key mailEditor
+                                    MailEditor.handleKeyDown (ctrlOrMeta model) key mailEditor
                             in
                             ( { model
                                 | mailEditor = newMailEditor
@@ -4679,6 +4679,9 @@ cursorSprite hover model =
 
                                                 MailEditor.EraserTool ->
                                                     CursorSprite EraserSpriteCursor
+
+                                                MailEditor.TextTool _ ->
+                                                    CursorSprite TextSpriteCursor
 
                                         _ ->
                                             PointerCursor
