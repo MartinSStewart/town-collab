@@ -905,19 +905,19 @@ updateLoaded audioData msg model =
                 Just key ->
                     case model.mailEditor of
                         Just mailEditor ->
-                            let
-                                newMailEditor =
-                                    MailEditor.handleKeyDown model.time (ctrlOrMeta model) key mailEditor
-                            in
-                            ( { model
-                                | mailEditor = newMailEditor
-                                , lastMailEditorToggle =
-                                    if newMailEditor == Nothing then
-                                        Just model.time
+                            ( case MailEditor.handleKeyDown model.time (ctrlOrMeta model) key mailEditor of
+                                Just ( newMailEditor, outMsg ) ->
+                                    { model
+                                        | mailEditor = Just newMailEditor
+                                        , lastMailEditorToggle = model.lastMailEditorToggle
+                                    }
+                                        |> handleMailEditorOutMsg outMsg
 
-                                    else
-                                        model.lastMailEditorToggle
-                              }
+                                Nothing ->
+                                    { model
+                                        | mailEditor = Nothing
+                                        , lastMailEditorToggle = Just model.time
+                                    }
                             , Command.none
                             )
 
@@ -2915,6 +2915,24 @@ mainMouseButtonUp mousePosition previousMouseState model =
         ( model2, Command.none )
 
 
+handleMailEditorOutMsg : MailEditor.OutMsg -> FrontendLoaded -> FrontendLoaded
+handleMailEditorOutMsg outMsg model =
+    (case outMsg of
+        MailEditor.NoOutMsg ->
+            ( model, LocalGrid.NoOutMsg )
+
+        MailEditor.SubmitMail submitMail ->
+            updateLocalModel (Change.SubmitMail submitMail) model
+
+        MailEditor.UpdateDraft updateDraft ->
+            updateLocalModel (Change.UpdateDraft updateDraft) model
+
+        MailEditor.ViewedMail mailId ->
+            updateLocalModel (Change.ViewedMail mailId) model
+    )
+        |> handleOutMsg False
+
+
 uiUpdate : Coord Pixels -> UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 uiUpdate elementPosition msg model =
     case msg of
@@ -3035,20 +3053,7 @@ uiUpdate elementPosition msg model =
                                         model.lastMailEditorToggle
                             }
                     in
-                    ( (case outMsg of
-                        MailEditor.NoOutMsg ->
-                            ( model2, LocalGrid.NoOutMsg )
-
-                        MailEditor.SubmitMail submitMail ->
-                            updateLocalModel (Change.SubmitMail submitMail) model2
-
-                        MailEditor.UpdateDraft updateDraft ->
-                            updateLocalModel (Change.UpdateDraft updateDraft) model2
-
-                        MailEditor.ViewedMail mailId ->
-                            updateLocalModel (Change.ViewedMail mailId) model2
-                      )
-                        |> handleOutMsg False
+                    ( handleMailEditorOutMsg outMsg model2
                     , Command.none
                     )
 
@@ -4652,7 +4657,7 @@ currentTool model =
             HandTool
 
 
-cursorSprite : Hover -> FrontendLoaded -> CursorType
+cursorSprite : Hover -> FrontendLoaded -> { cursorType : CursorType, scale : Int }
 cursorSprite hover model =
     case currentUserId model of
         Just userId ->
@@ -4662,123 +4667,104 @@ cursorSprite hover model =
                         Just mailEditor ->
                             case hover of
                                 UiHover (MailEditorHover uiHover) _ ->
-                                    case uiHover of
-                                        MailEditor.BackgroundHover ->
-                                            DefaultCursor
-
-                                        MailEditor.ImageButton _ ->
-                                            PointerCursor
-
-                                        MailEditor.MailButton ->
-                                            case mailEditor.currentTool of
-                                                MailEditor.ImagePlacer _ ->
-                                                    NoCursor
-
-                                                MailEditor.ImagePicker ->
-                                                    PointerCursor
-
-                                                MailEditor.EraserTool ->
-                                                    CursorSprite EraserSpriteCursor
-
-                                                MailEditor.TextTool _ ->
-                                                    CursorSprite TextSpriteCursor
-
-                                        _ ->
-                                            PointerCursor
+                                    MailEditor.cursorSprite model.windowSize uiHover mailEditor
 
                                 _ ->
-                                    DefaultCursor
+                                    { cursorType = DefaultCursor, scale = 1 }
 
                         Nothing ->
-                            if isHoldingCow model /= Nothing then
-                                CursorSprite PinchSpriteCursor
+                            { cursorType =
+                                if isHoldingCow model /= Nothing then
+                                    CursorSprite PinchSpriteCursor
 
-                            else
-                                case currentTool model of
-                                    TilePlacerTool _ ->
-                                        case hover of
-                                            UiBackgroundHover ->
-                                                DefaultCursor
+                                else
+                                    case currentTool model of
+                                        TilePlacerTool _ ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
 
-                                            TileHover _ ->
-                                                NoCursor
+                                                TileHover _ ->
+                                                    NoCursor
 
-                                            TrainHover _ ->
-                                                NoCursor
+                                                TrainHover _ ->
+                                                    NoCursor
 
-                                            MapHover ->
-                                                NoCursor
+                                                MapHover ->
+                                                    NoCursor
 
-                                            CowHover _ ->
-                                                NoCursor
+                                                CowHover _ ->
+                                                    NoCursor
 
-                                            UiHover _ _ ->
-                                                PointerCursor
+                                                UiHover _ _ ->
+                                                    PointerCursor
 
-                                    HandTool ->
-                                        case hover of
-                                            UiBackgroundHover ->
-                                                DefaultCursor
+                                        HandTool ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
 
-                                            TileHover data ->
-                                                case tileInteraction userId data model of
-                                                    Just _ ->
-                                                        CursorSprite PointerSpriteCursor
+                                                TileHover data ->
+                                                    case tileInteraction userId data model of
+                                                        Just _ ->
+                                                            CursorSprite PointerSpriteCursor
 
-                                                    Nothing ->
-                                                        CursorSprite DefaultSpriteCursor
+                                                        Nothing ->
+                                                            CursorSprite DefaultSpriteCursor
 
-                                            TrainHover _ ->
-                                                CursorSprite PointerSpriteCursor
+                                                TrainHover _ ->
+                                                    CursorSprite PointerSpriteCursor
 
-                                            MapHover ->
-                                                CursorSprite DefaultSpriteCursor
+                                                MapHover ->
+                                                    CursorSprite DefaultSpriteCursor
 
-                                            CowHover _ ->
-                                                CursorSprite PointerSpriteCursor
+                                                CowHover _ ->
+                                                    CursorSprite PointerSpriteCursor
 
-                                            UiHover _ _ ->
-                                                PointerCursor
+                                                UiHover _ _ ->
+                                                    PointerCursor
 
-                                    TilePickerTool ->
-                                        case hover of
-                                            UiBackgroundHover ->
-                                                DefaultCursor
+                                        TilePickerTool ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
 
-                                            TileHover _ ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                TileHover _ ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            TrainHover _ ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                TrainHover _ ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            MapHover ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                MapHover ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            CowHover _ ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                CowHover _ ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            UiHover _ _ ->
-                                                PointerCursor
+                                                UiHover _ _ ->
+                                                    PointerCursor
 
-                                    TextTool _ ->
-                                        case hover of
-                                            UiBackgroundHover ->
-                                                DefaultCursor
+                                        TextTool _ ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
 
-                                            TileHover _ ->
-                                                CursorSprite TextSpriteCursor
+                                                TileHover _ ->
+                                                    CursorSprite TextSpriteCursor
 
-                                            TrainHover _ ->
-                                                CursorSprite TextSpriteCursor
+                                                TrainHover _ ->
+                                                    CursorSprite TextSpriteCursor
 
-                                            MapHover ->
-                                                CursorSprite TextSpriteCursor
+                                                MapHover ->
+                                                    CursorSprite TextSpriteCursor
 
-                                            CowHover _ ->
-                                                CursorSprite TextSpriteCursor
+                                                CowHover _ ->
+                                                    CursorSprite TextSpriteCursor
 
-                                            UiHover _ _ ->
-                                                PointerCursor
+                                                UiHover _ _ ->
+                                                    PointerCursor
+                            , scale = 1
+                            }
             in
             case isDraggingView hover model of
                 Just mouse ->
@@ -4786,18 +4772,21 @@ cursorSprite hover model =
                         helper ()
 
                     else
-                        CursorSprite DragScreenSpriteCursor
+                        { cursorType = CursorSprite DragScreenSpriteCursor, scale = 1 }
 
                 Nothing ->
                     helper ()
 
         Nothing ->
-            case hover of
-                UiHover _ _ ->
-                    PointerCursor
+            { cursorType =
+                case hover of
+                    UiHover _ _ ->
+                        PointerCursor
 
-                _ ->
-                    DefaultCursor
+                    _ ->
+                        DefaultCursor
+            , scale = 1
+            }
 
 
 isDraggingView :
@@ -4933,7 +4922,7 @@ canvasView audioData model =
                 ]
                 ([ Html.Attributes.width windowWidth
                  , Html.Attributes.height windowHeight
-                 , Cursor.htmlAttribute showMousePointer
+                 , Cursor.htmlAttribute showMousePointer.cursorType
                  , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
                  , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
                  , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
@@ -5385,11 +5374,17 @@ drawOtherCursors texture viewMatrix model =
             )
 
 
-drawCursor : CursorType -> WebGL.Texture.Texture -> Mat4 -> Id UserId -> FrontendLoaded -> List Effect.WebGL.Entity
+drawCursor :
+    { cursorType : CursorType, scale : Int }
+    -> WebGL.Texture.Texture
+    -> Mat4
+    -> Id UserId
+    -> FrontendLoaded
+    -> List Effect.WebGL.Entity
 drawCursor showMousePointer texture viewMatrix userId model =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
-            case showMousePointer of
+            case showMousePointer.cursorType of
                 CursorSprite mousePointer ->
                     let
                         point =
@@ -5398,6 +5393,10 @@ drawCursor showMousePointer texture viewMatrix userId model =
                     in
                     case IdDict.get userId model.handMeshes of
                         Just mesh ->
+                            let
+                                scale =
+                                    toFloat showMousePointer.scale
+                            in
                             [ Effect.WebGL.entityWith
                                 [ Shaders.blend ]
                                 Shaders.vertexShader
@@ -5414,6 +5413,7 @@ drawCursor showMousePointer texture viewMatrix userId model =
                                             |> (*) (1 / toFloat model.zoomFactor)
                                         )
                                         0
+                                        |> Mat4.scale3 scale scale 1
                                         |> Mat4.mul viewMatrix
                                 , texture = texture
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2

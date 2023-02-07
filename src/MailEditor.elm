@@ -12,6 +12,7 @@ module MailEditor exposing
     , Tool(..)
     , backendMailToFrontend
     , backgroundLayer
+    , cursorSprite
     , disconnectWarning
     , drawMail
     , getImageData
@@ -34,7 +35,7 @@ import Bounds
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
-import Cursor
+import Cursor exposing (CursorType(..))
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Time
@@ -278,7 +279,7 @@ mailMousePosition elementPosition maybeImageData windowSize mousePosition =
                     Coord.minus (Coord.divide (Coord.xy 2 2) imageData.textureSize)
 
                 Nothing ->
-                    identity
+                    Coord.minus (Coord.yOnly Units.tileSize |> Coord.divide (Coord.xy 2 2))
            )
         |> Coord.toVector2d
         |> Vector2d.scaleBy 0.5
@@ -714,9 +715,9 @@ toData to model =
     { to = to, content = model.current.content }
 
 
-handleKeyDown : Effect.Time.Posix -> Bool -> Key -> Model -> Maybe Model
+handleKeyDown : Effect.Time.Posix -> Bool -> Key -> Model -> Maybe ( Model, OutMsg )
 handleKeyDown currentTime ctrlHeld key model =
-    case ( key, ctrlHeld ) of
+    (case ( key, ctrlHeld ) of
         ( Escape, _ ) ->
             Nothing
 
@@ -731,24 +732,65 @@ handleKeyDown currentTime ctrlHeld key model =
 
         ( Character string, False ) ->
             case model.currentTool of
-                TextTool position ->
-                    String.foldl (typeCharacter currentTime position) model string |> Just
+                TextTool _ ->
+                    String.foldl (typeCharacter currentTime) model string |> Just
 
                 _ ->
                     Just model
 
         ( Spacebar, False ) ->
             case model.currentTool of
-                TextTool position ->
-                    typeCharacter currentTime position ' ' model |> Just
+                TextTool _ ->
+                    typeCharacter currentTime ' ' model |> Just
+
+                _ ->
+                    Just model
+
+        ( Backspace, False ) ->
+            let
+                oldEditor =
+                    model.current
+            in
+            case ( List.unconsLast oldEditor.content, model.currentTool ) of
+                ( Just ( last, rest ), TextTool cursorPosition ) ->
+                    case last.item of
+                        TextType text ->
+                            let
+                                index =
+                                    cursorPositionToIndex cursorPosition text
+
+                                newCursorPosition =
+                                    indexToCursorPosition (max 0 (index - 1)) text
+
+                                newText =
+                                    String.left (index - 1) text
+                                        ++ String.right (String.length text - index) text
+                            in
+                            (case model.lastTextInput of
+                                Just lastTextInput ->
+                                    if Duration.from lastTextInput currentTime |> Quantity.lessThan (Duration.seconds 0.3) then
+                                        replaceChange
+
+                                    else
+                                        addChange
+
+                                Nothing ->
+                                    addChange
+                            )
+                                { oldEditor | content = rest ++ [ { last | item = TextType newText } ] }
+                                { model | currentTool = TextTool newCursorPosition }
+                                |> Just
+
+                        ImageType _ ->
+                            Just model
 
                 _ ->
                     Just model
 
         ( Enter, _ ) ->
             case model.currentTool of
-                TextTool position ->
-                    typeCharacter currentTime position '\n' model |> Just
+                TextTool _ ->
+                    typeCharacter currentTime '\n' model |> Just
 
                 _ ->
                     Just model
@@ -890,6 +932,26 @@ handleKeyDown currentTime ctrlHeld key model =
 
         _ ->
             Just model
+    )
+        |> Maybe.map
+            (\model2 ->
+                case model.to of
+                    Just ( to, _ ) ->
+                        let
+                            data =
+                                toData to model2
+                        in
+                        ( model2
+                        , if toData to model == data then
+                            NoOutMsg
+
+                          else
+                            UpdateDraft data
+                        )
+
+                    Nothing ->
+                        ( model2, NoOutMsg )
+            )
 
 
 lineLength : Int -> List String -> Int
@@ -917,8 +979,33 @@ moveCursor moveFunc model =
             model
 
 
-typeCharacter : Effect.Time.Posix -> Coord TextUnit -> Char -> Model -> Model
-typeCharacter currentTime position newText model =
+cursorPositionToIndex : Coord TextUnit -> String -> Int
+cursorPositionToIndex cursorPosition text =
+    List.take (Coord.yRaw cursorPosition) (String.lines text)
+        |> List.map (\a -> String.length a + 1)
+        |> List.sum
+        |> (+) (Coord.xRaw cursorPosition)
+
+
+indexToCursorPosition : Int -> String -> Coord TextUnit
+indexToCursorPosition index text =
+    let
+        lines =
+            String.left index text |> String.lines
+    in
+    Coord.xy
+        (case List.last lines of
+            Just line ->
+                String.length line
+
+            Nothing ->
+                0
+        )
+        (List.length lines - 1)
+
+
+typeCharacter : Effect.Time.Posix -> Char -> Model -> Model
+typeCharacter currentTime newText model =
     let
         oldEditor =
             model.current
@@ -927,9 +1014,14 @@ typeCharacter currentTime position newText model =
         ( Just ( last, rest ), TextTool cursorPosition ) ->
             case last.item of
                 TextType text ->
+                    let
+                        index : Int
+                        index =
+                            cursorPositionToIndex cursorPosition text
+                    in
                     (case model.lastTextInput of
                         Just lastTextInput ->
-                            if Duration.from lastTextInput currentTime |> Quantity.lessThan Duration.second then
+                            if Duration.from lastTextInput currentTime |> Quantity.lessThan (Duration.seconds 0.3) then
                                 replaceChange
 
                             else
@@ -940,7 +1032,16 @@ typeCharacter currentTime position newText model =
                     )
                         { oldEditor
                             | content =
-                                rest ++ [ { last | item = TextType (text ++ String.fromChar newText) } ]
+                                rest
+                                    ++ [ { last
+                                            | item =
+                                                TextType
+                                                    (String.left index text
+                                                        ++ String.fromChar newText
+                                                        ++ String.right (String.length text - index) text
+                                                    )
+                                         }
+                                       ]
                         }
                         { model
                             | lastTextInput = Just currentTime
@@ -1337,7 +1438,7 @@ mailView mailScale mailContent maybeTool =
                                         imageMesh position2 mailScale image
 
                                     TextType text ->
-                                        Sprite.text Color.black 2 text position2
+                                        Sprite.text Color.black (2 * mailScale) text position2
                             )
                             mailContent
                         ++ (case ( List.last mailContent, maybeTool ) of
@@ -1349,12 +1450,12 @@ mailView mailScale mailContent maybeTool =
                                                 Color.black
                                                 (Coord.plus position (Coord.scalar mailScale lastContent.position)
                                                     |> Coord.plus
-                                                        (Coord.multiply (Coord.scalar 2 Sprite.charSize) cursorPosition
+                                                        (Coord.multiply (Coord.scalar (2 * mailScale) Sprite.charSize) cursorPosition
                                                             |> Coord.toTuple
                                                             |> Coord.tuple
                                                         )
                                                 )
-                                                (Coord.scalar 2 Sprite.charSize)
+                                                (Coord.scalar (2 * mailScale) Sprite.charSize)
 
                                         ImageType _ ->
                                             []
@@ -1364,6 +1465,36 @@ mailView mailScale mailContent maybeTool =
                            )
             }
         )
+
+
+cursorSprite : Coord Pixels -> Hover -> Model -> { cursorType : CursorType, scale : Int }
+cursorSprite windowSize uiHover model =
+    { cursorType =
+        case uiHover of
+            BackgroundHover ->
+                Cursor.DefaultCursor
+
+            ImageButton _ ->
+                Cursor.PointerCursor
+
+            MailButton ->
+                case model.currentTool of
+                    ImagePlacer _ ->
+                        Cursor.NoCursor
+
+                    ImagePicker ->
+                        Cursor.PointerCursor
+
+                    EraserTool ->
+                        Cursor.CursorSprite Cursor.EraserSpriteCursor
+
+                    TextTool _ ->
+                        Cursor.CursorSprite Cursor.TextSpriteCursor
+
+            _ ->
+                Cursor.PointerCursor
+    , scale = mailZoomFactor windowSize
+    }
 
 
 editorView :
