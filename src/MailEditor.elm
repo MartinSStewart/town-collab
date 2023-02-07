@@ -166,7 +166,7 @@ type alias Model =
     , submitStatus : SubmitStatus
     , to : Maybe ( Id UserId, DisplayName )
     , inboxMailViewed : Maybe (Id MailId)
-    , textDebouncing : Int
+    , lastTextInput : Maybe Effect.Time.Posix
     }
 
 
@@ -180,7 +180,7 @@ type alias EditorState =
 
 
 type alias Content =
-    { position : Coord Pixels, image : ImageOrText }
+    { position : Coord Pixels, item : ImageOrText }
 
 
 type ImageOrText
@@ -321,7 +321,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                                 (Just imageData)
                                                 config.windowSize
                                                 mousePosition
-                                        , image = currentImage imagePlacer |> ImageType
+                                        , item = currentImage imagePlacer |> ImageType
                                         }
                                         { model | lastPlacedImage = Just config.time }
                             in
@@ -345,7 +345,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                 { newContent, erased } =
                                     List.foldr
                                         (\content state ->
-                                            case content.image of
+                                            case content.item of
                                                 ImageType image ->
                                                     let
                                                         imageData : ImageData units
@@ -411,7 +411,7 @@ uiUpdate config elementPosition mousePosition msg model =
                                         Nothing
                                         config.windowSize
                                         mousePosition
-                                , image = TextType ""
+                                , item = TextType ""
                                 }
                                 { model | currentTool = TextTool Coord.origin }
                                 |> Just
@@ -468,7 +468,7 @@ addContent newItem model =
     in
     case List.unconsLast oldEditor.content of
         Just ( last, rest ) ->
-            case last.image of
+            case last.item of
                 TextType "" ->
                     replaceChange { oldEditor | content = rest ++ [ newItem ] } model
 
@@ -567,7 +567,7 @@ init maybeUserIdAndName =
             Nothing ->
                 Nothing
     , inboxMailViewed = Nothing
-    , textDebouncing = 0
+    , lastTextInput = Nothing
     }
         |> updateCurrentImageMesh
 
@@ -714,8 +714,8 @@ toData to model =
     { to = to, content = model.current.content }
 
 
-handleKeyDown : Bool -> Key -> Model -> Maybe Model
-handleKeyDown ctrlHeld key model =
+handleKeyDown : Effect.Time.Posix -> Bool -> Key -> Model -> Maybe Model
+handleKeyDown currentTime ctrlHeld key model =
     case ( key, ctrlHeld ) of
         ( Escape, _ ) ->
             Nothing
@@ -732,53 +732,234 @@ handleKeyDown ctrlHeld key model =
         ( Character string, False ) ->
             case model.currentTool of
                 TextTool position ->
-                    typeCharacter position string model.current model
+                    String.foldl (typeCharacter currentTime position) model string |> Just
 
-                ImagePlacer imagePlacer_ ->
+                _ ->
                     Just model
 
-                ImagePicker ->
-                    Just model
+        ( Spacebar, False ) ->
+            case model.currentTool of
+                TextTool position ->
+                    typeCharacter currentTime position ' ' model |> Just
 
-                EraserTool ->
+                _ ->
                     Just model
 
         ( Enter, _ ) ->
             case model.currentTool of
                 TextTool position ->
-                    typeCharacter position "\n" model.current model
+                    typeCharacter currentTime position '\n' model |> Just
 
-                ImagePlacer imagePlacer_ ->
+                _ ->
                     Just model
 
-                ImagePicker ->
-                    Just model
+        ( ArrowLeft, False ) ->
+            moveCursor
+                (\position lines ->
+                    let
+                        ( x, y ) =
+                            Coord.toTuple position
+                    in
+                    if x == 0 then
+                        if y == 0 then
+                            position
 
-                EraserTool ->
-                    Just model
+                        else
+                            Coord.xy (lineLength (y - 1) lines) (y - 1)
+
+                    else
+                        Coord.plus (Coord.xy -1 0) position
+                )
+                model
+                |> Just
+
+        ( ArrowLeft, True ) ->
+            moveCursor
+                (\position lines ->
+                    let
+                        ( x, y ) =
+                            Coord.toTuple position
+                    in
+                    if x == 0 then
+                        if y == 0 then
+                            position
+
+                        else
+                            Coord.xy (lineLength (y - 1) lines) (y - 1)
+
+                    else
+                        Coord.xy 0 y
+                )
+                model
+                |> Just
+
+        ( ArrowRight, False ) ->
+            moveCursor
+                (\position lines ->
+                    let
+                        ( x, y ) =
+                            Coord.toTuple position
+
+                        xMax =
+                            lineLength y lines
+
+                        yMax =
+                            List.length lines - 1
+                    in
+                    if x >= xMax then
+                        if y >= yMax then
+                            position
+
+                        else
+                            Coord.xy 0 (y + 1)
+
+                    else
+                        Coord.plus (Coord.xy 1 0) position
+                )
+                model
+                |> Just
+
+        ( ArrowRight, True ) ->
+            moveCursor
+                (\position lines ->
+                    let
+                        ( x, y ) =
+                            Coord.toTuple position
+
+                        xMax =
+                            lineLength y lines
+
+                        yMax =
+                            List.length lines - 1
+                    in
+                    if x >= xMax then
+                        if y >= yMax then
+                            position
+
+                        else
+                            Coord.xy 0 (y + 1)
+
+                    else
+                        Coord.xy xMax y
+                )
+                model
+                |> Just
+
+        ( ArrowUp, False ) ->
+            moveCursor
+                (\position lines ->
+                    let
+                        ( x, y ) =
+                            Coord.toTuple position
+                    in
+                    if y == 0 then
+                        Coord.origin
+
+                    else
+                        Coord.xy
+                            (min x (lineLength (y - 1) lines))
+                            (max 0 (y - 1))
+                )
+                model
+                |> Just
+
+        ( ArrowDown, False ) ->
+            moveCursor
+                (\position lines ->
+                    let
+                        ( x, y ) =
+                            Coord.toTuple position
+
+                        yNext =
+                            min (y + 1) yMax
+
+                        xMax =
+                            lineLength yNext lines
+
+                        yMax =
+                            List.length lines - 1
+                    in
+                    if y == yMax then
+                        Coord.xy xMax yNext
+
+                    else
+                        Coord.xy (min x xMax) yNext
+                )
+                model
+                |> Just
 
         _ ->
             Just model
 
 
-typeCharacter position newText oldEditor model =
-    case List.unconsLast oldEditor.content of
-        Just ( last, rest ) ->
-            case last.image of
-                TextType text ->
-                    addChange
-                        { oldEditor
-                            | content =
-                                rest ++ [ { last | image = TextType (text ++ newText) } ]
-                        }
-                        model
-                        |> Just
-
-                ImageType _ ->
-                    Just model
+lineLength : Int -> List String -> Int
+lineLength y lines =
+    case List.getAt y lines of
+        Just line ->
+            String.length line
 
         Nothing ->
-            Just model
+            0
+
+
+moveCursor : (Coord TextUnit -> List String -> Coord TextUnit) -> Model -> Model
+moveCursor moveFunc model =
+    case ( model.currentTool, List.last model.current.content ) of
+        ( TextTool position, Just last ) ->
+            case last.item of
+                TextType text ->
+                    { model | currentTool = moveFunc position (String.lines text) |> TextTool }
+
+                ImageType _ ->
+                    model
+
+        _ ->
+            model
+
+
+typeCharacter : Effect.Time.Posix -> Coord TextUnit -> Char -> Model -> Model
+typeCharacter currentTime position newText model =
+    let
+        oldEditor =
+            model.current
+    in
+    case ( List.unconsLast oldEditor.content, model.currentTool ) of
+        ( Just ( last, rest ), TextTool cursorPosition ) ->
+            case last.item of
+                TextType text ->
+                    (case model.lastTextInput of
+                        Just lastTextInput ->
+                            if Duration.from lastTextInput currentTime |> Quantity.lessThan Duration.second then
+                                replaceChange
+
+                            else
+                                addChange
+
+                        Nothing ->
+                            addChange
+                    )
+                        { oldEditor
+                            | content =
+                                rest ++ [ { last | item = TextType (text ++ String.fromChar newText) } ]
+                        }
+                        { model
+                            | lastTextInput = Just currentTime
+                            , currentTool =
+                                (case newText of
+                                    '\n' ->
+                                        Coord.plus (Coord.xy 0 1) (Coord.yOnly cursorPosition)
+
+                                    _ ->
+                                        Coord.plus (Coord.xy 1 0) cursorPosition
+                                )
+                                    |> TextTool
+                        }
+
+                ImageType _ ->
+                    model
+
+        _ ->
+            model
 
 
 addChange : EditorState -> Model -> Model
@@ -809,7 +990,7 @@ undo model =
                 , currentTool =
                     case List.last head.content of
                         Just last ->
-                            case last.image of
+                            case last.item of
                                 TextType text ->
                                     let
                                         lines =
@@ -817,7 +998,7 @@ undo model =
                                     in
                                     case List.last lines of
                                         Just lastLine ->
-                                            TextTool (Coord.xy (String.length lastLine) (List.length lines))
+                                            TextTool (Coord.xy (String.length lastLine) (List.length lines - 1))
 
                                         Nothing ->
                                             model.currentTool
@@ -1151,7 +1332,7 @@ mailView mailScale mailContent maybeTool =
                                     position2 =
                                         Coord.plus position (Coord.scalar mailScale content.position)
                                 in
-                                case content.image of
+                                case content.item of
                                     ImageType image ->
                                         imageMesh position2 mailScale image
 
@@ -1161,12 +1342,18 @@ mailView mailScale mailContent maybeTool =
                             mailContent
                         ++ (case ( List.last mailContent, maybeTool ) of
                                 ( Just lastContent, Just (TextTool cursorPosition) ) ->
-                                    case lastContent.image of
+                                    case lastContent.item of
                                         TextType _ ->
                                             Sprite.rectangleWithOpacity
                                                 0.5
                                                 Color.black
-                                                (Coord.plus position (Coord.scalar mailScale lastContent.position))
+                                                (Coord.plus position (Coord.scalar mailScale lastContent.position)
+                                                    |> Coord.plus
+                                                        (Coord.multiply (Coord.scalar 2 Sprite.charSize) cursorPosition
+                                                            |> Coord.toTuple
+                                                            |> Coord.tuple
+                                                        )
+                                                )
                                                 (Coord.scalar 2 Sprite.charSize)
 
                                         ImageType _ ->

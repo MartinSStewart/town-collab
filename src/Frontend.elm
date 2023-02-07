@@ -907,7 +907,7 @@ updateLoaded audioData msg model =
                         Just mailEditor ->
                             let
                                 newMailEditor =
-                                    MailEditor.handleKeyDown (ctrlOrMeta model) key mailEditor
+                                    MailEditor.handleKeyDown model.time (ctrlOrMeta model) key mailEditor
                             in
                             ( { model
                                 | mailEditor = newMailEditor

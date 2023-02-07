@@ -658,7 +658,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                     (InternalRoute
                                         { loginOrInviteToken = Just (LoginToken2 loginToken)
                                         , showInbox = False
-                                        , viewPoint = Coord.origin
+                                        , viewPoint = Route.startPointAt
                                         }
                                     )
                     in
@@ -740,7 +740,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                         Env.domain
                                             ++ Route.encode
                                                 (InternalRoute
-                                                    { viewPoint = Coord.origin
+                                                    { viewPoint = Route.startPointAt
                                                     , showInbox = False
                                                     , loginOrInviteToken = Just (InviteToken2 inviteToken)
                                                     }
