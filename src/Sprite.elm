@@ -153,10 +153,10 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
             Coord.toTuple textureSize
 
         primaryColor2 =
-            Color.toVec3 primaryColor
+            Color.toInt primaryColor |> toFloat
 
         secondaryColor2 =
-            Color.toVec3 secondaryColor
+            Color.toInt secondaryColor |> toFloat
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
       , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat ty)

@@ -22,7 +22,7 @@ import WebGL.Texture
 
 
 type alias Vertex =
-    { position : Vec3, texturePosition : Vec2, opacity : Float, primaryColor : Vec3, secondaryColor : Vec3 }
+    { position : Vec3, texturePosition : Vec2, opacity : Float, primaryColor : Float, secondaryColor : Float }
 
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Effect.WebGL.Mesh attributes
@@ -62,8 +62,8 @@ vertexShader =
 attribute vec3 position;
 attribute vec2 texturePosition;
 attribute float opacity;
-attribute vec3 primaryColor;
-attribute vec3 secondaryColor;
+attribute float primaryColor;
+attribute float secondaryColor;
 uniform mat4 view;
 uniform vec2 textureSize;
 varying vec2 vcoord;
@@ -71,13 +71,83 @@ varying float opacity2;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 
+int OR(int n1, int n2){
+
+    float v1 = float(n1);
+    float v2 = float(n2);
+
+    int byteVal = 1;
+    int result = 0;
+
+    for(int i = 0; i < 32; i++){
+        bool keepGoing = v1>0.0 || v2 > 0.0;
+        if(keepGoing){
+
+            bool addOn = mod(v1, 2.0) > 0.0 || mod(v2, 2.0) > 0.0;
+
+            if(addOn){
+                result += byteVal;
+            }
+
+            v1 = floor(v1 / 2.0);
+            v2 = floor(v2 / 2.0);
+
+            byteVal *= 2;
+        } else {
+            return result;
+        }
+    }
+    return result;
+}
+
+int AND(int n1, int n2){
+
+    float v1 = float(n1);
+    float v2 = float(n2);
+
+    int byteVal = 1;
+    int result = 0;
+
+    for(int i = 0; i < 32; i++){
+        bool keepGoing = v1>0.0 || v2 > 0.0;
+        if(keepGoing){
+
+            bool addOn = mod(v1, 2.0) > 0.0 && mod(v2, 2.0) > 0.0;
+
+            if(addOn){
+                result += byteVal;
+            }
+
+            v1 = floor(v1 / 2.0);
+            v2 = floor(v2 / 2.0);
+            byteVal *= 2;
+        } else {
+            return result;
+        }
+    }
+    return result;
+}
+
+int RShift(int num, float shifts){
+    return int(floor(float(num) / pow(2.0, shifts)));
+}
+
+vec3 floatColorToVec3(float color) {
+    int colorInt = int(color);
+    float blue = float(AND(colorInt, 0xFF)) / 255.0;
+    float green = float(AND(RShift(colorInt, 8.0), 0xFF)) / 255.0;
+    float red = float(AND(RShift(colorInt, 16.0), 0xFF)) / 255.0;
+    return vec3(red, green, blue);
+}
+
 void main () {
     gl_Position = view * vec4(position, 1.0);
     vcoord = texturePosition / textureSize;
     opacity2 = opacity;
 
-    primaryColor2 = primaryColor;
-    secondaryColor2 = secondaryColor;
+
+    primaryColor2 = floatColorToVec3(primaryColor);
+    secondaryColor2 = floatColorToVec3(secondaryColor);
 }|]
 
 
@@ -133,8 +203,8 @@ type alias DebrisVertex =
     , texturePosition : Vec2
     , initialSpeed : Vec2
     , startTime : Float
-    , primaryColor : Vec3
-    , secondaryColor : Vec3
+    , primaryColor : Float
+    , secondaryColor : Float
     }
 
 
@@ -153,8 +223,8 @@ attribute vec2 position;
 attribute vec2 initialSpeed;
 attribute vec2 texturePosition;
 attribute float startTime;
-attribute vec3 primaryColor;
-attribute vec3 secondaryColor;
+attribute float primaryColor;
+attribute float secondaryColor;
 uniform mat4 view;
 uniform float time;
 uniform vec2 textureSize;
@@ -163,14 +233,83 @@ varying float opacity2;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 
+int OR(int n1, int n2){
+
+    float v1 = float(n1);
+    float v2 = float(n2);
+
+    int byteVal = 1;
+    int result = 0;
+
+    for(int i = 0; i < 32; i++){
+        bool keepGoing = v1>0.0 || v2 > 0.0;
+        if(keepGoing){
+
+            bool addOn = mod(v1, 2.0) > 0.0 || mod(v2, 2.0) > 0.0;
+
+            if(addOn){
+                result += byteVal;
+            }
+
+            v1 = floor(v1 / 2.0);
+            v2 = floor(v2 / 2.0);
+
+            byteVal *= 2;
+        } else {
+            return result;
+        }
+    }
+    return result;
+}
+
+int AND(int n1, int n2){
+
+    float v1 = float(n1);
+    float v2 = float(n2);
+
+    int byteVal = 1;
+    int result = 0;
+
+    for(int i = 0; i < 32; i++){
+        bool keepGoing = v1>0.0 || v2 > 0.0;
+        if(keepGoing){
+
+            bool addOn = mod(v1, 2.0) > 0.0 && mod(v2, 2.0) > 0.0;
+
+            if(addOn){
+                result += byteVal;
+            }
+
+            v1 = floor(v1 / 2.0);
+            v2 = floor(v2 / 2.0);
+            byteVal *= 2;
+        } else {
+            return result;
+        }
+    }
+    return result;
+}
+
+int RShift(int num, float shifts){
+    return int(floor(float(num) / pow(2.0, shifts)));
+}
+
+vec3 floatColorToVec3(float color) {
+    int colorInt = int(color);
+    float blue = float(AND(colorInt, 0xFF)) / 255.0;
+    float green = float(AND(RShift(colorInt, 8.0), 0xFF)) / 255.0;
+    float red = float(AND(RShift(colorInt, 16.0), 0xFF)) / 255.0;
+    return vec3(red, green, blue);
+}
+
 void main () {
     float seconds = time - startTime;
     gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
     vcoord = texturePosition / textureSize;
     opacity2 = 1.0;
 
-    primaryColor2 = primaryColor;
-    secondaryColor2 = secondaryColor;
+    primaryColor2 = floatColorToVec3(primaryColor);
+    secondaryColor2 = floatColorToVec3(secondaryColor);
 }|]
 
 

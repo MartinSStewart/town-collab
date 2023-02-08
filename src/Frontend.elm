@@ -3642,13 +3642,11 @@ createDebrisMeshHelper :
     -> List DebrisVertex
 createDebrisMeshHelper position texturePosition ( Quantity textureW, Quantity textureH ) colors scale appStartTime time =
     let
-        primaryColor2 : Vec3
         primaryColor2 =
-            Color.toVec3 colors.primaryColor
+            Color.toInt colors.primaryColor |> toFloat
 
-        secondaryColor2 : Vec3
         secondaryColor2 =
-            Color.toVec3 colors.secondaryColor
+            Color.toInt colors.secondaryColor |> toFloat
 
         time2 =
             Duration.from appStartTime time |> Duration.inSeconds
