@@ -5031,8 +5031,8 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
-                            ++ (case model.currentTool of
-                                    TextTool (Just textTool) ->
+                            ++ (case ( model.currentTool, currentUserId model ) of
+                                    ( TextTool (Just textTool), Just userId ) ->
                                         [ Effect.WebGL.entityWith
                                             [ Shaders.blend ]
                                             Shaders.vertexShader
@@ -5044,7 +5044,25 @@ canvasView audioData model =
                                                     viewMatrix
                                             , texture = texture
                                             , textureSize = textureSize
-                                            , color = Vec4.vec4 1 1 1 1
+                                            , color =
+                                                if
+                                                    canPlaceTile
+                                                        model.time
+                                                        { position = textTool.cursorPosition
+                                                        , change = BigText 'A'
+                                                        , userId = userId
+                                                        , colors =
+                                                            { primaryColor = Color.rgb255 0 0 0
+                                                            , secondaryColor = Color.rgb255 255 255 255
+                                                            }
+                                                        }
+                                                        model.trains
+                                                        (LocalGrid.localModel model.localModel |> .grid)
+                                                then
+                                                    Vec4.vec4 0 0 0 0.5
+
+                                                else
+                                                    Vec4.vec4 1 0 0 0.5
                                             }
                                         ]
 
@@ -5123,30 +5141,6 @@ canvasView audioData model =
                                             tileSize =
                                                 Tile.getData currentTile2 |> .size
 
-                                            lastPlacementOffset : () -> Float
-                                            lastPlacementOffset () =
-                                                case model.lastPlacementError of
-                                                    Just time ->
-                                                        let
-                                                            timeElapsed =
-                                                                Duration.from time model.time
-                                                        in
-                                                        if
-                                                            timeElapsed
-                                                                |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
-                                                        then
-                                                            timeElapsed
-                                                                |> Duration.inSeconds
-                                                                |> (*) 40
-                                                                |> cos
-                                                                |> (*) 2
-
-                                                        else
-                                                            0
-
-                                                    Nothing ->
-                                                        0
-
                                             offsetX : Float
                                             offsetX =
                                                 case model.lastTilePlaced of
@@ -5168,10 +5162,10 @@ canvasView audioData model =
                                                                 |> (*) 2
 
                                                         else
-                                                            lastPlacementOffset ()
+                                                            lastPlacementOffset audioData model
 
                                                     Nothing ->
-                                                        lastPlacementOffset ()
+                                                        lastPlacementOffset audioData model
                                         in
                                         [ Effect.WebGL.entityWith
                                             [ Shaders.blend ]
@@ -5295,6 +5289,31 @@ canvasView audioData model =
 
         Nothing ->
             Html.text ""
+
+
+lastPlacementOffset : AudioData -> FrontendLoaded -> Float
+lastPlacementOffset audioData model =
+    case model.lastPlacementError of
+        Just time ->
+            let
+                timeElapsed =
+                    Duration.from time model.time
+            in
+            if
+                timeElapsed
+                    |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
+            then
+                timeElapsed
+                    |> Duration.inSeconds
+                    |> (*) 40
+                    |> cos
+                    |> (*) 2
+
+            else
+                0
+
+        Nothing ->
+            0
 
 
 drawOtherCursors : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
@@ -5751,5 +5770,5 @@ mapSquare =
 
 textCursorMesh : Effect.WebGL.Mesh Vertex
 textCursorMesh =
-    Sprite.rectangleWithOpacity 0.5 Color.black Coord.origin (Coord.multiply Units.tileSize (Coord.xy 1 2))
+    Sprite.rectangle Color.white Coord.origin (Coord.multiply Units.tileSize (Coord.xy 1 2))
         |> Sprite.toMesh

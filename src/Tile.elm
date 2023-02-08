@@ -1346,12 +1346,7 @@ getData tile =
             dirtPathVertical
 
         BigText char ->
-            { texturePosition = Just (Sprite.charTexturePosition char)
-            , texturePositionTopLayer = Nothing
-            , size = Coord.xy 1 2
-            , collisionMask = DefaultCollision
-            , railPath = NoRailPath
-            }
+            bigText char
 
 
 emptyTile =
@@ -2817,6 +2812,16 @@ dirtPathHorizontal =
 
 dirtPathVertical =
     { texturePosition = Just (Coord.xy 34 51 |> Coord.multiply Units.tileSize)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 2
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+bigText : Char -> TileData unit
+bigText char =
+    { texturePosition = Just (Sprite.charTexturePosition char)
     , texturePositionTopLayer = Nothing
     , size = Coord.xy 1 2
     , collisionMask = DefaultCollision
