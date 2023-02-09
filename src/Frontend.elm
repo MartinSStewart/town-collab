@@ -2363,8 +2363,11 @@ keyMsgCanvasUpdate key model =
                                                 model.viewPoint
                                 }
 
-                    TextTool _ ->
+                    TextTool (Just _) ->
                         setCurrentTool TextToolButton model
+
+                    TextTool Nothing ->
+                        setCurrentTool HandToolButton model
                 , Command.none
                 )
 
