@@ -26,7 +26,7 @@ import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty(..))
 import Quantity exposing (Quantity(..))
 import Random
-import Terrain
+import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile(..))
 import Units exposing (CellLocalUnit, CellUnit)
 
@@ -284,12 +284,11 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                     seed =
                         Random.initialSeed (cellX * 269 + cellY * 229 + terrainX * 67 + terrainY)
 
-                    treeDensity : Float
-                    treeDensity =
+                    terrain =
                         Terrain.getTerrainValue terrainCoord_ cellPosition
                 in
-                if treeDensity > 0 then
-                    Random.step (Terrain.randomScenery treeDensity position) seed
+                if terrain.terrainType == Ground then
+                    Random.step (Terrain.randomScenery terrain.value position) seed
                         |> Tuple.first
                         |> List.foldl
                             (\( item, itemPosition ) cell2 ->

@@ -56,7 +56,7 @@ flagMesh position scale color frame =
             Tile.texturePositionPixels (Coord.xy 80 (594 + frame * 6)) (Coord.xy width 6)
 
         colorVec =
-            Color.toVec3 color
+            Color.toInt color |> toFloat
 
         ( x, y ) =
             Coord.toTuple position
@@ -74,25 +74,25 @@ flagMesh position scale color frame =
       , texturePosition = topLeft
       , opacity = 1
       , primaryColor = colorVec
-      , secondaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = 0
       }
     , { position = Vec3.vec3 (x2 + width * scale2) y2 0
       , texturePosition = topRight
       , opacity = 1
       , primaryColor = colorVec
-      , secondaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = 0
       }
     , { position = Vec3.vec3 (x2 + width * scale2) (y2 + height * scale2) 0
       , texturePosition = bottomRight
       , opacity = 1
       , primaryColor = colorVec
-      , secondaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = 0
       }
     , { position = Vec3.vec3 x2 (y2 + height * scale2) 0
       , texturePosition = bottomLeft
       , opacity = 1
       , primaryColor = colorVec
-      , secondaryColor = Vec3.vec3 0 0 0
+      , secondaryColor = 0
       }
     ]
 

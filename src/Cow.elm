@@ -26,11 +26,11 @@ cowSizeWorld =
 
 
 cowPrimaryColor =
-    Color.toVec3 defaultColors.primaryColor
+    Color.toInt defaultColors.primaryColor |> toFloat
 
 
 cowSecondaryColor =
-    Color.toVec3 defaultColors.secondaryColor
+    Color.toInt defaultColors.secondaryColor |> toFloat
 
 
 defaultColors : Colors

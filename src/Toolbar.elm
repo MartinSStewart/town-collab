@@ -46,8 +46,7 @@ type alias ViewData =
     , secondaryColorTextInput : TextInput.Model
     , tileColors : AssocList.Dict TileGroup Colors
     , tileHotkeys : Dict String TileGroup
-    , currentTool : Tool
-    , pingData : Maybe PingData
+    , currentTool : ToolButton
     , userId : Maybe (Id UserId)
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
@@ -592,29 +591,16 @@ toolbarUi :
     -> TextInput.Model
     -> AssocList.Dict TileGroup Colors
     -> Dict String TileGroup
-    -> Tool
+    -> ToolButton
     -> Ui.Element UiHover UiMsg
-toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentTool =
-    let
-        currentToolButton : ToolButton
-        currentToolButton =
-            case currentTool of
-                HandTool ->
-                    HandToolButton
-
-                TilePlacerTool { tileGroup } ->
-                    TilePlacerToolButton tileGroup
-
-                TilePickerTool ->
-                    TilePickerToolButton
-    in
+toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentToolButton =
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
         [ List.map (toolButtonUi hasCmdKey handColor tileColors hotkeys currentToolButton) buttonTiles
             |> List.greedyGroupsOf toolbarRowCount
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
-        , selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentTool
+        , selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentToolButton
         ]
 
 
@@ -623,7 +609,7 @@ selectedToolView :
     -> TextInput.Model
     -> TextInput.Model
     -> AssocList.Dict TileGroup Colors
-    -> Tool
+    -> ToolButton
     -> Ui.Element UiHover UiMsg
 selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentTool =
     let
@@ -634,14 +620,17 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
         { spacing = 6, padding = Ui.paddingXY 12 8 }
         [ Ui.text
             (case currentTool of
-                HandTool ->
+                HandToolButton ->
                     "Pointer tool"
 
-                TilePickerTool ->
+                TilePickerToolButton ->
                     "Tile picker"
 
-                TilePlacerTool { tileGroup } ->
+                TilePlacerToolButton tileGroup ->
                     Tile.getTileGroupData tileGroup |> .name
+
+                TextToolButton ->
+                    "Text"
             )
         , Ui.row
             { spacing = 10, padding = Ui.noPadding }
@@ -682,7 +671,7 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
             , Ui.center
                 { size = buttonSize }
                 (case currentTool of
-                    TilePlacerTool { tileGroup } ->
+                    TilePlacerToolButton tileGroup ->
                         case AssocList.get tileGroup tileColors of
                             Just color ->
                                 (Tile.getTileGroupData tileGroup).tiles
@@ -692,11 +681,19 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                             Nothing ->
                                 Ui.none
 
-                    TilePickerTool ->
+                    TilePickerToolButton ->
                         Cursor.eyeDropperCursor2
 
-                    HandTool ->
+                    HandToolButton ->
                         Cursor.defaultCursorMesh2 handColor
+
+                    TextToolButton ->
+                        case AssocList.get BigTextGroup tileColors of
+                            Just color ->
+                                tileMesh color (BigText 'A')
+
+                            Nothing ->
+                                Ui.none
                 )
             ]
         ]
@@ -758,6 +755,14 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                 TilePickerToolButton ->
                     Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
 
+                TextToolButton ->
+                    case AssocList.get BigTextGroup colors of
+                        Just a ->
+                            a
+
+                        Nothing ->
+                            Tile.getTileGroupData BigTextGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
+
         hotkeyText : Maybe String
         hotkeyText =
             case tool of
@@ -774,6 +779,9 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                     else
                         Just "Ctrl"
 
+                TextToolButton ->
+                    Nothing
+
         label : Ui.Element UiHover UiMsg
         label =
             case tool of
@@ -785,6 +793,9 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
 
                 TilePickerToolButton ->
                     Cursor.eyeDropperCursor2
+
+                TextToolButton ->
+                    tileMesh tileColors (getTileGroupTile BigTextGroup 77)
     in
     Ui.customButton
         { id = ToolButtonHover tool
@@ -831,7 +842,8 @@ buttonTiles =
     [ HandToolButton
     , TilePickerToolButton
     ]
-        ++ List.map TilePlacerToolButton Tile.allTileGroups
+        ++ List.map TilePlacerToolButton Tile.allTileGroupsExceptText
+        ++ [ TextToolButton ]
 
 
 toolbarRowCount : number
@@ -880,23 +892,25 @@ tileMesh colors tile =
                                 colors
                                 position3
                                 spriteSize
-                                (Coord.multiply Units.tileSize texturePosition)
-                                size
+                                texturePosition
+                                (case tile of
+                                    BigText _ ->
+                                        size |> Coord.divide (Coord.xy 2 2)
+
+                                    _ ->
+                                        size
+                                )
 
                         Nothing ->
                             []
                     )
                         ++ (case data.texturePositionTopLayer of
                                 Just topLayer ->
-                                    let
-                                        texturePosition2 =
-                                            Coord.multiply Units.tileSize topLayer.texturePosition
-                                    in
                                     Sprite.spriteWithTwoColors
                                         colors
                                         position3
                                         spriteSize
-                                        texturePosition2
+                                        topLayer.texturePosition
                                         size
 
                                 Nothing ->
@@ -918,11 +932,11 @@ buttonSize =
 showColorTextInputs :
     Colors
     -> AssocList.Dict TileGroup Colors
-    -> Tool
+    -> ToolButton
     -> { showPrimaryColorTextInput : Maybe Color, showSecondaryColorTextInput : Maybe Color }
 showColorTextInputs handColor tileColors tool =
     case tool of
-        TilePlacerTool { tileGroup } ->
+        TilePlacerToolButton tileGroup ->
             case ( AssocList.get tileGroup tileColors, Tile.getTileGroupData tileGroup |> .defaultColors ) of
                 ( _, ZeroDefaultColors ) ->
                     { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
@@ -943,13 +957,34 @@ showColorTextInputs handColor tileColors tool =
                     , showSecondaryColorTextInput = Just colors.secondaryColor
                     }
 
-        HandTool ->
+        HandToolButton ->
             { showPrimaryColorTextInput = Just handColor.primaryColor
             , showSecondaryColorTextInput = Just handColor.secondaryColor
             }
 
-        TilePickerTool ->
+        TilePickerToolButton ->
             { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
+
+        TextToolButton ->
+            case ( AssocList.get BigTextGroup tileColors, Tile.getTileGroupData BigTextGroup |> .defaultColors ) of
+                ( _, ZeroDefaultColors ) ->
+                    { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
+
+                ( Just colors, OneDefaultColor _ ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor, showSecondaryColorTextInput = Nothing }
+
+                ( Nothing, OneDefaultColor color ) ->
+                    { showPrimaryColorTextInput = Just color, showSecondaryColorTextInput = Nothing }
+
+                ( Just colors, TwoDefaultColors _ ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor
+                    , showSecondaryColorTextInput = Just colors.secondaryColor
+                    }
+
+                ( Nothing, TwoDefaultColors colors ) ->
+                    { showPrimaryColorTextInput = Just colors.primaryColor
+                    , showSecondaryColorTextInput = Just colors.secondaryColor
+                    }
 
 
 getTileGroupTile : TileGroup -> Int -> Tile

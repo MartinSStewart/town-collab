@@ -17,7 +17,7 @@ import Change exposing (Change(..), Cow, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
-import Cursor exposing (CursorMeshes, CursorSprite(..), CursorType(..))
+import Cursor exposing (Cursor, CursorMeshes, CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import DisplayName
 import Duration exposing (Duration)
@@ -35,9 +35,7 @@ import Effect.WebGL.Settings.DepthTest
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress
 import Env
-import EverySet
 import Flag
-import Geometry.Interop.LinearAlgebra.Point2d as Point2d
 import Grid exposing (Grid)
 import GridCell
 import Html exposing (Html)
@@ -55,11 +53,12 @@ import Keyboard.Arrows
 import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import LocalGrid exposing (Cursor, LocalGrid, LocalGrid_)
+import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
+import Math.Vector3 exposing (Vec3)
 import Math.Vector4 as Vec4
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
@@ -642,7 +641,7 @@ init url key =
         , cssWindowSize = Coord.xy 1920 1080
         , cssCanvasSize = Coord.xy 1920 1080
         , devicePixelRatio = 1
-        , zoomFactor = 2
+        , zoomFactor = 1
         , time = Nothing
         , viewPoint = data.viewPoint
         , showInbox = data.showInbox
@@ -799,6 +798,41 @@ update audioData msg model =
                         , cmd
                         )
                    )
+                |> (\( newModel, cmd ) ->
+                        let
+                            toolToCursorTool tool =
+                                case tool of
+                                    HandTool ->
+                                        Cursor.HandTool
+
+                                    TilePlacerTool { tileGroup } ->
+                                        if tileGroup == EmptyTileGroup then
+                                            Cursor.EraserTool
+
+                                        else
+                                            Cursor.TilePlacerTool
+
+                                    TilePickerTool ->
+                                        Cursor.TilePickerTool
+
+                                    TextTool (Just textTool) ->
+                                        Cursor.TextTool (Just { cursorPosition = textTool.cursorPosition })
+
+                                    TextTool Nothing ->
+                                        Cursor.TextTool Nothing
+
+                            newTool : Cursor.OtherUsersTool
+                            newTool =
+                                currentTool newModel |> toolToCursorTool
+                        in
+                        ( if toolToCursorTool (currentTool frontendLoaded) == newTool then
+                            newModel
+
+                          else
+                            updateLocalModel (Change.ChangeTool newTool) newModel |> Tuple.first
+                        , cmd
+                        )
+                   )
                 |> Tuple.mapFirst (updateMeshes False frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
@@ -871,19 +905,19 @@ updateLoaded audioData msg model =
                 Just key ->
                     case model.mailEditor of
                         Just mailEditor ->
-                            let
-                                newMailEditor =
-                                    MailEditor.handleKeyDown audioData model (ctrlOrMeta model) key mailEditor
-                            in
-                            ( { model
-                                | mailEditor = newMailEditor
-                                , lastMailEditorToggle =
-                                    if newMailEditor == Nothing then
-                                        Just model.time
+                            ( case MailEditor.handleKeyDown model.time (ctrlOrMeta model) key mailEditor of
+                                Just ( newMailEditor, outMsg ) ->
+                                    { model
+                                        | mailEditor = Just newMailEditor
+                                        , lastMailEditorToggle = model.lastMailEditorToggle
+                                    }
+                                        |> handleMailEditorOutMsg outMsg
 
-                                    else
-                                        model.lastMailEditorToggle
-                              }
+                                Nothing ->
+                                    { model
+                                        | mailEditor = Nothing
+                                        , lastMailEditorToggle = Just model.time
+                                    }
                             , Command.none
                             )
 
@@ -1044,7 +1078,7 @@ updateLoaded audioData msg model =
                                             ( model, Command.none )
 
                                 _ ->
-                                    keyMsgCanvasUpdate audioData key model
+                                    keyMsgCanvasUpdate key model
 
                 Nothing ->
                     ( model, Command.none )
@@ -1087,6 +1121,22 @@ updateLoaded audioData msg model =
 
                                         TilePickerTool ->
                                             ( model2, Command.none )
+
+                                        TextTool _ ->
+                                            let
+                                                position : Coord WorldUnit
+                                                position =
+                                                    mouseWorldPosition model
+                                                        |> Coord.floorPoint
+                                            in
+                                            ( { model2
+                                                | currentTool =
+                                                    { cursorPosition = position, startColumn = Tuple.first position }
+                                                        |> Just
+                                                        |> TextTool
+                                              }
+                                            , Command.none
+                                            )
 
                                 UiHover id data ->
                                     case id of
@@ -1299,6 +1349,9 @@ updateLoaded audioData msg model =
                             model2
 
                         TilePickerTool ->
+                            model2
+
+                        TextTool _ ->
                             model2
             in
             ( { model
@@ -1554,83 +1607,88 @@ updateLoaded audioData msg model =
 
                 canMoveWithArrowKeys : Bool
                 canMoveWithArrowKeys =
-                    case model.focus of
-                        TileHover _ ->
-                            True
+                    case model.currentTool of
+                        TextTool (Just _) ->
+                            False
 
-                        TrainHover _ ->
-                            True
-
-                        MapHover ->
-                            True
-
-                        CowHover _ ->
-                            True
-
-                        UiBackgroundHover ->
-                            True
-
-                        UiHover uiHover _ ->
-                            case uiHover of
-                                EmailAddressTextInputHover ->
-                                    False
-
-                                SendEmailButtonHover ->
+                        _ ->
+                            case model.focus of
+                                TileHover _ ->
                                     True
 
-                                PrimaryColorInput ->
-                                    False
-
-                                SecondaryColorInput ->
-                                    False
-
-                                ToolButtonHover _ ->
+                                TrainHover _ ->
                                     True
 
-                                ShowInviteUser ->
+                                MapHover ->
                                     True
 
-                                CloseInviteUser ->
+                                CowHover _ ->
                                     True
 
-                                SubmitInviteUser ->
+                                UiBackgroundHover ->
                                     True
 
-                                InviteEmailAddressTextInput ->
-                                    False
+                                UiHover uiHover _ ->
+                                    case uiHover of
+                                        EmailAddressTextInputHover ->
+                                            False
 
-                                LowerMusicVolume ->
-                                    True
+                                        SendEmailButtonHover ->
+                                            True
 
-                                RaiseMusicVolume ->
-                                    True
+                                        PrimaryColorInput ->
+                                            False
 
-                                LowerSoundEffectVolume ->
-                                    True
+                                        SecondaryColorInput ->
+                                            False
 
-                                RaiseSoundEffectVolume ->
-                                    True
+                                        ToolButtonHover _ ->
+                                            True
 
-                                SettingsButton ->
-                                    True
+                                        ShowInviteUser ->
+                                            True
 
-                                CloseSettings ->
-                                    True
+                                        CloseInviteUser ->
+                                            True
 
-                                DisplayNameTextInput ->
-                                    False
+                                        SubmitInviteUser ->
+                                            True
 
-                                MailEditorHover _ ->
-                                    False
+                                        InviteEmailAddressTextInput ->
+                                            False
 
-                                YouGotMailButton ->
-                                    True
+                                        LowerMusicVolume ->
+                                            True
 
-                                ShowMapButton ->
-                                    True
+                                        RaiseMusicVolume ->
+                                            True
 
-                                AllowEmailNotificationsCheckbox ->
-                                    True
+                                        LowerSoundEffectVolume ->
+                                            True
+
+                                        RaiseSoundEffectVolume ->
+                                            True
+
+                                        SettingsButton ->
+                                            True
+
+                                        CloseSettings ->
+                                            True
+
+                                        DisplayNameTextInput ->
+                                            False
+
+                                        MailEditorHover _ ->
+                                            False
+
+                                        YouGotMailButton ->
+                                            True
+
+                                        ShowMapButton ->
+                                            True
+
+                                        AllowEmailNotificationsCheckbox ->
+                                            True
 
                 model2 =
                     { model
@@ -1697,21 +1755,32 @@ updateLoaded audioData msg model =
                     ( model, Command.none )
 
         PastedText text ->
+            let
+                pasteTextTool () =
+                    ( case model.currentTool of
+                        TextTool (Just _) ->
+                            String.foldl placeChar model (String.left 200 text)
+
+                        _ ->
+                            model
+                    , Command.none
+                    )
+            in
             case model.focus of
                 TileHover _ ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 TrainHover _ ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 MapHover ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 CowHover _ ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 UiBackgroundHover ->
-                    ( model, Command.none )
+                    pasteTextTool ()
 
                 UiHover uiHover _ ->
                     case uiHover of
@@ -1721,7 +1790,7 @@ updateLoaded audioData msg model =
                             )
 
                         SendEmailButtonHover ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         PrimaryColorInput ->
                             case currentUserId model of
@@ -1736,7 +1805,7 @@ updateLoaded audioData msg model =
                                             model
 
                                 Nothing ->
-                                    ( model, Command.none )
+                                    pasteTextTool ()
 
                         SecondaryColorInput ->
                             case currentUserId model of
@@ -1751,40 +1820,40 @@ updateLoaded audioData msg model =
                                             model
 
                                 Nothing ->
-                                    ( model, Command.none )
+                                    pasteTextTool ()
 
                         ToolButtonHover _ ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         ShowInviteUser ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         CloseInviteUser ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         SubmitInviteUser ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         InviteEmailAddressTextInput ->
                             ( { model | inviteTextInput = TextInput.paste text model.inviteTextInput }, Command.none )
 
                         LowerMusicVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         RaiseMusicVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         LowerSoundEffectVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         RaiseSoundEffectVolume ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         SettingsButton ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         CloseSettings ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         DisplayNameTextInput ->
                             case model.topMenuOpened of
@@ -1796,19 +1865,19 @@ updateLoaded audioData msg model =
                                     )
 
                                 _ ->
-                                    ( model, Command.none )
+                                    pasteTextTool ()
 
                         MailEditorHover mailEditorHover ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         YouGotMailButton ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         ShowMapButton ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
                         AllowEmailNotificationsCheckbox ->
-                            ( model, Command.none )
+                            pasteTextTool ()
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -1870,6 +1939,9 @@ currentTileGroup model =
             Nothing
 
         TilePickerTool ->
+            Nothing
+
+        TextTool record ->
             Nothing
 
 
@@ -1990,6 +2062,34 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
 
         TilePickerTool ->
             ( model, Command.none )
+
+        TextTool _ ->
+            ( { model
+                | tileColors =
+                    case maybeNewColor of
+                        Just color ->
+                            AssocList.update
+                                BigTextGroup
+                                (\maybeColor ->
+                                    (case maybeColor of
+                                        Just colors ->
+                                            updateColor color colors
+
+                                        Nothing ->
+                                            Tile.getTileGroupData BigTextGroup
+                                                |> .defaultColors
+                                                |> Tile.defaultToPrimaryAndSecondary
+                                                |> updateColor color
+                                    )
+                                        |> Just
+                                )
+                                model.tileColors
+
+                        Nothing ->
+                            model.tileColors
+              }
+            , Command.none
+            )
     )
         |> Tuple.mapFirst (setTextInputModel newTextInput)
         |> Tuple.mapFirst
@@ -2017,6 +2117,9 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
 
                                     TilePickerTool ->
                                         m.currentTool
+
+                                    TextTool record ->
+                                        m.currentTool
                         }
 
                     Nothing ->
@@ -2043,8 +2146,19 @@ getViewModel model =
     , secondaryColorTextInput = model.secondaryColorTextInput
     , tileColors = model.tileColors
     , tileHotkeys = model.tileHotkeys
-    , currentTool = model.currentTool
-    , pingData = model.pingData
+    , currentTool =
+        case model.currentTool of
+            HandTool ->
+                HandToolButton
+
+            TilePlacerTool { tileGroup } ->
+                TilePlacerToolButton tileGroup
+
+            TilePickerTool ->
+                TilePickerToolButton
+
+            TextTool _ ->
+                TextToolButton
     , userId = maybeUserId
     , topMenuOpened = model.topMenuOpened
     , inviteTextInput = model.inviteTextInput
@@ -2109,6 +2223,13 @@ hoverAt model mousePosition =
                                     else
                                         Nothing
 
+                                TextTool _ ->
+                                    if ctrlOrMeta model then
+                                        TileHover tile |> Just
+
+                                    else
+                                        Nothing
+
                         Nothing ->
                             Nothing
 
@@ -2136,6 +2257,9 @@ hoverAt model mousePosition =
                                             Nothing
                                     )
                                 |> Quantity.minimumBy Tuple.second
+
+                        TextTool _ ->
+                            Nothing
 
                 localGrid : LocalGrid_
                 localGrid =
@@ -2166,6 +2290,9 @@ hoverAt model mousePosition =
                                                 False
                                     )
                                 |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+
+                        TextTool _ ->
+                            Nothing
             in
             case trainHovers of
                 Just ( train, _ ) ->
@@ -2195,35 +2322,9 @@ ctrlOrMeta model =
     keyDown Keyboard.Control model || keyDown Keyboard.Meta model
 
 
-keyMsgCanvasUpdate : AudioData -> Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-keyMsgCanvasUpdate audioData key model =
+keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+keyMsgCanvasUpdate key model =
     case ( key, ctrlOrMeta model ) of
-        ( Keyboard.Character "z", False ) ->
-            ( case model.currentTool of
-                TilePlacerTool tilePlacer ->
-                    tileRotationHelper audioData 1 tilePlacer model
-
-                HandTool ->
-                    model
-
-                TilePickerTool ->
-                    model
-            , Command.none
-            )
-
-        ( Keyboard.Character "x", False ) ->
-            ( case model.currentTool of
-                TilePlacerTool tilePlacer ->
-                    tileRotationHelper audioData -1 tilePlacer model
-
-                HandTool ->
-                    model
-
-                TilePickerTool ->
-                    model
-            , Command.none
-            )
-
         ( Keyboard.Character "z", True ) ->
             ( updateLocalModel Change.LocalUndo model |> Tuple.first, Command.none )
 
@@ -2261,35 +2362,92 @@ keyMsgCanvasUpdate audioData key model =
                                             NormalViewPoint _ ->
                                                 model.viewPoint
                                 }
+
+                    TextTool (Just _) ->
+                        setCurrentTool TextToolButton model
+
+                    TextTool Nothing ->
+                        setCurrentTool HandToolButton model
                 , Command.none
                 )
 
-        ( Keyboard.Spacebar, True ) ->
-            ( { model | tileHotkeys = Dict.update " " (\_ -> currentTileGroup model) model.tileHotkeys }
-            , Command.none
-            )
+        ( Keyboard.Character "v", True ) ->
+            case model.currentTool of
+                TextTool (Just _) ->
+                    ( model, Ports.readFromClipboardRequest )
 
-        ( Keyboard.Character string, True ) ->
-            ( { model | tileHotkeys = Dict.update string (\_ -> currentTileGroup model) model.tileHotkeys }
-            , Command.none
-            )
+                _ ->
+                    ( model, Command.none )
 
         ( Keyboard.Spacebar, False ) ->
-            ( case Dict.get " " model.tileHotkeys of
-                Just tile ->
-                    setCurrentTool (TilePlacerToolButton tile) model
+            case model.currentTool of
+                TextTool (Just _) ->
+                    ( placeChar ' ' model, Command.none )
 
-                Nothing ->
+                _ ->
+                    setTileFromHotkey " " model
+
+        ( Keyboard.Backspace, False ) ->
+            ( case model.currentTool of
+                TextTool (Just textTool) ->
+                    placeChar
+                        ' '
+                        { model
+                            | currentTool =
+                                { textTool | cursorPosition = Coord.plus (Coord.xy -1 0) textTool.cursorPosition }
+                                    |> Just
+                                    |> TextTool
+                        }
+                        |> (\m ->
+                                { m
+                                    | currentTool =
+                                        { textTool | cursorPosition = Coord.plus (Coord.xy -1 0) textTool.cursorPosition }
+                                            |> Just
+                                            |> TextTool
+                                }
+                           )
+
+                _ ->
                     model
             , Command.none
             )
 
-        ( Keyboard.Character string, False ) ->
-            ( case Dict.get string model.tileHotkeys of
-                Just tile ->
-                    setCurrentTool (TilePlacerToolButton tile) model
+        ( Keyboard.ArrowLeft, False ) ->
+            ( shiftTextCursor (Coord.xy -1 0) model
+            , Command.none
+            )
 
-                Nothing ->
+        ( Keyboard.ArrowRight, False ) ->
+            ( shiftTextCursor (Coord.xy 1 0) model
+            , Command.none
+            )
+
+        ( Keyboard.ArrowUp, False ) ->
+            ( shiftTextCursor (Coord.xy 0 -1) model
+            , Command.none
+            )
+
+        ( Keyboard.ArrowDown, False ) ->
+            ( shiftTextCursor (Coord.xy 0 1) model
+            , Command.none
+            )
+
+        ( Keyboard.Character string, False ) ->
+            case model.currentTool of
+                TextTool (Just _) ->
+                    ( String.foldl placeChar model string
+                    , Command.none
+                    )
+
+                _ ->
+                    setTileFromHotkey string model
+
+        ( Keyboard.Enter, False ) ->
+            ( case model.currentTool of
+                TextTool (Just _) ->
+                    placeChar '\n' model
+
+                _ ->
                     model
             , Command.none
             )
@@ -2298,10 +2456,99 @@ keyMsgCanvasUpdate audioData key model =
             ( model, Command.none )
 
 
-getTileColor :
-    TileGroup
-    -> { a | tileColors : AssocList.Dict TileGroup Colors }
-    -> Colors
+shiftTextCursor : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
+shiftTextCursor offset model =
+    case model.currentTool of
+        TextTool (Just textTool) ->
+            case BoundingBox2d.offsetBy (Units.tileUnit -8) (viewBoundingBox_ model) of
+                Just viewBounds ->
+                    let
+                        newCursorPosition =
+                            Coord.plus offset textTool.cursorPosition
+                    in
+                    { model
+                        | currentTool =
+                            { textTool | cursorPosition = newCursorPosition }
+                                |> Just
+                                |> TextTool
+                        , viewPoint =
+                            if BoundingBox2d.contains (Coord.toPoint2d newCursorPosition) viewBounds then
+                                model.viewPoint
+
+                            else
+                                actualViewPoint model
+                                    |> Point2d.translateBy (Coord.toVector2d offset)
+                                    |> NormalViewPoint
+                    }
+
+                Nothing ->
+                    { model
+                        | viewPoint =
+                            actualViewPoint model
+                                |> Point2d.translateBy (Coord.toVector2d offset)
+                                |> NormalViewPoint
+                    }
+
+        _ ->
+            model
+
+
+placeChar : Char -> FrontendLoaded -> FrontendLoaded
+placeChar char model =
+    case model.currentTool of
+        TextTool (Just textTool) ->
+            case char of
+                '\n' ->
+                    { model
+                        | currentTool =
+                            { textTool
+                                | cursorPosition =
+                                    ( textTool.startColumn
+                                    , Tuple.second textTool.cursorPosition |> Quantity.plus (Units.tileUnit 2)
+                                    )
+                            }
+                                |> Just
+                                |> TextTool
+                    }
+
+                _ ->
+                    case Dict.get char Sprite.charToInt of
+                        Just charInt ->
+                            placeTileAt
+                                textTool.cursorPosition
+                                False
+                                BigTextGroup
+                                charInt
+                                { model
+                                    | currentTool =
+                                        { textTool
+                                            | cursorPosition =
+                                                Coord.plus (Coord.xy 1 0) textTool.cursorPosition
+                                        }
+                                            |> Just
+                                            |> TextTool
+                                }
+
+                        _ ->
+                            model
+
+        _ ->
+            model
+
+
+setTileFromHotkey : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
+setTileFromHotkey string model =
+    ( case Dict.get string model.tileHotkeys of
+        Just tile ->
+            setCurrentTool (TilePlacerToolButton tile) model
+
+        Nothing ->
+            model
+    , Command.none
+    )
+
+
+getTileColor : TileGroup -> { a | tileColors : AssocList.Dict TileGroup Colors } -> Colors
 getTileColor tileGroup model =
     case AssocList.get tileGroup model.tileColors of
         Just a ->
@@ -2329,6 +2576,9 @@ setCurrentTool tool model =
 
                 TilePickerToolButton ->
                     { primaryColor = Color.white, secondaryColor = Color.black }
+
+                TextToolButton ->
+                    getTileColor BigTextGroup model
     in
     setCurrentToolWithColors tool colors model
 
@@ -2350,6 +2600,9 @@ setCurrentToolWithColors tool colors model =
 
                 TilePickerToolButton ->
                     TilePickerTool
+
+                TextToolButton ->
+                    TextTool Nothing
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
         , tileColors =
@@ -2362,6 +2615,9 @@ setCurrentToolWithColors tool colors model =
 
                 TilePickerToolButton ->
                     model.tileColors
+
+                TextToolButton ->
+                    AssocList.insert BigTextGroup colors model.tileColors
     }
 
 
@@ -2549,6 +2805,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         mousePosition
                                         |> NormalViewPoint
 
+                                TextTool _ ->
+                                    model.viewPoint
+
                         _ ->
                             model.viewPoint
             }
@@ -2604,6 +2863,9 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                     TilePlacerTool _ ->
                                         ( model2, Command.none )
 
+                                    TextTool _ ->
+                                        ( model2, Command.none )
+
                             Nothing ->
                                 ( model2, Command.none )
 
@@ -2654,6 +2916,24 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
     else
         ( model2, Command.none )
+
+
+handleMailEditorOutMsg : MailEditor.OutMsg -> FrontendLoaded -> FrontendLoaded
+handleMailEditorOutMsg outMsg model =
+    (case outMsg of
+        MailEditor.NoOutMsg ->
+            ( model, LocalGrid.NoOutMsg )
+
+        MailEditor.SubmitMail submitMail ->
+            updateLocalModel (Change.SubmitMail submitMail) model
+
+        MailEditor.UpdateDraft updateDraft ->
+            updateLocalModel (Change.UpdateDraft updateDraft) model
+
+        MailEditor.ViewedMail mailId ->
+            updateLocalModel (Change.ViewedMail mailId) model
+    )
+        |> handleOutMsg False
 
 
 uiUpdate : Coord Pixels -> UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -2776,20 +3056,7 @@ uiUpdate elementPosition msg model =
                                         model.lastMailEditorToggle
                             }
                     in
-                    ( (case outMsg of
-                        MailEditor.NoOutMsg ->
-                            ( model2, LocalGrid.NoOutMsg )
-
-                        MailEditor.SubmitMail submitMail ->
-                            updateLocalModel (Change.SubmitMail submitMail) model2
-
-                        MailEditor.UpdateDraft updateDraft ->
-                            updateLocalModel (Change.UpdateDraft updateDraft) model2
-
-                        MailEditor.ViewedMail mailId ->
-                            updateLocalModel (Change.ViewedMail mailId) model2
-                      )
-                        |> handleOutMsg False
+                    ( handleMailEditorOutMsg outMsg model2
                     , Command.none
                     )
 
@@ -2867,6 +3134,17 @@ setFocus : Hover -> FrontendLoaded -> FrontendLoaded
 setFocus newFocus model =
     { model
         | focus = newFocus
+        , currentTool =
+            case model.currentTool of
+                TextTool _ ->
+                    if newFocus == MapHover then
+                        model.currentTool
+
+                    else
+                        TextTool Nothing
+
+                _ ->
+                    model.currentTool
         , primaryColorTextInput =
             case currentUserId model of
                 Just userId ->
@@ -2883,6 +3161,10 @@ setFocus newFocus model =
                                 TextInput.withText
                                     (Color.toHexCode (getHandColor userId model).primaryColor)
                                     model.primaryColorTextInput
+
+                            TextTool _ ->
+                                model.primaryColorTextInput
+                                    |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).primaryColor)
 
                     else if not (isPrimaryColorInput model.focus) && isPrimaryColorInput newFocus then
                         TextInput.selectAll model.primaryColorTextInput
@@ -2908,6 +3190,10 @@ setFocus newFocus model =
                                 TextInput.withText
                                     (Color.toHexCode (getHandColor userId model).secondaryColor)
                                     model.secondaryColorTextInput
+
+                            TextTool _ ->
+                                model.secondaryColorTextInput
+                                    |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).secondaryColor)
 
                     else if not (isSecondaryColorInput model.focus) && isSecondaryColorInput newFocus then
                         TextInput.selectAll model.secondaryColorTextInput
@@ -3049,7 +3335,7 @@ point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
         |> Point2d.unsafe
 
 
-scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float b )
+scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float units )
 scaleForScreenToWorld model =
     ( 1 / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
     , 1 / (toFloat model.zoomFactor * toFloat (Coord.yRaw Units.tileSize)) |> Quantity
@@ -3110,18 +3396,23 @@ cursorPosition tileData model =
 
 placeTile : Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
 placeTile isDragPlacement tileGroup index model =
+    let
+        tile =
+            Toolbar.getTileGroupTile tileGroup index
+
+        tileData =
+            Tile.getData tile
+    in
+    placeTileAt (cursorPosition tileData model) isDragPlacement tileGroup index model
+
+
+placeTileAt : Coord WorldUnit -> Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
+placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
     case currentUserId model of
         Just userId ->
             let
                 tile =
                     Toolbar.getTileGroupTile tileGroup index
-
-                tileData =
-                    Tile.getData tile
-
-                cursorPosition_ : Coord WorldUnit
-                cursorPosition_ =
-                    cursorPosition tileData model
 
                 hasCollision : Bool
                 hasCollision =
@@ -3305,7 +3596,20 @@ createDebrisMesh appStartTime removedTiles =
             in
             (case data.texturePosition of
                 Just texturePosition ->
-                    createDebrisMeshHelper position texturePosition data.size colors appStartTime time
+                    createDebrisMeshHelper
+                        position
+                        texturePosition
+                        data.size
+                        colors
+                        (case tile of
+                            BigText _ ->
+                                2
+
+                            _ ->
+                                1
+                        )
+                        appStartTime
+                        time
 
                 Nothing ->
                     []
@@ -3317,6 +3621,7 @@ createDebrisMesh appStartTime removedTiles =
                                 topLayer.texturePosition
                                 data.size
                                 colors
+                                1
                                 appStartTime
                                 time
 
@@ -3330,51 +3635,91 @@ createDebrisMesh appStartTime removedTiles =
 
 
 createDebrisMeshHelper :
-    ( Quantity Int WorldUnit, Quantity Int WorldUnit )
+    Coord WorldUnit
     -> Coord unit
     -> Coord unit
     -> Colors
+    -> Int
     -> Effect.Time.Posix
     -> Effect.Time.Posix
     -> List DebrisVertex
-createDebrisMeshHelper ( Quantity x, Quantity y ) texturePosition ( Quantity textureW, Quantity textureH ) colors appStartTime time =
+createDebrisMeshHelper position texturePosition ( Quantity textureW, Quantity textureH ) colors scale appStartTime time =
+    let
+        primaryColor2 =
+            Color.toInt colors.primaryColor |> toFloat
+
+        secondaryColor2 =
+            Color.toInt colors.secondaryColor |> toFloat
+
+        time2 =
+            Duration.from appStartTime time |> Duration.inSeconds
+    in
     List.concatMap
         (\x2 ->
             List.concatMap
                 (\y2 ->
                     let
-                        { topLeft, topRight, bottomLeft, bottomRight } =
-                            Tile.texturePosition_ (texturePosition |> Coord.plus (Coord.xy x2 y2)) (Coord.xy 1 1)
+                        ( x3, y3 ) =
+                            Coord.xy x2 y2 |> Coord.multiply Units.tileSize |> Coord.toTuple
 
-                        ( ( randomX, randomY ), _ ) =
+                        initialSpeed : Vec2
+                        initialSpeed =
                             Random.step
-                                (Random.map2 Tuple.pair (Random.float -40 40) (Random.float -40 40))
+                                (Random.map2
+                                    (\randomX randomY ->
+                                        Vec2.vec2
+                                            ((toFloat x2 + 0.5 - toFloat textureW / 2) * 100 + randomX)
+                                            (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
+                                    )
+                                    (Random.float -40 40)
+                                    (Random.float -40 40)
+                                )
                                 (Random.initialSeed (Effect.Time.posixToMillis time + x2 * 3 + y2 * 5))
+                                |> Tuple.first
+
+                        ( w, h ) =
+                            Units.tileSize |> Coord.divide (Coord.xy scale scale) |> Coord.toTuple
+
+                        ( tx, ty ) =
+                            Coord.plus (Coord.xy x3 y3 |> Coord.divide (Coord.xy scale scale)) texturePosition |> Coord.toTuple
+
+                        ( x4, y4 ) =
+                            Coord.multiply Units.tileSize position
+                                |> Coord.plus (Coord.xy x3 y3)
+                                |> Coord.toTuple
+
+                        ( width, height ) =
+                            Coord.toTuple Units.tileSize
                     in
-                    List.map
-                        (\uv ->
-                            let
-                                offset =
-                                    Vec2.vec2
-                                        ((x + x2) * Coord.xRaw Units.tileSize |> toFloat)
-                                        ((y + y2) * Coord.yRaw Units.tileSize |> toFloat)
-                            in
-                            { position = Vec2.sub (Vec2.add offset uv) topLeft
-                            , initialSpeed =
-                                Vec2.vec2
-                                    ((toFloat x2 + 0.5 - toFloat textureW / 2) * 100 + randomX)
-                                    (((toFloat y2 + 0.5 - toFloat textureH / 2) * 100) + randomY - 100)
-                            , texturePosition = uv
-                            , startTime = Duration.from appStartTime time |> Duration.inSeconds
-                            , primaryColor = Color.toVec3 colors.primaryColor
-                            , secondaryColor = Color.toVec3 colors.secondaryColor
-                            }
-                        )
-                        [ topLeft
-                        , topRight
-                        , bottomRight
-                        , bottomLeft
-                        ]
+                    [ { position = Vec2.vec2 (toFloat x4) (toFloat y4)
+                      , texturePosition = Vec2.vec2 (toFloat tx) (toFloat ty)
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    , { position = Vec2.vec2 (toFloat (x4 + width)) (toFloat y4)
+                      , texturePosition = Vec2.vec2 (toFloat (tx + w)) (toFloat ty)
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    , { position = Vec2.vec2 (toFloat (x4 + width)) (toFloat (y4 + height))
+                      , texturePosition = Vec2.vec2 (toFloat (tx + w)) (toFloat (ty + h))
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    , { position = Vec2.vec2 (toFloat x4) (toFloat (y4 + height))
+                      , texturePosition = Vec2.vec2 (toFloat tx) (toFloat (ty + h))
+                      , primaryColor = primaryColor2
+                      , secondaryColor = secondaryColor2
+                      , initialSpeed = initialSpeed
+                      , startTime = time2
+                      }
+                    ]
                 )
                 (List.range 0 (textureH - 1))
         )
@@ -3434,6 +3779,9 @@ updateMeshes forceUpdate oldModel newModel =
                     Nothing
 
                 TilePickerTool ->
+                    Nothing
+
+                TextTool _ ->
                     Nothing
 
         oldCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
@@ -3661,6 +4009,9 @@ actualViewPoint model =
 
                 HandTool ->
                     offsetViewPoint model hover start current
+
+                TextTool _ ->
+                    actualViewPointHelper model
 
         _ ->
             actualViewPointHelper model
@@ -4307,7 +4658,7 @@ currentTool model =
             HandTool
 
 
-cursorSprite : Hover -> FrontendLoaded -> CursorType
+cursorSprite : Hover -> FrontendLoaded -> { cursorType : CursorType, scale : Int }
 cursorSprite hover model =
     case currentUserId model of
         Just userId ->
@@ -4317,100 +4668,104 @@ cursorSprite hover model =
                         Just mailEditor ->
                             case hover of
                                 UiHover (MailEditorHover uiHover) _ ->
-                                    case uiHover of
-                                        MailEditor.BackgroundHover ->
-                                            DefaultCursor
-
-                                        MailEditor.ImageButton _ ->
-                                            PointerCursor
-
-                                        MailEditor.MailButton ->
-                                            case mailEditor.currentTool of
-                                                MailEditor.ImagePlacer _ ->
-                                                    NoCursor
-
-                                                MailEditor.ImagePicker ->
-                                                    PointerCursor
-
-                                                MailEditor.EraserTool ->
-                                                    CursorSprite EraserSpriteCursor
-
-                                        _ ->
-                                            PointerCursor
+                                    MailEditor.cursorSprite model.windowSize uiHover mailEditor
 
                                 _ ->
-                                    DefaultCursor
+                                    { cursorType = DefaultCursor, scale = 1 }
 
                         Nothing ->
-                            if isHoldingCow model /= Nothing then
-                                CursorSprite PinchSpriteCursor
+                            { cursorType =
+                                if isHoldingCow model /= Nothing then
+                                    CursorSprite PinchSpriteCursor
 
-                            else
-                                case currentTool model of
-                                    TilePlacerTool _ ->
-                                        case hover of
-                                            UiBackgroundHover ->
-                                                DefaultCursor
+                                else
+                                    case currentTool model of
+                                        TilePlacerTool _ ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
 
-                                            TileHover _ ->
-                                                NoCursor
+                                                TileHover _ ->
+                                                    NoCursor
 
-                                            TrainHover _ ->
-                                                NoCursor
+                                                TrainHover _ ->
+                                                    NoCursor
 
-                                            MapHover ->
-                                                NoCursor
+                                                MapHover ->
+                                                    NoCursor
 
-                                            CowHover _ ->
-                                                NoCursor
+                                                CowHover _ ->
+                                                    NoCursor
 
-                                            UiHover _ _ ->
-                                                PointerCursor
+                                                UiHover _ _ ->
+                                                    PointerCursor
 
-                                    HandTool ->
-                                        case hover of
-                                            UiBackgroundHover ->
-                                                DefaultCursor
+                                        HandTool ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
 
-                                            TileHover data ->
-                                                case tileInteraction userId data model of
-                                                    Just _ ->
-                                                        CursorSprite PointerSpriteCursor
+                                                TileHover data ->
+                                                    case tileInteraction userId data model of
+                                                        Just _ ->
+                                                            CursorSprite PointerSpriteCursor
 
-                                                    Nothing ->
-                                                        CursorSprite DefaultSpriteCursor
+                                                        Nothing ->
+                                                            CursorSprite DefaultSpriteCursor
 
-                                            TrainHover _ ->
-                                                CursorSprite PointerSpriteCursor
+                                                TrainHover _ ->
+                                                    CursorSprite PointerSpriteCursor
 
-                                            MapHover ->
-                                                CursorSprite DefaultSpriteCursor
+                                                MapHover ->
+                                                    CursorSprite DefaultSpriteCursor
 
-                                            CowHover _ ->
-                                                CursorSprite PointerSpriteCursor
+                                                CowHover _ ->
+                                                    CursorSprite PointerSpriteCursor
 
-                                            UiHover _ _ ->
-                                                PointerCursor
+                                                UiHover _ _ ->
+                                                    PointerCursor
 
-                                    TilePickerTool ->
-                                        case hover of
-                                            UiBackgroundHover ->
-                                                DefaultCursor
+                                        TilePickerTool ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
 
-                                            TileHover _ ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                TileHover _ ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            TrainHover _ ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                TrainHover _ ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            MapHover ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                MapHover ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            CowHover _ ->
-                                                CursorSprite EyeDropperSpriteCursor
+                                                CowHover _ ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
-                                            UiHover _ _ ->
-                                                PointerCursor
+                                                UiHover _ _ ->
+                                                    PointerCursor
+
+                                        TextTool _ ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
+
+                                                TileHover _ ->
+                                                    CursorSprite TextSpriteCursor
+
+                                                TrainHover _ ->
+                                                    CursorSprite TextSpriteCursor
+
+                                                MapHover ->
+                                                    CursorSprite TextSpriteCursor
+
+                                                CowHover _ ->
+                                                    CursorSprite TextSpriteCursor
+
+                                                UiHover _ _ ->
+                                                    PointerCursor
+                            , scale = 1
+                            }
             in
             case isDraggingView hover model of
                 Just mouse ->
@@ -4418,18 +4773,21 @@ cursorSprite hover model =
                         helper ()
 
                     else
-                        CursorSprite DragScreenSpriteCursor
+                        { cursorType = CursorSprite DragScreenSpriteCursor, scale = 1 }
 
                 Nothing ->
                     helper ()
 
         Nothing ->
-            case hover of
-                UiHover _ _ ->
-                    PointerCursor
+            { cursorType =
+                case hover of
+                    UiHover _ _ ->
+                        PointerCursor
 
-                _ ->
-                    DefaultCursor
+                    _ ->
+                        DefaultCursor
+            , scale = 1
+            }
 
 
 isDraggingView :
@@ -4465,6 +4823,9 @@ isDraggingView hover model =
 
                     else
                         Nothing
+
+                TextTool _ ->
+                    Nothing
 
         _ ->
             Nothing
@@ -4562,7 +4923,7 @@ canvasView audioData model =
                 ]
                 ([ Html.Attributes.width windowWidth
                  , Html.Attributes.height windowHeight
-                 , Cursor.htmlAttribute showMousePointer
+                 , Cursor.htmlAttribute showMousePointer.cursorType
                  , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
                  , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
                  , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
@@ -4671,6 +5032,44 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
+                            ++ (case ( model.currentTool, currentUserId model ) of
+                                    ( TextTool (Just textTool), Just userId ) ->
+                                        [ Effect.WebGL.entityWith
+                                            [ Shaders.blend ]
+                                            Shaders.vertexShader
+                                            Shaders.fragmentShader
+                                            textCursorMesh
+                                            { view =
+                                                Coord.translateMat4
+                                                    (Coord.multiply Units.tileSize textTool.cursorPosition)
+                                                    viewMatrix
+                                            , texture = texture
+                                            , textureSize = textureSize
+                                            , color =
+                                                if
+                                                    canPlaceTile
+                                                        model.time
+                                                        { position = textTool.cursorPosition
+                                                        , change = BigText 'A'
+                                                        , userId = userId
+                                                        , colors =
+                                                            { primaryColor = Color.rgb255 0 0 0
+                                                            , secondaryColor = Color.rgb255 255 255 255
+                                                            }
+                                                        }
+                                                        model.trains
+                                                        (LocalGrid.localModel model.localModel |> .grid)
+                                                then
+                                                    Vec4.vec4 0 0 0 0.5
+
+                                                else
+                                                    Vec4.vec4 1 0 0 0.5
+                                            }
+                                        ]
+
+                                    _ ->
+                                        []
+                               )
                             ++ drawOtherCursors texture viewMatrix model
                             ++ List.filterMap
                                 (\{ position, isRadio } ->
@@ -4743,30 +5142,6 @@ canvasView audioData model =
                                             tileSize =
                                                 Tile.getData currentTile2 |> .size
 
-                                            lastPlacementOffset : () -> Float
-                                            lastPlacementOffset () =
-                                                case model.lastPlacementError of
-                                                    Just time ->
-                                                        let
-                                                            timeElapsed =
-                                                                Duration.from time model.time
-                                                        in
-                                                        if
-                                                            timeElapsed
-                                                                |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
-                                                        then
-                                                            timeElapsed
-                                                                |> Duration.inSeconds
-                                                                |> (*) 40
-                                                                |> cos
-                                                                |> (*) 2
-
-                                                        else
-                                                            0
-
-                                                    Nothing ->
-                                                        0
-
                                             offsetX : Float
                                             offsetX =
                                                 case model.lastTilePlaced of
@@ -4788,10 +5163,10 @@ canvasView audioData model =
                                                                 |> (*) 2
 
                                                         else
-                                                            lastPlacementOffset ()
+                                                            lastPlacementOffset audioData model
 
                                                     Nothing ->
-                                                        lastPlacementOffset ()
+                                                        lastPlacementOffset audioData model
                                         in
                                         [ Effect.WebGL.entityWith
                                             [ Shaders.blend ]
@@ -4867,7 +5242,7 @@ canvasView audioData model =
                                             []
                                             Shaders.worldMapVertexShader
                                             Shaders.worldMapFragmentShader
-                                            square
+                                            mapSquare
                                             { view =
                                                 Mat4.makeScale3
                                                     (mapSize * 2 / toFloat windowWidth)
@@ -4917,6 +5292,31 @@ canvasView audioData model =
             Html.text ""
 
 
+lastPlacementOffset : AudioData -> FrontendLoaded -> Float
+lastPlacementOffset audioData model =
+    case model.lastPlacementError of
+        Just time ->
+            let
+                timeElapsed =
+                    Duration.from time model.time
+            in
+            if
+                timeElapsed
+                    |> Quantity.lessThan (Sound.length audioData model.sounds ErrorSound)
+            then
+                timeElapsed
+                    |> Duration.inSeconds
+                    |> (*) 40
+                    |> cos
+                    |> (*) 2
+
+            else
+                0
+
+        Nothing ->
+            0
+
+
 drawOtherCursors : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
 drawOtherCursors texture viewMatrix model =
     let
@@ -4944,7 +5344,33 @@ drawOtherCursors texture viewMatrix model =
                             [ Shaders.blend ]
                             Shaders.vertexShader
                             Shaders.fragmentShader
-                            (Cursor.getSpriteMesh DefaultSpriteCursor mesh)
+                            (Cursor.getSpriteMesh
+                                (case cursor.holdingCow of
+                                    Just _ ->
+                                        PinchSpriteCursor
+
+                                    Nothing ->
+                                        case cursor.currentTool of
+                                            Cursor.HandTool ->
+                                                DefaultSpriteCursor
+
+                                            Cursor.EraserTool ->
+                                                EraserSpriteCursor
+
+                                            Cursor.TilePlacerTool ->
+                                                DefaultSpriteCursor
+
+                                            Cursor.TilePickerTool ->
+                                                EyeDropperSpriteCursor
+
+                                            Cursor.TextTool (Just _) ->
+                                                TextSpriteCursor
+
+                                            Cursor.TextTool Nothing ->
+                                                DefaultSpriteCursor
+                                )
+                                mesh
+                            )
                             { view =
                                 Mat4.makeTranslate3
                                     (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
@@ -4968,11 +5394,17 @@ drawOtherCursors texture viewMatrix model =
             )
 
 
-drawCursor : CursorType -> WebGL.Texture.Texture -> Mat4 -> Id UserId -> FrontendLoaded -> List Effect.WebGL.Entity
+drawCursor :
+    { cursorType : CursorType, scale : Int }
+    -> WebGL.Texture.Texture
+    -> Mat4
+    -> Id UserId
+    -> FrontendLoaded
+    -> List Effect.WebGL.Entity
 drawCursor showMousePointer texture viewMatrix userId model =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
-            case showMousePointer of
+            case showMousePointer.cursorType of
                 CursorSprite mousePointer ->
                     let
                         point =
@@ -4981,6 +5413,10 @@ drawCursor showMousePointer texture viewMatrix userId model =
                     in
                     case IdDict.get userId model.handMeshes of
                         Just mesh ->
+                            let
+                                scale =
+                                    toFloat showMousePointer.scale
+                            in
                             [ Effect.WebGL.entityWith
                                 [ Shaders.blend ]
                                 Shaders.vertexShader
@@ -4997,6 +5433,7 @@ drawCursor showMousePointer texture viewMatrix userId model =
                                             |> (*) (1 / toFloat model.zoomFactor)
                                         )
                                         0
+                                        |> Mat4.scale3 scale scale 1
                                         |> Mat4.mul viewMatrix
                                 , texture = texture
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -5020,8 +5457,12 @@ cursorActualPosition isCurrentUser userId cursor model =
         cursor.position
 
     else
-        case IdDict.get userId model.previousCursorPositions of
-            Just previous ->
+        case ( cursor.currentTool, IdDict.get userId model.previousCursorPositions ) of
+            ( Cursor.TextTool (Just textTool), _ ) ->
+                Coord.toPoint2d textTool.cursorPosition
+                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.5 })
+
+            ( _, Just previous ) ->
                 Point2d.interpolateFrom
                     previous.position
                     cursor.position
@@ -5031,7 +5472,7 @@ cursorActualPosition isCurrentUser userId cursor model =
                         |> clamp 0 1
                     )
 
-            Nothing ->
+            _ ->
                 cursor.position
 
 
@@ -5306,8 +5747,8 @@ cowActualPosition cowId model =
                     Nothing
 
 
-square : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
-square =
+mapSquare : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
+mapSquare =
     let
         size =
             11
@@ -5326,3 +5767,9 @@ square =
           , vcoord2 = Vec2.vec2 -size size
           }
         ]
+
+
+textCursorMesh : Effect.WebGL.Mesh Vertex
+textCursorMesh =
+    Sprite.rectangle Color.white Coord.origin (Coord.multiply Units.tileSize (Coord.xy 1 2))
+        |> Sprite.toMesh

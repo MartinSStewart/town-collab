@@ -39,7 +39,7 @@ import Browser
 import Change exposing (Change, Cow, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
-import Cursor exposing (CursorMeshes)
+import Cursor exposing (Cursor, CursorMeshes)
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
@@ -57,13 +57,14 @@ import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
 import List.Nonempty exposing (Nonempty)
-import LocalGrid exposing (Cursor, LocalGrid)
+import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, Model)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
+import Quantity exposing (Quantity)
 import Route exposing (ConfirmEmailKey, InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
@@ -129,12 +130,14 @@ type ToolButton
     = HandToolButton
     | TilePlacerToolButton TileGroup
     | TilePickerToolButton
+    | TextToolButton
 
 
 type Tool
     = HandTool
     | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
     | TilePickerTool
+    | TextTool (Maybe { cursorPosition : Coord WorldUnit, startColumn : Quantity Int WorldUnit })
 
 
 type alias FrontendLoaded =

@@ -11,6 +11,7 @@ module Change exposing
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
+import Cursor
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
 import Effect.Time
@@ -21,7 +22,6 @@ import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (MailStatus)
-import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Train exposing (TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
@@ -52,6 +52,7 @@ type LocalChange
     | LeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ViewedMail (Id MailId)
     | SetAllowEmailNotifications Bool
+    | ChangeTool Cursor.OtherUsersTool
 
 
 type ClientChange
@@ -87,6 +88,7 @@ type ServerChange
         }
     | ServerViewedMail (Id MailId) (Id UserId)
     | ServerNewCows (Nonempty ( Id CowId, Cow ))
+    | ServerChangeTool (Id UserId) Cursor.OtherUsersTool
 
 
 type alias Cow =

@@ -56,7 +56,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sprite
-import Terrain exposing (TerrainUnit)
+import Terrain exposing (TerrainType(..), TerrainUnit, TerrainValue)
 import Tile exposing (CollisionMask(..), RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import User exposing (FrontendUser)
@@ -300,8 +300,11 @@ canPlaceTile change =
 
                                 y3 =
                                     y2 + (y // Terrain.terrainSize)
+
+                                terrain =
+                                    Terrain.getTerrainValue (Coord.xy x3 y3) cellPosition
                             in
-                            if Terrain.isGroundTerrain (Coord.xy x3 y3) cellPosition then
+                            if terrain.terrainType == Ground then
                                 False
 
                             else
@@ -518,7 +521,21 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
                 _ ->
                     case data.texturePosition of
                         Just texturePosition ->
-                            tileMeshHelper opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
+                            tileMeshHelper
+                                opacity
+                                colors
+                                False
+                                0
+                                (Coord.multiply Units.tileSize position2)
+                                (case value of
+                                    BigText _ ->
+                                        2
+
+                                    _ ->
+                                        1
+                                )
+                                texturePosition
+                                data.size
 
                         Nothing ->
                             []
@@ -556,7 +573,7 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
                                         topLayer.yOffset
                                         (Coord.multiply Units.tileSize position2)
                                         1
-                                        (Coord.xy 4 35)
+                                        (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
                                         data.size
 
                             else
@@ -579,15 +596,20 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
         |> Sprite.toMesh
 
 
-getTerrainLookupValue : Coord TerrainUnit -> Array2D Bool -> Bool
+getTerrainLookupValue : Coord TerrainUnit -> Array2D TerrainValue -> TerrainType
 getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
-    Array2D.get (x + 1) (y + 1) lookup |> Maybe.withDefault True
+    case Array2D.get (x + 1) (y + 1) lookup of
+        Just terrain ->
+            terrain.terrainType
+
+        Nothing ->
+            Ground
 
 
 backgroundMesh : Coord CellUnit -> WebGL.Mesh Vertex
 backgroundMesh cellPosition =
     let
-        lookup : Array2D Bool
+        lookup : Array2D TerrainValue
         lookup =
             Terrain.createTerrainLookup cellPosition
 
@@ -601,13 +623,14 @@ backgroundMesh cellPosition =
                     |> List.concatMap
                         (\y2 ->
                             let
-                                getValue : Int -> Int -> Bool
+                                getValue : Int -> Int -> TerrainType
                                 getValue x3 y3 =
                                     getTerrainLookupValue (Coord.xy (x2 + x3) (y2 + y3)) lookup
 
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.spriteWithZ
+                                        1
                                         Color.black
                                         Color.black
                                         (Coord.xy
@@ -620,24 +643,24 @@ backgroundMesh cellPosition =
                                         (Coord.xy 80 72)
 
                                 corners =
-                                    [ { side1 = getValue 0 -1
-                                      , corner = getValue -1 -1
-                                      , side2 = getValue -1 0
+                                    [ { side1 = getValue 0 -1 /= Water
+                                      , corner = getValue -1 -1 /= Water
+                                      , side2 = getValue -1 0 /= Water
                                       , texturePos = ( 480, 504 )
                                       }
-                                    , { side1 = getValue 0 -1
-                                      , corner = getValue 1 -1
-                                      , side2 = getValue 1 0
+                                    , { side1 = getValue 0 -1 /= Water
+                                      , corner = getValue 1 -1 /= Water
+                                      , side2 = getValue 1 0 /= Water
                                       , texturePos = ( 400, 504 )
                                       }
-                                    , { side1 = getValue 0 1
-                                      , corner = getValue 1 1
-                                      , side2 = getValue 1 0
+                                    , { side1 = getValue 0 1 /= Water
+                                      , corner = getValue 1 1 /= Water
+                                      , side2 = getValue 1 0 /= Water
                                       , texturePos = ( 400, 432 )
                                       }
-                                    , { side1 = getValue 0 1
-                                      , corner = getValue -1 1
-                                      , side2 = getValue -1 0
+                                    , { side1 = getValue 0 1 /= Water
+                                      , corner = getValue -1 1 /= Water
+                                      , side2 = getValue -1 0 /= Water
                                       , texturePos = ( 480, 432 )
                                       }
                                     ]
@@ -650,64 +673,71 @@ backgroundMesh cellPosition =
                                                     []
                                             )
 
+                                originValue =
+                                    getValue 0 0
+
                                 tile =
-                                    if getValue 0 0 then
-                                        draw 220 216
+                                    case originValue of
+                                        Mountain ->
+                                            draw 640 216
 
-                                    else
-                                        case
-                                            ( {- Top -} getValue 0 -1
-                                            , ( getValue -1 0, getValue 1 0 ) {- Left, Right -}
-                                            , {- Bottom -} getValue 0 1
-                                            )
-                                        of
-                                            ( False, ( False, False ), False ) ->
-                                                draw 480 288
+                                        Ground ->
+                                            draw 220 216
 
-                                            ( True, ( False, False ), False ) ->
-                                                draw 480 216
+                                        Water ->
+                                            case
+                                                ( {- Top -} getValue 0 -1 /= Water
+                                                , ( getValue -1 0 /= Water, getValue 1 0 /= Water ) {- Left, Right -}
+                                                , {- Bottom -} getValue 0 1 /= Water
+                                                )
+                                            of
+                                                ( False, ( False, False ), False ) ->
+                                                    draw 480 288
 
-                                            ( False, ( True, False ), False ) ->
-                                                draw 400 288
+                                                ( True, ( False, False ), False ) ->
+                                                    draw 480 216
 
-                                            ( True, ( True, False ), False ) ->
-                                                draw 400 216
+                                                ( False, ( True, False ), False ) ->
+                                                    draw 400 288
 
-                                            ( False, ( False, True ), False ) ->
-                                                draw 560 288
+                                                ( True, ( True, False ), False ) ->
+                                                    draw 400 216
 
-                                            ( True, ( False, True ), False ) ->
-                                                draw 560 216
+                                                ( False, ( False, True ), False ) ->
+                                                    draw 560 288
 
-                                            ( False, ( True, True ), False ) ->
-                                                draw 560 504
+                                                ( True, ( False, True ), False ) ->
+                                                    draw 560 216
 
-                                            ( True, ( True, True ), False ) ->
-                                                draw 560 432
+                                                ( False, ( True, True ), False ) ->
+                                                    draw 560 504
 
-                                            ( False, ( False, False ), True ) ->
-                                                draw 480 360
+                                                ( True, ( True, True ), False ) ->
+                                                    draw 560 432
 
-                                            ( True, ( False, False ), True ) ->
-                                                draw 480 648
+                                                ( False, ( False, False ), True ) ->
+                                                    draw 480 360
 
-                                            ( False, ( True, False ), True ) ->
-                                                draw 400 360
+                                                ( True, ( False, False ), True ) ->
+                                                    draw 480 648
 
-                                            ( True, ( True, False ), True ) ->
-                                                draw 400 648
+                                                ( False, ( True, False ), True ) ->
+                                                    draw 400 360
 
-                                            ( False, ( False, True ), True ) ->
-                                                draw 560 360
+                                                ( True, ( True, False ), True ) ->
+                                                    draw 400 648
 
-                                            ( True, ( False, True ), True ) ->
-                                                draw 560 648
+                                                ( False, ( False, True ), True ) ->
+                                                    draw 560 360
 
-                                            ( False, ( True, True ), True ) ->
-                                                draw 560 576
+                                                ( True, ( False, True ), True ) ->
+                                                    draw 560 648
 
-                                            ( True, ( True, True ), True ) ->
-                                                draw 480 288
+                                                ( False, ( True, True ), True ) ->
+                                                    draw 560 576
+
+                                                ( True, ( True, True ), True ) ->
+                                                    draw 480 288
                             in
                             corners ++ tile
                         )
@@ -728,7 +758,21 @@ tileMesh tile position scale colors =
     else
         (case data.texturePosition of
             Just texturePosition ->
-                tileMeshHelper 1 colors False 0 position scale texturePosition data.size
+                tileMeshHelper
+                    1
+                    colors
+                    False
+                    0
+                    position
+                    (case tile of
+                        BigText _ ->
+                            2 * scale
+
+                        _ ->
+                            scale
+                    )
+                    texturePosition
+                    data.size
 
             Nothing ->
                 []
@@ -754,40 +798,46 @@ tileMeshHelper :
     -> List Vertex
 tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer yOffset position scale texturePosition size =
     let
-        { topLeft, topRight, bottomLeft, bottomRight } =
-            Tile.texturePosition_ texturePosition size
-
-        topLeftRecord =
-            Vec2.toRecord topLeft
-
-        ( Quantity x, Quantity y ) =
-            position
-
         (Quantity height) =
             Tuple.second size
+
+        ( x, y ) =
+            Coord.toTuple position
     in
-    List.map
-        (\uv ->
-            let
-                uvRecord =
-                    Vec2.toRecord uv
-            in
-            { position =
-                Vec3.vec3
-                    ((uvRecord.x - topLeftRecord.x) * toFloat scale + toFloat x)
-                    ((uvRecord.y - topLeftRecord.y) * toFloat scale + toFloat y)
-                    (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
-            , texturePosition = uv
-            , opacity = opacity
-            , primaryColor = Color.toVec3 primaryColor
-            , secondaryColor = Color.toVec3 secondaryColor
-            }
-        )
-        [ topLeft
-        , topRight
-        , bottomRight
-        , bottomLeft
-        ]
+    Sprite.spriteWithZ
+        opacity
+        primaryColor
+        secondaryColor
+        position
+        (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
+        (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
+        texturePosition
+        (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
+
+
+
+--List.map
+--    (\uv ->
+--        let
+--            uvRecord =
+--                Vec2.toRecord uv
+--        in
+--        { position =
+--            Vec3.vec3
+--                ((uvRecord.x - topLeftRecord.x) * toFloat scale + toFloat x)
+--                ((uvRecord.y - topLeftRecord.y) * toFloat scale + toFloat y)
+--                (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
+--        , texturePosition = uv
+--        , opacity = opacity
+--        , primaryColor = Color.toVec3 primaryColor
+--        , secondaryColor = Color.toVec3 secondaryColor
+--        }
+--    )
+--    [ topLeft
+--    , topRight
+--    , bottomRight
+--    , bottomLeft
+--    ]
 
 
 tileZ : Bool -> Float -> Int -> Float

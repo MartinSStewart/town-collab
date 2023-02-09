@@ -72,13 +72,13 @@ terrainSize =
     Units.cellSize // terrainDivisionsPerCell
 
 
-createTerrainLookup : Coord CellUnit -> Array2D Bool
+createTerrainLookup : Coord CellUnit -> Array2D TerrainValue
 createTerrainLookup cellPosition =
     List.range -1 terrainDivisionsPerCell
         |> List.map
             (\x2 ->
                 List.range -1 terrainDivisionsPerCell
-                    |> List.map (\y2 -> getTerrainValue (Coord.xy x2 y2) cellPosition > 0)
+                    |> List.map (\y2 -> getTerrainValue (Coord.xy x2 y2) cellPosition)
             )
         |> Array2D.fromList
 
@@ -87,7 +87,17 @@ type TerrainUnit
     = TerrainUnit Never
 
 
-getTerrainValue : Coord TerrainUnit -> Coord CellUnit -> Float
+type alias TerrainValue =
+    { value : Float, terrainType : TerrainType }
+
+
+type TerrainType
+    = Water
+    | Ground
+    | Mountain
+
+
+getTerrainValue : Coord TerrainUnit -> Coord CellUnit -> TerrainValue
 getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
     let
         persistence =
@@ -108,16 +118,33 @@ getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
         y2 =
             toFloat y / terrainDivisionsPerCell + toFloat cellY
 
-        noise1 =
+        highFrequency =
             Simplex.noise2d permutationTable (x2 / scale) (y2 / scale)
-                + (persistence * Simplex.noise2d permutationTable (x2 / scale2) (y2 / scale2))
+
+        lowFrequency =
+            Simplex.noise2d permutationTable (x2 / scale2) (y2 / scale2)
+
+        value2 =
+            (-highFrequency + (5.0 * lowFrequency)) / 6.0
+
+        noise1 =
+            highFrequency + (persistence * lowFrequency)
+
+        value =
+            noise1 / persistence2
     in
-    noise1 / persistence2
+    { value = value
+    , terrainType =
+        if value > 0 then
+            if value2 > 0.45 && value2 < 0.47 then
+                Mountain
 
+            else
+                Ground
 
-isGroundTerrain : Coord TerrainUnit -> Coord CellUnit -> Bool
-isGroundTerrain ( Quantity x, Quantity y ) cellPosition =
-    getTerrainValue (Coord.xy x y) cellPosition > 0
+        else
+            Water
+    }
 
 
 fractalConfig : Simplex.FractalConfig

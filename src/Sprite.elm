@@ -1,10 +1,14 @@
 module Sprite exposing
-    ( charSize
+    ( asciiChars
+    , charSize
+    , charTexturePosition
+    , charToInt
     , getIndices
     , getQuadIndices
     , nineSlice
     , outlinedText
     , rectangle
+    , rectangleWithOpacity
     , shiverText
     , sprite
     , spriteWithColor
@@ -19,11 +23,12 @@ module Sprite exposing
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
+import List.Nonempty exposing (Nonempty(..))
+import Math.Vector2
 import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
 import Random
 import Shaders exposing (Vertex)
-import Tile
 import WebGL
 
 
@@ -115,57 +120,65 @@ nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bot
 
 rectangle : Color -> Coord unit -> Coord unit -> List Vertex
 rectangle color topLeft size =
-    spriteWithColor color topLeft size (Coord.xy 508 28) (Coord.xy 1 1)
+    spriteWithZ 1 color color topLeft 0 size (Coord.xy 508 28) (Coord.xy 1 1)
+
+
+rectangleWithOpacity : Float -> Color -> Coord unit -> Coord unit -> List Vertex
+rectangleWithOpacity opacity color topLeft size =
+    spriteWithZ opacity color color topLeft 0 size (Coord.xy 508 28) (Coord.xy 1 1)
 
 
 sprite : Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
 sprite position size texturePosition textureSize =
-    spriteWithZ Color.black Color.black position 0 size texturePosition textureSize
+    spriteWithZ 1 Color.black Color.black position 0 size texturePosition textureSize
 
 
 spriteWithColor : Color -> Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithColor color position size texturePosition textureSize =
-    spriteWithZ color color position 0 size texturePosition textureSize
+    spriteWithZ 1 color color position 0 size texturePosition textureSize
 
 
 spriteWithTwoColors : Colors -> Coord unit -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithTwoColors { primaryColor, secondaryColor } position size texturePosition textureSize =
-    spriteWithZ primaryColor secondaryColor position 0 size texturePosition textureSize
+    spriteWithZ 1 primaryColor secondaryColor position 0 size texturePosition textureSize
 
 
-spriteWithZ : Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
-spriteWithZ primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
+spriteWithZ : Float -> Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
+spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
     let
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels texturePosition textureSize
+        ( tx, ty ) =
+            Coord.toTuple texturePosition
+
+        ( w, h ) =
+            Coord.toTuple textureSize
 
         primaryColor2 =
-            Color.toVec3 primaryColor
+            Color.toInt primaryColor |> toFloat
 
         secondaryColor2 =
-            Color.toVec3 secondaryColor
+            Color.toInt secondaryColor |> toFloat
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
-      , texturePosition = topLeft
-      , opacity = 1
+      , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat ty)
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
-      , texturePosition = topRight
-      , opacity = 1
+      , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat ty)
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
-      , texturePosition = bottomRight
-      , opacity = 1
+      , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat (ty + h))
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
-      , texturePosition = bottomLeft
-      , opacity = 1
+      , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat (ty + h))
+      , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
@@ -189,12 +202,14 @@ toMesh vertices =
     Shaders.indexedTriangles vertices (getQuadIndices vertices)
 
 
-asciiChars : List Char
+asciiChars : Nonempty Char
 asciiChars =
     (List.range 32 126 ++ List.range 161 172 ++ List.range 174 255)
         |> List.map Char.fromCode
         |> (++) [ '░', '▒', '▓', '█' ]
         |> (++) [ '│', '┤', '╡', '╢', '╖', '╕', '╣', '║', '╗', '╝', '╜', '╛', '┐', '└', '┴', '┬', '├', '─', '┼', '╞', '╟', '╚', '╔', '╩', '╦', '╠', '═', '╬', '╧', '╨', '╤', '╥', '╙', '╘', '╒', '╓', '╫', '╪', '┘', '┌' ]
+        |> List.Nonempty.fromList
+        |> Maybe.withDefault (Nonempty 'a' [])
 
 
 charsPerRow : number
@@ -209,7 +224,7 @@ charSize =
 
 charTexturePosition : Char -> Coord unit
 charTexturePosition char =
-    case Dict.get char charTexturePositionHelper of
+    case Dict.get char charToInt of
         Just index ->
             Coord.xy
                 (768 + modBy charsPerRow index * Coord.xRaw charSize)
@@ -219,9 +234,10 @@ charTexturePosition char =
             Coord.xy 0 0
 
 
-charTexturePositionHelper : Dict Char Int
-charTexturePositionHelper =
-    List.indexedMap (\index char -> ( char, index )) asciiChars
+charToInt : Dict Char Int
+charToInt =
+    List.Nonempty.toList asciiChars
+        |> List.indexedMap (\index char -> ( char, index ))
         |> Dict.fromList
 
 
@@ -278,6 +294,7 @@ textWithZ color charScale string lineSpacing position z =
                     , offsetY = state.offsetY
                     , vertices =
                         spriteWithZ
+                            1
                             color
                             color
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)

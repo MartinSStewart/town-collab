@@ -1,6 +1,5 @@
 module LocalGrid exposing
-    ( Cursor
-    , LocalGrid
+    ( LocalGrid
     , LocalGrid_
     , OutMsg(..)
     , addCows
@@ -12,11 +11,11 @@ module LocalGrid exposing
     , updateFromBackend
     )
 
-import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
+import Cursor exposing (Cursor)
 import Dict exposing (Dict)
 import Effect.Time
 import Grid exposing (Grid, GridData)
@@ -29,7 +28,7 @@ import MailEditor exposing (FrontendMail, MailStatus(..))
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
-import Terrain
+import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile)
 import Train exposing (Train)
 import Undo
@@ -50,12 +49,6 @@ type alias LocalGrid_ =
     , users : IdDict UserId FrontendUser
     , mail : IdDict MailId FrontendMail
     , trains : IdDict TrainId Train
-    }
-
-
-type alias Cursor =
-    { position : Point2d WorldUnit WorldUnit
-    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Effect.Time.Posix }
     }
 
 
@@ -377,6 +370,22 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
+        ChangeTool tool ->
+            ( case model.userStatus of
+                LoggedIn loggedIn ->
+                    { model
+                        | cursors =
+                            IdDict.update
+                                loggedIn.userId
+                                (Maybe.map (\cursor -> { cursor | currentTool = tool }))
+                                model.cursors
+                    }
+
+                NotLoggedIn ->
+                    model
+            , NoOutMsg
+            )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -577,14 +586,30 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
+        ServerChangeTool userId tool ->
+            ( { model
+                | cursors =
+                    IdDict.update userId (Maybe.map (\cursor -> { cursor | currentTool = tool })) model.cursors
+              }
+            , NoOutMsg
+            )
+
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 pickupCow userId cowId position time model =
     ( { model
         | cursors =
-            IdDict.insert
+            IdDict.update
                 userId
-                { position = position, holdingCow = Just { cowId = cowId, pickupTime = time } }
+                (\maybeCursor ->
+                    case maybeCursor of
+                        Just cursor ->
+                            { cursor | position = position, holdingCow = Just { cowId = cowId, pickupTime = time } }
+                                |> Just
+
+                        Nothing ->
+                            Cursor.defaultCursor position (Just { cowId = cowId, pickupTime = time }) |> Just
+                )
                 model.cursors
       }
     , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
@@ -595,10 +620,16 @@ dropCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> 
 dropCow userId cowId position model =
     ( { model
         | cursors =
-            IdDict.insert userId
-                { position = position
-                , holdingCow = Nothing
-                }
+            IdDict.update
+                userId
+                (\maybeCursor ->
+                    case maybeCursor of
+                        Just cursor ->
+                            { cursor | position = position, holdingCow = Nothing } |> Just
+
+                        Nothing ->
+                            Cursor.defaultCursor position Nothing |> Just
+                )
                 model.cursors
         , cows = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position })) model.cows
       }
@@ -618,7 +649,7 @@ moveCursor userId position model =
                             { cursor | position = position }
 
                         Nothing ->
-                            { position = position, holdingCow = Nothing }
+                            Cursor.defaultCursor position Nothing
                     )
                         |> Just
                 )
@@ -651,28 +682,6 @@ update_ msg model =
                         |> Dict.union newCells2
                         |> Grid.from
                 , cows = IdDict.fromList newCows |> IdDict.union model.cows
-
-                --Bounds.coordRangeFold
-                --    (\coord state ->
-                --        ( Coord.toTuple coord
-                --        , case ( Grid.getCell coord model.grid, Dict.get (Coord.toTuple coord) newCells2 ) of
-                --            ( _, Just newCell3 ) ->
-                --                newCell3
-                --
-                --            ( Nothing, Nothing ) ->
-                --                Debug.todo ""
-                --
-                --            --GridCell.empty coord
-                --            ( Just oldCell, Nothing ) ->
-                --                oldCell
-                --        )
-                --            :: state
-                --    )
-                --    identity
-                --    bounds
-                --    []
-                --    |> Dict.fromList
-                --    |> Grid.from
                 , viewBounds = bounds
               }
             , NoOutMsg
@@ -752,5 +761,5 @@ getCowsForCell newCell =
                             |> Grid.worldToCellAndLocalCoord
                             |> Tuple.mapSecond Terrain.localCoordToTerrain
                 in
-                Terrain.isGroundTerrain terrainUnit cellUnit
+                Terrain.getTerrainValue terrainUnit cellUnit |> .terrainType |> (==) Ground
             )
