@@ -8,8 +8,8 @@ type alias Vertex =
     { position : Math.Vector3.Vec3
     , texturePosition : Math.Vector2.Vec2
     , opacity : Float
-    , primaryColor : Math.Vector3.Vec3
-    , secondaryColor : Math.Vector3.Vec3
+    , primaryColor : Float
+    , secondaryColor : Float
     }
 
 
@@ -18,6 +18,6 @@ type alias DebrisVertex =
     , texturePosition : Math.Vector2.Vec2
     , initialSpeed : Math.Vector2.Vec2
     , startTime : Float
-    , primaryColor : Math.Vector3.Vec3
-    , secondaryColor : Math.Vector3.Vec3
+    , primaryColor : Float
+    , secondaryColor : Float
     }
