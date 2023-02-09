@@ -81,6 +81,7 @@ type TileGroup
     | ElmTreeGroup
     | DirtPathGroup
     | BigTextGroup
+    | HyperlinkGroup
 
 
 allTileGroupsExceptText : List TileGroup
@@ -120,6 +121,7 @@ allTileGroupsExceptText =
     , FlowersGroup
     , ElmTreeGroup
     , DirtPathGroup
+    , HyperlinkGroup
     ]
 
 
@@ -364,6 +366,12 @@ getTileGroupData tileGroup =
             , name = "Dirt path"
             }
 
+        HyperlinkGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty Hyperlink []
+            , name = "Hyperlink"
+            }
+
 
 type Tile
     = EmptyTile
@@ -465,6 +473,7 @@ type Tile
     | DirtPathHorizontal
     | DirtPathVertical
     | BigText Char
+    | Hyperlink
 
 
 type Direction
@@ -1347,6 +1356,9 @@ getData tile =
 
         BigText char ->
             bigText char
+
+        Hyperlink ->
+            hyperlink
 
 
 emptyTile =
@@ -2822,6 +2834,16 @@ dirtPathVertical =
 bigText : Char -> TileData unit
 bigText char =
     { texturePosition = Just (Sprite.charTexturePosition char)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 2
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+hyperlink : TileData unit
+hyperlink =
+    { texturePosition = Just (Coord.xy 700 918)
     , texturePositionTopLayer = Nothing
     , size = Coord.xy 1 2
     , collisionMask = DefaultCollision
