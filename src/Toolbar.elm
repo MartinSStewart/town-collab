@@ -8,7 +8,7 @@ module Toolbar exposing
     )
 
 import AssocList
-import Change exposing (UserStatus(..))
+import Change exposing (AdminData, LoggedIn_, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
@@ -111,7 +111,7 @@ view data =
                                             data.musicVolume
                                             data.soundEffectVolume
                                             nameTextInput
-                                            loggedIn.allowEmailNotifications
+                                            loggedIn
 
                                     NotLoggedIn ->
                                         Ui.none
@@ -236,8 +236,8 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> Bool -> Ui.Element UiHover UiMsg
-settingsView musicVolume soundEffectVolume nameTextInput allowEmailNotifications =
+settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover UiMsg
+settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
     let
         musicVolumeInput =
             volumeControl
@@ -247,6 +247,13 @@ settingsView musicVolume soundEffectVolume nameTextInput allowEmailNotifications
                 PressedLowerMusicVolume
                 PressedRaiseMusicVolume
                 musicVolume
+
+        allowEmailNotifications =
+            checkbox
+                AllowEmailNotificationsCheckbox
+                PressedAllowEmailNotifications
+                loggedIn.allowEmailNotifications
+                "Allow email notifications"
     in
     Ui.el
         { padding = Ui.paddingXY 8 8
@@ -292,7 +299,54 @@ settingsView musicVolume soundEffectVolume nameTextInput allowEmailNotifications
                         nameTextInput
                     ]
                 ]
-            , checkbox AllowEmailNotificationsCheckbox PressedAllowEmailNotifications allowEmailNotifications "Allow email notifications"
+            , allowEmailNotifications
+            , case loggedIn.adminData of
+                Just adminData ->
+                    Ui.column
+                        { spacing = 8, padding = Ui.noPadding }
+                        [ Ui.el
+                            { padding =
+                                { topLeft = Coord.xy (Ui.size allowEmailNotifications |> Coord.xRaw) 2
+                                , bottomRight = Coord.origin
+                                }
+                            , inFront = []
+                            , borderAndFill = FillOnly Color.outlineColor
+                            }
+                            Ui.none
+                        , Ui.text "Admin stuff"
+                        , Ui.text
+                            ("Last cache regen: "
+                                ++ (case adminData.lastCacheRegeneration of
+                                        Just time ->
+                                            MailEditor.date time
+
+                                        Nothing ->
+                                            "Never"
+                                   )
+                            )
+                        , Ui.text "Sessions (id:count)"
+                        , Ui.column
+                            { spacing = 4, padding = Ui.noPadding }
+                            (List.map
+                                (\data ->
+                                    "  "
+                                        ++ (case data.userId of
+                                                Just userId ->
+                                                    Id.toInt userId |> String.fromInt
+
+                                                Nothing ->
+                                                    "-"
+                                           )
+                                        ++ ":"
+                                        ++ String.fromInt data.connectionCount
+                                        |> Ui.text
+                                )
+                                adminData.userSessions
+                            )
+                        ]
+
+                Nothing ->
+                    Ui.none
             ]
         )
 

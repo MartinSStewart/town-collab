@@ -2,7 +2,7 @@ module Backend exposing (app, app_)
 
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminData, ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -94,14 +94,20 @@ init =
             , mail = IdDict.empty
             , pendingLoginTokens = AssocList.empty
             , invites = AssocList.empty
+            , lastCacheRegeneration = Nothing
             }
     in
     case Env.adminEmail of
         Just adminEmail ->
-            createUser (Id.fromInt 0) adminEmail model |> Tuple.first
+            createUser adminId adminEmail model |> Tuple.first
 
         Nothing ->
             model
+
+
+adminId : Id UserId
+adminId =
+    Id.fromInt 0
 
 
 sendEmail :
@@ -233,12 +239,13 @@ update isProduction msg model =
                 Err error ->
                     ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
 
-        RegenerateCache ->
+        RegenerateCache time ->
             ( { model
                 | grid =
                     Grid.allCellsDict model.grid
                         |> Dict.map (\cellPosition cell -> GridCell.updateCache (Coord.tuple cellPosition) cell)
                         |> Grid.from
+                , lastCacheRegeneration = Just time
               }
             , Command.none
             )
@@ -1341,6 +1348,25 @@ getUserInbox userId model =
         model.mail
 
 
+getAdminData : Id UserId -> BackendModel -> Maybe AdminData
+getAdminData userId model =
+    if userId == adminId then
+        { lastCacheRegeneration = model.lastCacheRegeneration
+        , userSessions =
+            Dict.toList model.userSessions
+                |> List.map
+                    (\( _, data ) ->
+                        { userId = data.userId
+                        , connectionCount = AssocList.size data.clientIds
+                        }
+                    )
+        }
+            |> Just
+
+    else
+        Nothing
+
+
 requestDataUpdate :
     Effect.Time.Posix
     -> SessionId
@@ -1363,6 +1389,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , emailAddress = user.emailAddress
                         , inbox = getUserInbox userId model
                         , allowEmailNotifications = user.allowEmailNotifications
+                        , adminData = getAdminData userId model
                         }
 
                 Nothing ->
@@ -1388,6 +1415,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , emailAddress = user.emailAddress
                                             , inbox = getUserInbox data.userId model
                                             , allowEmailNotifications = user.allowEmailNotifications
+                                            , adminData = getAdminData data.userId model
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , case data.requestedBy of
@@ -1427,6 +1455,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , emailAddress = newUser.emailAddress
                                 , inbox = getUserInbox userId model
                                 , allowEmailNotifications = newUser.allowEmailNotifications
+                                , adminData = getAdminData userId model
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites
