@@ -317,6 +317,7 @@ type alias BackendModel =
             , requestedBy : LoginRequestedBy
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
+    , lastCacheRegeneration : Maybe Effect.Time.Posix
     }
 
 
@@ -413,6 +414,7 @@ type BackendMsg
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
     | CheckConnectionTimeElapsed
     | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
+    | RegenerateCache Effect.Time.Posix
 
 
 type ToFrontend

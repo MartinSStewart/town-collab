@@ -1,5 +1,6 @@
 module Change exposing
-    ( Change(..)
+    ( AdminData
+    , Change(..)
     , ClientChange(..)
     , Cow
     , LocalChange(..)
@@ -110,4 +111,11 @@ type alias LoggedIn_ =
     , emailAddress : EmailAddress
     , inbox : IdDict MailId MailEditor.ReceivedMail
     , allowEmailNotifications : Bool
+    , adminData : Maybe AdminData
+    }
+
+
+type alias AdminData =
+    { lastCacheRegeneration : Maybe Effect.Time.Posix
+    , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
     }

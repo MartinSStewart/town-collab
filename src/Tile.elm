@@ -60,6 +60,7 @@ type TileGroup
     | RailTurnSplitMirrorGroup
     | PostOfficeGroup
     | PineTreeGroup
+    | BigPineTreeGroup
     | LogCabinGroup
     | RoadStraightGroup
     | RoadTurnGroup
@@ -81,6 +82,7 @@ type TileGroup
     | ElmTreeGroup
     | DirtPathGroup
     | BigTextGroup
+    | HyperlinkGroup
 
 
 allTileGroupsExceptText : List TileGroup
@@ -116,6 +118,7 @@ allTileGroupsExceptText =
     , HedgeCornerGroup
     , HedgePillarGroup
     , PineTreeGroup
+    , BigPineTreeGroup
     , RockGroup
     , FlowersGroup
     , ElmTreeGroup
@@ -244,6 +247,12 @@ getTileGroupData tileGroup =
             , name = "Pine tree"
             }
 
+        BigPineTreeGroup ->
+            { defaultColors = defaultPineTreeColor
+            , tiles = Nonempty BigPineTree []
+            , name = "Big pine tree"
+            }
+
         LogCabinGroup ->
             { defaultColors = defaultLogCabinColor
             , tiles = Nonempty LogCabinDown [ LogCabinLeft, LogCabinUp, LogCabinRight ]
@@ -364,6 +373,12 @@ getTileGroupData tileGroup =
             , name = "Dirt path"
             }
 
+        HyperlinkGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty Hyperlink []
+            , name = "Hyperlink"
+            }
+
 
 type Tile
     = EmptyTile
@@ -408,6 +423,7 @@ type Tile
     | MowedGrass4
     | PineTree1
     | PineTree2
+    | BigPineTree
     | LogCabinDown
     | LogCabinRight
     | LogCabinUp
@@ -465,6 +481,7 @@ type Tile
     | DirtPathHorizontal
     | DirtPathVertical
     | BigText Char
+    | Hyperlink
 
 
 type Direction
@@ -1177,6 +1194,9 @@ getData tile =
         PineTree2 ->
             pineTree2
 
+        BigPineTree ->
+            bigPineTree
+
         LogCabinDown ->
             logCabinDown
 
@@ -1347,6 +1367,9 @@ getData tile =
 
         BigText char ->
             bigText char
+
+        Hyperlink ->
+            hyperlink
 
 
 emptyTile =
@@ -2150,6 +2173,16 @@ pineTree2 =
     }
 
 
+bigPineTree : TileData units
+bigPineTree =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset BigPineTree, texturePosition = Coord.xy 640 756 }
+    , size = Coord.xy 3 3
+    , collisionMask = Set.fromList [ ( 1, 2 ) ] |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
 logCabinDown =
     { texturePosition = Nothing
     , texturePositionTopLayer = Just { yOffset = yOffset LogCabinDown, texturePosition = Coord.xy 11 26 |> Coord.multiply Units.tileSize }
@@ -2829,6 +2862,16 @@ bigText char =
     }
 
 
+hyperlink : TileData unit
+hyperlink =
+    { texturePosition = Just (Coord.xy 700 918)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 2
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
 yOffset : Tile -> Float
 yOffset tile =
     case List.elemIndex tile zOrderBackToFront of
@@ -2940,6 +2983,7 @@ zOrderBackToFront =
     , RockLeft
     , RockRight
     , RockUp
+    , BigPineTree
     , ElmTree
     , Hospital
     ]

@@ -14,6 +14,7 @@ module MailEditor exposing
     , backendMailToFrontend
     , backgroundLayer
     , cursorSprite
+    , date
     , disconnectWarning
     , drawMail
     , getImageData

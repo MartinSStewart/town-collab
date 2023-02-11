@@ -30,20 +30,49 @@ treeSize =
     Tile.getData PineTree1 |> .size
 
 
-randomSceneryItem : Coord CellLocalUnit -> Random.Generator ( Tile, Coord CellLocalUnit )
-randomSceneryItem offset =
-    Random.map3 (\x y tile -> ( tile, Coord.xy x y |> Coord.plus offset ))
-        (Random.int 0 (terrainSize - Coord.xRaw treeSize))
-        (Random.int -1 (terrainSize - Coord.yRaw treeSize))
-        (Random.weighted
-            ( 0.5, PineTree1 )
-            [ ( 0.49, PineTree2 )
-            , ( 0.0025, RockDown )
-            , ( 0.0025, RockLeft )
-            , ( 0.0025, RockUp )
-            , ( 0.0025, RockRight )
-            ]
-        )
+randomSceneryItem : Bool -> Coord CellLocalUnit -> Random.Generator ( Tile, Coord CellLocalUnit )
+randomSceneryItem bigTrees offset =
+    if bigTrees then
+        Random.map3
+            (\x y tile ->
+                let
+                    size =
+                        Tile.getData tile |> .size
+
+                    x2 =
+                        modBy terrainSize x - Coord.xRaw size // 2
+
+                    y2 =
+                        modBy terrainSize y - (Coord.yRaw size - 1)
+                in
+                ( tile, Coord.xy x2 y2 |> Coord.plus offset )
+            )
+            (Random.int 0 1000)
+            (Random.int 0 1000)
+            (Random.weighted
+                ( 0.05, PineTree1 )
+                [ ( 0.05, PineTree2 )
+                , ( 0.89, BigPineTree )
+                , ( 0.0025, RockDown )
+                , ( 0.0025, RockLeft )
+                , ( 0.0025, RockUp )
+                , ( 0.0025, RockRight )
+                ]
+            )
+
+    else
+        Random.map3 (\x y tile -> ( tile, Coord.xy x y |> Coord.plus offset ))
+            (Random.int 0 (terrainSize - Coord.xRaw treeSize))
+            (Random.int -1 (terrainSize - Coord.yRaw treeSize))
+            (Random.weighted
+                ( 0.5, PineTree1 )
+                [ ( 0.49, PineTree2 )
+                , ( 0.0025, RockDown )
+                , ( 0.0025, RockLeft )
+                , ( 0.0025, RockUp )
+                , ( 0.0025, RockRight )
+                ]
+            )
 
 
 randomScenery : Float -> Coord CellLocalUnit -> Random.Generator (List ( Tile, Coord CellLocalUnit ))
@@ -58,7 +87,7 @@ randomScenery chance offset =
         [ ( 0.02, 1 ) ]
         |> Random.andThen
             (\extraItem ->
-                Random.list (round chance2 + extraItem) (randomSceneryItem offset)
+                Random.list (round chance2 + extraItem) (randomSceneryItem (chance2 > 1) offset)
             )
 
 
