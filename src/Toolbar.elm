@@ -265,10 +265,10 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
             { spacing = 16
             , padding = Ui.noPadding
             }
-            [ Ui.button
+            ([ Ui.button
                 { id = CloseSettings, onPress = PressedCloseSettings, padding = Ui.paddingXY 10 4 }
                 (Ui.text "Close")
-            , Ui.column
+             , Ui.column
                 { spacing = 6
                 , padding = Ui.noPadding
                 }
@@ -300,69 +300,76 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                         nameTextInput
                     ]
                 ]
-            , allowEmailNotifications
-            , case loggedIn.adminData of
-                Just adminData ->
-                    Ui.column
-                        { spacing = 8, padding = Ui.noPadding }
-                        [ Ui.el
-                            { padding =
-                                { topLeft = Coord.xy (Ui.size allowEmailNotifications |> Coord.xRaw) 2
-                                , bottomRight = Coord.origin
-                                }
-                            , inFront = []
-                            , borderAndFill = FillOnly Color.outlineColor
-                            }
-                            Ui.none
-                        , Ui.row { spacing = 0, padding = Ui.noPadding }
-                            [ Ui.text "Admin stuff"
-                            , if Env.isProduction then
-                                Ui.colorText Color.errorColor "(PRODUCTION)"
+             , allowEmailNotifications
+             ]
+                ++ (case loggedIn.adminData of
+                        Just adminData ->
+                            [ adminView (Ui.size allowEmailNotifications |> Coord.xRaw) adminData ]
 
-                              else
-                                Ui.text "(dev)"
-                            ]
-                        , Ui.text
-                            ("Last cache regen: "
-                                ++ (case adminData.lastCacheRegeneration of
-                                        Just time ->
-                                            MailEditor.date time
-
-                                        Nothing ->
-                                            "Never"
-                                   )
-                            )
-                        , Ui.text "Sessions (id:count)"
-                        , Ui.button
-                            { id = ResetConnectionsButton
-                            , onPress = PressedResetConnections
-                            , padding = Ui.paddingXY 10 4
-                            }
-                            (Ui.text "Reset connections")
-                        , Ui.column
-                            { spacing = 4, padding = Ui.noPadding }
-                            (List.map
-                                (\data ->
-                                    "  "
-                                        ++ (case data.userId of
-                                                Just userId ->
-                                                    Id.toInt userId |> String.fromInt
-
-                                                Nothing ->
-                                                    "-"
-                                           )
-                                        ++ ":"
-                                        ++ String.fromInt data.connectionCount
-                                        |> Ui.text
-                                )
-                                adminData.userSessions
-                            )
-                        ]
-
-                Nothing ->
-                    Ui.none
-            ]
+                        Nothing ->
+                            []
+                   )
+            )
         )
+
+
+adminView : Int -> AdminData -> Ui.Element UiHover UiMsg
+adminView parentWidth adminData =
+    Ui.column
+        { spacing = 8, padding = Ui.noPadding }
+        [ Ui.el
+            { padding =
+                { topLeft = Coord.xy parentWidth 2
+                , bottomRight = Coord.origin
+                }
+            , inFront = []
+            , borderAndFill = FillOnly Color.outlineColor
+            }
+            Ui.none
+        , Ui.row { spacing = 0, padding = Ui.noPadding }
+            [ Ui.text "Admin stuff"
+            , if Env.isProduction then
+                Ui.colorText Color.errorColor "(PRODUCTION)"
+
+              else
+                Ui.text "(dev)"
+            ]
+        , Ui.text
+            ("Last cache regen: "
+                ++ (case adminData.lastCacheRegeneration of
+                        Just time ->
+                            MailEditor.date time
+
+                        Nothing ->
+                            "Never"
+                   )
+            )
+        , Ui.text "Sessions (id:count)"
+        , Ui.button
+            { id = ResetConnectionsButton
+            , onPress = PressedResetConnections
+            , padding = Ui.paddingXY 10 4
+            }
+            (Ui.text "Reset connections")
+        , Ui.column
+            { spacing = 4, padding = Ui.noPadding }
+            (List.map
+                (\data ->
+                    "  "
+                        ++ (case data.userId of
+                                Just userId ->
+                                    Id.toInt userId |> String.fromInt
+
+                                Nothing ->
+                                    "-"
+                           )
+                        ++ ":"
+                        ++ String.fromInt data.connectionCount
+                        |> Ui.text
+                )
+                adminData.userSessions
+            )
+        ]
 
 
 checkbox : id -> msg -> Bool -> String -> Ui.Element id msg

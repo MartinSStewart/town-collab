@@ -84,6 +84,10 @@ type TileGroup
     | BigTextGroup
     | HyperlinkGroup
     | BenchGroup
+    | ParkingLotGroup
+    | ParkingExitGroup
+    | ParkingRoadGroup
+    | ParkingRoundaboutGroup
 
 
 allTileGroupsExceptText : List TileGroup
@@ -125,6 +129,10 @@ allTileGroupsExceptText =
     , ElmTreeGroup
     , DirtPathGroup
     , BenchGroup
+    , ParkingLotGroup
+    , ParkingExitGroup
+    , ParkingRoadGroup
+    , ParkingRoundaboutGroup
     ]
 
 
@@ -387,6 +395,30 @@ getTileGroupData tileGroup =
             , name = "Bench"
             }
 
+        ParkingLotGroup ->
+            { defaultColors = OneDefaultColor (Color.rgb255 243 243 243)
+            , tiles = Nonempty ParkingDown [ ParkingLeft, ParkingUp, ParkingRight ]
+            , name = "Parking lot"
+            }
+
+        ParkingExitGroup ->
+            { defaultColors = defaultRoadColor
+            , tiles = Nonempty ParkingExitDown [ ParkingExitLeft, ParkingExitUp, ParkingExitRight ]
+            , name = "Parking exit"
+            }
+
+        ParkingRoadGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty ParkingRoad []
+            , name = "Parking road"
+            }
+
+        ParkingRoundaboutGroup ->
+            { defaultColors = defaultSidewalkColor
+            , tiles = Nonempty ParkingRoundabout []
+            , name = "Parking roundabout"
+            }
+
 
 type Tile
     = EmptyTile
@@ -494,6 +526,16 @@ type Tile
     | BenchLeft
     | BenchUp
     | BenchRight
+    | ParkingDown
+    | ParkingLeft
+    | ParkingUp
+    | ParkingRight
+    | ParkingExitDown
+    | ParkingExitLeft
+    | ParkingExitUp
+    | ParkingExitRight
+    | ParkingRoad
+    | ParkingRoundabout
 
 
 type Direction
@@ -1398,6 +1440,36 @@ getData tile =
 
         BenchRight ->
             benchRight
+
+        ParkingDown ->
+            parkingDown
+
+        ParkingLeft ->
+            parkingLeft
+
+        ParkingUp ->
+            parkingUp
+
+        ParkingRight ->
+            parkingRight
+
+        ParkingExitDown ->
+            parkingExitDown
+
+        ParkingExitLeft ->
+            parkingExitLeft
+
+        ParkingExitUp ->
+            parkingExitUp
+
+        ParkingExitRight ->
+            parkingExitRight
+
+        ParkingRoad ->
+            parkingRoad
+
+        ParkingRoundabout ->
+            parkingRoundabout
 
 
 emptyTile =
@@ -2936,6 +3008,117 @@ benchUp =
     , texturePositionTopLayer = Just { yOffset = yOffset BenchDown, texturePosition = Coord.xy 700 738 }
     , size = Coord.xy 1 1
     , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingDown : TileData unit
+parkingDown =
+    { texturePosition = Just (Coord.xy 640 666)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingLeft : TileData unit
+parkingLeft =
+    { texturePosition = Just (Coord.xy 700 720)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingRight : TileData unit
+parkingRight =
+    { texturePosition = Just (Coord.xy 640 720)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingUp : TileData unit
+parkingUp =
+    { texturePosition = Just (Coord.xy 640 702)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingExitDown : TileData unit
+parkingExitDown =
+    { texturePosition = Just (Coord.xy 660 702)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 3 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingExitLeft : TileData unit
+parkingExitLeft =
+    { texturePosition = Just (Coord.xy 740 648)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 3
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingExitRight : TileData unit
+parkingExitRight =
+    { texturePosition = Just (Coord.xy 720 648)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 3
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingExitUp : TileData unit
+parkingExitUp =
+    { texturePosition = Just (Coord.xy 660 630)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 3 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingRoad : TileData unit
+parkingRoad =
+    { texturePosition = Just (Coord.xy 640 684)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+parkingRoundabout : TileData unit
+parkingRoundabout =
+    { texturePosition = Just (Coord.xy 660 648)
+    , texturePositionTopLayer = Nothing
+    , size = Coord.xy 3 3
+    , collisionMask =
+        [ ( 0, 0 )
+        , ( 1, 0 )
+        , ( 2, 0 )
+        , ( 0, 1 )
+        , ( 2, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
     , railPath = NoRailPath
     }
 
