@@ -52,6 +52,16 @@ type alias Cow =
     }
 
 
+type alias AdminData =
+    { lastCacheRegeneration : Maybe Effect.Time.Posix
+    , userSessions :
+        List
+            { userId : Maybe (Evergreen.V58.Id.Id Evergreen.V58.Id.UserId)
+            , connectionCount : Int
+            }
+    }
+
+
 type alias LoggedIn_ =
     { userId : Evergreen.V58.Id.Id Evergreen.V58.Id.UserId
     , undoHistory : List (Dict.Dict Evergreen.V58.Coord.RawCellCoord Int)
@@ -61,6 +71,7 @@ type alias LoggedIn_ =
     , emailAddress : Evergreen.V58.EmailAddress.EmailAddress
     , inbox : Evergreen.V58.IdDict.IdDict Evergreen.V58.Id.MailId Evergreen.V58.MailEditor.ReceivedMail
     , allowEmailNotifications : Bool
+    , adminData : Maybe AdminData
     }
 
 

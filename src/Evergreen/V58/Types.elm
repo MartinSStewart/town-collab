@@ -387,6 +387,7 @@ type alias BackendModel =
             , requestedBy : LoginRequestedBy
             }
     , invites : AssocList.Dict (Evergreen.V58.Id.SecretId Evergreen.V58.Route.InviteToken) Invite
+    , lastCacheRegeneration : Maybe Effect.Time.Posix
     }
 
 
@@ -414,7 +415,7 @@ type BackendMsg
     | SentInviteEmail (Evergreen.V58.Id.SecretId Evergreen.V58.Route.InviteToken) (Result Effect.Http.Error Evergreen.V58.Postmark.PostmarkSendResponse)
     | CheckConnectionTimeElapsed
     | SentMailNotification Effect.Time.Posix Evergreen.V58.EmailAddress.EmailAddress (Result Effect.Http.Error Evergreen.V58.Postmark.PostmarkSendResponse)
-    | RegenerateCache
+    | RegenerateCache Effect.Time.Posix
 
 
 type alias LoadingData_ =

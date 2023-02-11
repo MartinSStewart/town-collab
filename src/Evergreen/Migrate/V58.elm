@@ -45,13 +45,14 @@ import List.Nonempty
 import Process
 import Quantity exposing (Quantity)
 import Task
+import Time
 
 
 backendModel : Evergreen.V57.Types.BackendModel -> ModelMigration Evergreen.V58.Types.BackendModel Evergreen.V58.Types.BackendMsg
 backendModel old =
     ModelMigrated
         ( migrateBackendModel old
-        , Process.sleep 1000 |> Task.perform (\() -> Evergreen.V58.Types.RegenerateCache)
+        , Time.now |> Task.perform Evergreen.V58.Types.RegenerateCache
         )
 
 
@@ -119,6 +120,7 @@ migrateBackendModel old =
             )
             old.pendingLoginTokens
     , invites = migrateAssocList migrateSecretId migrateInvite old.invites
+    , lastCacheRegeneration = Nothing
     }
 
 
