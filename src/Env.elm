@@ -23,9 +23,14 @@ isProduction2 =
     "False"
 
 
+isProduction_ : String
+isProduction_ =
+    "False"
+
+
 isProduction : Bool
 isProduction =
-    case String.toLower isProduction2 |> String.trim of
+    case String.toLower isProduction_ |> String.trim of
         "true" ->
             True
 
