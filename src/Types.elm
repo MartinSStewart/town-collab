@@ -413,6 +413,7 @@ type BackendMsg
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
     | CheckConnectionTimeElapsed
     | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
+    | RegenerateCache
 
 
 type ToFrontend

@@ -14,6 +14,7 @@ module GridCell exposing
     , moveUndoPoint
     , removeUser
     , toggleRailSplit
+    , updateCache
     )
 
 import AssocList

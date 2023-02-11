@@ -233,6 +233,16 @@ update isProduction msg model =
                 Err error ->
                     ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
 
+        RegenerateCache ->
+            ( { model
+                | grid =
+                    Grid.allCellsDict model.grid
+                        |> Dict.map (\cellPosition cell -> GridCell.updateCache (Coord.tuple cellPosition) cell)
+                        |> Grid.from
+              }
+            , Command.none
+            )
+
 
 handleWorldUpdate : Bool -> Effect.Time.Posix -> Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 handleWorldUpdate isProduction oldTime time model =
@@ -664,10 +674,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            let
-                                _ =
-                                    Debug.log "loginUrl" loginEmailUrl
-                            in
+                            --let
+                            --    _ =
+                            --        Debug.log "loginUrl" loginEmailUrl
+                            --in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
@@ -729,9 +739,8 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    _ =
-                                        Debug.log "inviteUrl" inviteUrl
-
+                                    --_ =
+                                    --    Debug.log "inviteUrl" inviteUrl
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 
