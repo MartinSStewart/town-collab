@@ -152,8 +152,13 @@ townCollabEmail subject contentString content to =
     }
 
 
-disconnectClient : SessionId -> ClientId -> Id UserId -> BackendUserData -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend backendMsg )
-disconnectClient sessionId clientId userId user model =
+disconnectClient : SessionId -> ClientId -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend backendMsg )
+disconnectClient sessionId clientId model =
+    let
+        maybeUser : Maybe ( Id UserId, BackendUserData )
+        maybeUser =
+            getUserFromSessionId sessionId model
+    in
     ( { model
         | userSessions =
             Dict.update
@@ -166,11 +171,22 @@ disconnectClient sessionId clientId userId user model =
                     )
                 )
                 model.userSessions
-        , users = IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
+        , users =
+            case maybeUser of
+                Just ( userId, user ) ->
+                    IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
+
+                Nothing ->
+                    model.users
       }
-    , Nonempty (ServerUserDisconnected userId |> Change.ServerChange) []
-        |> ChangeBroadcast
-        |> Effect.Lamdera.broadcast
+    , case maybeUser of
+        Just ( userId, _ ) ->
+            Nonempty (ServerUserDisconnected userId |> Change.ServerChange) []
+                |> ChangeBroadcast
+                |> Effect.Lamdera.broadcast
+
+        Nothing ->
+            Command.none
     )
 
 
@@ -178,7 +194,7 @@ update : Bool -> BackendMsg -> BackendModel -> ( BackendModel, Command BackendOn
 update isProduction msg model =
     case msg of
         UserDisconnected sessionId clientId ->
-            asUser sessionId model (disconnectClient sessionId clientId)
+            disconnectClient sessionId clientId model
 
         UserConnected _ clientId ->
             ( model, Effect.Lamdera.sendToFrontend clientId ClientConnected )
