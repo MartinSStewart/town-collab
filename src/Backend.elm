@@ -1217,12 +1217,16 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             )
 
         AdminResetSessions ->
-            ( { model
-                | userSessions = Dict.map (\_ data -> { data | clientIds = AssocList.empty }) model.userSessions
-              }
-            , originalChange
-            , Nothing
-            )
+            if userId == adminId then
+                ( { model
+                    | userSessions = Dict.map (\_ data -> { data | clientIds = AssocList.empty }) model.userSessions
+                  }
+                , originalChange
+                , Nothing
+                )
+
+            else
+                ( model, invalidChange, Nothing )
 
 
 generateVisibleRegion :
