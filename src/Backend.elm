@@ -229,7 +229,7 @@ update isProduction msg model =
             )
 
         CheckConnectionTimeElapsed ->
-            ( model, Effect.Lamdera.broadcast CheckConnectionBroadcast )
+            ( model, broadcast (\_ _ -> Just CheckConnectionBroadcast) model )
 
         SentMailNotification sendTime emailAddress result ->
             case result of
@@ -1214,6 +1214,14 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
               }
             , originalChange
             , ServerChangeTool userId tool |> Just
+            )
+
+        AdminResetSessions ->
+            ( { model
+                | userSessions = Dict.map (\_ data -> { data | clientIds = AssocList.empty }) model.userSessions
+              }
+            , originalChange
+            , Nothing
             )
 
 

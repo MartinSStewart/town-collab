@@ -268,6 +268,7 @@ type UiHover
     | YouGotMailButton
     | ShowMapButton
     | AllowEmailNotificationsCheckbox
+    | ResetConnectionsButton
 
 
 type UiMsg
@@ -291,6 +292,7 @@ type UiMsg
     | PressedYouGotMail
     | PressedShowMap
     | PressedAllowEmailNotifications
+    | PressedResetConnections
 
 
 type alias BackendModel =

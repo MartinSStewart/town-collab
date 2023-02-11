@@ -54,6 +54,7 @@ type LocalChange
     | ViewedMail (Id MailId)
     | SetAllowEmailNotifications Bool
     | ChangeTool Cursor.OtherUsersTool
+    | AdminResetSessions
 
 
 type ClientChange

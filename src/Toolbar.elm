@@ -16,6 +16,7 @@ import Dict exposing (Dict)
 import DisplayName
 import Duration
 import EmailAddress exposing (EmailAddress)
+import Env
 import Id exposing (Id, MailId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
@@ -313,7 +314,14 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                             , borderAndFill = FillOnly Color.outlineColor
                             }
                             Ui.none
-                        , Ui.text "Admin stuff"
+                        , Ui.row { spacing = 0, padding = Ui.noPadding }
+                            [ Ui.text "Admin stuff"
+                            , if Env.isProduction then
+                                Ui.colorText Color.errorColor "(PRODUCTION)"
+
+                              else
+                                Ui.text "(dev)"
+                            ]
                         , Ui.text
                             ("Last cache regen: "
                                 ++ (case adminData.lastCacheRegeneration of
@@ -325,6 +333,12 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                                    )
                             )
                         , Ui.text "Sessions (id:count)"
+                        , Ui.button
+                            { id = ResetConnectionsButton
+                            , onPress = PressedResetConnections
+                            , padding = Ui.paddingXY 10 4
+                            }
+                            (Ui.text "Reset connections")
                         , Ui.column
                             { spacing = 4, padding = Ui.noPadding }
                             (List.map

@@ -386,6 +386,34 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
+        AdminResetSessions ->
+            ( case model.userStatus of
+                LoggedIn loggedIn ->
+                    case loggedIn.adminData of
+                        Just adminData ->
+                            { model
+                                | userStatus =
+                                    LoggedIn
+                                        { loggedIn
+                                            | adminData =
+                                                { adminData
+                                                    | userSessions =
+                                                        List.map
+                                                            (\data -> { data | connectionCount = 0 })
+                                                            adminData.userSessions
+                                                }
+                                                    |> Just
+                                        }
+                            }
+
+                        Nothing ->
+                            model
+
+                NotLoggedIn ->
+                    model
+            , NoOutMsg
+            )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =

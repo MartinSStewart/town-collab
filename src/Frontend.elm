@@ -1485,6 +1485,9 @@ updateLoaded audioData msg model =
                                             AllowEmailNotificationsCheckbox ->
                                                 model2
 
+                                            ResetConnectionsButton ->
+                                                model2
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1689,6 +1692,9 @@ updateLoaded audioData msg model =
                                         AllowEmailNotificationsCheckbox ->
                                             True
 
+                                        ResetConnectionsButton ->
+                                            True
+
                 model2 =
                     { model
                         | time = time
@@ -1876,6 +1882,9 @@ updateLoaded audioData msg model =
                             pasteTextTool ()
 
                         AllowEmailNotificationsCheckbox ->
+                            pasteTextTool ()
+
+                        ResetConnectionsButton ->
                             pasteTextTool ()
 
         GotUserAgentPlatform _ ->
@@ -3080,6 +3089,9 @@ uiUpdate elementPosition msg model =
                     model
             , Command.none
             )
+
+        PressedResetConnections ->
+            ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
