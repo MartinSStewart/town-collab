@@ -83,6 +83,7 @@ type TileGroup
     | DirtPathGroup
     | BigTextGroup
     | HyperlinkGroup
+    | BenchGroup
 
 
 allTileGroupsExceptText : List TileGroup
@@ -123,6 +124,7 @@ allTileGroupsExceptText =
     , FlowersGroup
     , ElmTreeGroup
     , DirtPathGroup
+    , BenchGroup
     ]
 
 
@@ -379,6 +381,12 @@ getTileGroupData tileGroup =
             , name = "Hyperlink"
             }
 
+        BenchGroup ->
+            { defaultColors = defaultBenchColor
+            , tiles = Nonempty BenchDown [ BenchLeft, BenchUp, BenchRight ]
+            , name = "Bench"
+            }
+
 
 type Tile
     = EmptyTile
@@ -482,6 +490,10 @@ type Tile
     | DirtPathVertical
     | BigText Char
     | Hyperlink
+    | BenchDown
+    | BenchLeft
+    | BenchUp
+    | BenchRight
 
 
 type Direction
@@ -1065,6 +1077,10 @@ defaultDirtPathColor =
     OneDefaultColor (Color.rgb255 192 146 117)
 
 
+defaultBenchColor =
+    OneDefaultColor (Color.rgb255 162 115 83)
+
+
 getData : Tile -> TileData unit
 getData tile =
     case tile of
@@ -1370,6 +1386,18 @@ getData tile =
 
         Hyperlink ->
             hyperlink
+
+        BenchDown ->
+            benchDown
+
+        BenchLeft ->
+            benchLeft
+
+        BenchUp ->
+            benchUp
+
+        BenchRight ->
+            benchRight
 
 
 emptyTile =
@@ -2867,6 +2895,46 @@ hyperlink =
     { texturePosition = Just (Coord.xy 700 918)
     , texturePositionTopLayer = Nothing
     , size = Coord.xy 1 2
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+benchDown : TileData unit
+benchDown =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset BenchDown, texturePosition = Coord.xy 640 738 }
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+benchLeft : TileData unit
+benchLeft =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset BenchDown, texturePosition = Coord.xy 660 720 }
+    , size = Coord.xy 1 2
+    , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+benchRight : TileData unit
+benchRight =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset BenchDown, texturePosition = Coord.xy 680 720 }
+    , size = Coord.xy 1 2
+    , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+benchUp : TileData unit
+benchUp =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset BenchDown, texturePosition = Coord.xy 700 738 }
+    , size = Coord.xy 1 1
     , collisionMask = DefaultCollision
     , railPath = NoRailPath
     }
