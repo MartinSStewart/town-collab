@@ -641,16 +641,16 @@ migrateTile old =
             Evergreen.V62.Tile.ParkingRight
 
         Evergreen.V60.Tile.ParkingExitDown ->
-            Evergreen.V62.Tile.RoadHorizontal
+            Evergreen.V62.Tile.RoadVertical
 
         Evergreen.V60.Tile.ParkingExitLeft ->
-            Evergreen.V62.Tile.RoadVertical
-
-        Evergreen.V60.Tile.ParkingExitUp ->
             Evergreen.V62.Tile.RoadHorizontal
 
-        Evergreen.V60.Tile.ParkingExitRight ->
+        Evergreen.V60.Tile.ParkingExitUp ->
             Evergreen.V62.Tile.RoadVertical
+
+        Evergreen.V60.Tile.ParkingExitRight ->
+            Evergreen.V62.Tile.RoadHorizontal
 
         Evergreen.V60.Tile.ParkingRoad ->
             Evergreen.V62.Tile.ParkingRoad
