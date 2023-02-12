@@ -85,7 +85,6 @@ type TileGroup
     | HyperlinkGroup
     | BenchGroup
     | ParkingLotGroup
-    | ParkingExitGroup
     | ParkingRoadGroup
     | ParkingRoundaboutGroup
     | CornerHouseGroup
@@ -402,12 +401,6 @@ getTileGroupData tileGroup =
             , name = "Parking lot"
             }
 
-        ParkingExitGroup ->
-            { defaultColors = defaultRoadColor
-            , tiles = Nonempty ParkingExitDown [ ParkingExitLeft, ParkingExitUp, ParkingExitRight ]
-            , name = "Parking exit"
-            }
-
         ParkingRoadGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty ParkingRoad []
@@ -537,10 +530,6 @@ type Tile
     | ParkingLeft
     | ParkingUp
     | ParkingRight
-    | ParkingExitDown
-    | ParkingExitLeft
-    | ParkingExitUp
-    | ParkingExitRight
     | ParkingRoad
     | ParkingRoundabout
     | CornerHouseUpLeft
@@ -1467,18 +1456,6 @@ getData tile =
 
         ParkingRight ->
             parkingRight
-
-        ParkingExitDown ->
-            parkingExitDown
-
-        ParkingExitLeft ->
-            parkingExitLeft
-
-        ParkingExitUp ->
-            parkingExitUp
-
-        ParkingExitRight ->
-            parkingExitRight
 
         ParkingRoad ->
             parkingRoad
@@ -3074,46 +3051,6 @@ parkingUp =
     { texturePosition = Just (Coord.xy 640 702)
     , texturePositionTopLayer = Nothing
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
-    , railPath = NoRailPath
-    }
-
-
-parkingExitDown : TileData unit
-parkingExitDown =
-    { texturePosition = Just (Coord.xy 660 702)
-    , texturePositionTopLayer = Nothing
-    , size = Coord.xy 3 1
-    , collisionMask = DefaultCollision
-    , railPath = NoRailPath
-    }
-
-
-parkingExitLeft : TileData unit
-parkingExitLeft =
-    { texturePosition = Just (Coord.xy 740 648)
-    , texturePositionTopLayer = Nothing
-    , size = Coord.xy 1 3
-    , collisionMask = DefaultCollision
-    , railPath = NoRailPath
-    }
-
-
-parkingExitRight : TileData unit
-parkingExitRight =
-    { texturePosition = Just (Coord.xy 720 648)
-    , texturePositionTopLayer = Nothing
-    , size = Coord.xy 1 3
-    , collisionMask = DefaultCollision
-    , railPath = NoRailPath
-    }
-
-
-parkingExitUp : TileData unit
-parkingExitUp =
-    { texturePosition = Just (Coord.xy 660 630)
-    , texturePositionTopLayer = Nothing
-    , size = Coord.xy 3 1
     , collisionMask = DefaultCollision
     , railPath = NoRailPath
     }
