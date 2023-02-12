@@ -88,6 +88,7 @@ type TileGroup
     | ParkingExitGroup
     | ParkingRoadGroup
     | ParkingRoundaboutGroup
+    | CornerHouseGroup
 
 
 allTileGroupsExceptText : List TileGroup
@@ -130,9 +131,9 @@ allTileGroupsExceptText =
     , DirtPathGroup
     , BenchGroup
     , ParkingLotGroup
-    , ParkingExitGroup
     , ParkingRoadGroup
     , ParkingRoundaboutGroup
+    , CornerHouseGroup
     ]
 
 
@@ -416,7 +417,13 @@ getTileGroupData tileGroup =
         ParkingRoundaboutGroup ->
             { defaultColors = defaultSidewalkColor
             , tiles = Nonempty ParkingRoundabout []
-            , name = "Parking roundabout"
+            , name = "Parking circle"
+            }
+
+        CornerHouseGroup ->
+            { defaultColors = defaultCornerHouseColor
+            , tiles = Nonempty CornerHouseUpLeft [ CornerHouseUpRight, CornerHouseDownRight, CornerHouseDownLeft ]
+            , name = "Corner house"
             }
 
 
@@ -536,6 +543,10 @@ type Tile
     | ParkingExitRight
     | ParkingRoad
     | ParkingRoundabout
+    | CornerHouseUpLeft
+    | CornerHouseUpRight
+    | CornerHouseDownLeft
+    | CornerHouseDownRight
 
 
 type Direction
@@ -1123,6 +1134,10 @@ defaultBenchColor =
     OneDefaultColor (Color.rgb255 162 115 83)
 
 
+defaultCornerHouseColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 101 108 124, secondaryColor = Color.rgb255 103 157 236 }
+
+
 getData : Tile -> TileData unit
 getData tile =
     case tile of
@@ -1470,6 +1485,18 @@ getData tile =
 
         ParkingRoundabout ->
             parkingRoundabout
+
+        CornerHouseUpLeft ->
+            cornerHouseUpLeft
+
+        CornerHouseUpRight ->
+            cornerHouseUpRight
+
+        CornerHouseDownLeft ->
+            cornerHouseDownLeft
+
+        CornerHouseDownRight ->
+            cornerHouseDownRight
 
 
 emptyTile =
@@ -3116,6 +3143,74 @@ parkingRoundabout =
         , ( 0, 2 )
         , ( 1, 2 )
         , ( 2, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+cornerHouseUpLeft =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset CornerHouseUpLeft, texturePosition = Coord.xy 660 576 }
+    , size = Coord.xy 3 3
+    , collisionMask =
+        [ ( 0, 1 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+cornerHouseUpRight =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset CornerHouseUpRight, texturePosition = Coord.xy 760 576 }
+    , size = Coord.xy 3 3
+    , collisionMask =
+        [ ( 0, 1 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+cornerHouseDownLeft =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset CornerHouseDownLeft, texturePosition = Coord.xy 660 504 }
+    , size = Coord.xy 3 4
+    , collisionMask =
+        [ ( 0, 2 )
+        , ( 1, 2 )
+        , ( 0, 3 )
+        , ( 1, 3 )
+        , ( 2, 3 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+cornerHouseDownRight =
+    { texturePosition = Nothing
+    , texturePositionTopLayer = Just { yOffset = yOffset CornerHouseDownRight, texturePosition = Coord.xy 760 504 }
+    , size = Coord.xy 3 4
+    , collisionMask =
+        [ ( 1, 2 )
+        , ( 2, 2 )
+        , ( 0, 3 )
+        , ( 1, 3 )
+        , ( 2, 3 )
         ]
             |> Set.fromList
             |> CustomCollision
