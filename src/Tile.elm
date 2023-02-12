@@ -3262,6 +3262,10 @@ zOrderBackToFront =
     , HedgePillarDownRight
     , HedgePillarUpLeft
     , HedgePillarUpRight
+    , CornerHouseDownRight
+    , CornerHouseDownLeft
+    , CornerHouseUpLeft
+    , CornerHouseUpRight
     , RockDown
     , RockLeft
     , RockRight

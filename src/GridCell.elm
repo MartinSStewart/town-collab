@@ -24,6 +24,7 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Id exposing (Id, UserId)
+import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty(..))
 import Quantity exposing (Quantity(..))
 import Random
@@ -33,24 +34,39 @@ import Units exposing (CellLocalUnit, CellUnit)
 
 
 type CellData
-    = CellData { history : List Value, undoPoint : Dict Int Int, railSplitToggled : AssocSet.Set (Coord CellLocalUnit) }
+    = CellData
+        { history : List Value
+        , undoPoint : IdDict UserId Int
+        , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
+        , cache : List Value
+        }
 
 
 dataToCell : Coord CellUnit -> CellData -> Cell
 dataToCell cellPosition (CellData cellData) =
-    Cell { history = cellData.history, undoPoint = cellData.undoPoint, cache = [], railSplitToggled = cellData.railSplitToggled }
+    { history = cellData.history
+    , undoPoint = cellData.undoPoint
+    , cache = cellData.cache
+    , railSplitToggled = cellData.railSplitToggled
+    }
+        |> Cell
         |> updateCache cellPosition
 
 
 cellToData : Cell -> CellData
 cellToData (Cell cell) =
-    CellData { history = cell.history, undoPoint = cell.undoPoint, railSplitToggled = cell.railSplitToggled }
+    CellData
+        { history = cell.history
+        , undoPoint = cell.undoPoint
+        , railSplitToggled = cell.railSplitToggled
+        , cache = cell.cache
+        }
 
 
 type Cell
     = Cell
         { history : List Value
-        , undoPoint : Dict Int Int
+        , undoPoint : IdDict UserId Int
         , cache : List Value
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
         }
@@ -81,7 +97,7 @@ addValue : Value -> Cell -> { cell : Cell, removed : List Value }
 addValue value (Cell cell) =
     let
         userUndoPoint =
-            Dict.get (Id.toInt value.userId) cell.undoPoint |> Maybe.withDefault 0
+            IdDict.get value.userId cell.undoPoint |> Maybe.withDefault 0
 
         { remaining, removed } =
             stepCacheHelperWithRemoved value cell.cache
@@ -105,11 +121,7 @@ addValue value (Cell cell) =
                     cell.history
                     |> Tuple.first
                     |> (\list -> value :: list)
-            , undoPoint =
-                Dict.insert
-                    (Id.toInt value.userId)
-                    (userUndoPoint + 1)
-                    cell.undoPoint
+            , undoPoint = IdDict.insert value.userId (userUndoPoint + 1) cell.undoPoint
             , cache = remaining
             , railSplitToggled = cell.railSplitToggled
             }
@@ -142,14 +154,14 @@ updateCache cellPosition (Cell cell) =
 
 stepCache :
     Value
-    -> { list : List Value, undoPoint : Dict Int number }
-    -> { list : List Value, undoPoint : Dict Int number }
+    -> { list : List Value, undoPoint : IdDict UserId number }
+    -> { list : List Value, undoPoint : IdDict UserId number }
 stepCache ({ userId, position, value } as item) state =
-    case Dict.get (Id.toInt userId) state.undoPoint of
+    case IdDict.get userId state.undoPoint of
         Just stepsLeft ->
             if stepsLeft > 0 then
                 { list = stepCacheHelper item state.list
-                , undoPoint = Dict.insert (Id.toInt userId) (stepsLeft - 1) state.undoPoint
+                , undoPoint = IdDict.insert userId (stepsLeft - 1) state.undoPoint
                 }
 
             else
@@ -202,7 +214,7 @@ removeUser : Id UserId -> Coord CellUnit -> Cell -> Cell
 removeUser userId cellPosition (Cell cell) =
     Cell
         { history = List.filter (.userId >> (==) userId) cell.history
-        , undoPoint = Dict.remove (Id.toInt userId) cell.undoPoint
+        , undoPoint = IdDict.remove userId cell.undoPoint
         , cache = cell.cache
         , railSplitToggled = cell.railSplitToggled
         }
@@ -211,14 +223,14 @@ removeUser userId cellPosition (Cell cell) =
 
 hasChangesBy : Id UserId -> Cell -> Bool
 hasChangesBy userId (Cell cell) =
-    Dict.member (Id.toInt userId) cell.undoPoint
+    IdDict.member userId cell.undoPoint
 
 
 moveUndoPoint : Id UserId -> Int -> Coord CellUnit -> Cell -> Cell
 moveUndoPoint userId moveAmount cellPosition (Cell cell) =
     Cell
         { history = cell.history
-        , undoPoint = Dict.update (Id.toInt userId) (Maybe.map ((+) moveAmount)) cell.undoPoint
+        , undoPoint = IdDict.update userId (Maybe.map ((+) moveAmount)) cell.undoPoint
         , cache = cell.cache
         , railSplitToggled = cell.railSplitToggled
         }
@@ -237,7 +249,7 @@ flatten (Cell cell) =
 
 empty : Coord CellUnit -> Cell
 empty cellPosition =
-    Cell { history = [], undoPoint = Dict.empty, cache = addTrees cellPosition, railSplitToggled = AssocSet.empty }
+    Cell { history = [], undoPoint = IdDict.empty, cache = addTrees cellPosition, railSplitToggled = AssocSet.empty }
 
 
 toggleRailSplit : Coord CellLocalUnit -> Cell -> Cell
