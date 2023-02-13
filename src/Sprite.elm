@@ -17,7 +17,6 @@ module Sprite exposing
     , textWithZ
     , textureWidth
     , toMesh
-    , toMesh2
     )
 
 import Color exposing (Color, Colors)
