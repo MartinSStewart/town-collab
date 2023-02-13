@@ -4943,93 +4943,25 @@ canvasView audioData model =
                             textureSize =
                                 WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
 
+                            gridViewBounds : BoundingBox2d WorldUnit WorldUnit
+                            gridViewBounds =
+                                viewLoadingBoundingBox model
+
                             meshes =
                                 Dict.filter
                                     (\key _ ->
                                         Coord.tuple key
                                             |> Units.cellToTile
                                             |> Coord.toPoint2d
-                                            |> (\p -> BoundingBox2d.contains p viewBounds_)
+                                            |> (\p -> BoundingBox2d.contains p gridViewBounds)
                                     )
                                     model.meshes
                         in
                         drawBackground meshes viewMatrix texture
                             ++ drawForeground meshes viewMatrix texture
                             ++ Train.draw model.time localGrid.mail model.trains viewMatrix trainTexture viewBounds_
-                            ++ List.filterMap
-                                (\( cowId, _ ) ->
-                                    case cowActualPosition cowId model of
-                                        Just { position } ->
-                                            if BoundingBox2d.contains position viewBounds_ then
-                                                let
-                                                    point =
-                                                        Point2d.unwrap position
-                                                in
-                                                Effect.WebGL.entityWith
-                                                    [ Shaders.blend ]
-                                                    Shaders.vertexShader
-                                                    Shaders.fragmentShader
-                                                    Cow.cowMesh
-                                                    { view =
-                                                        Mat4.makeTranslate3
-                                                            (point.x * toFloat Units.tileWidth |> round |> toFloat)
-                                                            (point.y * toFloat Units.tileHeight |> round |> toFloat)
-                                                            (Grid.tileZ True y (Coord.yRaw Cow.textureSize))
-                                                            |> Mat4.mul viewMatrix
-                                                    , texture = texture
-                                                    , textureSize = textureSize
-                                                    , color = Vec4.vec4 1 1 1 1
-                                                    }
-                                                    |> Just
-
-                                            else
-                                                Nothing
-
-                                        Nothing ->
-                                            Nothing
-                                )
-                                (IdDict.toList localGrid.cows)
-                            ++ List.filterMap
-                                (\flag ->
-                                    let
-                                        flagMesh2 =
-                                            if flag.isReceived then
-                                                Flag.receivingMailFlagMeshes
-
-                                            else
-                                                Flag.sendingMailFlagMeshes
-                                    in
-                                    case
-                                        Array.get
-                                            (Effect.Time.posixToMillis model.time |> toFloat |> (*) 0.005 |> round |> modBy 3)
-                                            flagMesh2
-                                    of
-                                        Just flagMesh_ ->
-                                            let
-                                                flagPosition =
-                                                    Point2d.unwrap flag.position
-                                            in
-                                            Effect.WebGL.entityWith
-                                                [ Shaders.blend ]
-                                                Shaders.vertexShader
-                                                Shaders.fragmentShader
-                                                flagMesh_
-                                                { view =
-                                                    Mat4.makeTranslate3
-                                                        (flagPosition.x * toFloat Units.tileWidth)
-                                                        (flagPosition.y * toFloat Units.tileHeight)
-                                                        0
-                                                        |> Mat4.mul viewMatrix
-                                                , texture = texture
-                                                , textureSize = textureSize
-                                                , color = Vec4.vec4 1 1 1 1
-                                                }
-                                                |> Just
-
-                                        Nothing ->
-                                            Nothing
-                                )
-                                (getFlags model)
+                            ++ drawCows texture viewMatrix model
+                            ++ drawFlags texture viewMatrix model
                             ++ [ Effect.WebGL.entityWith
                                     [ Shaders.blend ]
                                     Shaders.debrisVertexShader
@@ -5042,183 +4974,9 @@ canvasView audioData model =
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
-                            ++ (case ( model.currentTool, currentUserId model ) of
-                                    ( TextTool (Just textTool), Just userId ) ->
-                                        [ Effect.WebGL.entityWith
-                                            [ Shaders.blend ]
-                                            Shaders.vertexShader
-                                            Shaders.fragmentShader
-                                            textCursorMesh
-                                            { view =
-                                                Coord.translateMat4
-                                                    (Coord.multiply Units.tileSize textTool.cursorPosition)
-                                                    viewMatrix
-                                            , texture = texture
-                                            , textureSize = textureSize
-                                            , color =
-                                                if
-                                                    canPlaceTile
-                                                        model.time
-                                                        { position = textTool.cursorPosition
-                                                        , change = BigText 'A'
-                                                        , userId = userId
-                                                        , colors =
-                                                            { primaryColor = Color.rgb255 0 0 0
-                                                            , secondaryColor = Color.rgb255 255 255 255
-                                                            }
-                                                        }
-                                                        model.trains
-                                                        (LocalGrid.localModel model.localModel |> .grid)
-                                                then
-                                                    Vec4.vec4 0 0 0 0.5
-
-                                                else
-                                                    Vec4.vec4 1 0 0 0.5
-                                            }
-                                        ]
-
-                                    _ ->
-                                        []
-                               )
                             ++ drawOtherCursors texture viewMatrix model
-                            ++ List.filterMap
-                                (\{ position, isRadio } ->
-                                    let
-                                        point =
-                                            Point2d.unwrap position
-
-                                        ( xOffset, yOffset ) =
-                                            if isRadio then
-                                                ( 6, -8 )
-
-                                            else
-                                                ( -8, -48 )
-
-                                        meshArray =
-                                            if isRadio then
-                                                speechBubbleRadioMesh
-
-                                            else
-                                                speechBubbleMesh
-                                    in
-                                    case
-                                        Array.get
-                                            (Effect.Time.posixToMillis model.time
-                                                |> toFloat
-                                                |> (*) 0.01
-                                                |> round
-                                                |> modBy speechBubbleFrames
-                                            )
-                                            meshArray
-                                    of
-                                        Just mesh ->
-                                            Effect.WebGL.entityWith
-                                                [ Shaders.blend ]
-                                                Shaders.vertexShader
-                                                Shaders.fragmentShader
-                                                mesh
-                                                { view =
-                                                    Mat4.makeTranslate3
-                                                        (round (point.x * toFloat Units.tileWidth) + xOffset |> toFloat)
-                                                        (round (point.y * toFloat Units.tileHeight) + yOffset |> toFloat)
-                                                        0
-                                                        |> Mat4.mul viewMatrix
-                                                , texture = texture
-                                                , textureSize = textureSize
-                                                , color = Vec4.vec4 1 1 1 1
-                                                }
-                                                |> Just
-
-                                        Nothing ->
-                                            Nothing
-                                )
-                                (getSpeechBubbles model)
-                            ++ (case ( hoverAt model mouseScreenPosition_, currentTool model, currentUserId model ) of
-                                    ( MapHover, TilePlacerTool currentTile, Just userId ) ->
-                                        let
-                                            currentTile2 : Tile
-                                            currentTile2 =
-                                                Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index
-
-                                            mousePosition : Coord WorldUnit
-                                            mousePosition =
-                                                mouseWorldPosition model
-                                                    |> Coord.floorPoint
-                                                    |> Coord.minus (tileSize |> Coord.divide (Coord.tuple ( 2, 2 )))
-
-                                            ( mouseX, mouseY ) =
-                                                Coord.toTuple mousePosition
-
-                                            tileSize =
-                                                Tile.getData currentTile2 |> .size
-
-                                            offsetX : Float
-                                            offsetX =
-                                                case model.lastTilePlaced of
-                                                    Just { tile, time } ->
-                                                        let
-                                                            timeElapsed =
-                                                                Duration.from time model.time
-                                                        in
-                                                        if
-                                                            (timeElapsed
-                                                                |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
-                                                            )
-                                                                && (tile == EmptyTile)
-                                                        then
-                                                            timeElapsed
-                                                                |> Duration.inSeconds
-                                                                |> (*) 40
-                                                                |> cos
-                                                                |> (*) 2
-
-                                                        else
-                                                            lastPlacementOffset audioData model
-
-                                                    Nothing ->
-                                                        lastPlacementOffset audioData model
-                                        in
-                                        [ Effect.WebGL.entityWith
-                                            [ Shaders.blend ]
-                                            Shaders.vertexShader
-                                            Shaders.fragmentShader
-                                            currentTile.mesh
-                                            { view =
-                                                viewMatrix
-                                                    |> Mat4.translate3
-                                                        (toFloat mouseX * toFloat Units.tileWidth + offsetX)
-                                                        (toFloat mouseY * toFloat Units.tileHeight)
-                                                        0
-                                            , texture = texture
-                                            , textureSize = textureSize
-                                            , color =
-                                                if currentTile.tileGroup == EmptyTileGroup then
-                                                    Vec4.vec4 1 1 1 1
-
-                                                else if
-                                                    canPlaceTile
-                                                        model.time
-                                                        { position = mousePosition
-                                                        , change = currentTile2
-                                                        , userId = userId
-                                                        , colors =
-                                                            { primaryColor = Color.rgb255 0 0 0
-                                                            , secondaryColor = Color.rgb255 255 255 255
-                                                            }
-                                                        }
-                                                        model.trains
-                                                        (LocalGrid.localModel model.localModel |> .grid)
-                                                then
-                                                    Vec4.vec4 1 1 1 0.5
-
-                                                else
-                                                    Vec4.vec4 1 0 0 0.5
-                                            }
-                                        ]
-
-                                    _ ->
-                                        []
-                               )
+                            ++ drawSpeechBubble texture viewMatrix model
+                            ++ drawTilePlacer audioData viewMatrix texture model
                             ++ (case model.mailEditor of
                                     Just _ ->
                                         [ MailEditor.backgroundLayer texture ]
@@ -5232,45 +4990,14 @@ canvasView audioData model =
                                     Shaders.fragmentShader
                                     model.uiMesh
                                     { view =
-                                        Mat4.makeScale3
-                                            (2 / toFloat windowWidth)
-                                            (-2 / toFloat windowHeight)
-                                            1
+                                        Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
                                             |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                                     , texture = texture
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     }
                                ]
-                            ++ (case ( model.showMap, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
-                                    ( True, Just simplexNoiseLookup ) ->
-                                        let
-                                            mapSize =
-                                                Toolbar.mapSize model.windowSize |> toFloat
-                                        in
-                                        [ Effect.WebGL.entityWith
-                                            []
-                                            Shaders.worldMapVertexShader
-                                            Shaders.worldMapFragmentShader
-                                            mapSquare
-                                            { view =
-                                                Mat4.makeScale3
-                                                    (mapSize * 2 / toFloat windowWidth)
-                                                    (mapSize * -2 / toFloat windowHeight)
-                                                    1
-                                                    |> Mat4.translate3 -0.5 -0.5 -0.5
-                                            , texture = simplexNoiseLookup
-                                            , cellPosition =
-                                                actualViewPoint model
-                                                    |> Grid.worldToCellPoint
-                                                    |> Point2d.unwrap
-                                                    |> Vec2.fromRecord
-                                            }
-                                        ]
-
-                                    _ ->
-                                        []
-                               )
+                            ++ drawMap model
                             ++ (case model.mailEditor of
                                     Just mailEditor ->
                                         MailEditor.drawMail
@@ -5300,6 +5027,312 @@ canvasView audioData model =
 
         Nothing ->
             Html.text ""
+
+
+drawCows : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
+drawCows texture viewMatrix model =
+    let
+        localGrid : LocalGrid_
+        localGrid =
+            LocalGrid.localModel model.localModel
+
+        viewBounds_ : BoundingBox2d WorldUnit WorldUnit
+        viewBounds_ =
+            viewBoundingBox model
+    in
+    List.filterMap
+        (\( cowId, _ ) ->
+            case cowActualPosition cowId model of
+                Just { position } ->
+                    if BoundingBox2d.contains position viewBounds_ then
+                        let
+                            point =
+                                Point2d.unwrap position
+                        in
+                        Effect.WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            Cow.cowMesh
+                            { view =
+                                Mat4.makeTranslate3
+                                    (point.x * toFloat Units.tileWidth |> round |> toFloat)
+                                    (point.y * toFloat Units.tileHeight |> round |> toFloat)
+                                    (Grid.tileZ True point.y (Coord.yRaw Cow.textureSize))
+                                    |> Mat4.mul viewMatrix
+                            , texture = texture
+                            , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                            , color = Vec4.vec4 1 1 1 1
+                            }
+                            |> Just
+
+                    else
+                        Nothing
+
+                Nothing ->
+                    Nothing
+        )
+        (IdDict.toList localGrid.cows)
+
+
+drawFlags : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
+drawFlags texture viewMatrix model =
+    List.filterMap
+        (\flag ->
+            let
+                flagMesh2 =
+                    if flag.isReceived then
+                        Flag.receivingMailFlagMeshes
+
+                    else
+                        Flag.sendingMailFlagMeshes
+            in
+            case
+                Array.get
+                    (Effect.Time.posixToMillis model.time |> toFloat |> (*) 0.005 |> round |> modBy 3)
+                    flagMesh2
+            of
+                Just flagMesh_ ->
+                    let
+                        flagPosition =
+                            Point2d.unwrap flag.position
+                    in
+                    Effect.WebGL.entityWith
+                        [ Shaders.blend ]
+                        Shaders.vertexShader
+                        Shaders.fragmentShader
+                        flagMesh_
+                        { view =
+                            Mat4.makeTranslate3
+                                (flagPosition.x * toFloat Units.tileWidth)
+                                (flagPosition.y * toFloat Units.tileHeight)
+                                0
+                                |> Mat4.mul viewMatrix
+                        , texture = texture
+                        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                        , color = Vec4.vec4 1 1 1 1
+                        }
+                        |> Just
+
+                Nothing ->
+                    Nothing
+        )
+        (getFlags model)
+
+
+drawSpeechBubble : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
+drawSpeechBubble texture viewMatrix model =
+    List.filterMap
+        (\{ position, isRadio } ->
+            let
+                point =
+                    Point2d.unwrap position
+
+                ( xOffset, yOffset ) =
+                    if isRadio then
+                        ( 6, -8 )
+
+                    else
+                        ( -8, -48 )
+
+                meshArray =
+                    if isRadio then
+                        speechBubbleRadioMesh
+
+                    else
+                        speechBubbleMesh
+            in
+            case
+                Array.get
+                    (Effect.Time.posixToMillis model.time
+                        |> toFloat
+                        |> (*) 0.01
+                        |> round
+                        |> modBy speechBubbleFrames
+                    )
+                    meshArray
+            of
+                Just mesh ->
+                    Effect.WebGL.entityWith
+                        [ Shaders.blend ]
+                        Shaders.vertexShader
+                        Shaders.fragmentShader
+                        mesh
+                        { view =
+                            Mat4.makeTranslate3
+                                (round (point.x * toFloat Units.tileWidth) + xOffset |> toFloat)
+                                (round (point.y * toFloat Units.tileHeight) + yOffset |> toFloat)
+                                0
+                                |> Mat4.mul viewMatrix
+                        , texture = texture
+                        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                        , color = Vec4.vec4 1 1 1 1
+                        }
+                        |> Just
+
+                Nothing ->
+                    Nothing
+        )
+        (getSpeechBubbles model)
+
+
+drawTilePlacer : AudioData -> Mat4 -> WebGL.Texture.Texture -> FrontendLoaded -> List Effect.WebGL.Entity
+drawTilePlacer audioData viewMatrix texture model =
+    let
+        textureSize =
+            WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+    in
+    case ( hoverAt model (mouseScreenPosition model), currentTool model, currentUserId model ) of
+        ( MapHover, TilePlacerTool currentTile, Just userId ) ->
+            let
+                currentTile2 : Tile
+                currentTile2 =
+                    Toolbar.getTileGroupTile currentTile.tileGroup currentTile.index
+
+                mousePosition : Coord WorldUnit
+                mousePosition =
+                    mouseWorldPosition model
+                        |> Coord.floorPoint
+                        |> Coord.minus (tileSize |> Coord.divide (Coord.tuple ( 2, 2 )))
+
+                ( mouseX, mouseY ) =
+                    Coord.toTuple mousePosition
+
+                tileSize =
+                    Tile.getData currentTile2 |> .size
+
+                offsetX : Float
+                offsetX =
+                    case model.lastTilePlaced of
+                        Just { tile, time } ->
+                            let
+                                timeElapsed =
+                                    Duration.from time model.time
+                            in
+                            if
+                                (timeElapsed
+                                    |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
+                                )
+                                    && (tile == EmptyTile)
+                            then
+                                timeElapsed
+                                    |> Duration.inSeconds
+                                    |> (*) 40
+                                    |> cos
+                                    |> (*) 2
+
+                            else
+                                lastPlacementOffset audioData model
+
+                        Nothing ->
+                            lastPlacementOffset audioData model
+            in
+            [ Effect.WebGL.entityWith
+                [ Shaders.blend ]
+                Shaders.vertexShader
+                Shaders.fragmentShader
+                currentTile.mesh
+                { view =
+                    viewMatrix
+                        |> Mat4.translate3
+                            (toFloat mouseX * toFloat Units.tileWidth + offsetX)
+                            (toFloat mouseY * toFloat Units.tileHeight)
+                            0
+                , texture = texture
+                , textureSize = textureSize
+                , color =
+                    if currentTile.tileGroup == EmptyTileGroup then
+                        Vec4.vec4 1 1 1 1
+
+                    else if
+                        canPlaceTile
+                            model.time
+                            { position = mousePosition
+                            , change = currentTile2
+                            , userId = userId
+                            , colors =
+                                { primaryColor = Color.rgb255 0 0 0
+                                , secondaryColor = Color.rgb255 255 255 255
+                                }
+                            }
+                            model.trains
+                            (LocalGrid.localModel model.localModel |> .grid)
+                    then
+                        Vec4.vec4 1 1 1 0.5
+
+                    else
+                        Vec4.vec4 1 0 0 0.5
+                }
+            ]
+
+        ( MapHover, TextTool (Just textTool), Just userId ) ->
+            [ Effect.WebGL.entityWith
+                [ Shaders.blend ]
+                Shaders.vertexShader
+                Shaders.fragmentShader
+                textCursorMesh
+                { view =
+                    Coord.translateMat4
+                        (Coord.multiply Units.tileSize textTool.cursorPosition)
+                        viewMatrix
+                , texture = texture
+                , textureSize = textureSize
+                , color =
+                    if
+                        canPlaceTile
+                            model.time
+                            { position = textTool.cursorPosition
+                            , change = BigText 'A'
+                            , userId = userId
+                            , colors =
+                                { primaryColor = Color.rgb255 0 0 0
+                                , secondaryColor = Color.rgb255 255 255 255
+                                }
+                            }
+                            model.trains
+                            (LocalGrid.localModel model.localModel |> .grid)
+                    then
+                        Vec4.vec4 0 0 0 0.5
+
+                    else
+                        Vec4.vec4 1 0 0 0.5
+                }
+            ]
+
+        _ ->
+            []
+
+
+drawMap : FrontendLoaded -> List Effect.WebGL.Entity
+drawMap model =
+    case ( model.showMap, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
+        ( True, Just simplexNoiseLookup ) ->
+            let
+                mapSize =
+                    Toolbar.mapSize model.windowSize |> toFloat
+
+                ( windowWidth, windowHeight ) =
+                    Coord.toTuple model.windowSize
+            in
+            [ Effect.WebGL.entityWith
+                []
+                Shaders.worldMapVertexShader
+                Shaders.worldMapFragmentShader
+                mapSquare
+                { view =
+                    Mat4.makeScale3 (mapSize * 2 / toFloat windowWidth) (mapSize * -2 / toFloat windowHeight) 1
+                        |> Mat4.translate3 -0.5 -0.5 -0.5
+                , texture = simplexNoiseLookup
+                , cellPosition =
+                    actualViewPoint model
+                        |> Grid.worldToCellPoint
+                        |> Point2d.unwrap
+                        |> Vec2.fromRecord
+                }
+            ]
+
+        _ ->
+            []
 
 
 lastPlacementOffset : AudioData -> FrontendLoaded -> Float
@@ -5332,6 +5365,10 @@ drawOtherCursors texture viewMatrix model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
+
+        viewBounds_ : BoundingBox2d WorldUnit WorldUnit
+        viewBounds_ =
+            viewBoundingBox model |> BoundingBox2d.expandBy (Units.tileUnit 2)
     in
     (case currentUserId model of
         Just userId ->
@@ -5344,12 +5381,15 @@ drawOtherCursors texture viewMatrix model =
         |> List.filterMap
             (\( userId, cursor ) ->
                 let
+                    cursorPosition2 =
+                        cursorActualPosition False userId cursor model
+
                     point : { x : Float, y : Float }
                     point =
-                        cursorActualPosition False userId cursor model |> Point2d.unwrap
+                        Point2d.unwrap cursorPosition2
                 in
-                case IdDict.get userId model.handMeshes of
-                    Just mesh ->
+                case ( BoundingBox2d.contains cursorPosition2 viewBounds_, IdDict.get userId model.handMeshes ) of
+                    ( True, Just mesh ) ->
                         Effect.WebGL.entityWith
                             [ Shaders.blend ]
                             Shaders.vertexShader
@@ -5399,7 +5439,7 @@ drawOtherCursors texture viewMatrix model =
                             }
                             |> Just
 
-                    Nothing ->
+                    _ ->
                         Nothing
             )
 
