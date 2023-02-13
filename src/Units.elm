@@ -9,8 +9,10 @@ module Units exposing
     , cellUnit
     , localUnit
     , screenFrame
+    , tileHeight
     , tileSize
     , tileUnit
+    , tileWidth
     )
 
 import Coord exposing (Coord)
@@ -68,6 +70,16 @@ cellToTile coord =
 tileSize : Coord unit
 tileSize =
     Coord.xy 20 18
+
+
+tileWidth : Int
+tileWidth =
+    Coord.xRaw tileSize
+
+
+tileHeight : Int
+tileHeight =
+    Coord.yRaw tileSize
 
 
 screenFrame : Point2d WorldUnit WorldUnit -> Frame2d WorldUnit WorldUnit { defines : Pixels }

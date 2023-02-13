@@ -633,12 +633,12 @@ foregroundMesh2 maybeCurrentTile cellPosition maybeCurrentUserId users railSplit
             (case data.railPath of
                 RailSplitPath pathData ->
                     if AssocSet.member position railSplitToggled then
-                        tileMeshHelper opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
+                        tileMeshHelper2 opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
 
                     else
                         case data.texturePosition of
                             Just texturePosition ->
-                                tileMeshHelper opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
+                                tileMeshHelper2 opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
 
                             Nothing ->
                                 []
@@ -646,7 +646,7 @@ foregroundMesh2 maybeCurrentTile cellPosition maybeCurrentUserId users railSplit
                 _ ->
                     case data.texturePosition of
                         Just texturePosition ->
-                            tileMeshHelper
+                            tileMeshHelper2
                                 opacity
                                 colors
                                 False
@@ -691,7 +691,7 @@ foregroundMesh2 maybeCurrentTile cellPosition maybeCurrentUserId users railSplit
                                             (tileZ True (toFloat (Coord.yRaw position2)) 6)
                                 in
                                 text
-                                    ++ tileMeshHelper
+                                    ++ tileMeshHelper2
                                         opacity
                                         colors
                                         True
@@ -702,7 +702,7 @@ foregroundMesh2 maybeCurrentTile cellPosition maybeCurrentUserId users railSplit
                                         data.size
 
                             else
-                                tileMeshHelper
+                                tileMeshHelper2
                                     opacity
                                     colors
                                     True
@@ -759,8 +759,8 @@ backgroundMesh cellPosition =
                                         Color.black
                                         Color.black
                                         (Coord.xy
-                                            ((x2 * Terrain.terrainDivisionsPerCell + x) * Coord.xRaw Units.tileSize)
-                                            ((y2 * Terrain.terrainDivisionsPerCell + y) * Coord.yRaw Units.tileSize)
+                                            ((x2 * Terrain.terrainDivisionsPerCell + x) * Units.tileWidth)
+                                            ((y2 * Terrain.terrainDivisionsPerCell + y) * Units.tileHeight)
                                         )
                                         0.9
                                         (Coord.xy 80 72)
@@ -935,6 +935,32 @@ tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer yOffset posit
         secondaryColor
         position
         (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
+        (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
+        texturePosition
+        (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
+
+
+tileMeshHelper2 :
+    Float
+    -> Colors
+    -> Bool
+    -> Float
+    -> Coord unit2
+    -> Int
+    -> Coord unit
+    -> Coord unit
+    -> List Vertex
+tileMeshHelper2 opacity { primaryColor, secondaryColor } isTopLayer yOffset position scale texturePosition size =
+    Sprite.spriteWithZ
+        opacity
+        primaryColor
+        secondaryColor
+        position
+        (tileZ
+            isTopLayer
+            ((toFloat (Coord.yRaw position) + yOffset) / toFloat Units.tileHeight)
+            (Coord.yRaw size)
+        )
         (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
         texturePosition
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))

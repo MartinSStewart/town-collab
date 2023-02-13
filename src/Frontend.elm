@@ -3348,8 +3348,8 @@ point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
 
 scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float units )
 scaleForScreenToWorld model =
-    ( 1 / (toFloat model.zoomFactor * toFloat (Coord.xRaw Units.tileSize)) |> Quantity
-    , 1 / (toFloat model.zoomFactor * toFloat (Coord.yRaw Units.tileSize)) |> Quantity
+    ( 1 / (toFloat model.zoomFactor * toFloat Units.tileWidth) |> Quantity
+    , 1 / (toFloat model.zoomFactor * toFloat Units.tileHeight) |> Quantity
     )
 
 
@@ -4904,8 +4904,8 @@ canvasView audioData model =
                 viewMatrix =
                     Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                         |> Mat4.translate3
-                            (negate <| toFloat <| round (x * toFloat (Coord.xRaw Units.tileSize)))
-                            (negate <| toFloat <| round (y * toFloat (Coord.yRaw Units.tileSize)))
+                            (negate <| toFloat <| round (x * toFloat Units.tileWidth))
+                            (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                             0
 
                 mouseScreenPosition_ : Point2d Pixels Pixels
@@ -4976,8 +4976,8 @@ canvasView audioData model =
                                                 Cow.cowMesh
                                                 { view =
                                                     Mat4.makeTranslate3
-                                                        (point.x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
-                                                        (point.y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
+                                                        (point.x * toFloat Units.tileWidth |> round |> toFloat)
+                                                        (point.y * toFloat Units.tileHeight |> round |> toFloat)
                                                         (Grid.tileZ True y (Coord.yRaw Cow.textureSize))
                                                         |> Mat4.mul viewMatrix
                                                 , texture = texture
@@ -5017,8 +5017,8 @@ canvasView audioData model =
                                                 flagMesh_
                                                 { view =
                                                     Mat4.makeTranslate3
-                                                        (flagPosition.x * toFloat (Coord.xRaw Units.tileSize))
-                                                        (flagPosition.y * toFloat (Coord.yRaw Units.tileSize))
+                                                        (flagPosition.x * toFloat Units.tileWidth)
+                                                        (flagPosition.y * toFloat Units.tileHeight)
                                                         0
                                                         |> Mat4.mul viewMatrix
                                                 , texture = texture
@@ -5120,8 +5120,8 @@ canvasView audioData model =
                                                 mesh
                                                 { view =
                                                     Mat4.makeTranslate3
-                                                        (round (point.x * toFloat (Coord.xRaw Units.tileSize)) + xOffset |> toFloat)
-                                                        (round (point.y * toFloat (Coord.yRaw Units.tileSize)) + yOffset |> toFloat)
+                                                        (round (point.x * toFloat Units.tileWidth) + xOffset |> toFloat)
+                                                        (round (point.y * toFloat Units.tileHeight) + yOffset |> toFloat)
                                                         0
                                                         |> Mat4.mul viewMatrix
                                                 , texture = texture
@@ -5187,8 +5187,8 @@ canvasView audioData model =
                                             { view =
                                                 viewMatrix
                                                     |> Mat4.translate3
-                                                        (toFloat mouseX * toFloat (Coord.xRaw Units.tileSize) + offsetX)
-                                                        (toFloat mouseY * toFloat (Coord.yRaw Units.tileSize))
+                                                        (toFloat mouseX * toFloat Units.tileWidth + offsetX)
+                                                        (toFloat mouseY * toFloat Units.tileHeight)
                                                         0
                                             , texture = texture
                                             , textureSize = textureSize
@@ -5384,11 +5384,11 @@ drawOtherCursors texture viewMatrix model =
                             )
                             { view =
                                 Mat4.makeTranslate3
-                                    (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                    (round (point.x * toFloat Units.tileWidth * toFloat model.zoomFactor)
                                         |> toFloat
                                         |> (*) (1 / toFloat model.zoomFactor)
                                     )
-                                    (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                    (round (point.y * toFloat Units.tileHeight * toFloat model.zoomFactor)
                                         |> toFloat
                                         |> (*) (1 / toFloat model.zoomFactor)
                                     )
@@ -5435,11 +5435,11 @@ drawCursor showMousePointer texture viewMatrix userId model =
                                 (Cursor.getSpriteMesh mousePointer mesh)
                                 { view =
                                     Mat4.makeTranslate3
-                                        (round (point.x * toFloat (Coord.xRaw Units.tileSize) * toFloat model.zoomFactor)
+                                        (round (point.x * toFloat Units.tileWidth * toFloat model.zoomFactor)
                                             |> toFloat
                                             |> (*) (1 / toFloat model.zoomFactor)
                                         )
-                                        (round (point.y * toFloat (Coord.yRaw Units.tileSize) * toFloat model.zoomFactor)
+                                        (round (point.y * toFloat Units.tileHeight * toFloat model.zoomFactor)
                                             |> toFloat
                                             |> (*) (1 / toFloat model.zoomFactor)
                                         )

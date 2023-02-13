@@ -3,8 +3,6 @@ module Sprite exposing
     , charSize
     , charTexturePosition
     , charToInt
-    , getIndices
-    , getQuadIndices
     , nineSlice
     , outlinedText
     , rectangle
@@ -19,6 +17,7 @@ module Sprite exposing
     , textWithZ
     , textureWidth
     , toMesh
+    , toMesh2
     )
 
 import Color exposing (Color, Colors)
@@ -191,21 +190,25 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
     ]
 
 
-getQuadIndices : List a -> List ( Int, Int, Int )
-getQuadIndices list =
-    List.range 0 (List.length list // 4 - 1) |> List.concatMap getIndices
-
-
-getIndices : number -> List ( number, number, number )
-getIndices indexOffset =
-    [ ( 4 * indexOffset + 3, 4 * indexOffset + 1, 4 * indexOffset )
-    , ( 4 * indexOffset + 2, 4 * indexOffset + 1, 4 * indexOffset + 3 )
-    ]
-
-
 toMesh : List a -> WebGL.Mesh a
 toMesh vertices =
-    Shaders.indexedTriangles vertices (getQuadIndices vertices)
+    Shaders.indexedTriangles vertices (getQuadIndices vertices 0 [])
+
+
+getQuadIndices : List a -> Int -> List ( Int, Int, Int ) -> List ( Int, Int, Int )
+getQuadIndices list indexOffset newList =
+    case list of
+        _ :: rest ->
+            getQuadIndices
+                rest
+                (indexOffset + 1)
+                (( 4 * indexOffset + 3, 4 * indexOffset + 1, 4 * indexOffset )
+                    :: ( 4 * indexOffset + 2, 4 * indexOffset + 1, 4 * indexOffset + 3 )
+                    :: newList
+                )
+
+        [] ->
+            newList
 
 
 asciiChars : Nonempty Char

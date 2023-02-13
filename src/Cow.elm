@@ -20,8 +20,8 @@ textureSize =
 cowSizeWorld : Vector2d WorldUnit WorldUnit
 cowSizeWorld =
     Vector2d.unsafe
-        { x = toFloat (Coord.xRaw textureSize) / toFloat (Coord.xRaw Units.tileSize)
-        , y = toFloat (Coord.yRaw textureSize) / toFloat (Coord.yRaw Units.tileSize)
+        { x = toFloat (Coord.xRaw textureSize) / toFloat Units.tileWidth
+        , y = toFloat (Coord.yRaw textureSize) / toFloat Units.tileHeight
         }
 
 

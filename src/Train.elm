@@ -1050,8 +1050,8 @@ trainEntity trainTexture trainMesh viewMatrix x y =
         trainMesh
         { view =
             Mat4.makeTranslate3
-                (x * toFloat (Coord.xRaw Units.tileSize) |> round |> toFloat)
-                (y * toFloat (Coord.yRaw Units.tileSize) |> round |> toFloat)
+                (x * toFloat Units.tileWidth |> round |> toFloat)
+                (y * toFloat Units.tileHeight |> round |> toFloat)
                 (Grid.tileZ True y 0)
                 |> Mat4.mul viewMatrix
         , texture = trainTexture
