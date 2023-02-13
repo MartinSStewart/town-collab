@@ -367,7 +367,7 @@ volume : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Float
 volume model position =
     let
         boundingBox =
-            viewBoundingBox_ model
+            viewBoundingBox model
     in
     if BoundingBox2d.contains position boundingBox then
         1
@@ -1517,7 +1517,7 @@ updateLoaded audioData msg model =
                         ( model2, Command.none )
 
                 viewBounds =
-                    viewBoundingBox_ model
+                    viewBoundingBox model
 
                 playTrainWhistle =
                     (case model.lastTrainWhistle of
@@ -2468,7 +2468,7 @@ shiftTextCursor : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
 shiftTextCursor offset model =
     case model.currentTool of
         TextTool (Just textTool) ->
-            case BoundingBox2d.offsetBy (Units.tileUnit -8) (viewBoundingBox_ model) of
+            case BoundingBox2d.offsetBy (Units.tileUnit -8) (viewBoundingBox model) of
                 Just viewBounds ->
                     let
                         newCursorPosition =
@@ -3912,11 +3912,11 @@ getUiHover hover =
             Nothing
 
 
-visibleCellBounds : FrontendLoaded -> Bounds CellUnit
-visibleCellBounds model =
+loadingCellBounds : FrontendLoaded -> Bounds CellUnit
+loadingCellBounds model =
     let
         { minX, minY, maxX, maxY } =
-            viewBoundingBox model |> BoundingBox2d.extrema
+            viewLoadingBoundingBox model |> BoundingBox2d.extrema
 
         min_ =
             Point2d.xy minX minY |> Coord.floorPoint |> Grid.worldToCellAndLocalCoord |> Tuple.first
@@ -3938,10 +3938,7 @@ viewBoundsUpdate : ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_
 viewBoundsUpdate ( model, cmd ) =
     let
         bounds =
-            visibleCellBounds model
-
-        newBounds =
-            Bounds.expand (Units.cellUnit 1) bounds
+            loadingCellBounds model
     in
     if LocalGrid.localModel model.localModel |> .viewBounds |> Bounds.containsBounds bounds then
         ( model, cmd )
@@ -3950,11 +3947,11 @@ viewBoundsUpdate ( model, cmd ) =
         ( { model
             | localModel =
                 LocalGrid.update
-                    (ClientChange (Change.ViewBoundsChange newBounds [] []))
+                    (ClientChange (Change.ViewBoundsChange bounds [] []))
                     model.localModel
                     |> Tuple.first
           }
-        , Command.batch [ cmd, Effect.Lamdera.sendToBackend (ChangeViewBounds newBounds) ]
+        , Command.batch [ cmd, Effect.Lamdera.sendToBackend (ChangeViewBounds bounds) ]
         )
 
 
@@ -4349,13 +4346,10 @@ updateLoadedFromBackend msg model =
         ClientConnected ->
             let
                 bounds =
-                    visibleCellBounds model
-
-                newBounds =
-                    Bounds.expand (Units.cellUnit 1) bounds
+                    loadingCellBounds model
             in
             ( { model | isReconnecting = True }
-            , ConnectToBackend newBounds Nothing |> Effect.Lamdera.sendToBackend
+            , ConnectToBackend bounds Nothing |> Effect.Lamdera.sendToBackend
             )
 
         CheckConnectionBroadcast ->
@@ -4446,13 +4440,13 @@ findPixelPerfectSize2 frontendModel =
     { cssCanvasSize = Coord.xy w h, windowSize = Coord.xy actualW actualH }
 
 
-viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
-viewBoundingBox model =
+viewLoadingBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
+viewLoadingBoundingBox model =
     let
         viewMin =
             screenToWorld model Point2d.origin
                 |> Point2d.translateBy
-                    (Coord.tuple ( -1, -1 )
+                    (Coord.tuple ( -2, -2 )
                         |> Units.cellToTile
                         |> Coord.toVector2d
                     )
@@ -4463,8 +4457,8 @@ viewBoundingBox model =
     BoundingBox2d.from viewMin viewMax
 
 
-viewBoundingBox_ : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
-viewBoundingBox_ model =
+viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
+viewBoundingBox model =
     BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
@@ -4890,7 +4884,7 @@ canvasView audioData model =
         Just texture ->
             let
                 viewBounds_ =
-                    viewBoundingBox model
+                    viewLoadingBoundingBox model
 
                 ( windowWidth, windowHeight ) =
                     Coord.toTuple model.windowSize
