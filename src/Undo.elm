@@ -49,4 +49,4 @@ add model =
 
 
 maxUndoHistory =
-    20
+    200
