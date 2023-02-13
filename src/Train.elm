@@ -1148,7 +1148,7 @@ trainEngineMesh teleportAmount frame =
 
 
 trainTextureWidth =
-    1024
+    1152
 
 
 trainCoachMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
