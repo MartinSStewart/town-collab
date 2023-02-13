@@ -75,7 +75,7 @@ import Train exposing (Train, TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
-import User exposing (FrontendUser)
+import User exposing (FrontendUser, InviteTree)
 import WebGL
 
 
@@ -205,6 +205,7 @@ type alias FrontendLoaded =
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
     , showMap : Bool
+    , showInviteTree : Bool
     }
 
 
@@ -269,6 +270,7 @@ type UiHover
     | ShowMapButton
     | AllowEmailNotificationsCheckbox
     | ResetConnectionsButton
+    | UsersOnlineButton
 
 
 type UiMsg
@@ -293,6 +295,7 @@ type UiMsg
     | PressedShowMap
     | PressedAllowEmailNotifications
     | PressedResetConnections
+    | PressedUsersOnline
 
 
 type alias BackendModel =
@@ -445,4 +448,5 @@ type alias LoadingData_ =
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
+    , inviteTree : InviteTree
     }

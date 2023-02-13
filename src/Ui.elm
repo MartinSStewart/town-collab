@@ -7,6 +7,7 @@ module Ui exposing
     , bottomLeft
     , button
     , center
+    , colorScaledText
     , colorSprite
     , colorText
     , column
@@ -154,6 +155,17 @@ colorText color text2 =
         , scale = defaultCharScale
         , text = text2
         , cachedSize = Sprite.textSize defaultCharScale text2
+        }
+
+
+colorScaledText : Color -> Int -> String -> Element id msg
+colorScaledText color scale text2 =
+    Text
+        { outline = Nothing
+        , color = color
+        , scale = scale
+        , text = text2
+        , cachedSize = Sprite.textSize scale text2
         }
 
 

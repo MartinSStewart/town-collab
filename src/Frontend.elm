@@ -579,6 +579,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , isReconnecting = False
             , lastCheckConnection = time
             , showMap = False
+            , showInviteTree = False
             }
                 |> setCurrentTool HandToolButton
     in
@@ -1488,6 +1489,9 @@ updateLoaded audioData msg model =
                                             ResetConnectionsButton ->
                                                 model2
 
+                                            UsersOnlineButton ->
+                                                model2
+
                                     CowHover _ ->
                                         placeTileHelper model2
 
@@ -1695,6 +1699,9 @@ updateLoaded audioData msg model =
                                         ResetConnectionsButton ->
                                             True
 
+                                        UsersOnlineButton ->
+                                            True
+
                 model2 =
                     { model
                         | time = time
@@ -1885,6 +1892,9 @@ updateLoaded audioData msg model =
                             pasteTextTool ()
 
                         ResetConnectionsButton ->
+                            pasteTextTool ()
+
+                        UsersOnlineButton ->
                             pasteTextTool ()
 
         GotUserAgentPlatform _ ->
@@ -2175,6 +2185,7 @@ getViewModel model =
     , soundEffectVolume = model.soundEffectVolume
     , mailEditor = model.mailEditor
     , users = localModel.users
+    , inviteTree = localModel.inviteTree
     , isDisconnected = isDisconnected model
     , showMap = model.showMap
     , otherUsersOnline =
@@ -2184,6 +2195,7 @@ getViewModel model =
 
             Nothing ->
                 IdDict.size localModel.cursors
+    , showInviteTree = model.showInviteTree
     }
 
 
@@ -3092,6 +3104,9 @@ uiUpdate elementPosition msg model =
 
         PressedResetConnections ->
             ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none )
+
+        PressedUsersOnline ->
+            ( { model | showInviteTree = not model.showInviteTree }, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )

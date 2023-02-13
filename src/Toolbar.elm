@@ -33,7 +33,7 @@ import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), UiMsg(..))
 import Ui exposing (BorderAndFill(..))
 import Units
-import User exposing (FrontendUser)
+import User exposing (FrontendUser, InviteTree(..))
 
 
 type alias ViewData =
@@ -56,9 +56,11 @@ type alias ViewData =
     , topMenuOpened : Maybe TopMenu
     , mailEditor : Maybe MailEditor.Model
     , users : IdDict UserId FrontendUser
+    , inviteTree : InviteTree
     , isDisconnected : Bool
     , showMap : Bool
     , otherUsersOnline : Int
+    , showInviteTree : Bool
     }
 
 
@@ -79,21 +81,26 @@ view data =
             Ui.bottomCenter
                 { size = data.windowSize
                 , inFront =
-                    [ if data.isDisconnected then
+                    [ if data.showInviteTree then
+                        Ui.topRight
+                            { size = data.windowSize }
+                            (Ui.el
+                                { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
+                                (User.drawInviteTree data.users data.inviteTree)
+                            )
+
+                      else
+                        Ui.none
+                    , if data.isDisconnected then
                         MailEditor.disconnectWarning data.windowSize
 
                       else
                         Ui.topRight
                             { size = data.windowSize }
-                            (Ui.el
-                                { padding = Ui.paddingXY 10 4
-                                , borderAndFill =
-                                    BorderAndFill
-                                        { borderWidth = 2
-                                        , borderColor = Color.outlineColor
-                                        , fillColor = Color.fillColor
-                                        }
-                                , inFront = []
+                            (Ui.button
+                                { id = UsersOnlineButton
+                                , padding = Ui.paddingXY 10 4
+                                , onPress = PressedUsersOnline
                                 }
                                 (if data.otherUsersOnline == 1 then
                                     Ui.text "1 user online"

@@ -33,7 +33,7 @@ import Tile exposing (Tile)
 import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
-import User exposing (FrontendUser)
+import User exposing (FrontendUser, InviteTree)
 
 
 type LocalGrid
@@ -47,6 +47,7 @@ type alias LocalGrid_ =
     , cows : IdDict CowId Cow
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
+    , inviteTree : InviteTree
     , mail : IdDict MailId FrontendMail
     , trains : IdDict TrainId Train
     }
@@ -65,11 +66,12 @@ init :
         , cows : IdDict CowId Cow
         , cursors : IdDict UserId Cursor
         , users : IdDict UserId FrontendUser
+        , inviteTree : InviteTree
         , mail : IdDict MailId FrontendMail
         , trains : IdDict TrainId Train
     }
     -> LocalModel Change LocalGrid
-init { grid, userStatus, viewBounds, cows, cursors, users, mail, trains } =
+init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, trains } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
@@ -77,6 +79,7 @@ init { grid, userStatus, viewBounds, cows, cursors, users, mail, trains } =
         , cows = cows
         , cursors = cursors
         , users = users
+        , inviteTree = inviteTree
         , mail = mail
         , trains = trains
         }

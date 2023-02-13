@@ -32,7 +32,7 @@ import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
-import Route exposing (LoginOrInviteToken(..), LoginToken(..), Route(..))
+import Route exposing (InviteToken, LoginOrInviteToken(..), LoginToken(..), Route(..))
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..), Tile(..))
 import Train exposing (Status(..), Train, TrainDiff)
@@ -40,7 +40,7 @@ import Types exposing (..)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
-import User exposing (FrontendUser)
+import User exposing (FrontendUser, InviteTree(..))
 
 
 app =
@@ -1534,6 +1534,9 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
             , cows = model3.cows
             , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
             , users = IdDict.map (\_ a -> backendUserToFrontend a) model3.users
+            , inviteTree =
+                invitesToInviteTree adminId model3.users
+                    |> Maybe.withDefault (InviteTree { userId = adminId, invited = [] })
             }
 
         frontendUser =
@@ -1589,6 +1592,23 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                 Command.none
         ]
     )
+
+
+invitesToInviteTree : Id UserId -> IdDict UserId BackendUserData -> Maybe InviteTree
+invitesToInviteTree rootUserId users =
+    case IdDict.get rootUserId users of
+        Just user ->
+            { userId = rootUserId
+            , invited =
+                List.filterMap
+                    (\( userId, () ) -> invitesToInviteTree userId users)
+                    (IdDict.toList user.acceptedInvites)
+            }
+                |> InviteTree
+                |> Just
+
+        Nothing ->
+            Nothing
 
 
 backendUserToFrontend : BackendUserData -> FrontendUser
