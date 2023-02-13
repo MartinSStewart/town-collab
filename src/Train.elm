@@ -1121,30 +1121,34 @@ trainEngineMesh teleportAmount frame =
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
-          , texturePosition = Vec2.vec2 0 y
+          , texturePosition = trainTextureWidth * y
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
-          , texturePosition = Vec2.vec2 w y
+          , texturePosition = w + trainTextureWidth * y
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
-          , texturePosition = Vec2.vec2 w y2
+          , texturePosition = w + trainTextureWidth * y2
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
-          , texturePosition = Vec2.vec2 0 y2
+          , texturePosition = trainTextureWidth * y2
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
         ]
+
+
+trainTextureWidth =
+    1024
 
 
 trainCoachMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
@@ -1173,25 +1177,25 @@ trainCoachMesh teleportAmount frame =
     in
     Shaders.triangleFan
         [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
-          , texturePosition = Vec2.vec2 w y
+          , texturePosition = w + trainTextureWidth * y
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
-          , texturePosition = Vec2.vec2 (w * 2) y
+          , texturePosition = (w * 2) + trainTextureWidth * y
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
-          , texturePosition = Vec2.vec2 (w * 2) y2
+          , texturePosition = (w * 2) + trainTextureWidth * y2
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
-          , texturePosition = Vec2.vec2 w y2
+          , texturePosition = w + trainTextureWidth * y2
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0

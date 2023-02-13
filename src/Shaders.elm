@@ -22,7 +22,7 @@ import WebGL.Texture
 
 
 type alias Vertex =
-    { position : Vec3, texturePosition : Vec2, opacity : Float, primaryColor : Float, secondaryColor : Float }
+    { position : Vec3, texturePosition : Float, opacity : Float, primaryColor : Float, secondaryColor : Float }
 
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Effect.WebGL.Mesh attributes
@@ -60,7 +60,7 @@ vertexShader :
 vertexShader =
     [glsl|
 attribute vec3 position;
-attribute vec2 texturePosition;
+attribute float texturePosition;
 attribute float opacity;
 attribute float primaryColor;
 attribute float secondaryColor;
@@ -142,7 +142,9 @@ vec3 floatColorToVec3(float color) {
 
 void main () {
     gl_Position = view * vec4(position, 1.0);
-    vcoord = texturePosition / textureSize;
+
+    float y = floor(texturePosition / textureSize.x);
+    vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;
     opacity2 = opacity;
 
 
@@ -200,7 +202,7 @@ void main () {
 
 type alias DebrisVertex =
     { position : Vec2
-    , texturePosition : Vec2
+    , texturePosition : Float
     , initialSpeed : Vec2
     , startTime : Float
     , primaryColor : Float
@@ -221,7 +223,7 @@ debrisVertexShader =
     [glsl|
 attribute vec2 position;
 attribute vec2 initialSpeed;
-attribute vec2 texturePosition;
+attribute float texturePosition;
 attribute float startTime;
 attribute float primaryColor;
 attribute float secondaryColor;
@@ -305,7 +307,8 @@ vec3 floatColorToVec3(float color) {
 void main () {
     float seconds = time - startTime;
     gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
-    vcoord = texturePosition / textureSize;
+    float y = floor(texturePosition / textureSize.x);
+    vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;
     opacity2 = 1.0;
 
     primaryColor2 = floatColorToVec3(primaryColor);

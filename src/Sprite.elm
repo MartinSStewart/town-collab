@@ -17,6 +17,7 @@ module Sprite exposing
     , text
     , textSize
     , textWithZ
+    , textureWidth
     , toMesh
     )
 
@@ -143,6 +144,11 @@ spriteWithTwoColors { primaryColor, secondaryColor } position size texturePositi
     spriteWithZ 1 primaryColor secondaryColor position 0 size texturePosition textureSize
 
 
+textureWidth : number
+textureWidth =
+    1024
+
+
 spriteWithZ : Float -> Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
     let
@@ -159,25 +165,25 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
             Color.toInt secondaryColor |> toFloat
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
-      , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat ty)
+      , texturePosition = toFloat tx + textureWidth * toFloat ty
       , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
-      , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat ty)
+      , texturePosition = toFloat (tx + w) + textureWidth * toFloat ty
       , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
-      , texturePosition = Math.Vector2.vec2 (toFloat (tx + w)) (toFloat (ty + h))
+      , texturePosition = toFloat (tx + w) + textureWidth * toFloat (ty + h)
       , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
-      , texturePosition = Math.Vector2.vec2 (toFloat tx) (toFloat (ty + h))
+      , texturePosition = toFloat tx + textureWidth * toFloat (ty + h)
       , opacity = opacity
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2

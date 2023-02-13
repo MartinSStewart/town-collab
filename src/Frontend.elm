@@ -3703,28 +3703,28 @@ createDebrisMeshHelper position texturePosition ( Quantity textureW, Quantity te
                             Coord.toTuple Units.tileSize
                     in
                     [ { position = Vec2.vec2 (toFloat x4) (toFloat y4)
-                      , texturePosition = Vec2.vec2 (toFloat tx) (toFloat ty)
+                      , texturePosition = toFloat tx + Sprite.textureWidth * toFloat ty
                       , primaryColor = primaryColor2
                       , secondaryColor = secondaryColor2
                       , initialSpeed = initialSpeed
                       , startTime = time2
                       }
                     , { position = Vec2.vec2 (toFloat (x4 + width)) (toFloat y4)
-                      , texturePosition = Vec2.vec2 (toFloat (tx + w)) (toFloat ty)
+                      , texturePosition = toFloat (tx + w) + Sprite.textureWidth * toFloat ty
                       , primaryColor = primaryColor2
                       , secondaryColor = secondaryColor2
                       , initialSpeed = initialSpeed
                       , startTime = time2
                       }
                     , { position = Vec2.vec2 (toFloat (x4 + width)) (toFloat (y4 + height))
-                      , texturePosition = Vec2.vec2 (toFloat (tx + w)) (toFloat (ty + h))
+                      , texturePosition = toFloat (tx + w) + Sprite.textureWidth * toFloat (ty + h)
                       , primaryColor = primaryColor2
                       , secondaryColor = secondaryColor2
                       , initialSpeed = initialSpeed
                       , startTime = time2
                       }
                     , { position = Vec2.vec2 (toFloat x4) (toFloat (y4 + height))
-                      , texturePosition = Vec2.vec2 (toFloat tx) (toFloat (ty + h))
+                      , texturePosition = toFloat tx + Sprite.textureWidth * toFloat (ty + h)
                       , primaryColor = primaryColor2
                       , secondaryColor = secondaryColor2
                       , initialSpeed = initialSpeed

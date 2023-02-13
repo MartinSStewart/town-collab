@@ -1887,24 +1887,24 @@ square =
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
-          , texturePosition = Vec2.vec2 512 28
+          , texturePosition = 512 + Sprite.textureWidth * 28
           }
         , { position = Vec3.vec3 1 0 0
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
-          , texturePosition = Vec2.vec2 512 28
+          , texturePosition = 512 + Sprite.textureWidth * 28
           }
         , { position = Vec3.vec3 1 1 0
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
-          , texturePosition = Vec2.vec2 512 28
+          , texturePosition = 512 + Sprite.textureWidth * 28
           }
         , { position = Vec3.vec3 0 1 0
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
-          , texturePosition = Vec2.vec2 512 28
+          , texturePosition = 512 + Sprite.textureWidth * 28
           }
         ]

@@ -15,10 +15,21 @@ import Tile exposing (Tile(..))
 
 
 main =
-    Benchmark.benchmark
+    Benchmark.compare
         "Grid.foregroundMesh"
+        "V1"
         (\() ->
             Grid.foregroundMesh
+                Nothing
+                Coord.origin
+                Nothing
+                IdDict.empty
+                AssocSet.empty
+                cellValues
+        )
+        "V2"
+        (\() ->
+            Grid.foregroundMesh2
                 Nothing
                 Coord.origin
                 Nothing

@@ -14,6 +14,7 @@ module Grid exposing
     , dataToGrid
     , empty
     , foregroundMesh
+    , foregroundMesh2
     , from
     , fromData
     , getCell
@@ -596,6 +597,130 @@ foregroundMesh maybeCurrentTile cellPosition maybeCurrentUserId users railSplitT
         |> Sprite.toMesh
 
 
+foregroundMesh2 :
+    Maybe { a | tile : Tile, position : Coord WorldUnit }
+    -> Coord CellUnit
+    -> Maybe (Id UserId)
+    -> IdDict UserId FrontendUser
+    -> AssocSet.Set (Coord CellLocalUnit)
+    -> List GridCell.Value
+    -> WebGL.Mesh Vertex
+foregroundMesh2 maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
+    List.map
+        (\{ position, userId, value, colors } ->
+            let
+                position2 : Coord WorldUnit
+                position2 =
+                    cellAndLocalCoordToWorld ( cellPosition, position )
+
+                data : TileData unit
+                data =
+                    Tile.getData value
+
+                opacity : Float
+                opacity =
+                    case maybeCurrentTile of
+                        Just currentTile ->
+                            if Tile.hasCollision currentTile.position currentTile.tile position2 value then
+                                0.5
+
+                            else
+                                1
+
+                        Nothing ->
+                            1
+            in
+            (case data.railPath of
+                RailSplitPath pathData ->
+                    if AssocSet.member position railSplitToggled then
+                        tileMeshHelper opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
+
+                    else
+                        case data.texturePosition of
+                            Just texturePosition ->
+                                tileMeshHelper opacity colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
+
+                            Nothing ->
+                                []
+
+                _ ->
+                    case data.texturePosition of
+                        Just texturePosition ->
+                            tileMeshHelper
+                                opacity
+                                colors
+                                False
+                                0
+                                (Coord.multiply Units.tileSize position2)
+                                (case value of
+                                    BigText _ ->
+                                        2
+
+                                    _ ->
+                                        1
+                                )
+                                texturePosition
+                                data.size
+
+                        Nothing ->
+                            []
+            )
+                ++ (case data.texturePositionTopLayer of
+                        Just topLayer ->
+                            if value == PostOffice && Just userId /= maybeCurrentUserId then
+                                let
+                                    text =
+                                        Sprite.textWithZ
+                                            colors.secondaryColor
+                                            1
+                                            (case IdDict.get userId users of
+                                                Just user ->
+                                                    let
+                                                        name =
+                                                            DisplayName.toString user.name
+                                                    in
+                                                    String.left 5 name ++ "\n" ++ String.dropLeft 5 name
+
+                                                Nothing ->
+                                                    ""
+                                            )
+                                            -5
+                                            (Coord.multiply position2 Units.tileSize
+                                                |> Coord.plus (Coord.xy 15 19)
+                                            )
+                                            (tileZ True (toFloat (Coord.yRaw position2)) 6)
+                                in
+                                text
+                                    ++ tileMeshHelper
+                                        opacity
+                                        colors
+                                        True
+                                        topLayer.yOffset
+                                        (Coord.multiply Units.tileSize position2)
+                                        1
+                                        (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
+                                        data.size
+
+                            else
+                                tileMeshHelper
+                                    opacity
+                                    colors
+                                    True
+                                    topLayer.yOffset
+                                    (Coord.multiply Units.tileSize position2)
+                                    1
+                                    topLayer.texturePosition
+                                    data.size
+
+                        Nothing ->
+                            []
+                   )
+        )
+        tiles
+        |> List.concat
+        |> Sprite.toMesh
+
+
 getTerrainLookupValue : Coord TerrainUnit -> Array2D TerrainValue -> TerrainType
 getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
     case Array2D.get (x + 1) (y + 1) lookup of
@@ -813,31 +938,6 @@ tileMeshHelper opacity { primaryColor, secondaryColor } isTopLayer yOffset posit
         (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
         texturePosition
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
-
-
-
---List.map
---    (\uv ->
---        let
---            uvRecord =
---                Vec2.toRecord uv
---        in
---        { position =
---            Vec3.vec3
---                ((uvRecord.x - topLeftRecord.x) * toFloat scale + toFloat x)
---                ((uvRecord.y - topLeftRecord.y) * toFloat scale + toFloat y)
---                (tileZ isTopLayer ((toFloat y + yOffset) / toFloat (Coord.yRaw Units.tileSize)) height)
---        , texturePosition = uv
---        , opacity = opacity
---        , primaryColor = Color.toVec3 primaryColor
---        , secondaryColor = Color.toVec3 secondaryColor
---        }
---    )
---    [ topLeft
---    , topRight
---    , bottomRight
---    , bottomLeft
---    ]
 
 
 tileZ : Bool -> Float -> Int -> Float

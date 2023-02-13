@@ -890,7 +890,7 @@ railPathData railPath =
             railPathStrafeRightSmall
 
 
-texturePositionPixels : Coord b -> Coord b -> { topLeft : Vec2, topRight : Vec2, bottomLeft : Vec2, bottomRight : Vec2 }
+texturePositionPixels : Coord b -> Coord b -> { topLeft : Float, topRight : Float, bottomLeft : Float, bottomRight : Float }
 texturePositionPixels position textureSize =
     let
         ( x, y ) =
@@ -899,10 +899,10 @@ texturePositionPixels position textureSize =
         ( w, h ) =
             Coord.toTuple textureSize
     in
-    { topLeft = Math.Vector2.vec2 (toFloat x) (toFloat y)
-    , topRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat y)
-    , bottomRight = Math.Vector2.vec2 (toFloat (x + w)) (toFloat (y + h))
-    , bottomLeft = Math.Vector2.vec2 (toFloat x) (toFloat (y + h))
+    { topLeft = toFloat x + Sprite.textureWidth * toFloat y
+    , topRight = toFloat (x + w) + Sprite.textureWidth * toFloat y
+    , bottomRight = toFloat (x + w) + Sprite.textureWidth * toFloat (y + h)
+    , bottomLeft = toFloat x + Sprite.textureWidth * toFloat (y + h)
     }
 
 
