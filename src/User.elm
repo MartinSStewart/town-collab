@@ -6,6 +6,7 @@ import Cursor exposing (Cursor)
 import DisplayName exposing (DisplayName)
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
+import List.Extra
 import Sprite
 import Ui exposing (BorderAndFill(..))
 
@@ -31,18 +32,15 @@ charScale =
 drawInviteTree : IdDict UserId FrontendUser -> InviteTree -> Ui.Element id msg
 drawInviteTree dict (InviteTree tree) =
     let
-        childNodes : Ui.Element id msg
+        childNodes : List (Ui.Element id msg)
         childNodes =
-            Ui.column
-                { spacing = 0, padding = Ui.noPadding }
-                (List.map
-                    (\child ->
-                        Ui.row
-                            { spacing = 2, padding = Ui.noPadding }
-                            [ Ui.colorScaledText Color.outlineColor charScale "─", drawInviteTree dict child ]
-                    )
-                    tree.invited
+            List.map
+                (\child ->
+                    Ui.row
+                        { spacing = 2, padding = Ui.noPadding }
+                        [ Ui.colorScaledText Color.outlineColor charScale "─", drawInviteTree dict child ]
                 )
+                tree.invited
     in
     Ui.column
         { spacing = 0, padding = Ui.noPadding }
@@ -71,21 +69,27 @@ drawInviteTree dict (InviteTree tree) =
                 , bottomRight = Coord.origin
                 }
             }
-            [ Ui.el
-                { padding =
-                    { topLeft =
-                        Coord.xy 2
-                            (Ui.size childNodes
-                                |> Coord.yRaw
-                                |> (+) (charScale + charScale * Coord.yRaw Sprite.charSize // -2)
-                                |> max 0
-                            )
-                    , bottomRight = Coord.origin
-                    }
-                , inFront = []
-                , borderAndFill = FillOnly Color.outlineColor
-                }
-                Ui.none
-            , childNodes
+            [ case List.Extra.unconsLast childNodes of
+                Just ( _, rest ) ->
+                    Ui.el
+                        { padding =
+                            { topLeft =
+                                Coord.xy 2
+                                    (List.map (\element -> Ui.size element |> Coord.yRaw) rest
+                                        |> List.sum
+                                        |> (+) (charScale + charScale * Coord.yRaw Sprite.charSize // 2)
+                                    )
+                            , bottomRight = Coord.origin
+                            }
+                        , inFront = []
+                        , borderAndFill = FillOnly Color.outlineColor
+                        }
+                        Ui.none
+
+                Nothing ->
+                    Ui.none
+            , Ui.column
+                { spacing = 0, padding = Ui.noPadding }
+                childNodes
             ]
         ]
