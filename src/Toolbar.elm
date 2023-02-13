@@ -367,7 +367,7 @@ adminView parentWidth adminData =
                         ++ String.fromInt data.connectionCount
                         |> Ui.text
                 )
-                adminData.userSessions
+                (List.filter (\a -> a.connectionCount > 0) adminData.userSessions)
             )
         ]
 

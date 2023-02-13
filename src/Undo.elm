@@ -43,6 +43,10 @@ add :
 add model =
     { model
         | redoHistory = []
-        , undoHistory = model.undoCurrent :: model.undoHistory
+        , undoHistory = model.undoCurrent :: List.take maxUndoHistory model.undoHistory
         , undoCurrent = Dict.empty
     }
+
+
+maxUndoHistory =
+    20
