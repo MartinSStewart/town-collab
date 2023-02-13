@@ -191,13 +191,13 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
 
 toMesh : List a -> WebGL.Mesh a
 toMesh vertices =
-    Shaders.indexedTriangles vertices (getQuadIndices vertices 0 [])
+    Shaders.indexedTriangles vertices (getQuadIndices vertices 0 [] |> List.reverse)
 
 
 getQuadIndices : List a -> Int -> List ( Int, Int, Int ) -> List ( Int, Int, Int )
 getQuadIndices list indexOffset newList =
     case list of
-        _ :: rest ->
+        _ :: _ :: _ :: _ :: rest ->
             getQuadIndices
                 rest
                 (indexOffset + 1)
@@ -206,7 +206,7 @@ getQuadIndices list indexOffset newList =
                     :: newList
                 )
 
-        [] ->
+        _ ->
             newList
 
 
