@@ -140,7 +140,7 @@ migrateCell old =
         Evergreen.V60.GridCell.Cell a ->
             Evergreen.V62.GridCell.Cell
                 { history = migrateList migrateValue a.history
-                , undoPoint = migrateDict identity identity a.undoPoint
+                , undoPoint = migrateDict identity identity a.undoPoint |> migrateDictToIdDict
                 , cache = migrateList migrateValue a.cache
                 , railSplitToggled = migrateSet migrateCoord a.railSplitToggled
                 }
@@ -1025,3 +1025,90 @@ migratePoint2d (Evergreen.V60.Geometry.Types.Point2d old) =
 migrateId : Evergreen.V60.Id.Id a -> Evergreen.V62.Id.Id b
 migrateId (Evergreen.V60.Id.Id old) =
     Evergreen.V62.Id.Id old
+
+
+migrateDictToIdDict : Dict.Dict Int a -> Evergreen.V62.IdDict.IdDict id a
+migrateDictToIdDict dict =
+    Dict.toList dict |> List.map (Tuple.mapFirst Evergreen.V62.Id.Id) |> fromList
+
+
+{-| Convert an association list into a dictionary.
+-}
+fromList : List ( Evergreen.V62.Id.Id a, v ) -> Evergreen.V62.IdDict.IdDict a v
+fromList assocs =
+    List.foldl (\( key, value ) dict -> insert key value dict) empty assocs
+
+
+{-| Create an empty dictionary.
+-}
+empty : Evergreen.V62.IdDict.IdDict k v
+empty =
+    Evergreen.V62.IdDict.RBEmpty_elm_builtin
+
+
+{-| Insert a key-value pair into a dictionary. Replaces value when there is
+a collision.
+-}
+insert : Evergreen.V62.Id.Id a -> v -> Evergreen.V62.IdDict.IdDict a v -> Evergreen.V62.IdDict.IdDict a v
+insert key value dict =
+    -- Root node is always Black
+    case insertHelp key value dict of
+        Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Red k v l r ->
+            Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Black k v l r
+
+        x ->
+            x
+
+
+idToInt (Evergreen.V62.Id.Id id) =
+    id
+
+
+insertHelp : Evergreen.V62.Id.Id a -> v -> Evergreen.V62.IdDict.IdDict a v -> Evergreen.V62.IdDict.IdDict a v
+insertHelp key value dict =
+    case dict of
+        Evergreen.V62.IdDict.RBEmpty_elm_builtin ->
+            -- New nodes are always red. If it violates the rules, it will be fixed
+            -- when balancing.
+            Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Red (idToInt key) value Evergreen.V62.IdDict.RBEmpty_elm_builtin Evergreen.V62.IdDict.RBEmpty_elm_builtin
+
+        Evergreen.V62.IdDict.RBNode_elm_builtin nColor nKey nValue nLeft nRight ->
+            case compare (idToInt key) nKey of
+                LT ->
+                    balance nColor nKey nValue (insertHelp key value nLeft) nRight
+
+                EQ ->
+                    Evergreen.V62.IdDict.RBNode_elm_builtin nColor nKey value nLeft nRight
+
+                GT ->
+                    balance nColor nKey nValue nLeft (insertHelp key value nRight)
+
+
+balance : Evergreen.V62.IdDict.NColor -> Int -> v -> Evergreen.V62.IdDict.IdDict k v -> Evergreen.V62.IdDict.IdDict k v -> Evergreen.V62.IdDict.IdDict k v
+balance color key value left right =
+    case right of
+        Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Red rK rV rLeft rRight ->
+            case left of
+                Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Red lK lV lLeft lRight ->
+                    Evergreen.V62.IdDict.RBNode_elm_builtin
+                        Evergreen.V62.IdDict.Red
+                        key
+                        value
+                        (Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Black lK lV lLeft lRight)
+                        (Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Black rK rV rLeft rRight)
+
+                _ ->
+                    Evergreen.V62.IdDict.RBNode_elm_builtin color rK rV (Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Red key value left rLeft) rRight
+
+        _ ->
+            case left of
+                Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Red lK lV (Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Red llK llV llLeft llRight) lRight ->
+                    Evergreen.V62.IdDict.RBNode_elm_builtin
+                        Evergreen.V62.IdDict.Red
+                        lK
+                        lV
+                        (Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Black llK llV llLeft llRight)
+                        (Evergreen.V62.IdDict.RBNode_elm_builtin Evergreen.V62.IdDict.Black key value lRight right)
+
+                _ ->
+                    Evergreen.V62.IdDict.RBNode_elm_builtin color key value left right
