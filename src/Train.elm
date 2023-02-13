@@ -31,6 +31,7 @@ import Angle
 import Array exposing (Array)
 import AssocList
 import AssocSet
+import BoundingBox2d exposing (BoundingBox2d)
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import Duration exposing (Duration, Seconds)
@@ -839,8 +840,13 @@ draw :
     -> IdDict TrainId Train
     -> Mat4
     -> WebGL.Texture.Texture
+    -> BoundingBox2d WorldUnit WorldUnit
     -> List Effect.WebGL.Entity
-draw time mail trains viewMatrix trainTexture =
+draw time mail trains viewMatrix trainTexture viewBounds =
+    let
+        trainViewBounds =
+            BoundingBox2d.expandBy (Coord.maxComponent trainSize |> Quantity.toFloatQuantity) viewBounds
+    in
     List.concatMap
         (\( trainId, train ) ->
             let
@@ -848,8 +854,11 @@ draw time mail trains viewMatrix trainTexture =
                 railData =
                     Tile.railPathData (path time train)
 
+                trainPosition2 =
+                    trainPosition time train
+
                 { x, y } =
-                    trainPosition time train |> Point2d.unwrap
+                    Point2d.unwrap trainPosition2
 
                 trainFrame : Int
                 trainFrame =
@@ -922,7 +931,12 @@ draw time mail trains viewMatrix trainTexture =
                                 Nothing ->
                                     []
             in
-            trainMesh
+            (if BoundingBox2d.contains trainPosition2 trainViewBounds then
+                trainMesh
+
+             else
+                []
+            )
                 ++ (case carryingMail mail trainId of
                         Just _ ->
                             let
@@ -934,9 +948,13 @@ draw time mail trains viewMatrix trainTexture =
                                 railData_ =
                                     Tile.railPathData coach.path
 
+                                coachPosition2 : Point2d WorldUnit WorldUnit
+                                coachPosition2 =
+                                    coachPosition coach
+
                                 coachPosition_ : { x : Float, y : Float }
                                 coachPosition_ =
-                                    coachPosition coach |> Point2d.unwrap
+                                    Point2d.unwrap coachPosition2
 
                                 coachFrame : Int
                                 coachFrame =
@@ -955,40 +973,44 @@ draw time mail trains viewMatrix trainTexture =
                                         |> round
                                         |> modBy trainFrames
                             in
-                            case status time train of
-                                WaitingAtHome ->
-                                    []
-
-                                TeleportingHome teleportTime ->
-                                    let
-                                        t =
-                                            Quantity.ratio (Duration.from teleportTime time) teleportLength |> max 0
-                                    in
-                                    if t >= 1 then
+                            if BoundingBox2d.contains coachPosition2 trainViewBounds then
+                                case status time train of
+                                    WaitingAtHome ->
                                         []
 
-                                    else
-                                        [ trainEntity
-                                            trainTexture
-                                            (trainCoachMesh t coachFrame)
-                                            viewMatrix
-                                            coachPosition_.x
-                                            coachPosition_.y
-                                        ]
+                                    TeleportingHome teleportTime ->
+                                        let
+                                            t =
+                                                Quantity.ratio (Duration.from teleportTime time) teleportLength |> max 0
+                                        in
+                                        if t >= 1 then
+                                            []
 
-                                _ ->
-                                    case Array.get coachFrame trainCoachMeshes of
-                                        Just trainMesh_ ->
+                                        else
                                             [ trainEntity
                                                 trainTexture
-                                                trainMesh_
+                                                (trainCoachMesh t coachFrame)
                                                 viewMatrix
                                                 coachPosition_.x
                                                 coachPosition_.y
                                             ]
 
-                                        Nothing ->
-                                            []
+                                    _ ->
+                                        case Array.get coachFrame trainCoachMeshes of
+                                            Just trainMesh_ ->
+                                                [ trainEntity
+                                                    trainTexture
+                                                    trainMesh_
+                                                    viewMatrix
+                                                    coachPosition_.x
+                                                    coachPosition_.y
+                                                ]
+
+                                            Nothing ->
+                                                []
+
+                            else
+                                []
 
                         Nothing ->
                             []
@@ -1095,6 +1117,10 @@ trainCoachMeshes =
         |> Array.fromList
 
 
+trainSize =
+    Coord.xy 36 36
+
+
 trainEngineMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
 trainEngineMesh teleportAmount frame =
     let
@@ -1108,13 +1134,10 @@ trainEngineMesh teleportAmount frame =
             toFloat frame * 36
 
         y2 =
-            y + h - (teleportAmount * h)
+            y + toFloat h - (teleportAmount * toFloat h)
 
-        w =
-            36
-
-        h =
-            36
+        ( w, h ) =
+            Coord.toTuple trainSize
 
         ( tileSizeW, tileSizeH ) =
             Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
@@ -1127,18 +1150,18 @@ trainEngineMesh teleportAmount frame =
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
-          , texturePosition = w + trainTextureWidth * y
+          , texturePosition = toFloat w + trainTextureWidth * y
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
-          , texturePosition = w + trainTextureWidth * y2
+        , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * toFloat h)) 0
+          , texturePosition = toFloat w + trainTextureWidth * y2
           , opacity = 1
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
+        , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * toFloat h)) 0
           , texturePosition = trainTextureWidth * y2
           , opacity = 1
           , primaryColor = 0

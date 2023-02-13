@@ -3818,7 +3818,7 @@ updateMeshes forceUpdate oldModel newModel =
                     Coord.tuple rawCoord
             in
             { foreground =
-                Grid.foregroundMesh
+                Grid.foregroundMesh2
                     (case ( newCurrentTile, newMaybeUserId ) of
                         ( Just newCurrentTile_, Just userId ) ->
                             if
@@ -4883,8 +4883,9 @@ canvasView audioData model =
     case Effect.WebGL.Texture.unwrap model.texture of
         Just texture ->
             let
+                viewBounds_ : BoundingBox2d WorldUnit WorldUnit
                 viewBounds_ =
-                    viewLoadingBoundingBox model
+                    viewBoundingBox model
 
                 ( windowWidth, windowHeight ) =
                     Coord.toTuple model.windowSize
@@ -4954,31 +4955,35 @@ canvasView audioData model =
                         in
                         drawBackground meshes viewMatrix texture
                             ++ drawForeground meshes viewMatrix texture
-                            ++ Train.draw model.time localGrid.mail model.trains viewMatrix trainTexture
+                            ++ Train.draw model.time localGrid.mail model.trains viewMatrix trainTexture viewBounds_
                             ++ List.filterMap
                                 (\( cowId, _ ) ->
                                     case cowActualPosition cowId model of
                                         Just { position } ->
-                                            let
-                                                point =
-                                                    Point2d.unwrap position
-                                            in
-                                            Effect.WebGL.entityWith
-                                                [ Shaders.blend ]
-                                                Shaders.vertexShader
-                                                Shaders.fragmentShader
-                                                Cow.cowMesh
-                                                { view =
-                                                    Mat4.makeTranslate3
-                                                        (point.x * toFloat Units.tileWidth |> round |> toFloat)
-                                                        (point.y * toFloat Units.tileHeight |> round |> toFloat)
-                                                        (Grid.tileZ True y (Coord.yRaw Cow.textureSize))
-                                                        |> Mat4.mul viewMatrix
-                                                , texture = texture
-                                                , textureSize = textureSize
-                                                , color = Vec4.vec4 1 1 1 1
-                                                }
-                                                |> Just
+                                            if BoundingBox2d.contains position viewBounds_ then
+                                                let
+                                                    point =
+                                                        Point2d.unwrap position
+                                                in
+                                                Effect.WebGL.entityWith
+                                                    [ Shaders.blend ]
+                                                    Shaders.vertexShader
+                                                    Shaders.fragmentShader
+                                                    Cow.cowMesh
+                                                    { view =
+                                                        Mat4.makeTranslate3
+                                                            (point.x * toFloat Units.tileWidth |> round |> toFloat)
+                                                            (point.y * toFloat Units.tileHeight |> round |> toFloat)
+                                                            (Grid.tileZ True y (Coord.yRaw Cow.textureSize))
+                                                            |> Mat4.mul viewMatrix
+                                                    , texture = texture
+                                                    , textureSize = textureSize
+                                                    , color = Vec4.vec4 1 1 1 1
+                                                    }
+                                                    |> Just
+
+                                            else
+                                                Nothing
 
                                         Nothing ->
                                             Nothing

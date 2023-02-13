@@ -7,6 +7,7 @@ module Coord exposing
     , changeUnit
     , divide
     , floorPoint
+    , maxComponent
     , maxTuple
     , minimum
     , minus
@@ -237,3 +238,8 @@ xOnly ( Quantity x_, _ ) =
 yOnly : Coord a -> Coord a
 yOnly ( _, Quantity y_ ) =
     ( Quantity 0, Quantity y_ )
+
+
+maxComponent : Coord a -> Quantity Int a
+maxComponent ( x2, y2 ) =
+    Quantity.max x2 y2
