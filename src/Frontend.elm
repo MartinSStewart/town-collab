@@ -580,6 +580,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , lastCheckConnection = time
             , showMap = False
             , showInviteTree = False
+            , selectedUserId = Nothing
             }
                 |> setCurrentTool HandToolButton
     in
@@ -1259,6 +1260,25 @@ updateLoaded audioData msg model =
                     , Command.none
                     )
 
+                ( SecondButton, _, _ ) ->
+                    let
+                        maybeTile =
+                            Grid.getTile
+                                (screenToWorld model mousePosition |> Coord.floorPoint)
+                                (LocalGrid.localModel model.localModel).grid
+                    in
+                    ( { model
+                        | selectedUserId =
+                            case maybeTile of
+                                Just tile ->
+                                    Just tile.userId
+
+                                Nothing ->
+                                    Nothing
+                      }
+                    , Command.none
+                    )
+
                 _ ->
                     ( model, Command.none )
 
@@ -1756,7 +1776,7 @@ updateLoaded audioData msg model =
             ( { model | sounds = AssocList.insert sound result model.sounds }, Command.none )
 
         VisibilityChanged ->
-            ( setCurrentTool HandToolButton model, Command.none )
+            ( setCurrentTool HandToolButton { model | pressedKeys = [] }, Command.none )
 
         TrainTextureLoaded result ->
             case result of
@@ -4535,6 +4555,7 @@ loadingCanvasView model =
                     , texture = texture
                     , textureSize = textureSize
                     , color = Vec4.vec4 1 1 1 1
+                    , userId = Shaders.noUserIdSelected
                     }
                     :: (case tryLoading model of
                             Just _ ->
@@ -4558,6 +4579,7 @@ loadingCanvasView model =
                                     , texture = texture
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
+                                    , userId = Shaders.noUserIdSelected
                                     }
                                 ]
 
@@ -4578,6 +4600,7 @@ loadingCanvasView model =
                                     , texture = texture
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
+                                    , userId = Shaders.noUserIdSelected
                                     }
                                 ]
                        )
@@ -4866,6 +4889,7 @@ getHandColor userId model =
             Cursor.defaultColors
 
 
+mouseListeners : { a | devicePixelRatio : Float } -> List (Html.Attribute FrontendMsg_)
 mouseListeners model =
     [ Html.Events.Extra.Mouse.onDown
         (\{ clientPos, button } ->
@@ -4890,6 +4914,7 @@ mouseListeners model =
                     |> Point2d.scaleAbout Point2d.origin model.devicePixelRatio
                 )
         )
+    , Html.Events.Extra.Mouse.onContextMenu (\_ -> NoOpFrontendMsg)
     ]
 
 
@@ -4973,8 +4998,15 @@ canvasView audioData model =
                                     model.meshes
                         in
                         drawBackground meshes viewMatrix texture
-                            ++ drawForeground meshes viewMatrix texture
-                            ++ Train.draw model.time localGrid.mail model.trains viewMatrix trainTexture viewBounds_
+                            ++ drawForeground model.selectedUserId meshes viewMatrix texture
+                            ++ Train.draw
+                                model.selectedUserId
+                                model.time
+                                localGrid.mail
+                                model.trains
+                                viewMatrix
+                                trainTexture
+                                viewBounds_
                             ++ drawCows texture viewMatrix model
                             ++ drawFlags texture viewMatrix model
                             ++ [ Effect.WebGL.entityWith
@@ -5010,6 +5042,7 @@ canvasView audioData model =
                                     , texture = texture
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
+                                    , userId = Shaders.noUserIdSelected
                                     }
                                ]
                             ++ drawMap model
@@ -5078,6 +5111,7 @@ drawCows texture viewMatrix model =
                             , texture = texture
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
+                            , userId = Shaders.noUserIdSelected
                             }
                             |> Just
 
@@ -5126,6 +5160,7 @@ drawFlags texture viewMatrix model =
                         , texture = texture
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
+                        , userId = Shaders.noUserIdSelected
                         }
                         |> Just
 
@@ -5182,6 +5217,7 @@ drawSpeechBubble texture viewMatrix model =
                         , texture = texture
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
+                        , userId = Shaders.noUserIdSelected
                         }
                         |> Just
 
@@ -5277,6 +5313,7 @@ drawTilePlacer audioData viewMatrix texture model =
 
                     else
                         Vec4.vec4 1 0 0 0.5
+                , userId = Shaders.noUserIdSelected
                 }
             ]
 
@@ -5311,6 +5348,7 @@ drawTilePlacer audioData viewMatrix texture model =
 
                     else
                         Vec4.vec4 1 0 0 0.5
+                , userId = Shaders.noUserIdSelected
                 }
             ]
 
@@ -5451,6 +5489,7 @@ drawOtherCursors texture viewMatrix model =
                             , texture = texture
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
+                            , userId = Shaders.noUserIdSelected
                             }
                             |> Just
 
@@ -5503,6 +5542,7 @@ drawCursor showMousePointer texture viewMatrix userId model =
                                 , texture = texture
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , color = Vec4.vec4 1 1 1 1
+                                , userId = Shaders.noUserIdSelected
                                 }
                             ]
 
@@ -5612,11 +5652,12 @@ getFlags model =
 
 
 drawForeground :
-    Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
+    Maybe (Id userId)
+    -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Mat4
     -> WebGL.Texture.Texture
     -> List Effect.WebGL.Entity
-drawForeground meshes viewMatrix texture =
+drawForeground maybeSelectedUserId meshes viewMatrix texture =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5632,6 +5673,13 @@ drawForeground meshes viewMatrix texture =
                     , texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
+                    , userId =
+                        case maybeSelectedUserId of
+                            Just selectedUserId ->
+                                Id.toInt selectedUserId |> toFloat
+
+                            Nothing ->
+                                -3
                     }
             )
 
@@ -5657,6 +5705,7 @@ drawBackground meshes viewMatrix texture =
                     , texture = texture
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
+                    , userId = Shaders.noUserIdSelected
                     }
             )
 

@@ -28,6 +28,7 @@ import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty(..))
 import Quantity exposing (Quantity(..))
 import Random
+import Shaders
 import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile(..))
 import Units exposing (CellLocalUnit, CellUnit)
@@ -305,7 +306,7 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                         |> Tuple.first
                         |> List.foldl
                             (\( item, itemPosition ) cell2 ->
-                                { userId = Id.fromInt -1
+                                { userId = Shaders.worldGenUserId
                                 , position = itemPosition
                                 , value = item
                                 , colors =

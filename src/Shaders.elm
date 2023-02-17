@@ -5,15 +5,21 @@ module Shaders exposing
     , debrisVertexShader
     , fragmentShader
     , indexedTriangles
+    , noUserIdSelected
+    , opacityAndUserId
+    , opaque
     , triangleFan
     , vertexShader
+    , worldGenUserId
     , worldMapFragmentShader
     , worldMapVertexShader
     )
 
+import Bitwise
 import Effect.WebGL exposing (Shader)
 import Effect.WebGL.Settings exposing (Setting)
 import Effect.WebGL.Settings.Blend as Blend
+import Id exposing (Id, UserId)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
@@ -22,7 +28,39 @@ import WebGL.Texture
 
 
 type alias Vertex =
-    { position : Vec3, texturePosition : Float, opacity : Float, primaryColor : Float, secondaryColor : Float }
+    { position : Vec3
+    , texturePosition : Float
+    , -- bits 0-3 is opacity
+      -- bits 4-31 is userId
+      opacityAndUserId : Float
+    , primaryColor : Float
+    , secondaryColor : Float
+    }
+
+
+opaque : number
+opaque =
+    --0b1111
+    15
+
+
+noUserIdSelected : number
+noUserIdSelected =
+    -2
+
+
+worldGenUserId : Id UserId
+worldGenUserId =
+    Id.fromInt -1
+
+
+opacityAndUserId : Float -> Id UserId -> Float
+opacityAndUserId opacity userId =
+    opacity
+        * opaque
+        |> round
+        |> toFloat
+        |> (+) (Id.toInt userId |> Bitwise.shiftLeftBy 4 |> toFloat)
 
 
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Effect.WebGL.Mesh attributes
@@ -51,25 +89,28 @@ blend =
 vertexShader :
     Shader
         Vertex
-        { u | view : Mat4, textureSize : Vec2 }
+        { u | view : Mat4, textureSize : Vec2, userId : Float }
         { vcoord : Vec2
-        , opacity2 : Float
+        , opacity : Float
         , primaryColor2 : Vec3
         , secondaryColor2 : Vec3
+        , isSelected : Float
         }
 vertexShader =
     [glsl|
 attribute vec3 position;
 attribute float texturePosition;
-attribute float opacity;
+attribute float opacityAndUserId;
 attribute float primaryColor;
 attribute float secondaryColor;
 uniform mat4 view;
 uniform vec2 textureSize;
+uniform float userId;
 varying vec2 vcoord;
-varying float opacity2; 
+varying float opacity;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
+varying float isSelected;
 
 int OR(int n1, int n2){
 
@@ -145,7 +186,8 @@ void main () {
 
     float y = floor(texturePosition / textureSize.x);
     vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;
-    opacity2 = opacity;
+    opacity = float(AND(int(opacityAndUserId), 0xF)) / 16.0;
+    isSelected = userId == float(RShift(int(opacityAndUserId), 4.0)) ? 1.0 : 0.0;
 
 
     primaryColor2 = floatColorToVec3(primaryColor);
@@ -158,9 +200,10 @@ fragmentShader :
         {}
         { u | texture : WebGL.Texture.Texture, color : Vec4 }
         { vcoord : Vec2
-        , opacity2 : Float
+        , opacity : Float
         , primaryColor2 : Vec3
         , secondaryColor2 : Vec3
+        , isSelected : Float
         }
 fragmentShader =
     [glsl|
@@ -168,9 +211,10 @@ precision mediump float;
 uniform sampler2D texture;
 uniform vec4 color;
 varying vec2 vcoord;
-varying float opacity2;
+varying float opacity;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
+varying float isSelected;
 
 vec3 primaryColor = vec3(1.0, 0.0, 1.0);
 vec3 primaryColorMidShade = vec3(233.0 / 255.0, 45.0 / 255.0, 231.0 / 255.0);
@@ -186,17 +230,17 @@ void main () {
 
     gl_FragColor =
         (textureColor.xyz == primaryColor
-            ? vec4(primaryColor2, opacity2)
+            ? vec4(primaryColor2, opacity)
             : textureColor.xyz == primaryColorMidShade
-                ? vec4(primaryColor2 * 0.9, opacity2)
+                ? vec4(primaryColor2 * 0.9, opacity)
                 : textureColor.xyz == primaryColorShade
-                    ? vec4(primaryColor2 * 0.8, opacity2)
+                    ? vec4(primaryColor2 * 0.8, opacity)
                     : textureColor.xyz == secondaryColor
-                        ? vec4(secondaryColor2, opacity2)
+                        ? vec4(secondaryColor2, opacity)
                         : textureColor.xyz == secondaryColorShade
-                            ? vec4(secondaryColor2 * 0.8, opacity2)
-                            : vec4(textureColor.xyz, opacity2)
-        ) * color;
+                            ? vec4(secondaryColor2 * 0.8, opacity)
+                            : vec4(textureColor.xyz, opacity)
+        ) * color + isSelected * vec4(0.5, 0.5, 0.5, 0.0);
 }|]
 
 
@@ -215,9 +259,10 @@ debrisVertexShader :
         DebrisVertex
         { u | view : Mat4, time : Float, textureSize : Vec2 }
         { vcoord : Vec2
-        , opacity2 : Float
+        , opacity : Float
         , primaryColor2 : Vec3
         , secondaryColor2 : Vec3
+        , isSelected : Float
         }
 debrisVertexShader =
     [glsl|
@@ -231,9 +276,10 @@ uniform mat4 view;
 uniform float time;
 uniform vec2 textureSize;
 varying vec2 vcoord;
-varying float opacity2;
+varying float opacity;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
+varying float isSelected;
 
 int OR(int n1, int n2){
 
@@ -309,8 +355,8 @@ void main () {
     gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
     float y = floor(texturePosition / textureSize.x);
     vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;
-    opacity2 = 1.0;
-
+    opacity = 1.0;
+    isSelected = 0.0;
     primaryColor2 = floatColorToVec3(primaryColor);
     secondaryColor2 = floatColorToVec3(secondaryColor);
 }|]

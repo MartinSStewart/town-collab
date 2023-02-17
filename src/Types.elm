@@ -206,6 +206,7 @@ type alias FrontendLoaded =
     , lastCheckConnection : Time.Posix
     , showMap : Bool
     , showInviteTree : Bool
+    , selectedUserId : Maybe (Id UserId)
     }
 
 

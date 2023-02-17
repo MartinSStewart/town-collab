@@ -1193,6 +1193,7 @@ backgroundLayer texture =
         , view = Mat4.makeTranslate3 -1 -1 0 |> Mat4.scale3 2 2 1
         , texture = texture
         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , userId = Shaders.noUserIdSelected
         }
 
 
@@ -1271,6 +1272,7 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
                         (toFloat tileX |> round |> toFloat)
                         (toFloat tileY |> round |> toFloat)
                         0
+            , userId = Shaders.noUserIdSelected
             }
         ]
 
@@ -1882,29 +1884,4 @@ imageMesh position scale image =
 
 square : Effect.WebGL.Mesh Vertex
 square =
-    Shaders.triangleFan
-        [ { position = Vec3.vec3 0 0 0
-          , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
-          , texturePosition = 512 + Sprite.textureWidth * 28
-          }
-        , { position = Vec3.vec3 1 0 0
-          , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
-          , texturePosition = 512 + Sprite.textureWidth * 28
-          }
-        , { position = Vec3.vec3 1 1 0
-          , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
-          , texturePosition = 512 + Sprite.textureWidth * 28
-          }
-        , { position = Vec3.vec3 0 1 0
-          , opacity = 1
-          , primaryColor = 0
-          , secondaryColor = 0
-          , texturePosition = 512 + Sprite.textureWidth * 28
-          }
-        ]
+    Sprite.sprite Coord.origin (Coord.xy 1 1) (Coord.xy 512 28) Coord.origin |> Sprite.toMesh

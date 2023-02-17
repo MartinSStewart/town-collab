@@ -835,14 +835,15 @@ trainT time (Train train) =
 
 
 draw :
-    Effect.Time.Posix
+    Maybe (Id UserId)
+    -> Effect.Time.Posix
     -> IdDict MailId FrontendMail
     -> IdDict TrainId Train
     -> Mat4
     -> WebGL.Texture.Texture
     -> BoundingBox2d WorldUnit WorldUnit
     -> List Effect.WebGL.Entity
-draw time mail trains viewMatrix trainTexture viewBounds =
+draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds =
     let
         trainViewBounds =
             BoundingBox2d.expandBy (Coord.maxComponent trainSize |> Quantity.toFloatQuantity) viewBounds
@@ -850,6 +851,9 @@ draw time mail trains viewMatrix trainTexture viewBounds =
     List.concatMap
         (\( trainId, train ) ->
             let
+                isSelected =
+                    maybeSelectedUserId == Just (owner train)
+
                 railData : RailData
                 railData =
                     Tile.railPathData (path time train)
@@ -914,8 +918,9 @@ draw time mail trains viewMatrix trainTexture viewBounds =
                                 []
 
                             else
-                                [ trainEntity trainTexture (trainEngineMesh t trainFrame) viewMatrix x y
+                                [ trainEntity isSelected trainTexture (trainEngineMesh t trainFrame) viewMatrix x y
                                 , trainEntity
+                                    isSelected
                                     trainTexture
                                     (trainEngineMesh (1 - t) trainFrame2)
                                     viewMatrix
@@ -926,7 +931,7 @@ draw time mail trains viewMatrix trainTexture viewBounds =
                         _ ->
                             case Array.get trainFrame trainEngineMeshes of
                                 Just mesh ->
-                                    [ trainEntity trainTexture mesh viewMatrix x y ]
+                                    [ trainEntity isSelected trainTexture mesh viewMatrix x y ]
 
                                 Nothing ->
                                     []
@@ -988,6 +993,7 @@ draw time mail trains viewMatrix trainTexture viewBounds =
 
                                         else
                                             [ trainEntity
+                                                isSelected
                                                 trainTexture
                                                 (trainCoachMesh t coachFrame)
                                                 viewMatrix
@@ -999,6 +1005,7 @@ draw time mail trains viewMatrix trainTexture viewBounds =
                                         case Array.get coachFrame trainCoachMeshes of
                                             Just trainMesh_ ->
                                                 [ trainEntity
+                                                    isSelected
                                                     trainTexture
                                                     trainMesh_
                                                     viewMatrix
@@ -1063,8 +1070,8 @@ leaveHome time (Train train) =
             Train train
 
 
-trainEntity : WebGL.Texture.Texture -> Effect.WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> Effect.WebGL.Entity
-trainEntity trainTexture trainMesh viewMatrix x y =
+trainEntity : Bool -> WebGL.Texture.Texture -> Effect.WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> Effect.WebGL.Entity
+trainEntity isSelected trainTexture trainMesh viewMatrix x y =
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.DepthTest.default, Shaders.blend ]
         Shaders.vertexShader
@@ -1079,6 +1086,12 @@ trainEntity trainTexture trainMesh viewMatrix x y =
         , texture = trainTexture
         , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
         , color = Vec4.vec4 1 1 1 1
+        , userId =
+            if isSelected then
+                0
+
+            else
+                -1
         }
 
 
@@ -1121,6 +1134,10 @@ trainSize =
     Coord.xy 36 36
 
 
+opacityAndUserId =
+    Shaders.opacityAndUserId 1 (Id.fromInt 0)
+
+
 trainEngineMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
 trainEngineMesh teleportAmount frame =
     let
@@ -1145,25 +1162,25 @@ trainEngineMesh teleportAmount frame =
     Shaders.triangleFan
         [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = trainTextureWidth * y
-          , opacity = 1
+          , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = toFloat w + trainTextureWidth * y
-          , opacity = 1
+          , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * toFloat h)) 0
           , texturePosition = toFloat w + trainTextureWidth * y2
-          , opacity = 1
+          , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * toFloat h)) 0
           , texturePosition = trainTextureWidth * y2
-          , opacity = 1
+          , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
@@ -1201,25 +1218,25 @@ trainCoachMesh teleportAmount frame =
     Shaders.triangleFan
         [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = w + trainTextureWidth * y
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
           , texturePosition = (w * 2) + trainTextureWidth * y
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = (w * 2) + trainTextureWidth * y2
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
           , texturePosition = w + trainTextureWidth * y2
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = 0
           , secondaryColor = 0
           }

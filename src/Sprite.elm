@@ -12,6 +12,7 @@ module Sprite exposing
     , spriteWithColor
     , spriteWithTwoColors
     , spriteWithZ
+    , spriteWithZAndOpacityAndUserId
     , text
     , textSize
     , textWithZ
@@ -19,9 +20,11 @@ module Sprite exposing
     , toMesh
     )
 
+import Bitwise
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
+import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2
 import Math.Vector3 as Vec3
@@ -161,28 +164,73 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
 
         secondaryColor2 =
             Color.toInt secondaryColor |> toFloat
+
+        opacity2 =
+            opacity * Shaders.opaque |> round |> toFloat
     in
     [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
       , texturePosition = toFloat tx + textureWidth * toFloat ty
-      , opacity = opacity
+      , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat ty
-      , opacity = opacity
+      , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat (ty + h)
-      , opacity = opacity
+      , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
     , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
       , texturePosition = toFloat tx + textureWidth * toFloat (ty + h)
-      , opacity = opacity
+      , opacityAndUserId = opacity2
+      , primaryColor = primaryColor2
+      , secondaryColor = secondaryColor2
+      }
+    ]
+
+
+spriteWithZAndOpacityAndUserId : Float -> Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
+spriteWithZAndOpacityAndUserId opacityAndUserId primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
+    let
+        ( tx, ty ) =
+            Coord.toTuple texturePosition
+
+        ( w, h ) =
+            Coord.toTuple textureSize
+
+        primaryColor2 =
+            Color.toInt primaryColor |> toFloat
+
+        secondaryColor2 =
+            Color.toInt secondaryColor |> toFloat
+    in
+    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
+      , texturePosition = toFloat tx + textureWidth * toFloat ty
+      , opacityAndUserId = opacityAndUserId
+      , primaryColor = primaryColor2
+      , secondaryColor = secondaryColor2
+      }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
+      , texturePosition = toFloat (tx + w) + textureWidth * toFloat ty
+      , opacityAndUserId = opacityAndUserId
+      , primaryColor = primaryColor2
+      , secondaryColor = secondaryColor2
+      }
+    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
+      , texturePosition = toFloat (tx + w) + textureWidth * toFloat (ty + h)
+      , opacityAndUserId = opacityAndUserId
+      , primaryColor = primaryColor2
+      , secondaryColor = secondaryColor2
+      }
+    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
+      , texturePosition = toFloat tx + textureWidth * toFloat (ty + h)
+      , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }

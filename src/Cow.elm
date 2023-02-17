@@ -63,25 +63,25 @@ cowMesh =
     Shaders.triangleFan
         [ { position = Vec3.vec3 (-width / 2) (-height / 2) 0
           , texturePosition = topLeft
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
           }
         , { position = Vec3.vec3 (width / 2) (-height / 2) 0
           , texturePosition = topRight
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
           }
         , { position = Vec3.vec3 (width / 2) (height / 2) 0
           , texturePosition = bottomRight
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
           }
         , { position = Vec3.vec3 (-width / 2) (height / 2) 0
           , texturePosition = bottomLeft
-          , opacity = 1
+          , opacityAndUserId = Shaders.opaque
           , primaryColor = cowPrimaryColor
           , secondaryColor = cowSecondaryColor
           }
