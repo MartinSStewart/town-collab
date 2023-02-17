@@ -27,7 +27,6 @@ module Types exposing
     , ToolButton(..)
     , TopMenu(..)
     , UiHover(..)
-    , UiMsg(..)
     , UserSettings
     , ViewPoint(..)
     )
@@ -272,31 +271,6 @@ type UiHover
     | AllowEmailNotificationsCheckbox
     | ResetConnectionsButton
     | UsersOnlineButton
-
-
-type UiMsg
-    = PressedShowInviteUser
-    | PressedCloseInviteUser
-    | PressedSendInviteUser
-    | PressedSendEmail
-    | PressedTool ToolButton
-    | ChangedInviteEmailAddressTextInput Bool Bool Keyboard.Key TextInput.Model
-    | KeyDownEmailAddressTextInputHover Bool Bool Keyboard.Key TextInput.Model
-    | ChangedPrimaryColorInput Bool Bool Keyboard.Key TextInput.Model
-    | ChangedSecondaryColorInput Bool Bool Keyboard.Key TextInput.Model
-    | PressedLowerMusicVolume
-    | PressedRaiseMusicVolume
-    | PressedLowerSoundEffectVolume
-    | PressedRaiseSoundEffectVolume
-    | PressedSettingsButton
-    | PressedCloseSettings
-    | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
-    | MailEditorUiMsg MailEditor.Msg
-    | PressedYouGotMail
-    | PressedShowMap
-    | PressedAllowEmailNotifications
-    | PressedResetConnections
-    | PressedUsersOnline
 
 
 type alias BackendModel =

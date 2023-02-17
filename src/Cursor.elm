@@ -238,7 +238,7 @@ defaultCursorTexturePosition =
     Coord.xy 533 28
 
 
-defaultCursorMesh2 : Colors -> Ui.Element id msg
+defaultCursorMesh2 : Colors -> Ui.Element id
 defaultCursorMesh2 colors =
     Ui.colorSprite
         { colors = colors
@@ -268,7 +268,7 @@ eyeDropperSize =
     Coord.xy 19 19
 
 
-eyeDropperCursor2 : Ui.Element id msg
+eyeDropperCursor2 : Ui.Element id
 eyeDropperCursor2 =
     Ui.sprite
         { size = Coord.scalar 2 eyeDropperSize

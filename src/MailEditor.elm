@@ -7,7 +7,6 @@ module MailEditor exposing
     , ImageOrText(..)
     , MailStatus(..)
     , Model
-    , Msg
     , OutMsg(..)
     , ReceivedMail
     , Tool(..)
@@ -63,7 +62,7 @@ import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile, TileData, TileGroup(..))
 import Time exposing (Month(..))
-import Ui exposing (BorderAndFill(..))
+import Ui exposing (BorderAndFill(..), UiEvent)
 import Units exposing (MailPixelUnit, WorldUnit)
 import User exposing (FrontendUser)
 import Vector2d
@@ -292,145 +291,150 @@ mailMousePosition elementPosition maybeImageData windowSize mousePosition =
 uiUpdate :
     { a | windowSize : Coord Pixels, time : Effect.Time.Posix }
     -> Coord Pixels
-    -> Coord Pixels
-    -> Msg
+    -> Hover
+    -> UiEvent
     -> Model
     -> ( Maybe Model, OutMsg )
-uiUpdate config elementPosition mousePosition msg model =
-    case msg of
-        PressedImageButton index ->
+uiUpdate config mousePosition id event model =
+    case id of
+        ImageButton index ->
             ( updateCurrentImageMesh { model | currentTool = ImagePlacer { imageIndex = index, rotationIndex = 0 } } |> Just
             , NoOutMsg
             )
 
-        PressedBackground ->
+        BackgroundHover ->
             ( Nothing, NoOutMsg )
 
-        MouseDownMail ->
-            case model.to of
-                Just ( to, _ ) ->
-                    case model.currentTool of
-                        ImagePlacer imagePlacer ->
-                            let
-                                imageData : ImageData units
-                                imageData =
-                                    getImageData (currentImage imagePlacer)
+        MailButton ->
+            case event of
+                Ui.MouseDown { elementPosition } ->
+                    case model.to of
+                        Just ( to, _ ) ->
+                            case model.currentTool of
+                                ImagePlacer imagePlacer ->
+                                    let
+                                        imageData : ImageData units
+                                        imageData =
+                                            getImageData (currentImage imagePlacer)
 
-                                model2 =
-                                    addContent
+                                        model2 =
+                                            addContent
+                                                { position =
+                                                    mailMousePosition
+                                                        elementPosition
+                                                        (Just imageData)
+                                                        config.windowSize
+                                                        mousePosition
+                                                , item = currentImage imagePlacer |> ImageType
+                                                }
+                                                { model | lastPlacedImage = Just config.time }
+                                    in
+                                    ( Just model2, UpdateDraft (toData to model2) )
+
+                                EraserTool ->
+                                    let
+                                        mailMousePosition2 : Coord Pixels
+                                        mailMousePosition2 =
+                                            mousePosition
+                                                |> Coord.minus elementPosition
+                                                |> Coord.divide (Coord.xy mailScale mailScale)
+
+                                        mailScale =
+                                            mailZoomFactor config.windowSize
+
+                                        oldEditorState : EditorState
+                                        oldEditorState =
+                                            model.current
+
+                                        { newContent, erased } =
+                                            List.foldr
+                                                (\content state ->
+                                                    case content.item of
+                                                        ImageType image ->
+                                                            let
+                                                                imageData : ImageData units
+                                                                imageData =
+                                                                    getImageData image
+
+                                                                isOverImage : Bool
+                                                                isOverImage =
+                                                                    Bounds.contains
+                                                                        mailMousePosition2
+                                                                        (Bounds.fromCoordAndSize content.position imageData.textureSize)
+                                                            in
+                                                            if not state.erased && isOverImage then
+                                                                { newContent = state.newContent, erased = True }
+
+                                                            else
+                                                                { newContent = content :: state.newContent
+                                                                , erased = state.erased
+                                                                }
+
+                                                        TextType text ->
+                                                            let
+                                                                isOverImage : Bool
+                                                                isOverImage =
+                                                                    Bounds.contains
+                                                                        mailMousePosition2
+                                                                        (Bounds.fromCoordAndSize
+                                                                            content.position
+                                                                            (Sprite.textSize 2 text)
+                                                                        )
+                                                            in
+                                                            if not state.erased && isOverImage then
+                                                                { newContent = state.newContent, erased = True }
+
+                                                            else
+                                                                { newContent = content :: state.newContent
+                                                                , erased = state.erased
+                                                                }
+                                                )
+                                                { newContent = [], erased = False }
+                                                oldEditorState.content
+                                    in
+                                    if erased then
+                                        let
+                                            model2 =
+                                                addChange { oldEditorState | content = newContent } model
+                                        in
+                                        ( Just { model2 | lastErase = Just config.time }
+                                        , UpdateDraft (toData to model2)
+                                        )
+
+                                    else
+                                        ( Just { model | lastErase = Just config.time }, NoOutMsg )
+
+                                ImagePicker ->
+                                    ( Just model, NoOutMsg )
+
+                                TextTool _ ->
+                                    ( addContent
                                         { position =
                                             mailMousePosition
                                                 elementPosition
-                                                (Just imageData)
+                                                Nothing
                                                 config.windowSize
                                                 mousePosition
-                                        , item = currentImage imagePlacer |> ImageType
+                                        , item = TextType ""
                                         }
-                                        { model | lastPlacedImage = Just config.time }
-                            in
-                            ( Just model2, UpdateDraft (toData to model2) )
+                                        { model | currentTool = TextTool Coord.origin }
+                                        |> Just
+                                    , NoOutMsg
+                                    )
 
-                        EraserTool ->
-                            let
-                                mailMousePosition2 : Coord Pixels
-                                mailMousePosition2 =
-                                    mousePosition
-                                        |> Coord.minus elementPosition
-                                        |> Coord.divide (Coord.xy mailScale mailScale)
-
-                                mailScale =
-                                    mailZoomFactor config.windowSize
-
-                                oldEditorState : EditorState
-                                oldEditorState =
-                                    model.current
-
-                                { newContent, erased } =
-                                    List.foldr
-                                        (\content state ->
-                                            case content.item of
-                                                ImageType image ->
-                                                    let
-                                                        imageData : ImageData units
-                                                        imageData =
-                                                            getImageData image
-
-                                                        isOverImage : Bool
-                                                        isOverImage =
-                                                            Bounds.contains
-                                                                mailMousePosition2
-                                                                (Bounds.fromCoordAndSize content.position imageData.textureSize)
-                                                    in
-                                                    if not state.erased && isOverImage then
-                                                        { newContent = state.newContent, erased = True }
-
-                                                    else
-                                                        { newContent = content :: state.newContent
-                                                        , erased = state.erased
-                                                        }
-
-                                                TextType text ->
-                                                    let
-                                                        isOverImage : Bool
-                                                        isOverImage =
-                                                            Bounds.contains
-                                                                mailMousePosition2
-                                                                (Bounds.fromCoordAndSize
-                                                                    content.position
-                                                                    (Sprite.textSize 2 text)
-                                                                )
-                                                    in
-                                                    if not state.erased && isOverImage then
-                                                        { newContent = state.newContent, erased = True }
-
-                                                    else
-                                                        { newContent = content :: state.newContent
-                                                        , erased = state.erased
-                                                        }
-                                        )
-                                        { newContent = [], erased = False }
-                                        oldEditorState.content
-                            in
-                            if erased then
-                                let
-                                    model2 =
-                                        addChange { oldEditorState | content = newContent } model
-                                in
-                                ( Just { model2 | lastErase = Just config.time }
-                                , UpdateDraft (toData to model2)
-                                )
-
-                            else
-                                ( Just { model | lastErase = Just config.time }, NoOutMsg )
-
-                        ImagePicker ->
+                        Nothing ->
                             ( Just model, NoOutMsg )
 
-                        TextTool _ ->
-                            ( addContent
-                                { position =
-                                    mailMousePosition
-                                        elementPosition
-                                        Nothing
-                                        config.windowSize
-                                        mousePosition
-                                , item = TextType ""
-                                }
-                                { model | currentTool = TextTool Coord.origin }
-                                |> Just
-                            , NoOutMsg
-                            )
-
-                Nothing ->
+                Ui.MousePressed record ->
                     ( Just model, NoOutMsg )
 
-        PressedMail ->
-            ( Just model, NoOutMsg )
+                Ui.KeyDown record ->
+                    ( Just model, NoOutMsg )
 
-        PressedEraserButton ->
+        EraserButton ->
             ( { model | currentTool = EraserTool } |> updateCurrentImageMesh |> Just, NoOutMsg )
 
-        PressedSendLetter ->
+        SendLetterButton ->
             case model.to of
                 Just ( userId, _ ) ->
                     ( Just { model | submitStatus = Submitted }
@@ -440,13 +444,10 @@ uiUpdate config elementPosition mousePosition msg model =
                 Nothing ->
                     ( Just model, NoOutMsg )
 
-        TypedToUser _ _ _ _ ->
-            ( Just model, NoOutMsg )
-
-        PressedCloseSendLetterInstructions ->
+        CloseSendLetterInstructionsButton ->
             ( Nothing, NoOutMsg )
 
-        PressedInboxRow mailId ->
+        InboxRowButton mailId ->
             ( Just
                 { model
                     | inboxMailViewed =
@@ -459,7 +460,7 @@ uiUpdate config elementPosition mousePosition msg model =
             , ViewedMail mailId
             )
 
-        PressedTextToolButton ->
+        TextToolButton ->
             ( { model | currentTool = TextTool Coord.origin } |> updateCurrentImageMesh |> Just, NoOutMsg )
 
 
@@ -1154,7 +1155,7 @@ mailZoomFactor windowSize =
             (Coord.yRaw windowSize
                 - toolbarMaxHeight
                 - (mainColumnSpacing * 2)
-                - Coord.yRaw (Ui.size (sendLetterButton identity identity ( Id.fromInt 0, DisplayName.default )))
+                - Coord.yRaw (Ui.size (sendLetterButton identity ( Id.fromInt 0, DisplayName.default )))
             )
             / mailHeight
         )
@@ -1280,19 +1281,6 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
         []
 
 
-type Msg
-    = PressedImageButton Int
-    | PressedBackground
-    | MouseDownMail
-    | PressedMail
-    | PressedEraserButton
-    | PressedSendLetter
-    | TypedToUser Bool Bool Keyboard.Key TextInput.Model
-    | PressedCloseSendLetterInstructions
-    | PressedInboxRow (Id MailId)
-    | PressedTextToolButton
-
-
 mainColumnSpacing =
     40
 
@@ -1301,18 +1289,17 @@ toolbarMaxHeight =
     250
 
 
-sendLetterButton : (Hover -> id) -> (Msg -> msg) -> ( Id UserId, DisplayName ) -> Ui.Element id msg
-sendLetterButton idMap msgMap ( userId, name ) =
+sendLetterButton : (Hover -> id) -> ( Id UserId, DisplayName ) -> Ui.Element id
+sendLetterButton idMap ( userId, name ) =
     Ui.button
         { id = idMap SendLetterButton
         , padding = Ui.paddingXY 16 8
-        , onPress = msgMap PressedSendLetter
         }
         (Ui.text ("Send letter to " ++ DisplayName.nameAndId name userId))
 
 
-submittedView : (Hover -> id) -> (Msg -> msg) -> DisplayName -> Ui.Element id msg
-submittedView idMap msgMap name =
+submittedView : (Hover -> id) -> DisplayName -> Ui.Element id
+submittedView idMap name =
     let
         paragraph1 =
             Ui.row
@@ -1342,7 +1329,6 @@ submittedView idMap msgMap name =
                 )
             , Ui.button
                 { id = idMap CloseSendLetterInstructionsButton
-                , onPress = msgMap PressedCloseSendLetterInstructions
                 , padding = Ui.paddingXY 16 8
                 }
                 (Ui.text "Close")
@@ -1355,7 +1341,7 @@ grassSize =
     Coord.xy 80 72
 
 
-yourPostOffice : Ui.Element id msg
+yourPostOffice : Ui.Element id
 yourPostOffice =
     Ui.quads
         { size = Tile.getData Tile.PostOffice |> .size |> Coord.multiply Units.tileSize |> Coord.scalar 2
@@ -1387,7 +1373,7 @@ yourPostOffice =
         }
 
 
-mailView : Int -> List Content -> Maybe Tool -> Ui.Element id msg
+mailView : Int -> List Content -> Maybe Tool -> Ui.Element id
 mailView mailScale mailContent maybeTool =
     let
         stampSize =
@@ -1503,12 +1489,11 @@ cursorSprite windowSize uiHover model =
 
 editorView :
     (Hover -> id)
-    -> (Msg -> msg)
     -> ( Id UserId, DisplayName )
     -> Coord Pixels
     -> Model
-    -> List (Ui.Element id msg)
-editorView idMap msgMap userIdAndName windowSize model =
+    -> List (Ui.Element id)
+editorView idMap userIdAndName windowSize model =
     let
         mailScale =
             mailZoomFactor windowSize
@@ -1517,13 +1502,11 @@ editorView idMap msgMap userIdAndName windowSize model =
         { size = windowSize, inFront = [] }
         (Ui.column
             { spacing = mainColumnSpacing, padding = Ui.noPadding }
-            [ sendLetterButton idMap msgMap userIdAndName
+            [ sendLetterButton idMap userIdAndName
             , Ui.customButton
                 { id = idMap MailButton
                 , padding = Ui.noPadding
                 , inFront = []
-                , onPress = msgMap PressedMail
-                , onMouseDown = msgMap MouseDownMail |> Just
                 , borderAndFill = NoBorderOrFill
                 , borderAndFillFocus = NoBorderOrFill
                 }
@@ -1543,7 +1526,6 @@ editorView idMap msgMap userIdAndName windowSize model =
                             (Ui.paddingXY 4 4)
                             (model.currentTool == EraserTool)
                             (idMap EraserButton)
-                            (msgMap PressedEraserButton)
                             (Ui.text "Eraser")
                         , highlightButton
                             (Ui.paddingXY 4 4)
@@ -1555,12 +1537,10 @@ editorView idMap msgMap userIdAndName windowSize model =
                                     False
                             )
                             (idMap TextToolButton)
-                            (msgMap PressedTextToolButton)
                             (Ui.text " Text ")
                         ]
                     , imageButtons
                         idMap
-                        msgMap
                         (case model.currentTool of
                             ImagePlacer imagePlacer ->
                                 Just imagePlacer.imageIndex
@@ -1636,12 +1616,11 @@ date time =
 
 inboxView :
     (Hover -> id)
-    -> (Msg -> msg)
     -> IdDict UserId FrontendUser
     -> IdDict MailId ReceivedMail
     -> Model
-    -> Ui.Element id msg
-inboxView idMap msgMap users inbox model =
+    -> Ui.Element id
+inboxView idMap users inbox model =
     let
         rows =
             IdDict.toList inbox
@@ -1673,7 +1652,6 @@ inboxView idMap msgMap users inbox model =
                                 (Ui.paddingXY 8 0)
                                 (model.inboxMailViewed == Just mailId)
                                 (InboxRowButton mailId |> idMap)
-                                (PressedInboxRow mailId |> msgMap)
                                 (Ui.text "View")
                             ]
                     )
@@ -1718,12 +1696,11 @@ ui :
     Bool
     -> Coord Pixels
     -> (Hover -> uiHover)
-    -> (Msg -> msg)
     -> IdDict UserId FrontendUser
     -> IdDict MailId ReceivedMail
     -> Model
-    -> Ui.Element uiHover msg
-ui isDisconnected windowSize idMap msgMap users inbox model =
+    -> Ui.Element uiHover
+ui isDisconnected windowSize idMap users inbox model =
     Ui.el
         { padding = Ui.noPadding
         , borderAndFill = NoBorderOrFill
@@ -1736,20 +1713,18 @@ ui isDisconnected windowSize idMap msgMap users inbox model =
             )
                 ++ (case ( model.submitStatus, model.to ) of
                         ( Submitted, Just ( _, name ) ) ->
-                            [ Ui.center { size = windowSize } (submittedView idMap msgMap name) ]
+                            [ Ui.center { size = windowSize } (submittedView idMap name) ]
 
                         ( NotSubmitted, Just userIdAndName ) ->
-                            editorView idMap msgMap userIdAndName windowSize model
+                            editorView idMap userIdAndName windowSize model
 
                         ( _, Nothing ) ->
-                            [ Ui.center { size = windowSize } (inboxView idMap msgMap users inbox model) ]
+                            [ Ui.center { size = windowSize } (inboxView idMap users inbox model) ]
                    )
         }
         (Ui.customButton
             { id = idMap BackgroundHover
             , inFront = []
-            , onPress = msgMap PressedBackground
-            , onMouseDown = Nothing
             , padding = { topLeft = windowSize, bottomRight = Coord.origin }
             , borderAndFill = NoBorderOrFill
             , borderAndFillFocus = NoBorderOrFill
@@ -1758,7 +1733,7 @@ ui isDisconnected windowSize idMap msgMap users inbox model =
         )
 
 
-disconnectWarning : Coord Pixels -> Ui.Element id msg
+disconnectWarning : Coord Pixels -> Ui.Element id
 disconnectWarning windowSize =
     Ui.topRight
         { size = windowSize }
@@ -1768,14 +1743,12 @@ disconnectWarning windowSize =
         )
 
 
-highlightButton : Ui.Padding -> Bool -> id -> msg -> Ui.Element id msg -> Ui.Element id msg
-highlightButton padding isSelected id onPress child =
+highlightButton : Ui.Padding -> Bool -> id -> Ui.Element id -> Ui.Element id
+highlightButton padding isSelected id child =
     Ui.customButton
         { id = id
         , padding = padding
-        , onPress = onPress
         , inFront = []
-        , onMouseDown = Nothing
         , borderAndFill =
             BorderAndFill
                 { borderWidth = 2
@@ -1797,13 +1770,13 @@ highlightButton padding isSelected id onPress child =
         child
 
 
-imageButtons : (Hover -> uiHover) -> (Msg -> msg) -> Maybe Int -> Ui.Element uiHover msg
-imageButtons idMap msgMap currentImageIndex =
+imageButtons : (Hover -> uiHover) -> Maybe Int -> Ui.Element uiHover
+imageButtons idMap currentImageIndex =
     List.foldl
         (\image state ->
             let
                 button =
-                    imageButton idMap msgMap currentImageIndex state.index image
+                    imageButton idMap currentImageIndex state.index image
 
                 newHeight =
                     state.height + Coord.yRaw (Ui.size button)
@@ -1838,8 +1811,8 @@ imageButtonScale size =
         1
 
 
-imageButton : (Hover -> uiHover) -> (Msg -> msg) -> Maybe Int -> Int -> Image -> Ui.Element uiHover msg
-imageButton idMap msgMap selectedIndex index image =
+imageButton : (Hover -> uiHover) -> Maybe Int -> Int -> Image -> Ui.Element uiHover
+imageButton idMap selectedIndex index image =
     let
         imageData : ImageData units
         imageData =
@@ -1852,7 +1825,6 @@ imageButton idMap msgMap selectedIndex index image =
         (Ui.paddingXY 4 4)
         (selectedIndex == Just index)
         (ImageButton index |> idMap)
-        (PressedImageButton index |> msgMap)
         (Ui.quads
             { size = Coord.scalar scale imageData.textureSize
             , vertices = \position -> imageMesh position scale image

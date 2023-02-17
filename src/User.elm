@@ -29,10 +29,10 @@ charScale =
     2
 
 
-drawInviteTree : IdDict UserId FrontendUser -> InviteTree -> Ui.Element id msg
+drawInviteTree : IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
 drawInviteTree dict (InviteTree tree) =
     let
-        childNodes : List (Ui.Element id msg)
+        childNodes : List (Ui.Element id)
         childNodes =
             List.map
                 (\child ->

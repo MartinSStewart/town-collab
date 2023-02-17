@@ -77,7 +77,7 @@ import Time
 import Toolbar exposing (ViewData)
 import Train exposing (Status(..), Train)
 import Types exposing (..)
-import Ui
+import Ui exposing (UiEvent)
 import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
 import Untrusted
 import Url exposing (Url)
@@ -942,7 +942,8 @@ updateLoaded audioData msg model =
                                 ( UiHover id data, _, Keyboard.Enter ) ->
                                     case Ui.findButton id (Toolbar.view (getViewModel model)) of
                                         Just { buttonData } ->
-                                            uiUpdate data.position buttonData.onPress model
+                                            --uiUpdate data.position id model
+                                            Debug.todo ""
 
                                         Nothing ->
                                             ( model, Command.none )
@@ -1210,13 +1211,12 @@ updateLoaded audioData msg model =
 
                                         _ ->
                                             case Toolbar.view (getViewModel model) |> Ui.findButton id of
-                                                Just { buttonData } ->
-                                                    case buttonData.onMouseDown of
-                                                        Just onMouseDown2 ->
-                                                            uiUpdate data.position onMouseDown2 model2
-
-                                                        Nothing ->
-                                                            ( model2, Command.none )
+                                                Just { buttonData, position } ->
+                                                    uiUpdate
+                                                        data.position
+                                                        id
+                                                        (Ui.MouseDown { elementPosition = position })
+                                                        model2
 
                                                 Nothing ->
                                                     ( model2, Command.none )
@@ -2948,8 +2948,12 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                     UiHover id data ->
                         case Ui.findButton id (Toolbar.view (getViewModel model2)) of
-                            Just { buttonData } ->
-                                uiUpdate data.position buttonData.onPress model2
+                            Just { buttonData, position } ->
+                                uiUpdate
+                                    data.position
+                                    id
+                                    (Ui.MousePressed { elementPosition = position })
+                                    model2
 
                             Nothing ->
                                 ( model2, Command.none )
@@ -2976,16 +2980,16 @@ handleMailEditorOutMsg outMsg model =
         |> handleOutMsg False
 
 
-uiUpdate : Coord Pixels -> UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-uiUpdate elementPosition msg model =
-    case msg of
-        PressedCloseInviteUser ->
+uiUpdate : Coord Pixels -> UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+uiUpdate elementPosition id event model =
+    case id of
+        CloseInviteUser ->
             ( { model | topMenuOpened = Nothing }, Command.none )
 
-        PressedShowInviteUser ->
+        ShowInviteUser ->
             ( { model | topMenuOpened = Just InviteMenu }, Command.none )
 
-        PressedSendInviteUser ->
+        SubmitInviteUser ->
             case ( LocalGrid.localModel model.localModel |> .userStatus, model.inviteSubmitStatus ) of
                 ( LoggedIn loggedIn, NotSubmitted _ ) ->
                     case Toolbar.validateInviteEmailAddress loggedIn.emailAddress model.inviteTextInput.current.text of
@@ -3000,37 +3004,41 @@ uiUpdate elementPosition msg model =
                 _ ->
                     ( model, Command.none )
 
-        PressedSendEmail ->
+        SendEmailButtonHover ->
             sendEmail model
 
-        PressedTool tool ->
+        ToolButtonHover tool ->
             ( setCurrentTool tool model, Command.none )
 
-        ChangedInviteEmailAddressTextInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | inviteTextInput = textInput }, Command.none )
+        InviteEmailAddressTextInput ->
+            --( { model | inviteTextInput = textInput }, Command.none )
+            Debug.todo ""
 
-        KeyDownEmailAddressTextInputHover ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | loginTextInput = textInput }, Command.none )
+        EmailAddressTextInputHover ->
+            --( { model | loginTextInput = textInput }, Command.none )
+            Debug.todo ""
 
-        ChangedPrimaryColorInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | primaryColorTextInput = textInput }, Command.none )
+        PrimaryColorInput ->
+            --( { model | primaryColorTextInput = textInput }, Command.none )
+            Debug.todo ""
 
-        ChangedSecondaryColorInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | secondaryColorTextInput = textInput }, Command.none )
+        SecondaryColorInput ->
+            --( { model | secondaryColorTextInput = textInput }, Command.none )
+            Debug.todo ""
 
-        PressedLowerMusicVolume ->
+        LowerMusicVolume ->
             { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings
 
-        PressedRaiseMusicVolume ->
+        RaiseMusicVolume ->
             { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
 
-        PressedLowerSoundEffectVolume ->
+        LowerSoundEffectVolume ->
             { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings
 
-        PressedRaiseSoundEffectVolume ->
+        RaiseSoundEffectVolume ->
             { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
 
-        PressedSettingsButton ->
+        SettingsButton ->
             let
                 localModel =
                     LocalGrid.localModel model.localModel
@@ -3057,33 +3065,29 @@ uiUpdate elementPosition msg model =
             , Command.none
             )
 
-        PressedCloseSettings ->
+        CloseSettings ->
             ( { model | topMenuOpened = Nothing }, Command.none )
 
-        ChangedDisplayNameTextInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model
-                | topMenuOpened =
-                    case model.topMenuOpened of
-                        Just (SettingsMenu _) ->
-                            SettingsMenu textInput |> Just
+        DisplayNameTextInput ->
+            --( { model
+            --    | topMenuOpened =
+            --        case model.topMenuOpened of
+            --            Just (SettingsMenu _) ->
+            --                SettingsMenu textInput |> Just
+            --
+            --            _ ->
+            --                Nothing
+            --  }
+            --, Command.none
+            --)
+            Debug.todo ""
 
-                        _ ->
-                            Nothing
-              }
-            , Command.none
-            )
-
-        MailEditorUiMsg mailEditorMsg ->
+        MailEditorHover mailEditorId ->
             case model.mailEditor of
                 Just mailEditor ->
                     let
-                        mousePosition2 : Coord Pixels
-                        mousePosition2 =
-                            mouseScreenPosition model
-                                |> Coord.roundPoint
-
                         ( newMailEditor, outMsg ) =
-                            MailEditor.uiUpdate model elementPosition mousePosition2 mailEditorMsg mailEditor
+                            MailEditor.uiUpdate model elementPosition mailEditorId event mailEditor
 
                         model2 =
                             { model
@@ -3103,13 +3107,13 @@ uiUpdate elementPosition msg model =
                 Nothing ->
                     ( model, Command.none )
 
-        PressedYouGotMail ->
+        YouGotMailButton ->
             ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )
 
-        PressedShowMap ->
+        ShowMapButton ->
             ( { model | showMap = not model.showMap }, Command.none )
 
-        PressedAllowEmailNotifications ->
+        AllowEmailNotificationsCheckbox ->
             ( case LocalGrid.localModel model.localModel |> .userStatus of
                 LoggedIn loggedIn ->
                     updateLocalModel
@@ -3122,10 +3126,10 @@ uiUpdate elementPosition msg model =
             , Command.none
             )
 
-        PressedResetConnections ->
+        ResetConnectionsButton ->
             ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none )
 
-        PressedUsersOnline ->
+        UsersOnlineButton ->
             ( { model | showInviteTree = not model.showInviteTree }, Command.none )
 
 

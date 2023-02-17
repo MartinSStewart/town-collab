@@ -30,7 +30,7 @@ import Sound
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), UiMsg(..))
+import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..))
 import Ui exposing (BorderAndFill(..))
 import Units
 import User exposing (FrontendUser, InviteTree(..))
@@ -64,7 +64,7 @@ type alias ViewData =
     }
 
 
-view : ViewData -> Ui.Element UiHover UiMsg
+view : ViewData -> Ui.Element UiHover
 view data =
     case ( data.userStatus, data.mailEditor ) of
         ( LoggedIn loggedIn, Just mailEditor ) ->
@@ -72,7 +72,6 @@ view data =
                 data.isDisconnected
                 data.windowSize
                 MailEditorHover
-                MailEditorUiMsg
                 data.users
                 loggedIn.inbox
                 mailEditor
@@ -100,7 +99,6 @@ view data =
                             (Ui.button
                                 { id = UsersOnlineButton
                                 , padding = Ui.paddingXY 10 4
-                                , onPress = PressedUsersOnline
                                 }
                                 (if data.otherUsersOnline == 1 then
                                     Ui.text "1 user online"
@@ -131,7 +129,6 @@ view data =
                                 Ui.button
                                     { id = SettingsButton
                                     , padding = Ui.paddingXY 10 4
-                                    , onPress = PressedSettingsButton
                                     }
                                     (Ui.text "Settings")
                         , case data.userStatus of
@@ -147,7 +144,6 @@ view data =
                         , Ui.button
                             { id = ShowMapButton
                             , padding = Ui.paddingXY 10 4
-                            , onPress = PressedShowMap
                             }
                             (Ui.text
                                 (if data.showMap then
@@ -170,8 +166,6 @@ view data =
                                     Ui.customButton
                                         { id = YouGotMailButton
                                         , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
-                                        , onPress = PressedYouGotMail
-                                        , onMouseDown = Nothing
                                         , borderAndFill = Ui.defaultButtonBorderAndFill
                                         , borderAndFillFocus = Ui.defaultButtonBorderAndFill
                                         , inFront = []
@@ -244,7 +238,7 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover UiMsg
+settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
 settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
     let
         musicVolumeInput =
@@ -252,14 +246,11 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                 "Music volume "
                 LowerMusicVolume
                 RaiseMusicVolume
-                PressedLowerMusicVolume
-                PressedRaiseMusicVolume
                 musicVolume
 
         allowEmailNotifications =
             checkbox
                 AllowEmailNotificationsCheckbox
-                PressedAllowEmailNotifications
                 loggedIn.allowEmailNotifications
                 "Allow email notifications"
     in
@@ -273,7 +264,7 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
             , padding = Ui.noPadding
             }
             ([ Ui.button
-                { id = CloseSettings, onPress = PressedCloseSettings, padding = Ui.paddingXY 10 4 }
+                { id = CloseSettings, padding = Ui.paddingXY 10 4 }
                 (Ui.text "Close")
              , Ui.column
                 { spacing = 6
@@ -284,8 +275,6 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                     "Sound effects"
                     LowerSoundEffectVolume
                     RaiseSoundEffectVolume
-                    PressedLowerSoundEffectVolume
-                    PressedRaiseSoundEffectVolume
                     soundEffectVolume
                 , Ui.column
                     { spacing = 4
@@ -302,7 +291,6 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
 
                                 Err _ ->
                                     False
-                        , onKeyDown = ChangedDisplayNameTextInput
                         }
                         nameTextInput
                     ]
@@ -320,7 +308,7 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
         )
 
 
-adminView : Int -> AdminData -> Ui.Element UiHover UiMsg
+adminView : Int -> AdminData -> Ui.Element UiHover
 adminView parentWidth adminData =
     Ui.column
         { spacing = 8, padding = Ui.noPadding }
@@ -354,7 +342,6 @@ adminView parentWidth adminData =
         , Ui.text "Sessions (id:count)"
         , Ui.button
             { id = ResetConnectionsButton
-            , onPress = PressedResetConnections
             , padding = Ui.paddingXY 10 4
             }
             (Ui.text "Reset connections")
@@ -379,14 +366,12 @@ adminView parentWidth adminData =
         ]
 
 
-checkbox : id -> msg -> Bool -> String -> Ui.Element id msg
-checkbox id onPress isChecked text =
+checkbox : id -> Bool -> String -> Ui.Element id
+checkbox id isChecked text =
     Ui.customButton
         { id = id
         , padding = Ui.noPadding
         , inFront = []
-        , onPress = onPress
-        , onMouseDown = Nothing
         , borderAndFill = NoBorderOrFill
         , borderAndFillFocus = NoBorderOrFill
         }
@@ -412,28 +397,26 @@ checkbox id onPress isChecked text =
         )
 
 
-volumeControl : String -> id -> id -> msg -> msg -> Int -> Ui.Element id msg
-volumeControl name lowerId raiseId pressedLower pressedRaise volume =
+volumeControl : String -> id -> id -> Int -> Ui.Element id
+volumeControl name lowerId raiseId volume =
     Ui.row
         { spacing = 8, padding = Ui.noPadding }
         [ Ui.text name
         , Ui.button
             { id = lowerId
             , padding = { topLeft = Coord.xy 6 0, bottomRight = Coord.xy 4 2 }
-            , onPress = pressedLower
             }
             (Ui.text "-")
         , Ui.text (String.padLeft 2 ' ' (String.fromInt volume) ++ "/" ++ String.fromInt Sound.maxVolume)
         , Ui.button
             { id = raiseId
             , padding = { topLeft = Coord.xy 6 0, bottomRight = Coord.xy 4 2 }
-            , onPress = pressedRaise
             }
             (Ui.text "+")
         ]
 
 
-loggedOutSettingsView : Int -> Int -> Ui.Element UiHover UiMsg
+loggedOutSettingsView : Int -> Int -> Ui.Element UiHover
 loggedOutSettingsView musicVolume soundEffectVolume =
     Ui.el
         { padding = Ui.paddingXY 8 8
@@ -445,7 +428,7 @@ loggedOutSettingsView musicVolume soundEffectVolume =
             , padding = Ui.noPadding
             }
             [ Ui.button
-                { id = CloseSettings, onPress = PressedCloseSettings, padding = Ui.paddingXY 10 4 }
+                { id = CloseSettings, padding = Ui.paddingXY 10 4 }
                 (Ui.text "Close")
             , Ui.column
                 { spacing = 6
@@ -455,15 +438,11 @@ loggedOutSettingsView musicVolume soundEffectVolume =
                     "Music volume "
                     LowerMusicVolume
                     RaiseMusicVolume
-                    PressedLowerMusicVolume
-                    PressedRaiseMusicVolume
                     musicVolume
                 , volumeControl
                     "Sound effects"
                     LowerSoundEffectVolume
                     RaiseSoundEffectVolume
-                    PressedLowerSoundEffectVolume
-                    PressedRaiseSoundEffectVolume
                     soundEffectVolume
                 ]
             ]
@@ -484,21 +463,21 @@ validateInviteEmailAddress emailAddress inviteEmailAddressText =
             Err "Invalid email"
 
 
-inviteView : Bool -> EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
+inviteView : Bool -> EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
 inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
     if showInvite then
         let
-            inviteForm : Ui.Element UiHover UiMsg
+            inviteForm : Ui.Element UiHover
             inviteForm =
                 Ui.column
                     { spacing = 8, padding = Ui.noPadding }
                     [ Ui.button
-                        { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                        { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
                         (Ui.text "Cancel")
                     , content
                     ]
 
-            content : Ui.Element UiHover UiMsg
+            content : Ui.Element UiHover
             content =
                 Ui.column
                     { spacing = 0, padding = Ui.noPadding }
@@ -509,14 +488,13 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
                             { id = InviteEmailAddressTextInput
                             , width = 800
                             , isValid = True
-                            , onKeyDown = ChangedInviteEmailAddressTextInput
                             }
                             inviteTextInput
                         ]
                     , Ui.row
                         { spacing = 4, padding = { topLeft = Coord.xy 0 8, bottomRight = Coord.origin } }
                         [ Ui.button
-                            { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
+                            { id = SubmitInviteUser, padding = Ui.paddingXY 10 4 }
                             (case inviteSubmitStatus of
                                 NotSubmitted _ ->
                                     Ui.text "Send invite"
@@ -549,7 +527,7 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
                     Ui.column
                         { spacing = 0, padding = Ui.noPadding }
                         [ Ui.button
-                            { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                            { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
                             (Ui.text "Close")
                         , Ui.center
                             { size = Ui.size content }
@@ -566,7 +544,6 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
     else
         Ui.button
             { id = ShowInviteUser
-            , onPress = PressedShowInviteUser
             , padding = Ui.paddingXY 10 4
             }
             (Ui.text "Invite")
@@ -591,13 +568,13 @@ pressedSubmit submitStatus =
             False
 
 
-loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover UiMsg
+loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover
 loginToolbarUi pressedSubmitEmail emailTextInput =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
 
-        loginUi : Ui.Element UiHover UiMsg
+        loginUi : Ui.Element UiHover
         loginUi =
             Ui.column
                 { spacing = 10, padding = Ui.paddingXY 20 10 }
@@ -615,11 +592,10 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
 
                                 else
                                     True
-                            , onKeyDown = KeyDownEmailAddressTextInputHover
                             }
                             emailTextInput
                         , Ui.button
-                            { id = SendEmailButtonHover, onPress = PressedSendEmail, padding = Ui.paddingXY 30 4 }
+                            { id = SendEmailButtonHover, padding = Ui.paddingXY 30 4 }
                             (Ui.text "Send email")
                         ]
                     , case pressedSubmitEmail of
@@ -647,7 +623,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
     case pressedSubmitEmail of
         Submitted emailAddress ->
             let
-                submittedText : Ui.Element id msg
+                submittedText : Ui.Element id
                 submittedText =
                     "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.wrappedText 1000
             in
@@ -674,7 +650,7 @@ toolbarUi :
     -> AssocList.Dict TileGroup Colors
     -> Dict String TileGroup
     -> ToolButton
-    -> Ui.Element UiHover UiMsg
+    -> Ui.Element UiHover
 toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentToolButton =
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
@@ -692,7 +668,7 @@ selectedToolView :
     -> TextInput.Model
     -> AssocList.Dict TileGroup Colors
     -> ToolButton
-    -> Ui.Element UiHover UiMsg
+    -> Ui.Element UiHover
 selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
@@ -720,13 +696,13 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                 { spacing = 10, padding = Ui.noPadding }
                 [ case showPrimaryColorTextInput of
                     Just color ->
-                        colorTextInput PrimaryColorInput ChangedPrimaryColorInput primaryColorTextInput color
+                        colorTextInput PrimaryColorInput primaryColorTextInput color
 
                     Nothing ->
                         Ui.none
                 , case showSecondaryColorTextInput of
                     Just color ->
-                        colorTextInput SecondaryColorInput ChangedSecondaryColorInput secondaryColorTextInput color
+                        colorTextInput SecondaryColorInput secondaryColorTextInput color
 
                     Nothing ->
                         Ui.none
@@ -736,7 +712,6 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                             Coord.xy
                                 (colorTextInput
                                     PrimaryColorInput
-                                    ChangedPrimaryColorInput
                                     primaryColorTextInput
                                     Color.black
                                     |> Ui.size
@@ -783,11 +758,10 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
 
 colorTextInput :
     id
-    -> (Bool -> Bool -> Keyboard.Key -> TextInput.Model -> UiMsg)
     -> TextInput.Model
     -> Color
-    -> Ui.Element id UiMsg
-colorTextInput id onChange textInput color =
+    -> Ui.Element id
+colorTextInput id textInput color =
     let
         padding =
             TextInput.size (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
@@ -806,7 +780,7 @@ colorTextInput id onChange textInput color =
             }
             Ui.none
         , Ui.textInput
-            { id = id, width = primaryColorInputWidth, isValid = True, onKeyDown = onChange }
+            { id = id, width = primaryColorInputWidth, isValid = True }
             textInput
         ]
 
@@ -818,7 +792,7 @@ toolButtonUi :
     -> Dict String TileGroup
     -> ToolButton
     -> ToolButton
-    -> Ui.Element UiHover UiMsg
+    -> Ui.Element UiHover
 toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     let
         tileColors =
@@ -864,7 +838,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                 TextToolButton ->
                     Nothing
 
-        label : Ui.Element UiHover UiMsg
+        label : Ui.Element UiHover
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
@@ -881,8 +855,6 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     in
     Ui.customButton
         { id = ToolButtonHover tool
-        , onPress = PressedTool tool
-        , onMouseDown = Nothing
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of
@@ -933,7 +905,7 @@ toolbarRowCount =
     3
 
 
-tileMesh : Colors -> Tile -> Ui.Element id msg
+tileMesh : Colors -> Tile -> Ui.Element id
 tileMesh colors tile =
     let
         data : TileData b
@@ -1074,7 +1046,7 @@ getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
 
 
-createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id msg
+createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id
 createInfoMesh maybePingData maybeUserId =
     let
         durationToString duration =
