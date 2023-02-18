@@ -32,6 +32,7 @@ import Array exposing (Array)
 import AssocList
 import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
+import Color
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import Duration exposing (Duration, Seconds)
@@ -53,6 +54,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
 import Shaders exposing (Vertex)
+import Sprite
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import WebGL.Texture
@@ -1160,25 +1162,33 @@ trainEngineMesh teleportAmount frame =
             Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
     in
     Shaders.triangleFan
-        [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
+        [ { x = -tileSizeW + offsetX
+          , y = -tileSizeH + offsetY
+          , z = 0
           , texturePosition = trainTextureWidth * y
           , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
+        , { x = tileSizeW + offsetX
+          , y = -tileSizeH + offsetY
+          , z = 0
           , texturePosition = toFloat w + trainTextureWidth * y
           , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * toFloat h)) 0
+        , { x = tileSizeW + offsetX
+          , y = tileSizeH + offsetY - (teleportAmount * toFloat h)
+          , z = 0
           , texturePosition = toFloat w + trainTextureWidth * y2
           , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * toFloat h)) 0
+        , { x = -tileSizeW + offsetX
+          , y = tileSizeH + offsetY - (teleportAmount * toFloat h)
+          , z = 0
           , texturePosition = trainTextureWidth * y2
           , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
@@ -1216,25 +1226,33 @@ trainCoachMesh teleportAmount frame =
             Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
     in
     Shaders.triangleFan
-        [ { position = Vec3.vec3 (-tileSizeW + offsetX) (-tileSizeH + offsetY) 0
+        [ { x = -tileSizeW + offsetX
+          , y = -tileSizeH + offsetY
+          , z = 0
           , texturePosition = w + trainTextureWidth * y
           , opacityAndUserId = Shaders.opaque
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (tileSizeW + offsetX) (-tileSizeH + offsetY) 0
+        , { x = tileSizeW + offsetX
+          , y = -tileSizeH + offsetY
+          , z = 0
           , texturePosition = (w * 2) + trainTextureWidth * y
           , opacityAndUserId = Shaders.opaque
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
+        , { x = tileSizeW + offsetX
+          , y = tileSizeH + offsetY - (teleportAmount * h)
+          , z = 0
           , texturePosition = (w * 2) + trainTextureWidth * y2
           , opacityAndUserId = Shaders.opaque
           , primaryColor = 0
           , secondaryColor = 0
           }
-        , { position = Vec3.vec3 (-tileSizeW + offsetX) (tileSizeH + offsetY - (teleportAmount * h)) 0
+        , { x = -tileSizeW + offsetX
+          , y = tileSizeH + offsetY - (teleportAmount * h)
+          , z = 0
           , texturePosition = w + trainTextureWidth * y2
           , opacityAndUserId = Shaders.opaque
           , primaryColor = 0

@@ -168,25 +168,33 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
         opacity2 =
             opacity * Shaders.opaque |> round |> toFloat
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
+    [ { x = toFloat x
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat ty
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
+    , { x = toFloat (x + width)
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat ty
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
+    , { x = toFloat (x + width)
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
+    , { x = toFloat x
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
@@ -210,25 +218,33 @@ spriteWithZAndOpacityAndUserId opacityAndUserId primaryColor secondaryColor ( Qu
         secondaryColor2 =
             Color.toInt secondaryColor |> toFloat
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
+    [ { x = toFloat x
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat ty
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
+    , { x = toFloat (x + width)
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat ty
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
+    , { x = toFloat (x + width)
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
+    , { x = toFloat x
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2

@@ -542,6 +542,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , primaryColorTextInput = TextInput.init
             , secondaryColorTextInput = TextInput.init
             , focus = Nothing
+            , previousFocus = Nothing
             , music =
                 { startTime = Duration.addTo time (Duration.seconds 10)
                 , sound =
@@ -1421,16 +1422,31 @@ updateLoaded audioData msg model =
                             else
                                 model.scrollThreshold + 1
                     }
+
+                model3 =
+                    case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTool ) of
+                        ( ( True, _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
+                            placeTile True currentTile.tileGroup currentTile.index model2
+
+                        ( ( _, TrainViewPoint _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
+                            placeTile True currentTile.tileGroup currentTile.index model2
+
+                        _ ->
+                            model2
+
+                newUi =
+                    Toolbar.view model3
             in
-            ( case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTool ) of
-                ( ( True, _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
-                    placeTile True currentTile.tileGroup currentTile.index model2
+            ( { model3
+                | ui = newUi
+                , previousFocus = model3.focus
+                , uiMesh =
+                    if newUi == model3.ui && model3.focus == model3.previousFocus then
+                        model3.uiMesh
 
-                ( ( _, TrainViewPoint _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
-                    placeTile True currentTile.tileGroup currentTile.index model2
-
-                _ ->
-                    model2
+                    else
+                        Ui.view model3.focus newUi
+              }
             , Command.none
             )
 
@@ -3673,10 +3689,6 @@ updateMeshes oldModel newModel =
                     Nothing ->
                         Grid.backgroundMesh coord
             }
-
-        newUi : Ui.Element UiHover
-        newUi =
-            Toolbar.view newModel
     in
     { newModel
         | meshes =
@@ -3714,13 +3726,6 @@ updateMeshes oldModel newModel =
                             newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
                 )
                 newCells
-        , ui = newUi
-        , uiMesh =
-            if newUi == oldModel.ui && newModel.focus == oldModel.focus then
-                newModel.uiMesh
-
-            else
-                Ui.view newModel.focus newUi
     }
 
 

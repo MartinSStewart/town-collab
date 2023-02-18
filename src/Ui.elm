@@ -717,13 +717,11 @@ viewHelper focus position vertices element2 =
                 ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Quads data ->
-            let
-                positionVec =
-                    Vec3.vec3 (toFloat (Coord.xRaw position)) (toFloat (Coord.yRaw position)) 0
-            in
             List.map
                 (\v ->
-                    { position = Vec3.add positionVec v.position
+                    { x = v.x + toFloat (Coord.xRaw position)
+                    , y = v.y + toFloat (Coord.yRaw position)
+                    , z = v.z
                     , texturePosition = v.texturePosition
                     , opacityAndUserId = v.opacityAndUserId
                     , primaryColor = v.primaryColor

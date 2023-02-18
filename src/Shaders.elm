@@ -28,7 +28,9 @@ import WebGL.Texture
 
 
 type alias Vertex =
-    { position : Vec3
+    { x : Float
+    , y : Float
+    , z : Float
     , texturePosition : Float
     , -- bits 0-3 is opacity
       -- bits 4-31 is userId
@@ -98,7 +100,9 @@ vertexShader :
         }
 vertexShader =
     [glsl|
-attribute vec3 position;
+attribute float x;
+attribute float y;
+attribute float z;
 attribute float texturePosition;
 attribute float opacityAndUserId;
 attribute float primaryColor;
@@ -182,7 +186,7 @@ vec3 floatColorToVec3(float color) {
 }
 
 void main () {
-    gl_Position = view * vec4(position, 1.0);
+    gl_Position = view * vec4(vec3(x, y, z), 1.0);
 
     float y = floor(texturePosition / textureSize.x);
     vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;

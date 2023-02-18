@@ -190,6 +190,7 @@ type alias FrontendLoaded =
     , tileColors : AssocList.Dict TileGroup Colors
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
+    , previousFocus : Maybe UiHover
     , focus : Maybe UiHover
     , music : { startTime : Effect.Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
