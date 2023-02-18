@@ -1211,10 +1211,9 @@ updateLoaded audioData msg model =
                                                     ( model2, Command.none )
 
                                         _ ->
-                                            case Toolbar.view (getViewModel model) |> Ui.findButton id of
+                                            case Ui.findButton id model.ui of
                                                 Just { buttonData, position } ->
                                                     uiUpdate
-                                                        data.position
                                                         id
                                                         (Ui.MouseDown { elementPosition = position })
                                                         model2
@@ -1375,7 +1374,7 @@ updateLoaded audioData msg model =
                         TextTool _ ->
                             model2
             in
-            ( { model
+            { model
                 | mouseLeft =
                     case model.mouseLeft of
                         MouseButtonDown mouseState ->
@@ -1391,136 +1390,32 @@ updateLoaded audioData msg model =
                         MouseButtonUp _ ->
                             MouseButtonUp { current = mousePosition }
                 , previousTileHover = tileHover_
-              }
+            }
                 |> (\model2 ->
                         case model2.mouseLeft of
                             MouseButtonDown { hover } ->
                                 case hover of
                                     UiBackgroundHover ->
-                                        model2
+                                        ( model2, Command.none )
 
                                     TileHover _ ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                                     TrainHover _ ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                                     MapHover ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                                     UiHover uiHover data ->
-                                        case uiHover of
-                                            PrimaryColorInput ->
-                                                { model2
-                                                    | primaryColorTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.primaryColorTextInput
-                                                }
-
-                                            SecondaryColorInput ->
-                                                { model2
-                                                    | secondaryColorTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.secondaryColorTextInput
-                                                }
-
-                                            EmailAddressTextInputHover ->
-                                                { model2
-                                                    | loginTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.loginTextInput
-                                                }
-
-                                            SendEmailButtonHover ->
-                                                model2
-
-                                            ToolButtonHover _ ->
-                                                model2
-
-                                            ShowInviteUser ->
-                                                model2
-
-                                            CloseInviteUser ->
-                                                model2
-
-                                            SubmitInviteUser ->
-                                                model2
-
-                                            InviteEmailAddressTextInput ->
-                                                { model2
-                                                    | inviteTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.inviteTextInput
-                                                }
-
-                                            LowerMusicVolume ->
-                                                model2
-
-                                            RaiseMusicVolume ->
-                                                model2
-
-                                            LowerSoundEffectVolume ->
-                                                model2
-
-                                            RaiseSoundEffectVolume ->
-                                                model2
-
-                                            SettingsButton ->
-                                                model2
-
-                                            CloseSettings ->
-                                                model2
-
-                                            DisplayNameTextInput ->
-                                                { model2
-                                                    | topMenuOpened =
-                                                        case model2.topMenuOpened of
-                                                            Just (SettingsMenu nameTextInput) ->
-                                                                TextInput.mouseDownMove
-                                                                    mousePosition2
-                                                                    data.position
-                                                                    nameTextInput
-                                                                    |> SettingsMenu
-                                                                    |> Just
-
-                                                            _ ->
-                                                                model2.topMenuOpened
-                                                }
-
-                                            MailEditorHover mailEditorHover ->
-                                                model2
-
-                                            YouGotMailButton ->
-                                                model2
-
-                                            ShowMapButton ->
-                                                model2
-
-                                            AllowEmailNotificationsCheckbox ->
-                                                model2
-
-                                            ResetConnectionsButton ->
-                                                model2
-
-                                            UsersOnlineButton ->
-                                                model2
+                                        uiUpdate uiHover (Ui.MouseMove { elementPosition = data.position }) model2
 
                                     CowHover _ ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                             _ ->
-                                model2
+                                ( model2, Command.none )
                    )
-            , Command.none
-            )
 
         ShortIntervalElapsed time ->
             let
@@ -1962,7 +1857,7 @@ previousFocus : FrontendLoaded -> Hover
 previousFocus model =
     case model.focus of
         UiHover hoverId _ ->
-            UiHover (Toolbar.view (getViewModel model) |> Ui.tabBackward hoverId) { position = Coord.origin }
+            UiHover (Ui.tabBackward hoverId model.ui) { position = Coord.origin }
 
         _ ->
             model.focus
@@ -1988,7 +1883,7 @@ nextFocus : FrontendLoaded -> Hover
 nextFocus model =
     case model.focus of
         UiHover hoverId _ ->
-            UiHover (Toolbar.view (getViewModel model) |> Ui.tabForward hoverId) { position = Coord.origin }
+            UiHover (Ui.tabForward hoverId model.ui) { position = Coord.origin }
 
         _ ->
             model.focus
@@ -2228,7 +2123,7 @@ hoverAt model mousePosition =
             mousePosition
                 |> Coord.roundPoint
     in
-    case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
+    case Ui.hover mousePosition2 model.ui of
         Ui.InputHover data ->
             UiHover data.id { position = data.position }
 
@@ -2948,16 +2843,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( model3, Command.none )
 
                     UiHover id data ->
-                        case Ui.findButton id (Toolbar.view (getViewModel model2)) of
-                            Just { buttonData, position } ->
-                                uiUpdate
-                                    data.position
-                                    id
-                                    (Ui.MousePressed { elementPosition = position })
-                                    model2
-
-                            Nothing ->
-                                ( model2, Command.none )
+                        uiUpdate
+                            id
+                            (Ui.MousePressed { elementPosition = data.position })
+                            model2
 
     else
         ( model2, Command.none )
@@ -2981,8 +2870,114 @@ handleMailEditorOutMsg outMsg model =
         |> handleOutMsg False
 
 
-uiUpdate : Coord Pixels -> UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-uiUpdate elementPosition id event model =
+
+--case uiHover of
+--                                            PrimaryColorInput ->
+--                                                { model2
+--                                                    | primaryColorTextInput =
+--                                                        TextInput.mouseDownMove
+--                                                            mousePosition2
+--                                                            data.position
+--                                                            model2.primaryColorTextInput
+--                                                }
+--
+--                                            SecondaryColorInput ->
+--                                                { model2
+--                                                    | secondaryColorTextInput =
+--                                                        TextInput.mouseDownMove
+--                                                            mousePosition2
+--                                                            data.position
+--                                                            model2.secondaryColorTextInput
+--                                                }
+--
+--                                            EmailAddressTextInputHover ->
+--                                                { model2
+--                                                    | loginTextInput =
+--                                                        TextInput.mouseDownMove
+--                                                            mousePosition2
+--                                                            data.position
+--                                                            model2.loginTextInput
+--                                                }
+--
+--                                            SendEmailButtonHover ->
+--                                                model2
+--
+--                                            ToolButtonHover _ ->
+--                                                model2
+--
+--                                            ShowInviteUser ->
+--                                                model2
+--
+--                                            CloseInviteUser ->
+--                                                model2
+--
+--                                            SubmitInviteUser ->
+--                                                model2
+--
+--                                            InviteEmailAddressTextInput ->
+--                                                { model2
+--                                                    | inviteTextInput =
+--                                                        TextInput.mouseDownMove
+--                                                            mousePosition2
+--                                                            data.position
+--                                                            model2.inviteTextInput
+--                                                }
+--
+--                                            LowerMusicVolume ->
+--                                                model2
+--
+--                                            RaiseMusicVolume ->
+--                                                model2
+--
+--                                            LowerSoundEffectVolume ->
+--                                                model2
+--
+--                                            RaiseSoundEffectVolume ->
+--                                                model2
+--
+--                                            SettingsButton ->
+--                                                model2
+--
+--                                            CloseSettings ->
+--                                                model2
+--
+--                                            DisplayNameTextInput ->
+--                                                { model2
+--                                                    | topMenuOpened =
+--                                                        case model2.topMenuOpened of
+--                                                            Just (SettingsMenu nameTextInput) ->
+--                                                                TextInput.mouseDownMove
+--                                                                    mousePosition2
+--                                                                    data.position
+--                                                                    nameTextInput
+--                                                                    |> SettingsMenu
+--                                                                    |> Just
+--
+--                                                            _ ->
+--                                                                model2.topMenuOpened
+--                                                }
+--
+--                                            MailEditorHover mailEditorHover ->
+--                                                model2
+--
+--                                            YouGotMailButton ->
+--                                                model2
+--
+--                                            ShowMapButton ->
+--                                                model2
+--
+--                                            AllowEmailNotificationsCheckbox ->
+--                                                model2
+--
+--                                            ResetConnectionsButton ->
+--                                                model2
+--
+--                                            UsersOnlineButton ->
+--                                                model2
+
+
+uiUpdate : UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+uiUpdate id event model =
     case id of
         CloseInviteUser ->
             ( { model | topMenuOpened = Nothing }, Command.none )
@@ -3020,9 +3015,22 @@ uiUpdate elementPosition id event model =
             Debug.todo ""
 
         PrimaryColorInput ->
-            --( { model | primaryColorTextInput = textInput }, Command.none )
-            Debug.todo ""
+            case event of
+                Ui.MouseMove { elementPosition } ->
+                    ( { model
+                        | primaryColorTextInput =
+                            TextInput.mouseDownMove
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.primaryColorTextInput
+                      }
+                    , Command.none
+                    )
 
+                _ ->
+                    ( model, Command.none )
+
+        --( { model | primaryColorTextInput = textInput }, Command.none )
         SecondaryColorInput ->
             --( { model | secondaryColorTextInput = textInput }, Command.none )
             Debug.todo ""
@@ -3088,7 +3096,12 @@ uiUpdate elementPosition id event model =
                 Just mailEditor ->
                     let
                         ( newMailEditor, outMsg ) =
-                            MailEditor.uiUpdate model elementPosition mailEditorId event mailEditor
+                            MailEditor.uiUpdate
+                                model
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                mailEditorId
+                                event
+                                mailEditor
 
                         model2 =
                             { model
@@ -4957,7 +4970,7 @@ canvasView audioData model =
                     cursorSprite (hoverAt model (mouseScreenPosition model)) model
 
                 ( mailPosition, mailSize ) =
-                    case Toolbar.view (getViewModel model) |> Ui.findButton (MailEditorHover MailEditor.MailButton) of
+                    case Ui.findButton (MailEditorHover MailEditor.MailButton) model.ui of
                         Just mailButton ->
                             ( mailButton.position, mailButton.buttonData.cachedSize )
 

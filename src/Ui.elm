@@ -72,6 +72,7 @@ type alias ButtonData id =
 type UiEvent
     = MouseDown { elementPosition : Coord Pixels }
     | MousePressed { elementPosition : Coord Pixels }
+    | MouseMove { elementPosition : Coord Pixels }
     | KeyDown { ctrlOrMetaDown : Bool, shiftDown : Bool, key : Keyboard.Key }
 
 

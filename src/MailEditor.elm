@@ -425,10 +425,7 @@ uiUpdate config mousePosition id event model =
                         Nothing ->
                             ( Just model, NoOutMsg )
 
-                Ui.MousePressed record ->
-                    ( Just model, NoOutMsg )
-
-                Ui.KeyDown record ->
+                _ ->
                     ( Just model, NoOutMsg )
 
         EraserButton ->
