@@ -43,6 +43,7 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Keyboard
 import List.Extra as List
+import Math.Vector3 as Vec3
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
@@ -99,7 +100,7 @@ type Element id
         , ignoreInputs : Bool
         }
         (Element id)
-    | Quads { size : Coord Pixels, vertices : Coord Pixels -> List Vertex }
+    | Quads { size : Coord Pixels, vertices : List Vertex }
     | Empty
 
 
@@ -478,7 +479,7 @@ sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Co
 sprite data =
     Quads
         { size = data.size
-        , vertices = \position -> Sprite.sprite position data.size data.texturePosition data.textureSize
+        , vertices = Sprite.sprite Coord.origin data.size data.texturePosition data.textureSize
         }
 
 
@@ -488,11 +489,11 @@ colorSprite :
 colorSprite data =
     Quads
         { size = data.size
-        , vertices = \position -> Sprite.spriteWithTwoColors data.colors position data.size data.texturePosition data.textureSize
+        , vertices = Sprite.spriteWithTwoColors data.colors Coord.origin data.size data.texturePosition data.textureSize
         }
 
 
-quads : { size : Coord Pixels, vertices : Coord Pixels -> List Vertex } -> Element id
+quads : { size : Coord Pixels, vertices : List Vertex } -> Element id
 quads =
     Quads
 
@@ -714,7 +715,21 @@ viewHelper focus position vertices element2 =
                 ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Quads data ->
-            data.vertices position ++ vertices
+            let
+                positionVec =
+                    Vec3.vec3 (toFloat (Coord.xRaw position)) (toFloat (Coord.yRaw position)) 0
+            in
+            List.map
+                (\v ->
+                    { position = Vec3.add positionVec v.position
+                    , texturePosition = v.texturePosition
+                    , opacityAndUserId = v.opacityAndUserId
+                    , primaryColor = v.primaryColor
+                    , secondaryColor = v.secondaryColor
+                    }
+                )
+                data.vertices
+                ++ vertices
 
         Empty ->
             vertices

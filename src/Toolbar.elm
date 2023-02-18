@@ -931,45 +931,44 @@ tileMesh colors tile =
             else
                 spriteSize
         , vertices =
-            \position3 ->
-                if tile == EmptyTile then
-                    Sprite.sprite
-                        position3
-                        (Coord.tuple ( 28 * 2, 27 * 2 ))
-                        (Coord.xy 504 42)
-                        (Coord.xy 28 27)
+            if tile == EmptyTile then
+                Sprite.sprite
+                    Coord.origin
+                    (Coord.tuple ( 28 * 2, 27 * 2 ))
+                    (Coord.xy 504 42)
+                    (Coord.xy 28 27)
 
-                else
-                    (case data.texturePosition of
-                        Just texturePosition ->
-                            Sprite.spriteWithTwoColors
-                                colors
-                                position3
-                                spriteSize
-                                texturePosition
-                                (case tile of
-                                    BigText _ ->
-                                        size |> Coord.divide (Coord.xy 2 2)
+            else
+                (case data.texturePosition of
+                    Just texturePosition ->
+                        Sprite.spriteWithTwoColors
+                            colors
+                            Coord.origin
+                            spriteSize
+                            texturePosition
+                            (case tile of
+                                BigText _ ->
+                                    size |> Coord.divide (Coord.xy 2 2)
 
-                                    _ ->
-                                        size
-                                )
+                                _ ->
+                                    size
+                            )
 
-                        Nothing ->
-                            []
-                    )
-                        ++ (case data.texturePositionTopLayer of
-                                Just topLayer ->
-                                    Sprite.spriteWithTwoColors
-                                        colors
-                                        position3
-                                        spriteSize
-                                        topLayer.texturePosition
-                                        size
+                    Nothing ->
+                        []
+                )
+                    ++ (case data.texturePositionTopLayer of
+                            Just topLayer ->
+                                Sprite.spriteWithTwoColors
+                                    colors
+                                    Coord.origin
+                                    spriteSize
+                                    topLayer.texturePosition
+                                    size
 
-                                Nothing ->
-                                    []
-                           )
+                            Nothing ->
+                                []
+                       )
         }
 
 

@@ -763,7 +763,7 @@ tileMesh tile position scale colors =
         (case data.texturePosition of
             Just texturePosition ->
                 tileMeshHelper2
-                    1
+                    Shaders.opaque
                     colors
                     False
                     0
@@ -783,7 +783,7 @@ tileMesh tile position scale colors =
         )
             ++ (case data.texturePositionTopLayer of
                     Just topLayer ->
-                        tileMeshHelper2 1 colors True topLayer.yOffset position scale topLayer.texturePosition data.size
+                        tileMeshHelper2 Shaders.opaque colors True topLayer.yOffset position scale topLayer.texturePosition data.size
 
                     Nothing ->
                         []

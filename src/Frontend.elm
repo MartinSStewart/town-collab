@@ -532,6 +532,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , lastTileRotation = []
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
+            , ui = Ui.none
             , uiMesh = Shaders.triangleFan []
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
@@ -584,7 +585,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             }
                 |> setCurrentTool HandToolButton
     in
-    ( updateMeshes True model model
+    ( updateMeshes model model
     , Command.batch
         [ Effect.WebGL.Texture.loadWith
             { magnify = Effect.WebGL.Texture.nearest
@@ -834,7 +835,7 @@ update audioData msg model =
                         , cmd
                         )
                    )
-                |> Tuple.mapFirst (updateMeshes False frontendLoaded)
+                |> Tuple.mapFirst (updateMeshes frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
 
@@ -3781,8 +3782,8 @@ keyDown key { pressedKeys } =
     List.any ((==) key) pressedKeys
 
 
-updateMeshes : Bool -> FrontendLoaded -> FrontendLoaded -> FrontendLoaded
-updateMeshes forceUpdate oldModel newModel =
+updateMeshes : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
+updateMeshes oldModel newModel =
     let
         oldCells : Dict ( Int, Int ) GridCell.Cell
         oldCells =
@@ -3893,8 +3894,8 @@ updateMeshes forceUpdate oldModel newModel =
                         Grid.backgroundMesh coord
             }
 
-        viewModel =
-            getViewModel newModel
+        newUi =
+            Toolbar.view (getViewModel newModel)
     in
     { newModel
         | meshes =
@@ -3932,12 +3933,13 @@ updateMeshes forceUpdate oldModel newModel =
                             newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
                 )
                 newCells
+        , ui = newUi
         , uiMesh =
-            if (viewModel == getViewModel oldModel) && newModel.focus == oldModel.focus && not forceUpdate then
+            if newUi == oldModel.ui && newModel.focus == oldModel.focus then
                 newModel.uiMesh
 
             else
-                Toolbar.view viewModel |> Ui.view (getUiHover newModel.focus)
+                Ui.view (getUiHover newModel.focus) newUi
     }
 
 
@@ -4137,7 +4139,7 @@ updateFromBackend msg model =
             )
 
         ( Loaded loaded, _ ) ->
-            updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes False loaded) |> Tuple.mapFirst Loaded
+            updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
 
         _ ->
             ( model, Command.none )
@@ -4946,10 +4948,6 @@ canvasView audioData model =
                             (negate <| toFloat <| round (x * toFloat Units.tileWidth))
                             (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                             0
-
-                mouseScreenPosition_ : Point2d Pixels Pixels
-                mouseScreenPosition_ =
-                    mouseScreenPosition model
 
                 localGrid : LocalGrid_
                 localGrid =

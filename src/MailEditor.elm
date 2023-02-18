@@ -1346,30 +1346,26 @@ yourPostOffice =
     Ui.quads
         { size = Tile.getData Tile.PostOffice |> .size |> Coord.multiply Units.tileSize |> Coord.scalar 2
         , vertices =
-            \position ->
-                Sprite.sprite
-                    (Coord.plus (Coord.yOnly Units.tileSize |> Coord.scalar 2) position)
+            Sprite.sprite
+                (Coord.yOnly Units.tileSize |> Coord.scalar 2)
+                (Coord.scalar 2 grassSize)
+                (Coord.xy 220 216)
+                grassSize
+                ++ Sprite.sprite
+                    Coord.origin
                     (Coord.scalar 2 grassSize)
                     (Coord.xy 220 216)
                     grassSize
-                    ++ Sprite.sprite
-                        position
-                        (Coord.scalar 2 grassSize)
-                        (Coord.xy 220 216)
-                        grassSize
-                    ++ Grid.tileMesh
-                        Tile.PostOffice
-                        position
-                        2
-                        (Tile.defaultToPrimaryAndSecondary Tile.defaultPostOfficeColor)
-                    ++ Flag.flagMesh
-                        (Coord.plus
-                            (Coord.scalar 2 Flag.postOfficeSendingMailFlagOffset2)
-                            position
-                        )
-                        2
-                        Flag.sendingMailFlagColor
-                        1
+                ++ Grid.tileMesh
+                    Tile.PostOffice
+                    Coord.origin
+                    2
+                    (Tile.defaultToPrimaryAndSecondary Tile.defaultPostOfficeColor)
+                ++ Flag.flagMesh
+                    (Coord.scalar 2 Flag.postOfficeSendingMailFlagOffset2)
+                    2
+                    Flag.sendingMailFlagColor
+                    1
         }
 
 
@@ -1379,12 +1375,11 @@ mailView mailScale mailContent maybeTool =
         stampSize =
             Coord.xy 46 46
 
-        line position y =
+        line y =
             Sprite.rectangle
                 Color.outlineColor
                 (Coord.xy (mailWidth - 200) y
                     |> Coord.scalar mailScale
-                    |> Coord.plus position
                 )
                 (Coord.xy 180 2 |> Coord.scalar mailScale)
     in
@@ -1398,61 +1393,58 @@ mailView mailScale mailContent maybeTool =
         (Ui.quads
             { size = Coord.scalar mailScale mailSize
             , vertices =
-                \position ->
-                    Sprite.rectangle
-                        Color.outlineColor
-                        (Coord.xy (mailWidth - Coord.xRaw stampSize - 20) 20
+                Sprite.rectangle
+                    Color.outlineColor
+                    (Coord.xy (mailWidth - Coord.xRaw stampSize - 20) 20
+                        |> Coord.scalar mailScale
+                    )
+                    (Coord.scalar mailScale stampSize)
+                    ++ Sprite.rectangle
+                        Color.fillColor
+                        (Coord.xy (mailWidth - Coord.xRaw stampSize - 18) 22
                             |> Coord.scalar mailScale
-                            |> Coord.plus position
                         )
-                        (Coord.scalar mailScale stampSize)
-                        ++ Sprite.rectangle
-                            Color.fillColor
-                            (Coord.xy (mailWidth - Coord.xRaw stampSize - 18) 22
-                                |> Coord.scalar mailScale
-                                |> Coord.plus position
-                            )
-                            (stampSize |> Coord.minus (Coord.xy 4 4) |> Coord.scalar mailScale)
-                        ++ line position 120
-                        ++ line position (120 + 18 * 2)
-                        ++ line position (120 + 18 * 4)
-                        ++ line position (120 + 18 * 6)
-                        ++ List.concatMap
-                            (\content ->
-                                let
-                                    position2 =
-                                        Coord.plus position (Coord.scalar mailScale content.position)
-                                in
-                                case content.item of
-                                    ImageType image ->
-                                        imageMesh position2 mailScale image
+                        (stampSize |> Coord.minus (Coord.xy 4 4) |> Coord.scalar mailScale)
+                    ++ line 120
+                    ++ line (120 + 18 * 2)
+                    ++ line (120 + 18 * 4)
+                    ++ line (120 + 18 * 6)
+                    ++ List.concatMap
+                        (\content ->
+                            let
+                                position2 =
+                                    Coord.scalar mailScale content.position
+                            in
+                            case content.item of
+                                ImageType image ->
+                                    imageMesh position2 mailScale image
 
-                                    TextType text ->
-                                        Sprite.text Color.black (2 * mailScale) text position2
-                            )
-                            mailContent
-                        ++ (case ( List.last mailContent, maybeTool ) of
-                                ( Just lastContent, Just (TextTool cursorPosition) ) ->
-                                    case lastContent.item of
-                                        TextType _ ->
-                                            Sprite.rectangleWithOpacity
-                                                0.5
-                                                Color.black
-                                                (Coord.plus position (Coord.scalar mailScale lastContent.position)
-                                                    |> Coord.plus
-                                                        (Coord.multiply (Coord.scalar (2 * mailScale) Sprite.charSize) cursorPosition
-                                                            |> Coord.toTuple
-                                                            |> Coord.tuple
-                                                        )
-                                                )
-                                                (Coord.scalar (2 * mailScale) Sprite.charSize)
+                                TextType text ->
+                                    Sprite.text Color.black (2 * mailScale) text position2
+                        )
+                        mailContent
+                    ++ (case ( List.last mailContent, maybeTool ) of
+                            ( Just lastContent, Just (TextTool cursorPosition) ) ->
+                                case lastContent.item of
+                                    TextType _ ->
+                                        Sprite.rectangleWithOpacity
+                                            0.5
+                                            Color.black
+                                            (Coord.scalar mailScale lastContent.position
+                                                |> Coord.plus
+                                                    (Coord.multiply (Coord.scalar (2 * mailScale) Sprite.charSize) cursorPosition
+                                                        |> Coord.toTuple
+                                                        |> Coord.tuple
+                                                    )
+                                            )
+                                            (Coord.scalar (2 * mailScale) Sprite.charSize)
 
-                                        ImageType _ ->
-                                            []
+                                    ImageType _ ->
+                                        []
 
-                                _ ->
-                                    []
-                           )
+                            _ ->
+                                []
+                       )
             }
         )
 
@@ -1827,7 +1819,7 @@ imageButton idMap selectedIndex index image =
         (ImageButton index |> idMap)
         (Ui.quads
             { size = Coord.scalar scale imageData.textureSize
-            , vertices = \position -> imageMesh position scale image
+            , vertices = imageMesh Coord.origin scale image
             }
         )
 

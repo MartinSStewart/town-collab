@@ -71,6 +71,7 @@ import TextInput
 import Tile exposing (Tile, TileGroup)
 import Time
 import Train exposing (Train, TrainDiff)
+import Ui
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
@@ -177,6 +178,7 @@ type alias FrontendLoaded =
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix
     , tileHotkeys : Dict String TileGroup
+    , ui : Ui.Element UiHover
     , uiMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe TileGroup
     , lastHouseClick : Maybe Effect.Time.Posix
