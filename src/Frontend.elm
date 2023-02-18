@@ -481,9 +481,6 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
         defaultTileColors =
             AssocList.empty
 
-        focus =
-            MapHover
-
         currentUserId2 =
             currentUserId loadedLocalModel
 
@@ -544,7 +541,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , tileColors = defaultTileColors
             , primaryColorTextInput = TextInput.init
             , secondaryColorTextInput = TextInput.init
-            , focus = focus
+            , focus = Nothing
             , music =
                 { startTime = Duration.addTo time (Duration.seconds 10)
                 , sound =
@@ -937,10 +934,10 @@ updateLoaded audioData msg model =
                                     , Command.none
                                     )
 
-                                ( UiHover EmailAddressTextInputHover _, _, Keyboard.Enter ) ->
+                                ( Just EmailAddressTextInputHover, _, Keyboard.Enter ) ->
                                     sendEmail model
 
-                                ( UiHover id data, _, Keyboard.Enter ) ->
+                                ( Just id, _, Keyboard.Enter ) ->
                                     case Ui.findButton id (Toolbar.view model) of
                                         Just { buttonData } ->
                                             --uiUpdate data.position id model
@@ -949,22 +946,22 @@ updateLoaded audioData msg model =
                                         Nothing ->
                                             ( model, Command.none )
 
-                                ( UiHover PrimaryColorInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
+                                ( Just PrimaryColorInput, _, Keyboard.Escape ) ->
+                                    ( setFocus Nothing model, Command.none )
 
-                                ( UiHover SecondaryColorInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
+                                ( Just SecondaryColorInput, _, Keyboard.Escape ) ->
+                                    ( setFocus Nothing model, Command.none )
 
-                                ( UiHover EmailAddressTextInputHover _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
+                                ( Just EmailAddressTextInputHover, _, Keyboard.Escape ) ->
+                                    ( setFocus Nothing model, Command.none )
 
-                                ( UiHover InviteEmailAddressTextInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
+                                ( Just InviteEmailAddressTextInput, _, Keyboard.Escape ) ->
+                                    ( setFocus Nothing model, Command.none )
 
-                                ( UiHover DisplayNameTextInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
+                                ( Just DisplayNameTextInput, _, Keyboard.Escape ) ->
+                                    ( setFocus Nothing model, Command.none )
 
-                                ( UiHover PrimaryColorInput _, tool, _ ) ->
+                                ( Just PrimaryColorInput, tool, _ ) ->
                                     case currentUserId model of
                                         Just userId ->
                                             handleKeyDownColorInput
@@ -979,7 +976,7 @@ updateLoaded audioData msg model =
                                         Nothing ->
                                             ( model, Command.none )
 
-                                ( UiHover SecondaryColorInput _, tool, _ ) ->
+                                ( Just SecondaryColorInput, tool, _ ) ->
                                     case currentUserId model of
                                         Just userId ->
                                             handleKeyDownColorInput
@@ -994,7 +991,7 @@ updateLoaded audioData msg model =
                                         Nothing ->
                                             ( model, Command.none )
 
-                                ( UiHover EmailAddressTextInputHover _, _, _ ) ->
+                                ( Just EmailAddressTextInputHover, _, _ ) ->
                                     let
                                         ( newTextInput, outMsg ) =
                                             TextInput.keyMsg
@@ -1015,7 +1012,7 @@ updateLoaded audioData msg model =
                                             Command.none
                                     )
 
-                                ( UiHover InviteEmailAddressTextInput _, _, _ ) ->
+                                ( Just InviteEmailAddressTextInput, _, _ ) ->
                                     let
                                         ( newTextInput, outMsg ) =
                                             TextInput.keyMsg
@@ -1036,7 +1033,7 @@ updateLoaded audioData msg model =
                                             Command.none
                                     )
 
-                                ( UiHover DisplayNameTextInput _, _, _ ) ->
+                                ( Just DisplayNameTextInput, _, _ ) ->
                                     case model.topMenuOpened of
                                         Just (SettingsMenu nameTextInput) ->
                                             let
@@ -1151,7 +1148,7 @@ updateLoaded audioData msg model =
                                                         data.position
                                                         model2.primaryColorTextInput
                                               }
-                                                |> setFocus (UiHover PrimaryColorInput data)
+                                                |> setFocus (Just PrimaryColorInput)
                                             , Command.none
                                             )
 
@@ -1163,7 +1160,7 @@ updateLoaded audioData msg model =
                                                         data.position
                                                         model2.secondaryColorTextInput
                                               }
-                                                |> setFocus (UiHover SecondaryColorInput data)
+                                                |> setFocus (Just SecondaryColorInput)
                                             , Command.none
                                             )
 
@@ -1175,7 +1172,7 @@ updateLoaded audioData msg model =
                                                         data.position
                                                         model2.loginTextInput
                                               }
-                                                |> setFocus hover
+                                                |> setFocus (getUiHover hover)
                                             , Command.none
                                             )
 
@@ -1187,7 +1184,7 @@ updateLoaded audioData msg model =
                                                         data.position
                                                         model2.inviteTextInput
                                               }
-                                                |> setFocus hover
+                                                |> setFocus (getUiHover hover)
                                             , Command.none
                                             )
 
@@ -1203,7 +1200,7 @@ updateLoaded audioData msg model =
                                                                 |> SettingsMenu
                                                                 |> Just
                                                       }
-                                                        |> setFocus hover
+                                                        |> setFocus (getUiHover hover)
                                                     , Command.none
                                                     )
 
@@ -1535,22 +1532,7 @@ updateLoaded audioData msg model =
 
                         _ ->
                             case model.focus of
-                                TileHover _ ->
-                                    True
-
-                                TrainHover _ ->
-                                    True
-
-                                MapHover ->
-                                    True
-
-                                CowHover _ ->
-                                    True
-
-                                UiBackgroundHover ->
-                                    True
-
-                                UiHover uiHover _ ->
+                                Just uiHover ->
                                     case uiHover of
                                         EmailAddressTextInputHover ->
                                             False
@@ -1618,6 +1600,9 @@ updateLoaded audioData msg model =
                                         UsersOnlineButton ->
                                             True
 
+                                Nothing ->
+                                    True
+
                 model2 =
                     { model
                         | time = time
@@ -1683,34 +1668,8 @@ updateLoaded audioData msg model =
                     ( model, Command.none )
 
         PastedText text ->
-            let
-                pasteTextTool () =
-                    ( case model.currentTool of
-                        TextTool (Just _) ->
-                            String.foldl placeChar model (String.left 200 text)
-
-                        _ ->
-                            model
-                    , Command.none
-                    )
-            in
             case model.focus of
-                TileHover _ ->
-                    pasteTextTool ()
-
-                TrainHover _ ->
-                    pasteTextTool ()
-
-                MapHover ->
-                    pasteTextTool ()
-
-                CowHover _ ->
-                    pasteTextTool ()
-
-                UiBackgroundHover ->
-                    pasteTextTool ()
-
-                UiHover uiHover _ ->
+                Just uiHover ->
                     case uiHover of
                         EmailAddressTextInputHover ->
                             ( { model | loginTextInput = TextInput.paste text model.loginTextInput }
@@ -1718,7 +1677,7 @@ updateLoaded audioData msg model =
                             )
 
                         SendEmailButtonHover ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         PrimaryColorInput ->
                             case currentUserId model of
@@ -1733,7 +1692,7 @@ updateLoaded audioData msg model =
                                             model
 
                                 Nothing ->
-                                    pasteTextTool ()
+                                    pasteTextTool text model
 
                         SecondaryColorInput ->
                             case currentUserId model of
@@ -1748,40 +1707,40 @@ updateLoaded audioData msg model =
                                             model
 
                                 Nothing ->
-                                    pasteTextTool ()
+                                    pasteTextTool text model
 
                         ToolButtonHover _ ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         ShowInviteUser ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         CloseInviteUser ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         SubmitInviteUser ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         InviteEmailAddressTextInput ->
                             ( { model | inviteTextInput = TextInput.paste text model.inviteTextInput }, Command.none )
 
                         LowerMusicVolume ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         RaiseMusicVolume ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         LowerSoundEffectVolume ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         RaiseSoundEffectVolume ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         SettingsButton ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         CloseSettings ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         DisplayNameTextInput ->
                             case model.topMenuOpened of
@@ -1793,25 +1752,28 @@ updateLoaded audioData msg model =
                                     )
 
                                 _ ->
-                                    pasteTextTool ()
+                                    pasteTextTool text model
 
                         MailEditorHover mailEditorHover ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         YouGotMailButton ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         ShowMapButton ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         AllowEmailNotificationsCheckbox ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         ResetConnectionsButton ->
-                            pasteTextTool ()
+                            pasteTextTool text model
 
                         UsersOnlineButton ->
-                            pasteTextTool ()
+                            pasteTextTool text model
+
+                Nothing ->
+                    pasteTextTool text model
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -1820,6 +1782,17 @@ updateLoaded audioData msg model =
             ( { model | musicVolume = userSettings.musicVolume, soundEffectVolume = userSettings.soundEffectVolume }
             , Command.none
             )
+
+
+pasteTextTool text model =
+    ( case model.currentTool of
+        TextTool (Just _) ->
+            String.foldl placeChar model (String.left 200 text)
+
+        _ ->
+            model
+    , Command.none
+    )
 
 
 tileRotationHelper : AudioData -> Int -> { a | tileGroup : TileGroup, index : Int } -> FrontendLoaded -> FrontendLoaded
@@ -1853,14 +1826,14 @@ tileRotationHelper audioData offset tile model =
         }
 
 
-previousFocus : FrontendLoaded -> Hover
+previousFocus : FrontendLoaded -> Maybe UiHover
 previousFocus model =
     case model.focus of
-        UiHover hoverId _ ->
-            UiHover (Ui.tabBackward hoverId model.ui) { position = Coord.origin }
+        Just hoverId ->
+            Just (Ui.tabBackward hoverId model.ui)
 
         _ ->
-            model.focus
+            Nothing
 
 
 currentTileGroup : FrontendLoaded -> Maybe TileGroup
@@ -1879,14 +1852,14 @@ currentTileGroup model =
             Nothing
 
 
-nextFocus : FrontendLoaded -> Hover
+nextFocus : FrontendLoaded -> Maybe UiHover
 nextFocus model =
     case model.focus of
-        UiHover hoverId _ ->
-            UiHover (Ui.tabForward hoverId model.ui) { position = Coord.origin }
+        Just hoverId ->
+            Just (Ui.tabForward hoverId model.ui)
 
         _ ->
-            model.focus
+            Nothing
 
 
 colorTextInputAdjustText : TextInput.Model -> TextInput.Model
@@ -2658,6 +2631,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
         isSmallDistance2 =
             isSmallDistance previousMouseState mousePosition
 
+        hoverAt2 : Hover
         hoverAt2 =
             hoverAt model mousePosition
 
@@ -2695,7 +2669,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
             }
                 |> (\m ->
                         if isSmallDistance2 then
-                            setFocus hoverAt2 m
+                            setFocus (getUiHover hoverAt2) m
 
                         else
                             m
@@ -2926,39 +2900,72 @@ uiUpdate : UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command Fro
 uiUpdate id event model =
     case id of
         CloseInviteUser ->
-            ( { model | topMenuOpened = Nothing }, Command.none )
+            case event of
+                Ui.MousePressed _ ->
+                    ( { model | topMenuOpened = Nothing }, Command.none )
+
+                _ ->
+                    ( model, Command.none )
 
         ShowInviteUser ->
-            ( { model | topMenuOpened = Just InviteMenu }, Command.none )
+            case event of
+                Ui.MousePressed _ ->
+                    ( { model | topMenuOpened = Just InviteMenu }, Command.none )
+
+                _ ->
+                    ( model, Command.none )
 
         SubmitInviteUser ->
-            case ( LocalGrid.localModel model.localModel |> .userStatus, model.inviteSubmitStatus ) of
-                ( LoggedIn loggedIn, NotSubmitted _ ) ->
-                    case Toolbar.validateInviteEmailAddress loggedIn.emailAddress model.inviteTextInput.current.text of
-                        Ok emailAddress ->
-                            ( { model | inviteSubmitStatus = Submitting }
-                            , Effect.Lamdera.sendToBackend (SendInviteEmailRequest (Untrusted.untrust emailAddress))
-                            )
+            case event of
+                Ui.MousePressed _ ->
+                    case ( LocalGrid.localModel model.localModel |> .userStatus, model.inviteSubmitStatus ) of
+                        ( LoggedIn loggedIn, NotSubmitted _ ) ->
+                            case Toolbar.validateInviteEmailAddress loggedIn.emailAddress model.inviteTextInput.current.text of
+                                Ok emailAddress ->
+                                    ( { model | inviteSubmitStatus = Submitting }
+                                    , Effect.Lamdera.sendToBackend (SendInviteEmailRequest (Untrusted.untrust emailAddress))
+                                    )
 
-                        Err _ ->
-                            ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }, Command.none )
+                                Err _ ->
+                                    ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }, Command.none )
+
+                        _ ->
+                            ( model, Command.none )
 
                 _ ->
                     ( model, Command.none )
 
         SendEmailButtonHover ->
-            sendEmail model
+            case event of
+                Ui.MousePressed _ ->
+                    sendEmail model
+
+                _ ->
+                    ( model, Command.none )
 
         ToolButtonHover tool ->
-            ( setCurrentTool tool model, Command.none )
+            case event of
+                Ui.MousePressed _ ->
+                    ( setCurrentTool tool model, Command.none )
+
+                _ ->
+                    ( model, Command.none )
 
         InviteEmailAddressTextInput ->
-            --( { model | inviteTextInput = textInput }, Command.none )
-            Debug.todo ""
+            textInputUpdate
+                (\_ model2 -> model2)
+                model.inviteTextInput
+                (\a -> { model | inviteTextInput = a })
+                event
+                model
 
         EmailAddressTextInputHover ->
-            --( { model | loginTextInput = textInput }, Command.none )
-            Debug.todo ""
+            textInputUpdate
+                (\_ model2 -> model2)
+                model.loginTextInput
+                (\a -> { model | loginTextInput = a })
+                event
+                model
 
         PrimaryColorInput ->
             case event of
@@ -2973,69 +2980,217 @@ uiUpdate id event model =
                     , Command.none
                     )
 
+                Ui.MouseDown { elementPosition } ->
+                    ( { model
+                        | primaryColorTextInput =
+                            TextInput.mouseDown
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.primaryColorTextInput
+                      }
+                        |> setFocus (Just PrimaryColorInput)
+                    , Command.none
+                    )
+
+                Ui.KeyDown Keyboard.Escape ->
+                    ( setFocus Nothing model, Command.none )
+
+                Ui.KeyDown key ->
+                    case currentUserId model of
+                        Just userId ->
+                            handleKeyDownColorInput
+                                userId
+                                (\a b -> { b | primaryColorTextInput = a })
+                                (\color a -> { a | primaryColor = color })
+                                model.currentTool
+                                key
+                                model
+                                model.primaryColorTextInput
+
+                        Nothing ->
+                            ( model, Command.none )
+
+                Ui.PastedText text ->
+                    case currentUserId model of
+                        Just userId ->
+                            TextInput.paste text model.primaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    userId
+                                    (\a b -> { b | primaryColorTextInput = a })
+                                    (\a b -> { b | primaryColor = a })
+                                    model.currentTool
+                                    model
+
+                        Nothing ->
+                            pasteTextTool text model
+
                 _ ->
                     ( model, Command.none )
 
-        --( { model | primaryColorTextInput = textInput }, Command.none )
         SecondaryColorInput ->
-            --( { model | secondaryColorTextInput = textInput }, Command.none )
-            Debug.todo ""
+            case event of
+                Ui.MouseMove { elementPosition } ->
+                    ( { model
+                        | secondaryColorTextInput =
+                            TextInput.mouseDownMove
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.secondaryColorTextInput
+                      }
+                    , Command.none
+                    )
+
+                Ui.MouseDown { elementPosition } ->
+                    ( { model
+                        | secondaryColorTextInput =
+                            TextInput.mouseDown
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.secondaryColorTextInput
+                      }
+                        |> setFocus (Just SecondaryColorInput)
+                    , Command.none
+                    )
+
+                Ui.KeyDown Keyboard.Escape ->
+                    ( setFocus Nothing model, Command.none )
+
+                Ui.KeyDown key ->
+                    case currentUserId model of
+                        Just userId ->
+                            handleKeyDownColorInput
+                                userId
+                                (\a b -> { b | secondaryColorTextInput = a })
+                                (\color a -> { a | secondaryColor = color })
+                                model.currentTool
+                                key
+                                model
+                                model.secondaryColorTextInput
+
+                        Nothing ->
+                            ( model, Command.none )
+
+                Ui.PastedText text ->
+                    case currentUserId model of
+                        Just userId ->
+                            TextInput.paste text model.secondaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    userId
+                                    (\a b -> { b | secondaryColorTextInput = a })
+                                    (\a b -> { b | secondaryColor = a })
+                                    model.currentTool
+                                    model
+
+                        Nothing ->
+                            pasteTextTool text model
+
+                _ ->
+                    ( model, Command.none )
 
         LowerMusicVolume ->
-            { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings
+            case event of
+                Ui.MousePressed _ ->
+                    { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings
+
+                _ ->
+                    ( model, Command.none )
 
         RaiseMusicVolume ->
-            { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
+            case event of
+                Ui.MousePressed _ ->
+                    { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
+
+                _ ->
+                    ( model, Command.none )
 
         LowerSoundEffectVolume ->
-            { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings
+            case event of
+                Ui.MousePressed _ ->
+                    { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings
+
+                _ ->
+                    ( model, Command.none )
 
         RaiseSoundEffectVolume ->
-            { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
+            case event of
+                Ui.MousePressed _ ->
+                    { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
+
+                _ ->
+                    ( model, Command.none )
 
         SettingsButton ->
-            let
-                localModel =
-                    LocalGrid.localModel model.localModel
-            in
-            ( { model
-                | topMenuOpened =
-                    case localModel.userStatus of
-                        LoggedIn loggedIn ->
-                            TextInput.init
-                                |> TextInput.withText
-                                    (case IdDict.get loggedIn.userId localModel.users of
-                                        Just user ->
-                                            DisplayName.toString user.name
+            case event of
+                Ui.MousePressed _ ->
+                    let
+                        localModel =
+                            LocalGrid.localModel model.localModel
+                    in
+                    ( { model
+                        | topMenuOpened =
+                            case localModel.userStatus of
+                                LoggedIn loggedIn ->
+                                    TextInput.init
+                                        |> TextInput.withText
+                                            (case IdDict.get loggedIn.userId localModel.users of
+                                                Just user ->
+                                                    DisplayName.toString user.name
 
-                                        Nothing ->
-                                            DisplayName.toString DisplayName.default
-                                    )
-                                |> SettingsMenu
-                                |> Just
+                                                Nothing ->
+                                                    DisplayName.toString DisplayName.default
+                                            )
+                                        |> SettingsMenu
+                                        |> Just
 
-                        NotLoggedIn ->
-                            Just LoggedOutSettingsMenu
-              }
-            , Command.none
-            )
+                                NotLoggedIn ->
+                                    Just LoggedOutSettingsMenu
+                      }
+                    , Command.none
+                    )
+
+                _ ->
+                    ( model, Command.none )
 
         CloseSettings ->
-            ( { model | topMenuOpened = Nothing }, Command.none )
+            case event of
+                Ui.MousePressed _ ->
+                    ( { model | topMenuOpened = Nothing }, Command.none )
+
+                _ ->
+                    ( model, Command.none )
 
         DisplayNameTextInput ->
-            --( { model
-            --    | topMenuOpened =
-            --        case model.topMenuOpened of
-            --            Just (SettingsMenu _) ->
-            --                SettingsMenu textInput |> Just
-            --
-            --            _ ->
-            --                Nothing
-            --  }
-            --, Command.none
-            --)
-            Debug.todo ""
+            case model.topMenuOpened of
+                Just (SettingsMenu nameTextInput) ->
+                    textInputUpdate
+                        (\newTextInput model3 ->
+                            let
+                                ( model2, outMsg2 ) =
+                                    case ( DisplayName.fromString nameTextInput.current.text, DisplayName.fromString newTextInput.current.text ) of
+                                        ( Ok old, Ok new ) ->
+                                            if old == new then
+                                                ( model3, LocalGrid.NoOutMsg )
+
+                                            else
+                                                updateLocalModel (Change.ChangeDisplayName new) model3
+
+                                        ( Err _, Ok new ) ->
+                                            updateLocalModel (Change.ChangeDisplayName new) model3
+
+                                        _ ->
+                                            ( model3, LocalGrid.NoOutMsg )
+                            in
+                            handleOutMsg False ( model2, outMsg2 )
+                        )
+                        nameTextInput
+                        (\a -> { model | topMenuOpened = Just (SettingsMenu a) })
+                        event
+                        model
+
+                _ ->
+                    ( model, Command.none )
 
         MailEditorHover mailEditorId ->
             case model.mailEditor of
@@ -3068,29 +3223,119 @@ uiUpdate id event model =
                     ( model, Command.none )
 
         YouGotMailButton ->
-            ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )
+            case event of
+                Ui.MousePressed _ ->
+                    ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )
+
+                _ ->
+                    ( model, Command.none )
 
         ShowMapButton ->
-            ( { model | showMap = not model.showMap }, Command.none )
+            case event of
+                Ui.MousePressed _ ->
+                    ( { model | showMap = not model.showMap }, Command.none )
+
+                _ ->
+                    ( model, Command.none )
 
         AllowEmailNotificationsCheckbox ->
-            ( case LocalGrid.localModel model.localModel |> .userStatus of
-                LoggedIn loggedIn ->
-                    updateLocalModel
-                        (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
-                        model
-                        |> handleOutMsg False
+            case event of
+                Ui.MousePressed _ ->
+                    ( case LocalGrid.localModel model.localModel |> .userStatus of
+                        LoggedIn loggedIn ->
+                            updateLocalModel
+                                (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
+                                model
+                                |> handleOutMsg False
 
-                NotLoggedIn ->
-                    model
+                        NotLoggedIn ->
+                            model
+                    , Command.none
+                    )
+
+                _ ->
+                    ( model, Command.none )
+
+        ResetConnectionsButton ->
+            case event of
+                Ui.MousePressed _ ->
+                    ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none )
+
+                _ ->
+                    ( model, Command.none )
+
+        UsersOnlineButton ->
+            case event of
+                Ui.MousePressed _ ->
+                    ( { model | showInviteTree = not model.showInviteTree }, Command.none )
+
+                _ ->
+                    ( model, Command.none )
+
+
+textInputUpdate :
+    (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
+    -> TextInput.Model
+    -> (TextInput.Model -> FrontendLoaded)
+    -> UiEvent
+    -> FrontendLoaded
+    -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
+textInputUpdate textChanged nameTextInput setTextInput event model =
+    case event of
+        Ui.MouseDown { elementPosition } ->
+            ( TextInput.mouseDownMove
+                (mouseScreenPosition model |> Coord.roundPoint)
+                elementPosition
+                nameTextInput
+                |> setTextInput
             , Command.none
             )
 
-        ResetConnectionsButton ->
-            ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none )
+        Ui.PastedText text ->
+            let
+                textInput2 =
+                    TextInput.paste text nameTextInput
+            in
+            ( setTextInput textInput2 |> textChanged textInput2
+            , Command.none
+            )
 
-        UsersOnlineButton ->
-            ( { model | showInviteTree = not model.showInviteTree }, Command.none )
+        Ui.MouseDown { elementPosition } ->
+            ( TextInput.mouseDown
+                (mouseScreenPosition model |> Coord.roundPoint)
+                elementPosition
+                nameTextInput
+                |> setTextInput
+                |> setFocus (Just DisplayNameTextInput)
+            , Command.none
+            )
+
+        Ui.KeyDown Keyboard.Escape ->
+            ( setFocus Nothing model, Command.none )
+
+        Ui.KeyDown key ->
+            let
+                ( newTextInput, outMsg ) =
+                    TextInput.keyMsg
+                        (ctrlOrMeta model)
+                        (keyDown Keyboard.Shift model)
+                        key
+                        nameTextInput
+            in
+            ( setTextInput newTextInput |> textChanged newTextInput
+            , case outMsg of
+                CopyText text ->
+                    Ports.copyToClipboard text
+
+                PasteText ->
+                    Ports.readFromClipboardRequest
+
+                NoOutMsg ->
+                    Command.none
+            )
+
+        _ ->
+            ( model, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -3120,34 +3365,34 @@ sendEmail model2 =
             ( model2, Command.none )
 
 
-isPrimaryColorInput : Hover -> Bool
+isPrimaryColorInput : Maybe UiHover -> Bool
 isPrimaryColorInput hover =
     case hover of
-        UiHover PrimaryColorInput _ ->
+        Just PrimaryColorInput ->
             True
 
         _ ->
             False
 
 
-isSecondaryColorInput : Hover -> Bool
+isSecondaryColorInput : Maybe UiHover -> Bool
 isSecondaryColorInput hover =
     case hover of
-        UiHover SecondaryColorInput _ ->
+        Just SecondaryColorInput ->
             True
 
         _ ->
             False
 
 
-setFocus : Hover -> FrontendLoaded -> FrontendLoaded
+setFocus : Maybe UiHover -> FrontendLoaded -> FrontendLoaded
 setFocus newFocus model =
     { model
         | focus = newFocus
         , currentTool =
             case model.currentTool of
                 TextTool _ ->
-                    if newFocus == MapHover then
+                    if newFocus == Nothing then
                         model.currentTool
 
                     else
@@ -3853,6 +4098,7 @@ updateMeshes oldModel newModel =
                         Grid.backgroundMesh coord
             }
 
+        newUi : Ui.Element UiHover
         newUi =
             Toolbar.view newModel
     in
@@ -3898,7 +4144,7 @@ updateMeshes oldModel newModel =
                 newModel.uiMesh
 
             else
-                Ui.view (getUiHover newModel.focus) newUi
+                Ui.view newModel.focus newUi
     }
 
 
