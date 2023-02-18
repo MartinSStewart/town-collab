@@ -1,6 +1,6 @@
 module Toolbar exposing
-    ( ViewData
-    , getTileGroupTile
+    ( getTileGroupTile
+    , isDisconnected
     , mapSize
     , showColorTextInputs
     , validateInviteEmailAddress
@@ -22,6 +22,7 @@ import IdDict exposing (IdDict)
 import Keyboard
 import List.Extra as List
 import List.Nonempty
+import LocalGrid
 import MailEditor
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
@@ -30,92 +31,76 @@ import Sound
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..))
+import Types exposing (FrontendLoaded, Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..))
 import Ui exposing (BorderAndFill(..))
 import Units
 import User exposing (FrontendUser, InviteTree(..))
 
 
-type alias ViewData =
-    { windowSize : Coord Pixels
-    , pressedSubmitEmail : SubmitStatus EmailAddress
-    , loginTextInput : TextInput.Model
-    , hasCmdKey : Bool
-    , handColor : Maybe Colors
-    , userStatus : UserStatus
-    , primaryColorTextInput : TextInput.Model
-    , secondaryColorTextInput : TextInput.Model
-    , tileColors : AssocList.Dict TileGroup Colors
-    , tileHotkeys : Dict String TileGroup
-    , currentTool : ToolButton
-    , userId : Maybe (Id UserId)
-    , inviteTextInput : TextInput.Model
-    , inviteSubmitStatus : SubmitStatus EmailAddress
-    , musicVolume : Int
-    , soundEffectVolume : Int
-    , topMenuOpened : Maybe TopMenu
-    , mailEditor : Maybe MailEditor.Model
-    , users : IdDict UserId FrontendUser
-    , inviteTree : InviteTree
-    , isDisconnected : Bool
-    , showMap : Bool
-    , otherUsersOnline : Int
-    , showInviteTree : Bool
-    }
+view : FrontendLoaded -> Ui.Element UiHover
+view model =
+    let
+        localModel =
+            LocalGrid.localModel model.localModel
 
+        otherUsersOnline =
+            case localModel.userStatus of
+                LoggedIn { userId } ->
+                    IdDict.remove userId localModel.cursors |> IdDict.size
 
-view : ViewData -> Ui.Element UiHover
-view data =
-    case ( data.userStatus, data.mailEditor ) of
+                NotLoggedIn ->
+                    IdDict.size localModel.cursors
+    in
+    case ( localModel.userStatus, model.mailEditor ) of
         ( LoggedIn loggedIn, Just mailEditor ) ->
             MailEditor.ui
-                data.isDisconnected
-                data.windowSize
+                (isDisconnected model)
+                model.windowSize
                 MailEditorHover
-                data.users
+                localModel.users
                 loggedIn.inbox
                 mailEditor
 
         _ ->
             Ui.bottomCenter
-                { size = data.windowSize
+                { size = model.windowSize
                 , inFront =
-                    [ if data.showInviteTree then
+                    [ if model.showInviteTree then
                         Ui.topRight
-                            { size = data.windowSize }
+                            { size = model.windowSize }
                             (Ui.el
                                 { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
-                                (User.drawInviteTree data.users data.inviteTree)
+                                (User.drawInviteTree localModel.users localModel.inviteTree)
                             )
 
                       else
                         Ui.none
-                    , if data.isDisconnected then
-                        MailEditor.disconnectWarning data.windowSize
+                    , if isDisconnected model then
+                        MailEditor.disconnectWarning model.windowSize
 
                       else
                         Ui.topRight
-                            { size = data.windowSize }
+                            { size = model.windowSize }
                             (Ui.button
                                 { id = UsersOnlineButton
                                 , padding = Ui.paddingXY 10 4
                                 }
-                                (if data.otherUsersOnline == 1 then
+                                (if otherUsersOnline == 1 then
                                     Ui.text "1 user online"
 
                                  else
-                                    Ui.text (String.fromInt data.otherUsersOnline ++ " users online")
+                                    Ui.text (String.fromInt otherUsersOnline ++ " users online")
                                 )
                             )
                     , Ui.row
                         { padding = Ui.noPadding, spacing = 4 }
-                        [ case data.topMenuOpened of
+                        [ case model.topMenuOpened of
                             Just (SettingsMenu nameTextInput) ->
-                                case data.userStatus of
+                                case localModel.userStatus of
                                     LoggedIn loggedIn ->
                                         settingsView
-                                            data.musicVolume
-                                            data.soundEffectVolume
+                                            model.musicVolume
+                                            model.soundEffectVolume
                                             nameTextInput
                                             loggedIn
 
@@ -123,7 +108,7 @@ view data =
                                         Ui.none
 
                             Just LoggedOutSettingsMenu ->
-                                loggedOutSettingsView data.musicVolume data.soundEffectVolume
+                                loggedOutSettingsView model.musicVolume model.soundEffectVolume
 
                             _ ->
                                 Ui.button
@@ -131,13 +116,13 @@ view data =
                                     , padding = Ui.paddingXY 10 4
                                     }
                                     (Ui.text "Settings")
-                        , case data.userStatus of
+                        , case localModel.userStatus of
                             LoggedIn loggedIn ->
                                 inviteView
-                                    (data.topMenuOpened == Just InviteMenu)
+                                    (model.topMenuOpened == Just InviteMenu)
                                     loggedIn.emailAddress
-                                    data.inviteTextInput
-                                    data.inviteSubmitStatus
+                                    model.inviteTextInput
+                                    model.inviteSubmitStatus
 
                             NotLoggedIn ->
                                 Ui.none
@@ -146,14 +131,14 @@ view data =
                             , padding = Ui.paddingXY 10 4
                             }
                             (Ui.text
-                                (if data.showMap then
+                                (if model.showMap then
                                     "Hide map"
 
                                  else
                                     "Show map"
                                 )
                             )
-                        , case data.userStatus of
+                        , case localModel.userStatus of
                             LoggedIn loggedIn ->
                                 let
                                     unviewedMail =
@@ -185,10 +170,10 @@ view data =
                             NotLoggedIn ->
                                 Ui.none
                         ]
-                    , if data.showMap then
+                    , if model.showMap then
                         let
                             mapSize2 =
-                                mapSize data.windowSize
+                                mapSize model.windowSize
                         in
                         Ui.el
                             { padding =
@@ -205,7 +190,7 @@ view data =
                             }
                             Ui.none
                             |> Ui.ignoreInputs
-                            |> Ui.center { size = data.windowSize }
+                            |> Ui.center { size = model.windowSize }
 
                       else
                         Ui.none
@@ -216,21 +201,44 @@ view data =
                     , inFront = []
                     , borderAndFill = borderAndFill
                     }
-                    (case data.handColor of
-                        Just handColor ->
+                    (case localModel.userStatus of
+                        LoggedIn loggedIn ->
                             toolbarUi
-                                data.hasCmdKey
-                                handColor
-                                data.primaryColorTextInput
-                                data.secondaryColorTextInput
-                                data.tileColors
-                                data.tileHotkeys
-                                data.currentTool
+                                model.hasCmdKey
+                                (case IdDict.get loggedIn.userId localModel.users of
+                                    Just user ->
+                                        user.handColor
 
-                        Nothing ->
-                            loginToolbarUi data.pressedSubmitEmail data.loginTextInput
+                                    Nothing ->
+                                        Cursor.defaultColors
+                                )
+                                model.primaryColorTextInput
+                                model.secondaryColorTextInput
+                                model.tileColors
+                                model.tileHotkeys
+                                (case model.currentTool of
+                                    HandTool ->
+                                        HandToolButton
+
+                                    TilePlacerTool { tileGroup } ->
+                                        TilePlacerToolButton tileGroup
+
+                                    TilePickerTool ->
+                                        TilePickerToolButton
+
+                                    TextTool _ ->
+                                        TextToolButton
+                                )
+
+                        NotLoggedIn ->
+                            loginToolbarUi model.pressedSubmitEmail model.loginTextInput
                     )
                 )
+
+
+isDisconnected : FrontendLoaded -> Bool
+isDisconnected model =
+    Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 20)
 
 
 mapSize : Coord Pixels -> Int

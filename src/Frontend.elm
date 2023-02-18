@@ -74,7 +74,7 @@ import Terrain
 import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
 import Time
-import Toolbar exposing (ViewData)
+import Toolbar
 import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Ui exposing (UiEvent)
@@ -941,7 +941,7 @@ updateLoaded audioData msg model =
                                     sendEmail model
 
                                 ( UiHover id data, _, Keyboard.Enter ) ->
-                                    case Ui.findButton id (Toolbar.view (getViewModel model)) of
+                                    case Ui.findButton id (Toolbar.view model) of
                                         Just { buttonData } ->
                                             --uiUpdate data.position id model
                                             Debug.todo ""
@@ -2059,60 +2059,6 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
                     Nothing ->
                         m
             )
-
-
-getViewModel : FrontendLoaded -> ViewData
-getViewModel model =
-    let
-        localModel =
-            LocalGrid.localModel model.localModel
-
-        maybeUserId =
-            currentUserId model
-    in
-    { windowSize = model.windowSize
-    , pressedSubmitEmail = model.pressedSubmitEmail
-    , loginTextInput = model.loginTextInput
-    , hasCmdKey = model.hasCmdKey
-    , handColor = Maybe.map (\userId -> getHandColor userId model) (currentUserId model)
-    , userStatus = localModel.userStatus
-    , primaryColorTextInput = model.primaryColorTextInput
-    , secondaryColorTextInput = model.secondaryColorTextInput
-    , tileColors = model.tileColors
-    , tileHotkeys = model.tileHotkeys
-    , currentTool =
-        case model.currentTool of
-            HandTool ->
-                HandToolButton
-
-            TilePlacerTool { tileGroup } ->
-                TilePlacerToolButton tileGroup
-
-            TilePickerTool ->
-                TilePickerToolButton
-
-            TextTool _ ->
-                TextToolButton
-    , userId = maybeUserId
-    , topMenuOpened = model.topMenuOpened
-    , inviteTextInput = model.inviteTextInput
-    , inviteSubmitStatus = model.inviteSubmitStatus
-    , musicVolume = model.musicVolume
-    , soundEffectVolume = model.soundEffectVolume
-    , mailEditor = model.mailEditor
-    , users = localModel.users
-    , inviteTree = localModel.inviteTree
-    , isDisconnected = isDisconnected model
-    , showMap = model.showMap
-    , otherUsersOnline =
-        case maybeUserId of
-            Just userId ->
-                IdDict.remove userId localModel.cursors |> IdDict.size
-
-            Nothing ->
-                IdDict.size localModel.cursors
-    , showInviteTree = model.showInviteTree
-    }
 
 
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
@@ -3908,7 +3854,7 @@ updateMeshes oldModel newModel =
             }
 
         newUi =
-            Toolbar.view (getViewModel newModel)
+            Toolbar.view newModel
     in
     { newModel
         | meshes =
@@ -4419,11 +4365,6 @@ debugTimeOffset =
     Duration.seconds 0
 
 
-isDisconnected : FrontendLoaded -> Bool
-isDisconnected model =
-    Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 20)
-
-
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
 view audioData model =
     { title =
@@ -4432,7 +4373,7 @@ view audioData model =
                 "Town Collab"
 
             Loaded loaded ->
-                if isDisconnected loaded then
+                if Toolbar.isDisconnected loaded then
                     "Town Collab (disconnected)"
 
                 else
