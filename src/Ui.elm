@@ -43,7 +43,6 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Keyboard
 import List.Extra as List
-import Math.Vector3 as Vec3
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
@@ -160,6 +159,9 @@ visuallyEqual a b =
 
         ( Empty, Empty ) ->
             True
+
+        ( IgnoreInputs aChild, IgnoreInputs bChild ) ->
+            visuallyEqual aChild bChild
 
         _ ->
             False

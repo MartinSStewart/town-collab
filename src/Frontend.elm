@@ -1438,7 +1438,7 @@ updateLoaded audioData msg model =
                     Toolbar.view model3
             in
             ( { model3
-                | ui = Debug.log "" newUi
+                | ui = newUi
                 , previousFocus = model3.focus
                 , uiMesh =
                     if Ui.visuallyEqual newUi model3.ui && model3.focus == model3.previousFocus then
