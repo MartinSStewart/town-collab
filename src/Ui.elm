@@ -1,6 +1,6 @@
 module Ui exposing
     ( BorderAndFill(..)
-    , Element
+    , Element(..)
     , HoverType(..)
     , Padding
     , UiEvent(..)
@@ -15,8 +15,7 @@ module Ui exposing
     , customButton
     , defaultButtonBorderAndFill
     , el
-    , findButton
-    , findTextInput
+    , findElement
     , hover
     , ignoreInputs
     , noPadding
@@ -35,6 +34,7 @@ module Ui exposing
     , textInput
     , topRight
     , view
+    , visuallyEqual
     , wrappedText
     )
 
@@ -89,8 +89,8 @@ type Element id
         { id : id
         , width : Int
         , isValid : Bool
+        , state : TextInput.State
         }
-        TextInput.Model
     | Button (ButtonData id) (Element id)
     | Row RowColumn (List (Element id))
     | Column RowColumn (List (Element id))
@@ -99,11 +99,11 @@ type Element id
         , borderAndFill : BorderAndFill
         , inFront : List (Element id)
         , cachedSize : Coord Pixels
-        , ignoreInputs : Bool
         }
         (Element id)
     | Quads { size : Coord Pixels, vertices : List Vertex }
     | Empty
+    | IgnoreInputs (Element id)
 
 
 type BorderAndFill
@@ -114,6 +114,55 @@ type BorderAndFill
 
 type alias Padding =
     { topLeft : Coord Pixels, bottomRight : Coord Pixels }
+
+
+visuallyEqual : Element id -> Element id -> Bool
+visuallyEqual a b =
+    case ( a, b ) of
+        ( Single aData aChild, Single bData bChild ) ->
+            (aData.padding == bData.padding)
+                && (aData.borderAndFill == bData.borderAndFill)
+                && List.all identity (List.map2 visuallyEqual aData.inFront bData.inFront)
+                && visuallyEqual aChild bChild
+
+        ( Row aRow aChildren, Row bRow bChildren ) ->
+            (aRow.spacing == bRow.spacing)
+                && (aRow.padding == bRow.padding)
+                && List.all identity (List.map2 visuallyEqual aChildren bChildren)
+
+        ( Column aColumn aChildren, Column bColumn bChildren ) ->
+            (aColumn.spacing == bColumn.spacing)
+                && (aColumn.padding == bColumn.padding)
+                && List.all identity (List.map2 visuallyEqual aChildren bChildren)
+
+        ( Text aText, Text bText ) ->
+            (aText.text == bText.text)
+                && (aText.outline == bText.outline)
+                && (aText.color == bText.color)
+                && (aText.scale == bText.scale)
+                && (aText.text == bText.text)
+
+        ( TextInput aTextInput, TextInput bTextInput ) ->
+            (aTextInput.width == bTextInput.width)
+                && (aTextInput.isValid == bTextInput.isValid)
+                && (aTextInput.state == bTextInput.state)
+
+        ( Button aButton aChild, Button bButton bChild ) ->
+            (aButton.padding == bButton.padding)
+                && (aButton.borderAndFill == bButton.borderAndFill)
+                && (aButton.borderAndFillFocus == bButton.borderAndFillFocus)
+                && (List.length aButton.inFront == List.length bButton.inFront)
+                && List.all identity (List.map2 visuallyEqual aButton.inFront bButton.inFront)
+                && visuallyEqual aChild bChild
+
+        ( Quads aQuad, Quads bQuad ) ->
+            aQuad == bQuad
+
+        ( Empty, Empty ) ->
+            True
+
+        _ ->
+            False
 
 
 noPadding : Padding
@@ -265,8 +314,7 @@ wrappedText maxWidth text2 =
 
 
 textInput :
-    { id : id, width : Int, isValid : Bool }
-    -> TextInput.Model
+    { id : id, width : Int, isValid : Bool, state : TextInput.State }
     -> Element id
 textInput =
     TextInput
@@ -367,7 +415,6 @@ el data element2 =
         , borderAndFill = data.borderAndFill
         , inFront = data.inFront
         , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
-        , ignoreInputs = False
         }
         element2
 
@@ -391,7 +438,6 @@ center data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
@@ -413,7 +459,6 @@ topRight data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
@@ -435,7 +480,6 @@ bottomLeft data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
@@ -460,21 +504,13 @@ bottomCenter data element2 =
         , inFront = data.inFront
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
 
 ignoreInputs : Element id -> Element id
-ignoreInputs element2 =
-    Single
-        { padding = noPadding
-        , inFront = []
-        , borderAndFill = NoBorderOrFill
-        , cachedSize = size element2
-        , ignoreInputs = True
-        }
-        element2
+ignoreInputs =
+    IgnoreInputs
 
 
 sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id
@@ -517,7 +553,7 @@ hoverHelper point elementPosition element2 =
         Text _ ->
             NoHover
 
-        TextInput data _ ->
+        TextInput data ->
             if Bounds.fromCoordAndSize elementPosition (TextInput.size (Quantity data.width)) |> Bounds.contains point then
                 InputHover { id = data.id, position = elementPosition }
 
@@ -538,55 +574,54 @@ hoverHelper point elementPosition element2 =
             hoverRowColumnHelper False point elementPosition data children
 
         Single data child ->
-            if data.ignoreInputs then
-                NoHover
+            let
+                hover2 : HoverType id msg
+                hover2 =
+                    List.foldl
+                        (\inFront hover4 ->
+                            case hover4 of
+                                NoHover ->
+                                    hoverHelper point elementPosition inFront
 
-            else
-                let
-                    hover2 : HoverType id msg
-                    hover2 =
-                        List.foldl
-                            (\inFront hover4 ->
-                                case hover4 of
-                                    NoHover ->
-                                        hoverHelper point elementPosition inFront
+                                InputHover _ ->
+                                    hover4
 
-                                    InputHover _ ->
-                                        hover4
+                                BackgroundHover ->
+                                    hover4
+                        )
+                        NoHover
+                        data.inFront
 
-                                    BackgroundHover ->
-                                        hover4
-                            )
-                            NoHover
-                            data.inFront
+                hover3 : HoverType id msg
+                hover3 =
+                    case hover2 of
+                        NoHover ->
+                            hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
 
-                    hover3 : HoverType id msg
-                    hover3 =
-                        case hover2 of
-                            NoHover ->
-                                hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
+                        InputHover _ ->
+                            hover2
 
-                            InputHover _ ->
-                                hover2
+                        BackgroundHover ->
+                            hover2
+            in
+            case ( data.borderAndFill, hover3 ) of
+                ( BorderAndFill _, NoHover ) ->
+                    if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
+                        BackgroundHover
 
-                            BackgroundHover ->
-                                hover2
-                in
-                case ( data.borderAndFill, hover3 ) of
-                    ( BorderAndFill _, NoHover ) ->
-                        if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                            BackgroundHover
+                    else
+                        NoHover
 
-                        else
-                            NoHover
-
-                    _ ->
-                        hover3
+                _ ->
+                    hover3
 
         Quads _ ->
             NoHover
 
         Empty ->
+            NoHover
+
+        IgnoreInputs _ ->
             NoHover
 
 
@@ -654,8 +689,8 @@ viewHelper focus position vertices element2 =
             )
                 ++ vertices
 
-        TextInput data model ->
-            TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid model ++ vertices
+        TextInput data ->
+            TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid data.state ++ vertices
 
         Button data child ->
             borderAndFillView position
@@ -734,6 +769,9 @@ viewHelper focus position vertices element2 =
         Empty ->
             vertices
 
+        IgnoreInputs element ->
+            viewHelper focus position vertices element
+
 
 borderAndFillView :
     Coord Pixels
@@ -762,7 +800,7 @@ size element2 =
         Text data ->
             data.cachedSize
 
-        TextInput data _ ->
+        TextInput data ->
             TextInput.size (Quantity data.width)
 
         Button data _ ->
@@ -782,6 +820,9 @@ size element2 =
 
         Empty ->
             Coord.origin
+
+        IgnoreInputs element ->
+            size element
 
 
 rowSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
@@ -832,40 +873,8 @@ columnSize data children =
            )
 
 
-findTextInput : id -> Element id -> Maybe TextInput.Model
-findTextInput id element =
-    case element of
-        Text _ ->
-            Nothing
-
-        TextInput data textInput2 ->
-            if id == data.id then
-                Just textInput2
-
-            else
-                Nothing
-
-        Button _ _ ->
-            Nothing
-
-        Row _ children ->
-            List.findMap (findTextInput id) children
-
-        Column _ children ->
-            List.findMap (findTextInput id) children
-
-        Single data child ->
-            List.findMap (findTextInput id) (child :: data.inFront)
-
-        Quads _ ->
-            Nothing
-
-        Empty ->
-            Nothing
-
-
-findButton : id -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
-findButton id element =
+findElement : id -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
+findElement id element =
     findButtonHelper id Coord.origin element
 
 
@@ -875,7 +884,7 @@ findButtonHelper id position element =
         Text _ ->
             Nothing
 
-        TextInput _ _ ->
+        TextInput _ ->
             Nothing
 
         Button data _ ->
@@ -943,6 +952,9 @@ findButtonHelper id position element =
         Empty ->
             Nothing
 
+        IgnoreInputs child ->
+            findButtonHelper id position child
+
 
 tabForward : id -> Element id -> id
 tabForward id element =
@@ -996,7 +1008,7 @@ tabHelper stepForward hasFoundId id element =
             else
                 NotFound
 
-        TextInput data _ ->
+        TextInput data ->
             if hasFoundId then
                 FoundNextId data.id
 
@@ -1038,6 +1050,9 @@ tabHelper stepForward hasFoundId id element =
 
             else
                 NotFound
+
+        IgnoreInputs _ ->
+            NotFound
 
 
 rowColumnTabHelper : Bool -> Bool -> id -> List (Element id) -> TabForward id

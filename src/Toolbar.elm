@@ -299,8 +299,8 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
 
                                 Err _ ->
                                     False
+                        , state = nameTextInput.current
                         }
-                        nameTextInput
                     ]
                 ]
              , allowEmailNotifications
@@ -496,8 +496,8 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
                             { id = InviteEmailAddressTextInput
                             , width = 800
                             , isValid = True
+                            , state = inviteTextInput.current
                             }
-                            inviteTextInput
                         ]
                     , Ui.row
                         { spacing = 4, padding = { topLeft = Coord.xy 0 8, bottomRight = Coord.origin } }
@@ -600,8 +600,8 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
 
                                 else
                                     True
+                            , state = emailTextInput.current
                             }
-                            emailTextInput
                         , Ui.button
                             { id = SendEmailButtonHover, padding = Ui.paddingXY 30 4 }
                             (Ui.text "Send email")
@@ -787,9 +787,7 @@ colorTextInput id textInput color =
                     }
             }
             Ui.none
-        , Ui.textInput
-            { id = id, width = primaryColorInputWidth, isValid = True }
-            textInput
+        , Ui.textInput { id = id, width = primaryColorInputWidth, isValid = True, state = textInput.current }
         ]
 
 
@@ -1051,31 +1049,3 @@ showColorTextInputs handColor tileColors tool =
 getTileGroupTile : TileGroup -> Int -> Tile
 getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
-
-
-createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id
-createInfoMesh maybePingData maybeUserId =
-    let
-        durationToString duration =
-            Duration.inMilliseconds duration |> round |> String.fromInt
-    in
-    "Warning! Game is in alpha. The world is reset often.\n"
-        ++ "User ID: "
-        ++ (case maybeUserId of
-                Just userId ->
-                    String.fromInt (Id.toInt userId)
-
-                Nothing ->
-                    "Not logged in"
-           )
-        ++ "\n"
-        ++ (case maybePingData of
-                Just pingData ->
-                    ("RTT: " ++ durationToString pingData.roundTripTime ++ "ms\n")
-                        ++ ("Server offset: " ++ durationToString (PingData.pingOffset { pingData = maybePingData }) ++ "ms")
-
-                Nothing ->
-                    ""
-           )
-        |> Ui.text
-        |> Ui.el { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }

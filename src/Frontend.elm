@@ -1438,10 +1438,10 @@ updateLoaded audioData msg model =
                     Toolbar.view model3
             in
             ( { model3
-                | ui = newUi
+                | ui = Debug.log "" newUi
                 , previousFocus = model3.focus
                 , uiMesh =
-                    if newUi == model3.ui && model3.focus == model3.previousFocus then
+                    if Ui.visuallyEqual newUi model3.ui && model3.focus == model3.previousFocus then
                         model3.uiMesh
 
                     else
@@ -4738,7 +4738,7 @@ canvasView audioData model =
                     cursorSprite (hoverAt model (mouseScreenPosition model)) model
 
                 ( mailPosition, mailSize ) =
-                    case Ui.findButton (MailEditorHover MailEditor.MailButton) model.ui of
+                    case Ui.findElement (MailEditorHover MailEditor.MailButton) model.ui of
                         Just mailButton ->
                             ( mailButton.position, mailButton.buttonData.cachedSize )
 

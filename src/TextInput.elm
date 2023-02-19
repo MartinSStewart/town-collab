@@ -1,4 +1,4 @@
-module TextInput exposing (Model, OutMsg(..), bounds, charScale, init, keyMsg, mouseDown, mouseDownMove, padding, paste, pushState, replaceState, selectAll, size, view, withText)
+module TextInput exposing (Model, OutMsg(..), State, bounds, charScale, init, keyMsg, mouseDown, mouseDownMove, padding, paste, pushState, replaceState, selectAll, size, view, withText)
 
 import Bounds
 import Color
@@ -430,13 +430,8 @@ size width =
     ( width, Coord.yRaw Sprite.charSize * charScale + Coord.yRaw padding * 2 |> Quantity )
 
 
-view : Coord units -> Quantity Int units -> Bool -> Bool -> Model -> List Vertex
-view offset width hasFocus isValid model =
-    let
-        current : State
-        current =
-            model.current
-    in
+view : Coord units -> Quantity Int units -> Bool -> Bool -> State -> List Vertex
+view offset width hasFocus isValid current =
     Sprite.spriteWithColor
         (if not isValid then
             Color.errorColor
