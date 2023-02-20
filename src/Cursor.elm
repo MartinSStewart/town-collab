@@ -16,6 +16,7 @@ module Cursor exposing
     , eraserCursorMesh
     , eyeDropperCursor2
     , eyeDropperCursorMesh
+    , gavelCursorMesh
     , getSpriteMesh
     , htmlAttribute
     , meshes
@@ -71,6 +72,7 @@ type alias CursorMeshes =
     , eyeDropperSprite : WebGL.Mesh Vertex
     , eraserSprite : WebGL.Mesh Vertex
     , textSprite : WebGL.Mesh Vertex
+    , gavelSprite : WebGL.Mesh Vertex
     }
 
 
@@ -93,6 +95,7 @@ meshes showName colors =
     , eyeDropperSprite = nameTag2 (Coord.xy 0 -16) ++ eyeDropperCursorMesh |> Sprite.toMesh
     , eraserSprite = nameTag2 (Coord.xy 0 -16) ++ eraserCursorMesh |> Sprite.toMesh
     , textSprite = nameTag2 Coord.origin ++ textCursorMesh |> Sprite.toMesh
+    , gavelSprite = nameTag2 Coord.origin ++ gavelCursorMesh |> Sprite.toMesh
     }
 
 
@@ -290,3 +293,12 @@ pointerCursorMesh colors =
         handPointerSize
         (Coord.xy 563 28)
         handPointerSize
+
+
+gavelCursorMesh : List Vertex
+gavelCursorMesh =
+    Sprite.sprite
+        (Coord.xy 0 0)
+        (Coord.xy 21 21)
+        (Coord.xy 504 82)
+        (Coord.xy 21 21)

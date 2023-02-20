@@ -1476,8 +1476,9 @@ getData tile =
             cornerHouseDownRight
 
 
+emptyTile : TileData units
 emptyTile =
-    { texturePosition = Nothing
+    { texturePosition = Just (Coord.xy 120 738)
     , texturePositionTopLayer = Nothing
     , size = Coord.xy 1 1
     , collisionMask = DefaultCollision
