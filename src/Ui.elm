@@ -381,30 +381,32 @@ customButton data child =
         child
 
 
-row :
-    { spacing : Int, padding : Padding }
-    -> List (Element id)
-    -> Element id
+row : { spacing : Int, padding : Padding } -> List (Element id) -> Element id
 row data children =
+    let
+        children2 =
+            List.filter (\a -> a /= Empty) children
+    in
     Row
         { spacing = data.spacing
         , padding = data.padding
-        , cachedSize = rowSize data children
+        , cachedSize = rowSize data children2
         }
-        children
+        (List.filter (\a -> a /= Empty) children2)
 
 
-column :
-    { spacing : Int, padding : Padding }
-    -> List (Element id)
-    -> Element id
+column : { spacing : Int, padding : Padding } -> List (Element id) -> Element id
 column data children =
+    let
+        children2 =
+            List.filter (\a -> a /= Empty) children
+    in
     Column
         { spacing = data.spacing
         , padding = data.padding
-        , cachedSize = columnSize data children
+        , cachedSize = columnSize data children2
         }
-        children
+        children2
 
 
 el :

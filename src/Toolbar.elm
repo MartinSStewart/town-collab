@@ -1,10 +1,15 @@
 module Toolbar exposing
-    ( getTileGroupTile
+    ( actualViewPoint
+    , canDragView
+    , getTileGroupTile
     , isDisconnected
     , mapSize
+    , offsetViewPoint
+    , screenToWorld
     , showColorTextInputs
     , validateInviteEmailAddress
     , view
+    , worldToScreen
     )
 
 import AssocList
@@ -19,22 +24,24 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import Id exposing (Id, MailId, UserId)
 import IdDict exposing (IdDict)
-import Keyboard
 import List.Extra as List
 import List.Nonempty
 import LocalGrid
 import MailEditor
-import PingData exposing (PingData)
 import Pixels exposing (Pixels)
-import Quantity exposing (Quantity(..))
+import Point2d exposing (Point2d)
+import Quantity exposing (Quantity(..), Rate)
+import Shaders
 import Sound
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (FrontendLoaded, Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..))
+import Train
+import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
-import Units
+import Units exposing (WorldUnit)
 import User exposing (FrontendUser, InviteTree(..))
+import Vector2d exposing (Vector2d)
 
 
 view : FrontendLoaded -> Ui.Element UiHover
@@ -50,6 +57,45 @@ view model =
 
                 NotLoggedIn ->
                     IdDict.size localModel.cursors
+
+        toolbarElement =
+            Ui.el
+                { padding = Ui.noPadding
+                , inFront = []
+                , borderAndFill = borderAndFill
+                }
+                (case localModel.userStatus of
+                    LoggedIn loggedIn ->
+                        toolbarUi
+                            model.hasCmdKey
+                            (case IdDict.get loggedIn.userId localModel.users of
+                                Just user ->
+                                    user.handColor
+
+                                Nothing ->
+                                    Cursor.defaultColors
+                            )
+                            model.primaryColorTextInput
+                            model.secondaryColorTextInput
+                            model.tileColors
+                            model.tileHotkeys
+                            (case model.currentTool of
+                                HandTool ->
+                                    HandToolButton
+
+                                TilePlacerTool { tileGroup } ->
+                                    TilePlacerToolButton tileGroup
+
+                                TilePickerTool ->
+                                    TilePickerToolButton
+
+                                TextTool _ ->
+                                    TextToolButton
+                            )
+
+                    NotLoggedIn ->
+                        loginToolbarUi model.pressedSubmitEmail model.loginTextInput
+                )
     in
     case ( localModel.userStatus, model.mailEditor ) of
         ( LoggedIn loggedIn, Just mailEditor ) ->
@@ -65,7 +111,13 @@ view model =
             Ui.bottomCenter
                 { size = model.windowSize
                 , inFront =
-                    [ if model.showInviteTree then
+                    [ case model.contextMenu of
+                        Just contextMenu ->
+                            contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
+
+                        Nothing ->
+                            Ui.none
+                    , if model.showInviteTree then
                         Ui.topRight
                             { size = model.windowSize }
                             (Ui.el
@@ -196,44 +248,153 @@ view model =
                         Ui.none
                     ]
                 }
-                (Ui.el
-                    { padding = Ui.noPadding
-                    , inFront = []
-                    , borderAndFill = borderAndFill
-                    }
-                    (case localModel.userStatus of
-                        LoggedIn loggedIn ->
-                            toolbarUi
-                                model.hasCmdKey
-                                (case IdDict.get loggedIn.userId localModel.users of
-                                    Just user ->
-                                        user.handColor
+                toolbarElement
 
-                                    Nothing ->
-                                        Cursor.defaultColors
+
+contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover
+contextMenuView toolbarHeight contextMenu model =
+    let
+        localModel =
+            LocalGrid.localModel model.localModel
+
+        contextMenuElement : Ui.Element UiHover
+        contextMenuElement =
+            Ui.el
+                { padding = Ui.paddingXY 10 10, borderAndFill = NoBorderOrFill, inFront = [] }
+                (Ui.column
+                    { padding = Ui.noPadding, spacing = 8 }
+                    [ Ui.row
+                        { padding = Ui.noPadding, spacing = 8 }
+                        [ Ui.el
+                            { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }
+                            (Ui.text
+                                (String.fromInt (Coord.xRaw contextMenu.position)
+                                    ++ ","
+                                    ++ String.fromInt (Coord.yRaw contextMenu.position)
                                 )
-                                model.primaryColorTextInput
-                                model.secondaryColorTextInput
-                                model.tileColors
-                                model.tileHotkeys
-                                (case model.currentTool of
-                                    HandTool ->
-                                        HandToolButton
+                            )
+                        , Ui.button
+                            { id = CopyPositionUrlButton, padding = Ui.paddingXY 8 4 }
+                            (Ui.text "Copy link")
+                        ]
+                    , case contextMenu.userId of
+                        Just userId ->
+                            (if userId == Shaders.worldGenUserId then
+                                "Tile was generated"
 
-                                    TilePlacerTool { tileGroup } ->
-                                        TilePlacerToolButton tileGroup
+                             else
+                                "Tile was placed by "
+                                    ++ (case IdDict.get userId localModel.users of
+                                            Just user ->
+                                                DisplayName.nameAndId user.name userId
+                                                    ++ (case localModel.userStatus of
+                                                            LoggedIn loggedIn ->
+                                                                if loggedIn.userId == userId then
+                                                                    " (you)"
 
-                                    TilePickerTool ->
-                                        TilePickerToolButton
+                                                                else
+                                                                    ""
 
-                                    TextTool _ ->
-                                        TextToolButton
-                                )
+                                                            NotLoggedIn ->
+                                                                ""
+                                                       )
 
-                        NotLoggedIn ->
-                            loginToolbarUi model.pressedSubmitEmail model.loginTextInput
-                    )
+                                            Nothing ->
+                                                "Not found"
+                                       )
+                            )
+                                |> Ui.wrappedText 400
+
+                        Nothing ->
+                            Ui.none
+                    ]
                 )
+
+        position =
+            worldToScreen model (contextMenu.position |> Coord.plus (Coord.xy 1 1) |> Coord.toPoint2d) |> Coord.floorPoint
+
+        position2 =
+            worldToScreen model (Coord.toPoint2d contextMenu.position) |> Coord.floorPoint
+
+        fitsWindow =
+            model.windowSize |> Coord.minus position |> Coord.minus (Ui.size contextMenuElement)
+
+        fitsX =
+            Coord.xRaw fitsWindow > 0
+
+        fitsY =
+            Coord.yRaw fitsWindow > toolbarHeight
+
+        offset =
+            case ( fitsX, fitsY ) of
+                ( True, True ) ->
+                    position
+
+                ( True, False ) ->
+                    Coord.xy (Coord.xRaw position) (Coord.yRaw position2)
+                        |> Coord.minus (Ui.size contextMenuElement |> Coord.yOnly)
+
+                ( False, True ) ->
+                    Coord.xy (Coord.xRaw position2) (Coord.yRaw position)
+                        |> Coord.minus (Ui.size contextMenuElement |> Coord.xOnly)
+
+                ( False, False ) ->
+                    position2 |> Coord.minus (Ui.size contextMenuElement)
+    in
+    Ui.el
+        { padding =
+            { topLeft = offset, bottomRight = Coord.origin }
+        , inFront =
+            [ Ui.el
+                { padding = { topLeft = offset, bottomRight = Coord.origin }
+                , inFront = []
+                , borderAndFill = NoBorderOrFill
+                }
+                contextMenuElement
+            ]
+        , borderAndFill = NoBorderOrFill
+        }
+        (Ui.quads
+            { size = Ui.size contextMenuElement
+            , vertices =
+                Sprite.nineSlice
+                    { topLeft =
+                        if fitsX && fitsY then
+                            Coord.xy 504 69
+
+                        else
+                            Coord.xy 504 29
+                    , top = Coord.xy 510 29
+                    , topRight =
+                        if not fitsX && fitsY then
+                            Coord.xy 511 69
+
+                        else
+                            Coord.xy 511 29
+                    , left = Coord.xy 504 35
+                    , center = Coord.xy 510 35
+                    , right = Coord.xy 511 35
+                    , bottomLeft =
+                        if fitsX && not fitsY then
+                            Coord.xy 504 76
+
+                        else
+                            Coord.xy 504 36
+                    , bottom = Coord.xy 510 36
+                    , bottomRight =
+                        if not fitsX && not fitsY then
+                            Coord.xy 511 76
+
+                        else
+                            Coord.xy 511 36
+                    , cornerSize = Coord.xy 6 6
+                    , position = Coord.origin
+                    , size = Ui.size contextMenuElement
+                    , scale = 2
+                    }
+                    { primaryColor = Color.fillColor, secondaryColor = Color.outlineColor }
+            }
+        )
 
 
 isDisconnected : FrontendLoaded -> Bool
@@ -1049,3 +1210,177 @@ showColorTextInputs handColor tileColors tool =
 getTileGroupTile : TileGroup -> Int -> Tile
 getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
+
+
+screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
+screenToWorld model =
+    let
+        ( w, h ) =
+            model.windowSize
+    in
+    Point2d.translateBy
+        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
+        >> point2dAt2 (scaleForScreenToWorld model)
+        >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
+
+
+worldToScreen : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Point2d Pixels Pixels
+worldToScreen model =
+    let
+        ( w, h ) =
+            model.windowSize
+    in
+    Point2d.translateBy
+        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
+        << point2dAt2_ (scaleForScreenToWorld model)
+        << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
+
+
+point2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2 ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Point2d.unsafe
+
+
+point2dAt2_ :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x / rateX
+    , y = y / rateY
+    }
+        |> Point2d.unsafe
+
+
+scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float units )
+scaleForScreenToWorld model =
+    ( 1 / (toFloat model.zoomFactor * toFloat Units.tileWidth) |> Quantity
+    , 1 / (toFloat model.zoomFactor * toFloat Units.tileHeight) |> Quantity
+    )
+
+
+offsetViewPoint :
+    FrontendLoaded
+    -> Hover
+    -> Point2d Pixels Pixels
+    -> Point2d Pixels Pixels
+    -> Point2d WorldUnit WorldUnit
+offsetViewPoint model hover mouseStart mouseCurrent =
+    if canDragView hover then
+        let
+            delta : Vector2d WorldUnit WorldUnit
+            delta =
+                Vector2d.from mouseCurrent mouseStart
+                    |> vector2dAt2 (scaleForScreenToWorld model)
+                    |> Vector2d.placeIn (Units.screenFrame viewPoint2)
+
+            viewPoint2 =
+                actualViewPointHelper model
+        in
+        Point2d.translateBy delta viewPoint2
+
+    else
+        actualViewPointHelper model
+
+
+canDragView : Hover -> Bool
+canDragView hover =
+    case hover of
+        TileHover _ ->
+            True
+
+        TrainHover _ ->
+            True
+
+        UiBackgroundHover ->
+            False
+
+        MapHover ->
+            True
+
+        CowHover _ ->
+            True
+
+        UiHover _ _ ->
+            False
+
+
+actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
+actualViewPoint model =
+    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
+        ( Nothing, _, MouseButtonDown { start, current, hover } ) ->
+            offsetViewPoint model hover start current
+
+        ( Nothing, MouseButtonDown { start, current, hover }, _ ) ->
+            case model.currentTool of
+                TilePlacerTool _ ->
+                    actualViewPointHelper model
+
+                TilePickerTool ->
+                    offsetViewPoint model hover start current
+
+                HandTool ->
+                    offsetViewPoint model hover start current
+
+                TextTool _ ->
+                    actualViewPointHelper model
+
+        _ ->
+            actualViewPointHelper model
+
+
+actualViewPointHelper : FrontendLoaded -> Point2d WorldUnit WorldUnit
+actualViewPointHelper model =
+    case model.viewPoint of
+        NormalViewPoint viewPoint ->
+            viewPoint
+
+        TrainViewPoint trainViewPoint ->
+            case IdDict.get trainViewPoint.trainId model.trains of
+                Just train ->
+                    let
+                        t =
+                            Quantity.ratio
+                                (Duration.from trainViewPoint.startTime model.time)
+                                (Duration.milliseconds 600)
+                                |> min 1
+                    in
+                    Point2d.interpolateFrom trainViewPoint.startViewPoint (Train.trainPosition model.time train) t
+
+                Nothing ->
+                    trainViewPoint.startViewPoint
+
+
+vector2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Vector2d sourceUnits coordinates
+    -> Vector2d destinationUnits coordinates
+vector2dAt2 ( Quantity rateX, Quantity rateY ) vector =
+    let
+        { x, y } =
+            Vector2d.unwrap vector
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Vector2d.unsafe

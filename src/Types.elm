@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , ContextMenu
     , CssPixel
     , EmailEvent(..)
     , EmailResult(..)
@@ -208,7 +209,13 @@ type alias FrontendLoaded =
     , lastCheckConnection : Time.Posix
     , showMap : Bool
     , showInviteTree : Bool
-    , selectedUserId : Maybe (Id UserId)
+    , contextMenu : Maybe ContextMenu
+    }
+
+
+type alias ContextMenu =
+    { userId : Maybe (Id UserId)
+    , position : Coord WorldUnit
     }
 
 
@@ -274,6 +281,7 @@ type UiHover
     | AllowEmailNotificationsCheckbox
     | ResetConnectionsButton
     | UsersOnlineButton
+    | CopyPositionUrlButton
 
 
 type alias BackendModel =

@@ -579,7 +579,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , lastCheckConnection = time
             , showMap = False
             , showInviteTree = False
-            , selectedUserId = Nothing
+            , contextMenu = Nothing
             }
                 |> setCurrentTool HandToolButton
     in
@@ -965,7 +965,7 @@ updateLoaded audioData msg model =
                     | mouseLeft =
                         MouseButtonDown
                             { start = mousePosition
-                            , start_ = screenToWorld model mousePosition
+                            , start_ = Toolbar.screenToWorld model mousePosition
                             , current = mousePosition
                             , hover = hover
                             }
@@ -1014,7 +1014,7 @@ updateLoaded audioData msg model =
                     | mouseMiddle =
                         MouseButtonDown
                             { start = mousePosition
-                            , start_ = screenToWorld model mousePosition
+                            , start_ = Toolbar.screenToWorld model mousePosition
                             , current = mousePosition
                             , hover = hover
                             }
@@ -1039,27 +1039,20 @@ updateLoaded audioData msg model =
                                     model.viewPoint
 
                                 Nothing ->
-                                    offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
+                                    Toolbar.offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
                       }
                     , Command.none
                     )
 
                 ( SecondButton, _, _ ) ->
                     let
-                        maybeTile =
-                            Grid.getTile
-                                (screenToWorld model mousePosition |> Coord.floorPoint)
-                                (LocalGrid.localModel model.localModel).grid
-                    in
-                    ( { model
-                        | selectedUserId =
-                            case maybeTile of
-                                Just tile ->
-                                    Just tile.userId
+                        position =
+                            Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
 
-                                Nothing ->
-                                    Nothing
-                      }
+                        maybeTile =
+                            Grid.getTile position (LocalGrid.localModel model.localModel).grid
+                    in
+                    ( { model | contextMenu = Just { userId = Maybe.map .userId maybeTile, position = position } }
                     , Command.none
                     )
 
@@ -1199,7 +1192,7 @@ updateLoaded audioData msg model =
         ShortIntervalElapsed time ->
             let
                 actualViewPoint_ =
-                    actualViewPoint model
+                    Toolbar.actualViewPoint model
 
                 model2 =
                     { model | time = time, viewPointLastInterval = actualViewPoint_ }
@@ -1292,7 +1285,7 @@ updateLoaded audioData msg model =
 
                 oldViewPoint : Point2d WorldUnit WorldUnit
                 oldViewPoint =
-                    actualViewPoint model
+                    Toolbar.actualViewPoint model
 
                 newViewPoint : Point2d WorldUnit WorldUnit
                 newViewPoint =
@@ -1380,6 +1373,9 @@ updateLoaded audioData msg model =
                                             True
 
                                         UsersOnlineButton ->
+                                            True
+
+                                        CopyPositionUrlButton ->
                                             True
 
                                 Nothing ->
@@ -1734,7 +1730,7 @@ hoverAt model mousePosition =
             let
                 mouseWorldPosition_ : Point2d WorldUnit WorldUnit
                 mouseWorldPosition_ =
-                    screenToWorld model mousePosition
+                    Toolbar.screenToWorld model mousePosition
 
                 tileHover : Maybe Hover
                 tileHover =
@@ -1893,7 +1889,7 @@ keyMsgCanvasUpdate key model =
                                     | viewPoint =
                                         case model.viewPoint of
                                             TrainViewPoint _ ->
-                                                actualViewPoint model |> NormalViewPoint
+                                                Toolbar.actualViewPoint model |> NormalViewPoint
 
                                             NormalViewPoint _ ->
                                                 model.viewPoint
@@ -2012,7 +2008,7 @@ shiftTextCursor offset model =
                                 model.viewPoint
 
                             else
-                                actualViewPoint model
+                                Toolbar.actualViewPoint model
                                     |> Point2d.translateBy (Coord.toVector2d offset)
                                     |> NormalViewPoint
                     }
@@ -2020,7 +2016,7 @@ shiftTextCursor offset model =
                 Nothing ->
                     { model
                         | viewPoint =
-                            actualViewPoint model
+                            Toolbar.actualViewPoint model
                                 |> Point2d.translateBy (Coord.toVector2d offset)
                                 |> NormalViewPoint
                     }
@@ -2327,7 +2323,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                     model.viewPoint
 
                                 HandTool ->
-                                    offsetViewPoint
+                                    Toolbar.offsetViewPoint
                                         model
                                         previousMouseState.hover
                                         previousMouseState.start
@@ -2335,7 +2331,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         |> NormalViewPoint
 
                                 TilePickerTool ->
-                                    offsetViewPoint
+                                    Toolbar.offsetViewPoint
                                         model
                                         previousMouseState.hover
                                         previousMouseState.start
@@ -2815,6 +2811,21 @@ uiUpdate id event model =
         UsersOnlineButton ->
             onPress event (\_ -> ( { model | showInviteTree = not model.showInviteTree }, Command.none )) model
 
+        CopyPositionUrlButton ->
+            onPress
+                event
+                (\_ ->
+                    ( model
+                    , case model.contextMenu of
+                        Just contextMenu ->
+                            Ports.copyToClipboard (Env.domain ++ Route.encode (Route.internalRoute contextMenu.position))
+
+                        Nothing ->
+                            Command.none
+                    )
+                )
+                model
+
 
 textInputUpdate :
     UiHover
@@ -3028,7 +3039,7 @@ setTrainViewPoint trainId model =
         | viewPoint =
             TrainViewPoint
                 { trainId = trainId
-                , startViewPoint = actualViewPoint model
+                , startViewPoint = Toolbar.actualViewPoint model
                 , startTime = model.time
                 }
     }
@@ -3064,88 +3075,6 @@ updateLocalModel msg model =
             ( model, LocalGrid.NoOutMsg )
 
 
-screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
-screenToWorld model =
-    let
-        ( w, h ) =
-            model.windowSize
-    in
-    Point2d.translateBy
-        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> point2dAt2 (scaleForScreenToWorld model)
-        >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
-
-
-worldToScreen : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Point2d Pixels Pixels
-worldToScreen model =
-    let
-        ( w, h ) =
-            model.windowSize
-    in
-    Point2d.translateBy
-        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << point2dAt2_ (scaleForScreenToWorld model)
-        << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
-
-
-vector2dAt2 :
-    ( Quantity Float (Rate sourceUnits destinationUnits)
-    , Quantity Float (Rate sourceUnits destinationUnits)
-    )
-    -> Vector2d sourceUnits coordinates
-    -> Vector2d destinationUnits coordinates
-vector2dAt2 ( Quantity rateX, Quantity rateY ) vector =
-    let
-        { x, y } =
-            Vector2d.unwrap vector
-    in
-    { x = x * rateX
-    , y = y * rateY
-    }
-        |> Vector2d.unsafe
-
-
-point2dAt2 :
-    ( Quantity Float (Rate sourceUnits destinationUnits)
-    , Quantity Float (Rate sourceUnits destinationUnits)
-    )
-    -> Point2d sourceUnits coordinates
-    -> Point2d destinationUnits coordinates
-point2dAt2 ( Quantity rateX, Quantity rateY ) point =
-    let
-        { x, y } =
-            Point2d.unwrap point
-    in
-    { x = x * rateX
-    , y = y * rateY
-    }
-        |> Point2d.unsafe
-
-
-point2dAt2_ :
-    ( Quantity Float (Rate sourceUnits destinationUnits)
-    , Quantity Float (Rate sourceUnits destinationUnits)
-    )
-    -> Point2d sourceUnits coordinates
-    -> Point2d destinationUnits coordinates
-point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
-    let
-        { x, y } =
-            Point2d.unwrap point
-    in
-    { x = x / rateX
-    , y = y / rateY
-    }
-        |> Point2d.unsafe
-
-
-scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float units )
-scaleForScreenToWorld model =
-    ( 1 / (toFloat model.zoomFactor * toFloat Units.tileWidth) |> Quantity
-    , 1 / (toFloat model.zoomFactor * toFloat Units.tileHeight) |> Quantity
-    )
-
-
 windowResizedUpdate :
     Coord CssPixel
     -> { b | cssWindowSize : Coord CssPixel, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixel, devicePixelRatio : Float }
@@ -3178,7 +3107,7 @@ devicePixelRatioChanged devicePixelRatio model =
 
 mouseWorldPosition : FrontendLoaded -> Point2d WorldUnit WorldUnit
 mouseWorldPosition model =
-    mouseScreenPosition model |> screenToWorld model
+    mouseScreenPosition model |> Toolbar.screenToWorld model
 
 
 mouseScreenPosition : { a | mouseLeft : MouseButtonState } -> Point2d Pixels Pixels
@@ -3739,98 +3668,6 @@ viewBoundsUpdate ( model, cmd ) =
         )
 
 
-canDragView : Hover -> Bool
-canDragView hover =
-    case hover of
-        TileHover _ ->
-            True
-
-        TrainHover _ ->
-            True
-
-        UiBackgroundHover ->
-            False
-
-        MapHover ->
-            True
-
-        CowHover _ ->
-            True
-
-        UiHover _ _ ->
-            False
-
-
-offsetViewPoint :
-    FrontendLoaded
-    -> Hover
-    -> Point2d Pixels Pixels
-    -> Point2d Pixels Pixels
-    -> Point2d WorldUnit WorldUnit
-offsetViewPoint model hover mouseStart mouseCurrent =
-    if canDragView hover then
-        let
-            delta : Vector2d WorldUnit WorldUnit
-            delta =
-                Vector2d.from mouseCurrent mouseStart
-                    |> vector2dAt2 (scaleForScreenToWorld model)
-                    |> Vector2d.placeIn (Units.screenFrame viewPoint2)
-
-            viewPoint2 =
-                actualViewPointHelper model
-        in
-        Point2d.translateBy delta viewPoint2
-
-    else
-        actualViewPointHelper model
-
-
-actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
-actualViewPoint model =
-    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( Nothing, _, MouseButtonDown { start, current, hover } ) ->
-            offsetViewPoint model hover start current
-
-        ( Nothing, MouseButtonDown { start, current, hover }, _ ) ->
-            case model.currentTool of
-                TilePlacerTool _ ->
-                    actualViewPointHelper model
-
-                TilePickerTool ->
-                    offsetViewPoint model hover start current
-
-                HandTool ->
-                    offsetViewPoint model hover start current
-
-                TextTool _ ->
-                    actualViewPointHelper model
-
-        _ ->
-            actualViewPointHelper model
-
-
-actualViewPointHelper : FrontendLoaded -> Point2d WorldUnit WorldUnit
-actualViewPointHelper model =
-    case model.viewPoint of
-        NormalViewPoint viewPoint ->
-            viewPoint
-
-        TrainViewPoint trainViewPoint ->
-            case IdDict.get trainViewPoint.trainId model.trains of
-                Just train ->
-                    let
-                        t =
-                            Quantity.ratio
-                                (Duration.from trainViewPoint.startTime model.time)
-                                (Duration.milliseconds 600)
-                                |> min 1
-                    in
-                    Point2d.interpolateFrom trainViewPoint.startViewPoint (Train.trainPosition model.time train) t
-
-                Nothing ->
-                    trainViewPoint.startViewPoint
-
-
 updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
 updateFromBackend msg model =
     case ( model, msg ) of
@@ -4223,7 +4060,7 @@ viewLoadingBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewLoadingBoundingBox model =
     let
         viewMin =
-            screenToWorld model Point2d.origin
+            Toolbar.screenToWorld model Point2d.origin
                 |> Point2d.translateBy
                     (Coord.tuple ( -2, -2 )
                         |> Units.cellToTile
@@ -4231,14 +4068,14 @@ viewLoadingBoundingBox model =
                     )
 
         viewMax =
-            screenToWorld model (Coord.toPoint2d model.windowSize)
+            Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize)
     in
     BoundingBox2d.from viewMin viewMax
 
 
 viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewBoundingBox model =
-    BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
+    BoundingBox2d.from (Toolbar.screenToWorld model Point2d.origin) (Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
 loadingCanvasView : FrontendLoading -> Html FrontendMsg_
@@ -4601,14 +4438,14 @@ isDraggingView hover model =
                     Nothing
 
                 TilePickerTool ->
-                    if canDragView hover then
+                    if Toolbar.canDragView hover then
                         Just a
 
                     else
                         Nothing
 
                 HandTool ->
-                    if canDragView hover then
+                    if Toolbar.canDragView hover then
                         Just a
 
                     else
@@ -4685,7 +4522,7 @@ canvasView audioData model =
                     Coord.toTuple model.cssCanvasSize
 
                 { x, y } =
-                    Point2d.unwrap (actualViewPoint model)
+                    Point2d.unwrap (Toolbar.actualViewPoint model)
 
                 viewMatrix =
                     Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
@@ -4748,9 +4585,15 @@ canvasView audioData model =
                                     model.meshes
                         in
                         drawBackground meshes viewMatrix texture shaderTime2
-                            ++ drawForeground model.selectedUserId meshes viewMatrix texture shaderTime2
+                            ++ drawForeground model.contextMenu meshes viewMatrix texture shaderTime2
                             ++ Train.draw
-                                model.selectedUserId
+                                (case model.contextMenu of
+                                    Just contextMenu ->
+                                        contextMenu.userId
+
+                                    Nothing ->
+                                        Nothing
+                                )
                                 model.time
                                 localGrid.mail
                                 model.trains
@@ -5136,7 +4979,7 @@ drawMap model =
                         |> Mat4.translate3 -0.5 -0.5 -0.5
                 , texture = simplexNoiseLookup
                 , cellPosition =
-                    actualViewPoint model
+                    Toolbar.actualViewPoint model
                         |> Grid.worldToCellPoint
                         |> Point2d.unwrap
                         |> Vec2.fromRecord
@@ -5414,13 +5257,13 @@ getFlags model =
 
 
 drawForeground :
-    Maybe (Id userId)
+    Maybe ContextMenu
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Mat4
     -> WebGL.Texture.Texture
     -> Float
     -> List Effect.WebGL.Entity
-drawForeground maybeSelectedUserId meshes viewMatrix texture shaderTime2 =
+drawForeground maybeContextMenu meshes viewMatrix texture shaderTime2 =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5437,9 +5280,14 @@ drawForeground maybeSelectedUserId meshes viewMatrix texture shaderTime2 =
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId =
-                        case maybeSelectedUserId of
-                            Just selectedUserId ->
-                                Id.toInt selectedUserId |> toFloat
+                        case maybeContextMenu of
+                            Just contextMenu ->
+                                case contextMenu.userId of
+                                    Just userId ->
+                                        Id.toInt userId |> toFloat
+
+                                    Nothing ->
+                                        -3
 
                             Nothing ->
                                 -3
@@ -5593,6 +5441,7 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         , cornerSize = Coord.xy 6 6
         , position = Coord.xy 0 0
         , size = Sprite.textSize 1 text |> Coord.plus (Coord.multiplyTuple ( 2, 2 ) padding)
+        , scale = 1
         }
         colors
         ++ Sprite.shiverText frame 1 "Help!" padding

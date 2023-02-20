@@ -47,10 +47,11 @@ nineSlice :
     , cornerSize : Coord b
     , position : Coord b
     , size : Coord b
+    , scale : Int
     }
     -> Colors
     -> List Vertex
-nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bottomRight, cornerSize, position, size } colors =
+nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bottomRight, cornerSize, position, size, scale } colors =
     let
         ( sizeX, sizeY ) =
             Coord.toTuple size
@@ -59,63 +60,63 @@ nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bot
             Coord.toTuple cornerSize
 
         innerWidth =
-            sizeX - cornerW * 2
+            sizeX - cornerW * 2 * scale
 
         innerHeight =
-            sizeY - cornerH * 2
+            sizeY - cornerH * 2 * scale
     in
     spriteWithTwoColors
         colors
         position
-        cornerSize
+        (Coord.scalar scale cornerSize)
         topLeft
         (Coord.changeUnit cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW 0) position)
-            (Coord.xy innerWidth cornerH)
+            (Coord.plus (Coord.xy (cornerW * scale) 0) position)
+            (Coord.xy innerWidth (cornerH * scale))
             top
             (Coord.xy 1 cornerH)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) 0) position)
-            cornerSize
+            (Coord.plus (Coord.xy (cornerW * scale + innerWidth) 0) position)
+            (Coord.scalar scale cornerSize)
             topRight
             (Coord.changeUnit cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy 0 cornerH) position)
-            (Coord.xy cornerW innerHeight)
+            (Coord.plus (Coord.xy 0 (cornerH * scale)) position)
+            (Coord.xy (cornerW * scale) innerHeight)
             left
             (Coord.xy cornerW 1)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW cornerH) position)
+            (Coord.plus (Coord.xy (cornerW * scale) (cornerH * scale)) position)
             (Coord.xy innerWidth innerHeight)
             center
             (Coord.xy 1 1)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) cornerH) position)
-            (Coord.xy cornerW innerHeight)
+            (Coord.plus (Coord.xy ((cornerW * scale) + innerWidth) (cornerH * scale)) position)
+            (Coord.xy (cornerW * scale) innerHeight)
             right
             (Coord.xy cornerW 1)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy 0 (cornerH + innerHeight)) position)
-            cornerSize
+            (Coord.plus (Coord.xy 0 ((cornerH * scale) + innerHeight)) position)
+            (Coord.scalar scale cornerSize)
             bottomLeft
             (Coord.changeUnit cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW (cornerH + innerHeight)) position)
-            (Coord.xy innerWidth cornerH)
+            (Coord.plus (Coord.xy (cornerW * scale) ((cornerH * scale) + innerHeight)) position)
+            (Coord.xy innerWidth (cornerH * scale))
             bottom
             (Coord.xy 1 cornerH)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) (cornerH + innerHeight)) position)
-            cornerSize
+            (Coord.plus (Coord.xy ((cornerW * scale) + innerWidth) ((cornerH * scale) + innerHeight)) position)
+            (Coord.scalar scale cornerSize)
             bottomRight
             (Coord.changeUnit cornerSize)
 
