@@ -20,6 +20,7 @@ import Cursor
 import Dict exposing (Dict)
 import DisplayName
 import Duration
+import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Env
 import Id exposing (Id, MailId, UserId)
@@ -1212,7 +1213,21 @@ getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
 
 
-screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
+screenToWorld :
+    { a
+        | windowSize : ( Quantity Int sourceUnits, Quantity Int sourceUnits )
+        , devicePixelRatio : Float
+        , zoomFactor : Int
+        , mailEditor : Maybe b
+        , mouseLeft : MouseButtonState
+        , mouseMiddle : MouseButtonState
+        , viewPoint : ViewPoint
+        , trains : IdDict Id.TrainId Train.Train
+        , time : Effect.Time.Posix
+        , currentTool : Tool
+    }
+    -> Point2d sourceUnits Pixels
+    -> Point2d WorldUnit WorldUnit
 screenToWorld model =
     let
         ( w, h ) =
@@ -1278,10 +1293,16 @@ scaleForScreenToWorld model =
 
 
 offsetViewPoint :
-    FrontendLoaded
+    { a
+        | devicePixelRatio : Float
+        , zoomFactor : Int
+        , viewPoint : ViewPoint
+        , trains : IdDict Id.TrainId Train.Train
+        , time : Effect.Time.Posix
+    }
     -> Hover
-    -> Point2d Pixels Pixels
-    -> Point2d Pixels Pixels
+    -> Point2d sourceUnits Pixels
+    -> Point2d sourceUnits Pixels
     -> Point2d WorldUnit WorldUnit
 offsetViewPoint model hover mouseStart mouseCurrent =
     if canDragView hover then
@@ -1323,7 +1344,19 @@ canDragView hover =
             False
 
 
-actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
+actualViewPoint :
+    { a
+        | mailEditor : Maybe b
+        , mouseLeft : MouseButtonState
+        , mouseMiddle : MouseButtonState
+        , devicePixelRatio : Float
+        , zoomFactor : Int
+        , viewPoint : ViewPoint
+        , trains : IdDict Id.TrainId Train.Train
+        , time : Effect.Time.Posix
+        , currentTool : Tool
+    }
+    -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
     case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
         ( Nothing, _, MouseButtonDown { start, current, hover } ) ->
@@ -1347,7 +1380,9 @@ actualViewPoint model =
             actualViewPointHelper model
 
 
-actualViewPointHelper : FrontendLoaded -> Point2d WorldUnit WorldUnit
+actualViewPointHelper :
+    { a | viewPoint : ViewPoint, trains : IdDict Id.TrainId Train.Train, time : Effect.Time.Posix }
+    -> Point2d WorldUnit WorldUnit
 actualViewPointHelper model =
     case model.viewPoint of
         NormalViewPoint viewPoint ->

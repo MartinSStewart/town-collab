@@ -28,6 +28,7 @@ module Types exposing
     , ToolButton(..)
     , TopMenu(..)
     , UiHover(..)
+    , UpdateMeshesData
     , UserSettings
     , ViewPoint(..)
     )
@@ -210,6 +211,23 @@ type alias FrontendLoaded =
     , showMap : Bool
     , showInviteTree : Bool
     , contextMenu : Maybe ContextMenu
+    , previousUpdateMeshData : UpdateMeshesData
+    }
+
+
+type alias UpdateMeshesData =
+    { localModel : LocalModel Change LocalGrid
+    , pressedKeys : List Keyboard.Key
+    , currentTool : Tool
+    , mouseLeft : MouseButtonState
+    , windowSize : Coord Pixels
+    , devicePixelRatio : Float
+    , zoomFactor : Int
+    , mailEditor : Maybe MailEditor.Model
+    , mouseMiddle : MouseButtonState
+    , viewPoint : ViewPoint
+    , trains : IdDict TrainId Train
+    , time : Effect.Time.Posix
     }
 
 

@@ -475,7 +475,7 @@ loadedInit :
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
 loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
     let
-        currentTile =
+        currentTool2 =
             HandTool
 
         defaultTileColors =
@@ -484,13 +484,38 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
         currentUserId2 =
             currentUserId loadedLocalModel
 
+        viewpoint =
+            Coord.toPoint2d loading.viewPoint |> NormalViewPoint
+
+        mouseLeft =
+            MouseButtonUp { current = loading.mousePosition }
+
+        mouseMiddle =
+            MouseButtonUp { current = loading.mousePosition }
+
+        previousUpdateMeshData : UpdateMeshesData
+        previousUpdateMeshData =
+            { localModel = loadedLocalModel.localModel
+            , pressedKeys = []
+            , currentTool = currentTool2
+            , mouseLeft = mouseLeft
+            , mouseMiddle = mouseMiddle
+            , windowSize = loading.windowSize
+            , devicePixelRatio = loading.devicePixelRatio
+            , zoomFactor = loading.zoomFactor
+            , mailEditor = Nothing
+            , viewPoint = viewpoint
+            , trains = loadedLocalModel.trains
+            , time = time
+            }
+
         model : FrontendLoaded
         model =
             { key = loading.key
             , localModel = loadedLocalModel.localModel
             , trains = loadedLocalModel.trains
             , meshes = Dict.empty
-            , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
+            , viewPoint = viewpoint
             , viewPointLastInterval = Point2d.origin
             , texture = texture
             , simplexNoiseLookup = simplexNoiseLookup
@@ -501,8 +526,8 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , cssCanvasSize = loading.cssCanvasSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , mouseLeft = MouseButtonUp { current = loading.mousePosition }
-            , mouseMiddle = MouseButtonUp { current = loading.mousePosition }
+            , mouseLeft = mouseLeft
+            , mouseMiddle = mouseMiddle
             , pendingChanges = []
             , undoAddLast = Effect.Time.millisToPosix 0
             , time = time
@@ -525,7 +550,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
                     _ ->
                         Nothing
             , lastMailEditorToggle = Nothing
-            , currentTool = currentTile
+            , currentTool = currentTool2
             , lastTileRotation = []
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
@@ -580,10 +605,11 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , showMap = False
             , showInviteTree = False
             , contextMenu = Nothing
+            , previousUpdateMeshData = previousUpdateMeshData
             }
                 |> setCurrentTool HandToolButton
     in
-    ( updateMeshes model model
+    ( updateMeshes model
     , Command.batch
         [ Effect.WebGL.Texture.loadWith
             { magnify = Effect.WebGL.Texture.nearest
@@ -833,7 +859,6 @@ update audioData msg model =
                         , cmd
                         )
                    )
-                |> Tuple.mapFirst (updateMeshes frontendLoaded)
                 |> viewBoundsUpdate
                 |> Tuple.mapFirst Loaded
 
@@ -954,11 +979,6 @@ updateLoaded audioData msg model =
             let
                 hover =
                     hoverAt model mousePosition
-
-                mousePosition2 : Coord Pixels
-                mousePosition2 =
-                    mousePosition
-                        |> Coord.roundPoint
             in
             if button == MainButton then
                 { model
@@ -1430,18 +1450,21 @@ updateLoaded audioData msg model =
                         _ ->
                             model2
 
+                model4 =
+                    updateMeshes model3
+
                 newUi =
-                    Toolbar.view model3
+                    Toolbar.view model4
             in
-            ( { model3
+            ( { model4
                 | ui = newUi
-                , previousFocus = model3.focus
+                , previousFocus = model4.focus
                 , uiMesh =
-                    if Ui.visuallyEqual newUi model3.ui && model3.focus == model3.previousFocus then
-                        model3.uiMesh
+                    if Ui.visuallyEqual newUi model4.ui && model4.focus == model4.previousFocus then
+                        model4.uiMesh
 
                     else
-                        Ui.view model3.focus newUi
+                        Ui.view model4.focus newUi
               }
             , Command.none
             )
@@ -1867,7 +1890,10 @@ keyMsgCanvasUpdate key model =
             ( updateLocalModel Change.LocalRedo model |> Tuple.first, Command.none )
 
         ( Keyboard.Escape, _ ) ->
-            if model.showMap then
+            if model.contextMenu /= Nothing then
+                ( { model | contextMenu = Nothing }, Command.none )
+
+            else if model.showMap then
                 ( { model | showMap = False }, Command.none )
 
             else
@@ -2315,6 +2341,20 @@ mainMouseButtonUp mousePosition previousMouseState model =
         model2 =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
+                , contextMenu =
+                    case hoverAt2 of
+                        UiHover _ _ ->
+                            model.contextMenu
+
+                        UiBackgroundHover ->
+                            model.contextMenu
+
+                        _ ->
+                            if isSmallDistance2 then
+                                Nothing
+
+                            else
+                                model.contextMenu
                 , viewPoint =
                     case ( model.mailEditor, model.mouseMiddle ) of
                         ( Nothing, MouseButtonUp _ ) ->
@@ -3105,7 +3145,20 @@ devicePixelRatioChanged devicePixelRatio model =
     )
 
 
-mouseWorldPosition : FrontendLoaded -> Point2d WorldUnit WorldUnit
+mouseWorldPosition :
+    { a
+        | mouseLeft : MouseButtonState
+        , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
+        , devicePixelRatio : Float
+        , zoomFactor : Int
+        , mailEditor : Maybe b
+        , mouseMiddle : MouseButtonState
+        , viewPoint : ViewPoint
+        , trains : IdDict TrainId Train
+        , time : Effect.Time.Posix
+        , currentTool : Tool
+    }
+    -> Point2d WorldUnit WorldUnit
 mouseWorldPosition model =
     mouseScreenPosition model |> Toolbar.screenToWorld model
 
@@ -3120,7 +3173,22 @@ mouseScreenPosition model =
             current
 
 
-cursorPosition : TileData WorldUnit -> FrontendLoaded -> Coord WorldUnit
+cursorPosition :
+    { a | size : Coord WorldUnit }
+    ->
+        { b
+            | mouseLeft : MouseButtonState
+            , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
+            , devicePixelRatio : Float
+            , zoomFactor : Int
+            , mailEditor : Maybe c
+            , mouseMiddle : MouseButtonState
+            , viewPoint : ViewPoint
+            , trains : IdDict TrainId Train
+            , time : Effect.Time.Posix
+            , currentTool : Tool
+        }
+    -> Coord WorldUnit
 cursorPosition tileData model =
     mouseWorldPosition model
         |> Coord.floorPoint
@@ -3464,9 +3532,12 @@ keyDown key { pressedKeys } =
     List.any ((==) key) pressedKeys
 
 
-updateMeshes : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
-updateMeshes oldModel newModel =
+updateMeshes : FrontendLoaded -> FrontendLoaded
+updateMeshes newModel =
     let
+        oldModel =
+            newModel.previousUpdateMeshData
+
         oldCells : Dict ( Int, Int ) GridCell.Cell
         oldCells =
             LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
@@ -3612,6 +3683,20 @@ updateMeshes oldModel newModel =
                             newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
                 )
                 newCells
+        , previousUpdateMeshData =
+            { localModel = newModel.localModel
+            , pressedKeys = newModel.pressedKeys
+            , currentTool = newModel.currentTool
+            , mouseLeft = newModel.mouseLeft
+            , windowSize = newModel.windowSize
+            , devicePixelRatio = newModel.devicePixelRatio
+            , zoomFactor = newModel.zoomFactor
+            , mailEditor = newModel.mailEditor
+            , mouseMiddle = newModel.mouseMiddle
+            , viewPoint = newModel.viewPoint
+            , trains = newModel.trains
+            , time = newModel.time
+            }
     }
 
 
@@ -3719,7 +3804,7 @@ updateFromBackend msg model =
             )
 
         ( Loaded loaded, _ ) ->
-            updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes loaded) |> Tuple.mapFirst Loaded
+            updateLoadedFromBackend msg loaded |> Tuple.mapFirst Loaded
 
         _ ->
             ( model, Command.none )
@@ -4271,7 +4356,9 @@ startButtonHighlightMesh =
         |> Sprite.toMesh
 
 
-currentTool : FrontendLoaded -> Tool
+currentTool :
+    { a | localModel : LocalModel Change LocalGrid, pressedKeys : List Keyboard.Key, currentTool : Tool }
+    -> Tool
 currentTool model =
     case currentUserId model of
         Just _ ->
