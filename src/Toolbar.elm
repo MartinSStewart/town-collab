@@ -261,7 +261,7 @@ contextMenuView toolbarHeight contextMenu model =
         contextMenuElement : Ui.Element UiHover
         contextMenuElement =
             Ui.el
-                { padding = Ui.paddingXY 10 10, borderAndFill = NoBorderOrFill, inFront = [] }
+                { padding = Ui.paddingXY 12 12, borderAndFill = NoBorderOrFill, inFront = [] }
                 (Ui.column
                     { padding = Ui.noPadding, spacing = 8 }
                     [ Ui.row
@@ -276,35 +276,84 @@ contextMenuView toolbarHeight contextMenu model =
                             )
                         , Ui.button
                             { id = CopyPositionUrlButton, padding = Ui.paddingXY 8 4 }
-                            (Ui.text "Copy link")
+                            (Ui.text
+                                (if contextMenu.linkCopied then
+                                    " Copied! "
+
+                                 else
+                                    "Copy link"
+                                )
+                            )
                         ]
                     , case contextMenu.userId of
                         Just userId ->
-                            (if userId == Shaders.worldGenUserId then
-                                "Tile was generated"
+                            if userId == Shaders.worldGenUserId then
+                                Ui.wrappedText 400 "Last changed by server"
 
-                             else
-                                "Tile was placed by "
-                                    ++ (case IdDict.get userId localModel.users of
-                                            Just user ->
+                            else
+                                case IdDict.get userId localModel.users of
+                                    Just user ->
+                                        let
+                                            name =
                                                 DisplayName.nameAndId user.name userId
-                                                    ++ (case localModel.userStatus of
-                                                            LoggedIn loggedIn ->
-                                                                if loggedIn.userId == userId then
-                                                                    " (you)"
 
-                                                                else
-                                                                    ""
+                                            isYou =
+                                                case localModel.userStatus of
+                                                    LoggedIn loggedIn ->
+                                                        loggedIn.userId == userId
 
-                                                            NotLoggedIn ->
-                                                                ""
-                                                       )
+                                                    NotLoggedIn ->
+                                                        False
+                                        in
+                                        Ui.column
+                                            { padding = Ui.noPadding, spacing = 8 }
+                                            [ "Last changed by "
+                                                ++ name
+                                                ++ (if isYou then
+                                                        " (you)"
 
-                                            Nothing ->
-                                                "Not found"
-                                       )
-                            )
-                                |> Ui.wrappedText 400
+                                                    else
+                                                        ""
+                                                   )
+                                                |> Ui.wrappedText 400
+                                            , case localModel.userStatus of
+                                                LoggedIn loggedIn ->
+                                                    if isYou then
+                                                        Ui.none
+
+                                                    else if
+                                                        List.any
+                                                            (\a -> a.position == contextMenu.position)
+                                                            loggedIn.reports
+                                                    then
+                                                        Ui.colorText Color.errorColor "Report sent!"
+
+                                                    else
+                                                        Ui.customButton
+                                                            { id = ReportUserButton
+                                                            , padding = Ui.paddingXY 16 4
+                                                            , inFront = []
+                                                            , borderAndFill =
+                                                                BorderAndFill
+                                                                    { borderWidth = 2
+                                                                    , borderColor = Color.errorColor
+                                                                    , fillColor = Color.fillColor2
+                                                                    }
+                                                            , borderAndFillFocus =
+                                                                BorderAndFill
+                                                                    { borderWidth = 2
+                                                                    , borderColor = Color.errorColor
+                                                                    , fillColor = Color.highlightColor
+                                                                    }
+                                                            }
+                                                            (Ui.colorText Color.errorColor "Report as vandalism")
+
+                                                NotLoggedIn ->
+                                                    Ui.none
+                                            ]
+
+                                    Nothing ->
+                                        Ui.text "Not found"
 
                         Nothing ->
                             Ui.none

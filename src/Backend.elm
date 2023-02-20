@@ -1,6 +1,7 @@
 module Backend exposing (app, app_)
 
 import AssocList
+import Benchmark.Reporting exposing (Report)
 import Bounds exposing (Bounds)
 import Change exposing (AdminData, ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
@@ -95,6 +96,7 @@ init =
             , pendingLoginTokens = AssocList.empty
             , invites = AssocList.empty
             , lastCacheRegeneration = Nothing
+            , reported = IdDict.empty
             }
     in
     case Env.adminEmail of
@@ -1246,6 +1248,36 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             else
                 ( model, invalidChange, Nothing )
 
+        ReportChange report ->
+            ( { model
+                | reported =
+                    IdDict.update
+                        userId
+                        (\maybeList ->
+                            (case maybeList of
+                                Just nonempty ->
+                                    Nonempty.cons
+                                        { reportedUser = report.reportedUser
+                                        , position = report.position
+                                        , reportedAt = time
+                                        }
+                                        nonempty
+
+                                Nothing ->
+                                    Nonempty.singleton
+                                        { reportedUser = report.reportedUser
+                                        , position = report.position
+                                        , reportedAt = time
+                                        }
+                            )
+                                |> Just
+                        )
+                        model.reported
+              }
+            , originalChange
+            , Nothing
+            )
+
 
 generateVisibleRegion :
     Maybe (Bounds CellUnit)
@@ -1397,6 +1429,22 @@ getAdminData userId model =
         Nothing
 
 
+getUserReports : Id UserId -> BackendModel -> List Change.Report
+getUserReports userId model =
+    case IdDict.get userId model.reported of
+        Just nonempty ->
+            Nonempty.toList nonempty
+                |> List.map
+                    (\a ->
+                        { reportedUser = a.reportedUser
+                        , position = a.position
+                        }
+                    )
+
+        Nothing ->
+            []
+
+
 requestDataUpdate :
     Effect.Time.Posix
     -> SessionId
@@ -1420,6 +1468,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , inbox = getUserInbox userId model
                         , allowEmailNotifications = user.allowEmailNotifications
                         , adminData = getAdminData userId model
+                        , reports = getUserReports userId model
                         }
 
                 Nothing ->
@@ -1446,6 +1495,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , inbox = getUserInbox data.userId model
                                             , allowEmailNotifications = user.allowEmailNotifications
                                             , adminData = getAdminData data.userId model
+                                            , reports = getUserReports data.userId model
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , case data.requestedBy of
@@ -1486,6 +1536,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , inbox = getUserInbox userId model
                                 , allowEmailNotifications = newUser.allowEmailNotifications
                                 , adminData = getAdminData userId model
+                                , reports = getUserReports userId model
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites

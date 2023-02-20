@@ -1072,7 +1072,14 @@ updateLoaded audioData msg model =
                         maybeTile =
                             Grid.getTile position (LocalGrid.localModel model.localModel).grid
                     in
-                    ( { model | contextMenu = Just { userId = Maybe.map .userId maybeTile, position = position } }
+                    ( { model
+                        | contextMenu =
+                            Just
+                                { userId = Maybe.map .userId maybeTile
+                                , position = position
+                                , linkCopied = False
+                                }
+                      }
                     , Command.none
                     )
 
@@ -1396,6 +1403,9 @@ updateLoaded audioData msg model =
                                             True
 
                                         CopyPositionUrlButton ->
+                                            True
+
+                                        ReportUserButton ->
                                             True
 
                                 Nothing ->
@@ -2855,13 +2865,36 @@ uiUpdate id event model =
             onPress
                 event
                 (\_ ->
-                    ( model
-                    , case model.contextMenu of
+                    case model.contextMenu of
                         Just contextMenu ->
-                            Ports.copyToClipboard (Env.domain ++ Route.encode (Route.internalRoute contextMenu.position))
+                            ( { model | contextMenu = Just { contextMenu | linkCopied = True } }
+                            , Ports.copyToClipboard (Env.domain ++ Route.encode (Route.internalRoute contextMenu.position))
+                            )
 
                         Nothing ->
-                            Command.none
+                            ( model, Command.none )
+                )
+                model
+
+        ReportUserButton ->
+            onPress
+                event
+                (\_ ->
+                    ( case model.contextMenu of
+                        Just contextMenu ->
+                            case contextMenu.userId of
+                                Just userId ->
+                                    updateLocalModel
+                                        (Change.ReportChange { reportedUser = userId, position = contextMenu.position })
+                                        model
+                                        |> handleOutMsg False
+
+                                Nothing ->
+                                    model
+
+                        Nothing ->
+                            model
+                    , Command.none
                     )
                 )
                 model

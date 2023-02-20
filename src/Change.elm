@@ -5,6 +5,7 @@ module Change exposing
     , Cow
     , LocalChange(..)
     , LoggedIn_
+    , Report
     , ServerChange(..)
     , UserStatus(..)
     )
@@ -55,6 +56,7 @@ type LocalChange
     | SetAllowEmailNotifications Bool
     | ChangeTool Cursor.OtherUsersTool
     | AdminResetSessions
+    | ReportChange Report
 
 
 type ClientChange
@@ -113,7 +115,12 @@ type alias LoggedIn_ =
     , inbox : IdDict MailId MailEditor.ReceivedMail
     , allowEmailNotifications : Bool
     , adminData : Maybe AdminData
+    , reports : List Report
     }
+
+
+type alias Report =
+    { reportedUser : Id UserId, position : Coord WorldUnit }
 
 
 type alias AdminData =

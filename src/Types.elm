@@ -234,6 +234,7 @@ type alias UpdateMeshesData =
 type alias ContextMenu =
     { userId : Maybe (Id UserId)
     , position : Coord WorldUnit
+    , linkCopied : Bool
     }
 
 
@@ -300,6 +301,7 @@ type UiHover
     | ResetConnectionsButton
     | UsersOnlineButton
     | CopyPositionUrlButton
+    | ReportUserButton
 
 
 type alias BackendModel =
@@ -327,7 +329,12 @@ type alias BackendModel =
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
+    , reported : IdDict UserId (Nonempty Report)
     }
+
+
+type alias Report =
+    { reportedUser : Id UserId, position : Coord WorldUnit, reportedAt : Effect.Time.Posix }
 
 
 type LoginRequestedBy

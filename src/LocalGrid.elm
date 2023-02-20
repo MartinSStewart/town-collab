@@ -417,6 +417,16 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
+        ReportChange report ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model | userStatus = LoggedIn { loggedIn | reports = report :: loggedIn.reports } }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
