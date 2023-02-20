@@ -844,8 +844,9 @@ draw :
     -> Mat4
     -> WebGL.Texture.Texture
     -> BoundingBox2d WorldUnit WorldUnit
+    -> Float
     -> List Effect.WebGL.Entity
-draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds =
+draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds shaderTime =
     let
         trainViewBounds =
             BoundingBox2d.expandBy (Coord.maxComponent trainSize |> Quantity.toFloatQuantity) viewBounds
@@ -920,7 +921,14 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds =
                                 []
 
                             else
-                                [ trainEntity isSelected trainTexture (trainEngineMesh t trainFrame) viewMatrix x y
+                                [ trainEntity
+                                    isSelected
+                                    trainTexture
+                                    (trainEngineMesh t trainFrame)
+                                    viewMatrix
+                                    x
+                                    y
+                                    shaderTime
                                 , trainEntity
                                     isSelected
                                     trainTexture
@@ -928,12 +936,13 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds =
                                     viewMatrix
                                     homePosition.x
                                     homePosition.y
+                                    shaderTime
                                 ]
 
                         _ ->
                             case Array.get trainFrame trainEngineMeshes of
                                 Just mesh ->
-                                    [ trainEntity isSelected trainTexture mesh viewMatrix x y ]
+                                    [ trainEntity isSelected trainTexture mesh viewMatrix x y shaderTime ]
 
                                 Nothing ->
                                     []
@@ -1001,6 +1010,7 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds =
                                                 viewMatrix
                                                 coachPosition_.x
                                                 coachPosition_.y
+                                                shaderTime
                                             ]
 
                                     _ ->
@@ -1013,6 +1023,7 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds =
                                                     viewMatrix
                                                     coachPosition_.x
                                                     coachPosition_.y
+                                                    shaderTime
                                                 ]
 
                                             Nothing ->
@@ -1072,8 +1083,8 @@ leaveHome time (Train train) =
             Train train
 
 
-trainEntity : Bool -> WebGL.Texture.Texture -> Effect.WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> Effect.WebGL.Entity
-trainEntity isSelected trainTexture trainMesh viewMatrix x y =
+trainEntity : Bool -> WebGL.Texture.Texture -> Effect.WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> Float -> Effect.WebGL.Entity
+trainEntity isSelected trainTexture trainMesh viewMatrix x y shaderTime =
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.DepthTest.default, Shaders.blend ]
         Shaders.vertexShader
@@ -1094,6 +1105,7 @@ trainEntity isSelected trainTexture trainMesh viewMatrix x y =
 
             else
                 -1
+        , time = shaderTime
         }
 
 

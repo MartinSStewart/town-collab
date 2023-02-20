@@ -1180,8 +1180,8 @@ scaleForScreenToWorld windowSize =
     1 / toFloat (mailZoomFactor windowSize) |> Quantity
 
 
-backgroundLayer : WebGL.Texture.Texture -> Effect.WebGL.Entity
-backgroundLayer texture =
+backgroundLayer : WebGL.Texture.Texture -> Float -> Effect.WebGL.Entity
+backgroundLayer texture shaderTime =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -1192,6 +1192,7 @@ backgroundLayer texture =
         , texture = texture
         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , userId = Shaders.noUserIdSelected
+        , time = shaderTime
         }
 
 
@@ -1204,8 +1205,9 @@ drawMail :
     -> Int
     -> { a | windowSize : Coord Pixels, time : Effect.Time.Posix, zoomFactor : Int }
     -> Model
+    -> Float
     -> List Effect.WebGL.Entity
-drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight config model =
+drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight config model shaderTime2 =
     let
         zoomFactor : Float
         zoomFactor =
@@ -1271,6 +1273,7 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
                         (toFloat tileY |> round |> toFloat)
                         0
             , userId = Shaders.noUserIdSelected
+            , time = shaderTime2
             }
         ]
 
