@@ -15,7 +15,7 @@ module Sprite exposing
     , spriteWithZAndOpacityAndUserId
     , text
     , textSize
-    , textWithZ
+    , textWithZAndOpacityAndUserId
     , textureWidth
     , toMesh
     )
@@ -346,8 +346,8 @@ text color charScale string position =
         |> .vertices
 
 
-textWithZ : Color -> Int -> String -> Int -> Coord unit -> Float -> List Vertex
-textWithZ color charScale string lineSpacing position z =
+textWithZAndOpacityAndUserId : Float -> Color -> Int -> String -> Int -> Coord unit -> Float -> List Vertex
+textWithZAndOpacityAndUserId opacityAndUserId color charScale string lineSpacing position z =
     let
         charSize_ =
             Coord.multiplyTuple ( charScale, charScale ) charSize
@@ -365,8 +365,8 @@ textWithZ color charScale string lineSpacing position z =
                     { offsetX = state.offsetX + Coord.xRaw charSize_
                     , offsetY = state.offsetY
                     , vertices =
-                        spriteWithZ
-                            1
+                        spriteWithZAndOpacityAndUserId
+                            opacityAndUserId
                             color
                             color
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)

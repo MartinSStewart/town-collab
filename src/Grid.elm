@@ -549,7 +549,8 @@ foregroundMesh2 maybeCurrentTile cellPosition maybeCurrentUserId users railSplit
                             if value == PostOffice && Just userId /= maybeCurrentUserId then
                                 let
                                     text =
-                                        Sprite.textWithZ
+                                        Sprite.textWithZAndOpacityAndUserId
+                                            opacityAndUserId
                                             colors.secondaryColor
                                             1
                                             (case IdDict.get userId users of

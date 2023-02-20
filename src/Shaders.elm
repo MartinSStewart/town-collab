@@ -190,8 +190,8 @@ vec3 floatColorToVec3(float color) {
 void main () {
     gl_Position = view * vec4(vec3(x, y, z), 1.0);
 
-    float y = floor(texturePosition / textureSize.x);
-    vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;
+    float y2 = floor(texturePosition / textureSize.x);
+    vcoord = vec2(texturePosition - y2 * textureSize.x, y2) / textureSize;
     opacity = float(AND(int(opacityAndUserId), 0xF)) / 15.0;
     isSelected = userId == float(RShift(int(opacityAndUserId), 4.0)) ? 1.0 : 0.0;
 
@@ -232,8 +232,6 @@ vec3 primaryColorShade = vec3(209.0 / 255.0, 64.0 / 255.0, 206.0 / 255.0);
 vec3 secondaryColor = vec3(0.0, 1.0, 1.0);
 vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 
-
-
 void main () {
     vec4 textureColor = texture2D(texture, vcoord);
     if (textureColor.a == 0.0) {
@@ -241,7 +239,7 @@ void main () {
     }
 
     vec4 highlight =
-        vec4(1.5, 1.0, 1.0, 0.0) * (mod(-time + (floor(position2.x) / 20.0 + floor(position2.y) / 18.0), 1.0)) - vec4(0.5, 0.5, 0.5, 0.0);
+        vec4(1.3, 1.0, 1.0, 0.0) * (mod(-time + floor(position2.x + position2.y) / 40.0, 1.0)) - vec4(0.4, 0.4, 0.4, 0.0);
 
     gl_FragColor =
         (textureColor.xyz == primaryColor
@@ -255,7 +253,7 @@ void main () {
                         : textureColor.xyz == secondaryColorShade
                             ? vec4(secondaryColor2 * 0.8, opacity)
                             : vec4(textureColor.xyz, opacity)
-        ) * color + 0.4 * isSelected * highlight;
+        ) * color + 0.6 * isSelected * highlight;
 }|]
 
 

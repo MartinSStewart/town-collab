@@ -2488,48 +2488,35 @@ sendInvite model =
             ( model, Command.none )
 
 
+onPress event updateFunc model =
+    case event of
+        Ui.MousePressed data ->
+            updateFunc data
+
+        Ui.KeyDown key ->
+            keyMsgCanvasUpdate key model
+
+        _ ->
+            ( model, Command.none )
+
+
 uiUpdate : UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 uiUpdate id event model =
     case id of
         CloseInviteUser ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( { model | topMenuOpened = Nothing }, Command.none )
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> ( { model | topMenuOpened = Nothing }, Command.none )) model
 
         ShowInviteUser ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( { model | topMenuOpened = Just InviteMenu }, Command.none )
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
 
         SubmitInviteUser ->
-            case event of
-                Ui.MousePressed _ ->
-                    sendInvite model
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> sendInvite model) model
 
         SendEmailButtonHover ->
-            case event of
-                Ui.MousePressed _ ->
-                    sendEmail model
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> sendEmail model) model
 
         ToolButtonHover tool ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( setCurrentTool tool model, Command.none )
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> ( setCurrentTool tool model, Command.none )) model
 
         InviteEmailAddressTextInput ->
             textInputUpdate
@@ -2674,40 +2661,33 @@ uiUpdate id event model =
                     ( model, Command.none )
 
         LowerMusicVolume ->
-            case event of
-                Ui.MousePressed _ ->
-                    { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings
-
-                _ ->
-                    ( model, Command.none )
+            onPress
+                event
+                (\_ -> { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings)
+                model
 
         RaiseMusicVolume ->
-            case event of
-                Ui.MousePressed _ ->
-                    { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
-
-                _ ->
-                    ( model, Command.none )
+            onPress
+                event
+                (\_ -> { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
+                model
 
         LowerSoundEffectVolume ->
-            case event of
-                Ui.MousePressed _ ->
-                    { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings
-
-                _ ->
-                    ( model, Command.none )
+            onPress
+                event
+                (\_ -> { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings)
+                model
 
         RaiseSoundEffectVolume ->
-            case event of
-                Ui.MousePressed _ ->
-                    { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
-
-                _ ->
-                    ( model, Command.none )
+            onPress
+                event
+                (\_ -> { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
+                model
 
         SettingsButton ->
-            case event of
-                Ui.MousePressed _ ->
+            onPress
+                event
+                (\_ ->
                     let
                         localModel =
                             LocalGrid.localModel model.localModel
@@ -2733,17 +2713,11 @@ uiUpdate id event model =
                       }
                     , Command.none
                     )
-
-                _ ->
-                    ( model, Command.none )
+                )
+                model
 
         CloseSettings ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( { model | topMenuOpened = Nothing }, Command.none )
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> ( { model | topMenuOpened = Nothing }, Command.none )) model
 
         DisplayNameTextInput ->
             case model.topMenuOpened of
@@ -2809,24 +2783,15 @@ uiUpdate id event model =
                     ( model, Command.none )
 
         YouGotMailButton ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
 
         ShowMapButton ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( { model | showMap = not model.showMap }, Command.none )
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> ( { model | showMap = not model.showMap }, Command.none )) model
 
         AllowEmailNotificationsCheckbox ->
-            case event of
-                Ui.MousePressed _ ->
+            onPress
+                event
+                (\_ ->
                     ( case LocalGrid.localModel model.localModel |> .userStatus of
                         LoggedIn loggedIn ->
                             updateLocalModel
@@ -2838,25 +2803,17 @@ uiUpdate id event model =
                             model
                     , Command.none
                     )
-
-                _ ->
-                    ( model, Command.none )
+                )
+                model
 
         ResetConnectionsButton ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none )
-
-                _ ->
-                    ( model, Command.none )
+            onPress
+                event
+                (\_ -> ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none ))
+                model
 
         UsersOnlineButton ->
-            case event of
-                Ui.MousePressed _ ->
-                    ( { model | showInviteTree = not model.showInviteTree }, Command.none )
-
-                _ ->
-                    ( model, Command.none )
+            onPress event (\_ -> ( { model | showInviteTree = not model.showInviteTree }, Command.none )) model
 
 
 textInputUpdate :
