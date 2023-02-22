@@ -1,10 +1,13 @@
 module Change exposing
-    ( AdminData
+    ( AdminChange(..)
+    , AdminData
+    , BackendReport
     , Change(..)
     , ClientChange(..)
     , Cow
     , LocalChange(..)
     , LoggedIn_
+    , Report
     , ServerChange(..)
     , UserStatus(..)
     )
@@ -54,7 +57,14 @@ type LocalChange
     | ViewedMail (Id MailId)
     | SetAllowEmailNotifications Bool
     | ChangeTool Cursor.OtherUsersTool
-    | AdminResetSessions
+    | AdminChange AdminChange
+    | ReportVandalism Report
+    | RemoveReport (Coord WorldUnit)
+
+
+type AdminChange
+    = AdminResetSessions
+    | AdminSetGridReadOnly Bool
 
 
 type ClientChange
@@ -91,6 +101,9 @@ type ServerChange
     | ServerViewedMail (Id MailId) (Id UserId)
     | ServerNewCows (Nonempty ( Id CowId, Cow ))
     | ServerChangeTool (Id UserId) Cursor.OtherUsersTool
+    | ServerGridReadOnly Bool
+    | ServerVandalismReportedToAdmin (Id UserId) BackendReport
+    | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
 
 
 type alias Cow =
@@ -113,10 +126,21 @@ type alias LoggedIn_ =
     , inbox : IdDict MailId MailEditor.ReceivedMail
     , allowEmailNotifications : Bool
     , adminData : Maybe AdminData
+    , reports : List Report
+    , isGridReadOnly : Bool
     }
+
+
+type alias Report =
+    { reportedUser : Id UserId, position : Coord WorldUnit }
 
 
 type alias AdminData =
     { lastCacheRegeneration : Maybe Effect.Time.Posix
     , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
+    , reported : IdDict UserId (Nonempty BackendReport)
     }
+
+
+type alias BackendReport =
+    { reportedUser : Id UserId, position : Coord WorldUnit, reportedAt : Effect.Time.Posix }

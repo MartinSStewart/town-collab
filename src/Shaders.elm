@@ -28,7 +28,9 @@ import WebGL.Texture
 
 
 type alias Vertex =
-    { position : Vec3
+    { x : Float
+    , y : Float
+    , z : Float
     , texturePosition : Float
     , -- bits 0-3 is opacity
       -- bits 4-31 is userId
@@ -95,10 +97,13 @@ vertexShader :
         , primaryColor2 : Vec3
         , secondaryColor2 : Vec3
         , isSelected : Float
+        , position2 : Vec2
         }
 vertexShader =
     [glsl|
-attribute vec3 position;
+attribute float x;
+attribute float y;
+attribute float z;
 attribute float texturePosition;
 attribute float opacityAndUserId;
 attribute float primaryColor;
@@ -111,6 +116,7 @@ varying float opacity;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 varying float isSelected;
+varying vec2 position2;
 
 int OR(int n1, int n2){
 
@@ -182,39 +188,43 @@ vec3 floatColorToVec3(float color) {
 }
 
 void main () {
-    gl_Position = view * vec4(position, 1.0);
+    gl_Position = view * vec4(vec3(x, y, z), 1.0);
 
-    float y = floor(texturePosition / textureSize.x);
-    vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;
-    opacity = float(AND(int(opacityAndUserId), 0xF)) / 16.0;
+    float y2 = floor(texturePosition / textureSize.x);
+    vcoord = vec2(texturePosition - y2 * textureSize.x, y2) / textureSize;
+    opacity = float(AND(int(opacityAndUserId), 0xF)) / 15.0;
     isSelected = userId == float(RShift(int(opacityAndUserId), 4.0)) ? 1.0 : 0.0;
 
 
     primaryColor2 = floatColorToVec3(primaryColor);
     secondaryColor2 = floatColorToVec3(secondaryColor);
+    position2 = vec2(x, y);
 }|]
 
 
 fragmentShader :
     Shader
         {}
-        { u | texture : WebGL.Texture.Texture, color : Vec4 }
+        { u | texture : WebGL.Texture.Texture, time : Float, color : Vec4 }
         { vcoord : Vec2
         , opacity : Float
         , primaryColor2 : Vec3
         , secondaryColor2 : Vec3
         , isSelected : Float
+        , position2 : Vec2
         }
 fragmentShader =
     [glsl|
 precision mediump float;
 uniform sampler2D texture;
+uniform float time;
 uniform vec4 color;
 varying vec2 vcoord;
 varying float opacity;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 varying float isSelected;
+varying vec2 position2;
 
 vec3 primaryColor = vec3(1.0, 0.0, 1.0);
 vec3 primaryColorMidShade = vec3(233.0 / 255.0, 45.0 / 255.0, 231.0 / 255.0);
@@ -228,6 +238,9 @@ void main () {
         discard;
     }
 
+    vec4 highlight =
+        vec4(1.3, 1.0, 1.0, 0.0) * (mod(-time + floor(position2.x + position2.y) / 40.0, 1.0)) - vec4(0.4, 0.4, 0.4, 0.0);
+
     gl_FragColor =
         (textureColor.xyz == primaryColor
             ? vec4(primaryColor2, opacity)
@@ -240,7 +253,7 @@ void main () {
                         : textureColor.xyz == secondaryColorShade
                             ? vec4(secondaryColor2 * 0.8, opacity)
                             : vec4(textureColor.xyz, opacity)
-        ) * color + isSelected * vec4(0.5, 0.5, 0.5, 0.0);
+        ) * color + 0.6 * isSelected * highlight;
 }|]
 
 
@@ -257,12 +270,13 @@ type alias DebrisVertex =
 debrisVertexShader :
     Shader
         DebrisVertex
-        { u | view : Mat4, time : Float, textureSize : Vec2 }
+        { u | view : Mat4, time2 : Float, textureSize : Vec2 }
         { vcoord : Vec2
         , opacity : Float
         , primaryColor2 : Vec3
         , secondaryColor2 : Vec3
         , isSelected : Float
+        , position2 : Vec2
         }
 debrisVertexShader =
     [glsl|
@@ -273,13 +287,14 @@ attribute float startTime;
 attribute float primaryColor;
 attribute float secondaryColor;
 uniform mat4 view;
-uniform float time;
+uniform float time2;
 uniform vec2 textureSize;
 varying vec2 vcoord;
 varying float opacity;
 varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 varying float isSelected;
+varying vec2 position2;
 
 int OR(int n1, int n2){
 
@@ -351,7 +366,7 @@ vec3 floatColorToVec3(float color) {
 }
 
 void main () {
-    float seconds = time - startTime;
+    float seconds = time2 - startTime;
     gl_Position = view * vec4(position + vec2(0, 800.0 * seconds * seconds) + initialSpeed * seconds, 0.0, 1.0);
     float y = floor(texturePosition / textureSize.x);
     vcoord = vec2(texturePosition - y * textureSize.x, y) / textureSize;
@@ -359,6 +374,7 @@ void main () {
     isSelected = 0.0;
     primaryColor2 = floatColorToVec3(primaryColor);
     secondaryColor2 = floatColorToVec3(secondaryColor);
+    position2 = position;
 }|]
 
 

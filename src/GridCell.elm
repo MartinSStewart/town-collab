@@ -174,7 +174,7 @@ stepCache ({ userId, position, value } as item) state =
 
 stepCacheHelper : Value -> List Value -> List Value
 stepCacheHelper ({ userId, position, value } as item) cache =
-    (if Bounds.contains position cellBounds && value /= EmptyTile then
+    (if Bounds.contains position cellBounds then
         [ item ]
 
      else
@@ -200,7 +200,7 @@ stepCacheHelperWithRemoved ({ userId, position, value } as item) cache =
                 cache
     in
     { remaining =
-        (if Bounds.contains position cellBounds && value /= EmptyTile then
+        (if Bounds.contains position cellBounds then
             [ item ]
 
          else

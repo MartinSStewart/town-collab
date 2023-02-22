@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , ContextMenu
     , CssPixel
     , EmailEvent(..)
     , EmailResult(..)
@@ -27,7 +28,7 @@ module Types exposing
     , ToolButton(..)
     , TopMenu(..)
     , UiHover(..)
-    , UiMsg(..)
+    , UpdateMeshesData
     , UserSettings
     , ViewPoint(..)
     )
@@ -36,7 +37,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change, Cow, ServerChange, UserStatus)
+import Change exposing (BackendReport, Change, Cow, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -72,6 +73,7 @@ import TextInput
 import Tile exposing (Tile, TileGroup)
 import Time
 import Train exposing (Train, TrainDiff)
+import Ui
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
@@ -131,6 +133,7 @@ type ToolButton
     | TilePlacerToolButton TileGroup
     | TilePickerToolButton
     | TextToolButton
+    | ReportToolButton
 
 
 type Tool
@@ -138,6 +141,7 @@ type Tool
     | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
     | TilePickerTool
     | TextTool (Maybe { cursorPosition : Coord WorldUnit, startColumn : Quantity Int WorldUnit })
+    | ReportTool
 
 
 type alias FrontendLoaded =
@@ -178,6 +182,7 @@ type alias FrontendLoaded =
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix
     , tileHotkeys : Dict String TileGroup
+    , ui : Ui.Element UiHover
     , uiMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe TileGroup
     , lastHouseClick : Maybe Effect.Time.Posix
@@ -189,7 +194,8 @@ type alias FrontendLoaded =
     , tileColors : AssocList.Dict TileGroup Colors
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
-    , focus : Hover
+    , previousFocus : Maybe UiHover
+    , focus : Maybe UiHover
     , music : { startTime : Effect.Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
     , handMeshes : IdDict UserId CursorMeshes
@@ -206,7 +212,34 @@ type alias FrontendLoaded =
     , lastCheckConnection : Time.Posix
     , showMap : Bool
     , showInviteTree : Bool
-    , selectedUserId : Maybe (Id UserId)
+    , contextMenu : Maybe ContextMenu
+    , previousUpdateMeshData : UpdateMeshesData
+    , reportsMesh : WebGL.Mesh Vertex
+    , lastReportTilePlaced : Maybe Effect.Time.Posix
+    , lastReportTileRemoved : Maybe Effect.Time.Posix
+    }
+
+
+type alias UpdateMeshesData =
+    { localModel : LocalModel Change LocalGrid
+    , pressedKeys : List Keyboard.Key
+    , currentTool : Tool
+    , mouseLeft : MouseButtonState
+    , windowSize : Coord Pixels
+    , devicePixelRatio : Float
+    , zoomFactor : Int
+    , mailEditor : Maybe MailEditor.Model
+    , mouseMiddle : MouseButtonState
+    , viewPoint : ViewPoint
+    , trains : IdDict TrainId Train
+    , time : Effect.Time.Posix
+    }
+
+
+type alias ContextMenu =
+    { userId : Maybe (Id UserId)
+    , position : Coord WorldUnit
+    , linkCopied : Bool
     }
 
 
@@ -272,31 +305,9 @@ type UiHover
     | AllowEmailNotificationsCheckbox
     | ResetConnectionsButton
     | UsersOnlineButton
-
-
-type UiMsg
-    = PressedShowInviteUser
-    | PressedCloseInviteUser
-    | PressedSendInviteUser
-    | PressedSendEmail
-    | PressedTool ToolButton
-    | ChangedInviteEmailAddressTextInput Bool Bool Keyboard.Key TextInput.Model
-    | KeyDownEmailAddressTextInputHover Bool Bool Keyboard.Key TextInput.Model
-    | ChangedPrimaryColorInput Bool Bool Keyboard.Key TextInput.Model
-    | ChangedSecondaryColorInput Bool Bool Keyboard.Key TextInput.Model
-    | PressedLowerMusicVolume
-    | PressedRaiseMusicVolume
-    | PressedLowerSoundEffectVolume
-    | PressedRaiseSoundEffectVolume
-    | PressedSettingsButton
-    | PressedCloseSettings
-    | ChangedDisplayNameTextInput Bool Bool Keyboard.Key TextInput.Model
-    | MailEditorUiMsg MailEditor.Msg
-    | PressedYouGotMail
-    | PressedShowMap
-    | PressedAllowEmailNotifications
-    | PressedResetConnections
-    | PressedUsersOnline
+    | CopyPositionUrlButton
+    | ReportUserButton
+    | ToggleIsGridReadOnlyButton
 
 
 type alias BackendModel =
@@ -324,6 +335,9 @@ type alias BackendModel =
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
+    , reported : IdDict UserId (Nonempty BackendReport)
+    , isGridReadOnly : Bool
+    , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     }
 
 
@@ -421,6 +435,7 @@ type BackendMsg
     | CheckConnectionTimeElapsed
     | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | RegenerateCache Effect.Time.Posix
+    | SentReportVandalismAdminEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
 
 
 type ToFrontend
@@ -450,4 +465,5 @@ type alias LoadingData_ =
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree
+    , isGridReadOnly : Bool
     }

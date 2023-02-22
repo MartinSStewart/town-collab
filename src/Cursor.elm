@@ -16,6 +16,8 @@ module Cursor exposing
     , eraserCursorMesh
     , eyeDropperCursor2
     , eyeDropperCursorMesh
+    , gavelCursor2
+    , gavelCursorMesh
     , getSpriteMesh
     , htmlAttribute
     , meshes
@@ -61,6 +63,7 @@ type OtherUsersTool
     | TilePickerTool
     | EraserTool
     | TextTool (Maybe { cursorPosition : Coord WorldUnit })
+    | ReportTool
 
 
 type alias CursorMeshes =
@@ -71,6 +74,7 @@ type alias CursorMeshes =
     , eyeDropperSprite : WebGL.Mesh Vertex
     , eraserSprite : WebGL.Mesh Vertex
     , textSprite : WebGL.Mesh Vertex
+    , gavelSprite : WebGL.Mesh Vertex
     }
 
 
@@ -93,6 +97,7 @@ meshes showName colors =
     , eyeDropperSprite = nameTag2 (Coord.xy 0 -16) ++ eyeDropperCursorMesh |> Sprite.toMesh
     , eraserSprite = nameTag2 (Coord.xy 0 -16) ++ eraserCursorMesh |> Sprite.toMesh
     , textSprite = nameTag2 Coord.origin ++ textCursorMesh |> Sprite.toMesh
+    , gavelSprite = nameTag2 Coord.origin ++ gavelCursorMesh |> Sprite.toMesh
     }
 
 
@@ -126,6 +131,7 @@ type CursorSprite
     | EyeDropperSpriteCursor
     | EraserSpriteCursor
     | TextSpriteCursor
+    | GavelSpriteCursor
 
 
 getSpriteMesh : CursorSprite -> CursorMeshes -> WebGL.Mesh Vertex
@@ -151,6 +157,9 @@ getSpriteMesh cursorSprite cursorMeshes =
 
         TextSpriteCursor ->
             cursorMeshes.textSprite
+
+        GavelSpriteCursor ->
+            cursorMeshes.gavelSprite
 
 
 htmlAttribute : CursorType -> Html.Attribute msg
@@ -238,7 +247,7 @@ defaultCursorTexturePosition =
     Coord.xy 533 28
 
 
-defaultCursorMesh2 : Colors -> Ui.Element id msg
+defaultCursorMesh2 : Colors -> Ui.Element id
 defaultCursorMesh2 colors =
     Ui.colorSprite
         { colors = colors
@@ -268,7 +277,7 @@ eyeDropperSize =
     Coord.xy 19 19
 
 
-eyeDropperCursor2 : Ui.Element id msg
+eyeDropperCursor2 : Ui.Element id
 eyeDropperCursor2 =
     Ui.sprite
         { size = Coord.scalar 2 eyeDropperSize
@@ -290,3 +299,25 @@ pointerCursorMesh colors =
         handPointerSize
         (Coord.xy 563 28)
         handPointerSize
+
+
+gavelSize =
+    Coord.xy 21 21
+
+
+gavelCursorMesh : List Vertex
+gavelCursorMesh =
+    Sprite.sprite
+        (Coord.xy -4 -4)
+        gavelSize
+        (Coord.xy 504 82)
+        gavelSize
+
+
+gavelCursor2 : Ui.Element id
+gavelCursor2 =
+    Ui.sprite
+        { size = Coord.scalar 2 gavelSize
+        , texturePosition = Coord.xy 504 82
+        , textureSize = gavelSize
+        }

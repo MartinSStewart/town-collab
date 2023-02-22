@@ -15,7 +15,7 @@ module Sprite exposing
     , spriteWithZAndOpacityAndUserId
     , text
     , textSize
-    , textWithZ
+    , textWithZAndOpacityAndUserId
     , textureWidth
     , toMesh
     )
@@ -47,10 +47,11 @@ nineSlice :
     , cornerSize : Coord b
     , position : Coord b
     , size : Coord b
+    , scale : Int
     }
     -> Colors
     -> List Vertex
-nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bottomRight, cornerSize, position, size } colors =
+nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bottomRight, cornerSize, position, size, scale } colors =
     let
         ( sizeX, sizeY ) =
             Coord.toTuple size
@@ -59,63 +60,63 @@ nineSlice { topLeft, top, topRight, left, center, right, bottomLeft, bottom, bot
             Coord.toTuple cornerSize
 
         innerWidth =
-            sizeX - cornerW * 2
+            sizeX - cornerW * 2 * scale
 
         innerHeight =
-            sizeY - cornerH * 2
+            sizeY - cornerH * 2 * scale
     in
     spriteWithTwoColors
         colors
         position
-        cornerSize
+        (Coord.scalar scale cornerSize)
         topLeft
         (Coord.changeUnit cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW 0) position)
-            (Coord.xy innerWidth cornerH)
+            (Coord.plus (Coord.xy (cornerW * scale) 0) position)
+            (Coord.xy innerWidth (cornerH * scale))
             top
             (Coord.xy 1 cornerH)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) 0) position)
-            cornerSize
+            (Coord.plus (Coord.xy (cornerW * scale + innerWidth) 0) position)
+            (Coord.scalar scale cornerSize)
             topRight
             (Coord.changeUnit cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy 0 cornerH) position)
-            (Coord.xy cornerW innerHeight)
+            (Coord.plus (Coord.xy 0 (cornerH * scale)) position)
+            (Coord.xy (cornerW * scale) innerHeight)
             left
             (Coord.xy cornerW 1)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW cornerH) position)
+            (Coord.plus (Coord.xy (cornerW * scale) (cornerH * scale)) position)
             (Coord.xy innerWidth innerHeight)
             center
             (Coord.xy 1 1)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) cornerH) position)
-            (Coord.xy cornerW innerHeight)
+            (Coord.plus (Coord.xy ((cornerW * scale) + innerWidth) (cornerH * scale)) position)
+            (Coord.xy (cornerW * scale) innerHeight)
             right
             (Coord.xy cornerW 1)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy 0 (cornerH + innerHeight)) position)
-            cornerSize
+            (Coord.plus (Coord.xy 0 ((cornerH * scale) + innerHeight)) position)
+            (Coord.scalar scale cornerSize)
             bottomLeft
             (Coord.changeUnit cornerSize)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy cornerW (cornerH + innerHeight)) position)
-            (Coord.xy innerWidth cornerH)
+            (Coord.plus (Coord.xy (cornerW * scale) ((cornerH * scale) + innerHeight)) position)
+            (Coord.xy innerWidth (cornerH * scale))
             bottom
             (Coord.xy 1 cornerH)
         ++ spriteWithTwoColors
             colors
-            (Coord.plus (Coord.xy (cornerW + innerWidth) (cornerH + innerHeight)) position)
-            cornerSize
+            (Coord.plus (Coord.xy ((cornerW * scale) + innerWidth) ((cornerH * scale) + innerHeight)) position)
+            (Coord.scalar scale cornerSize)
             bottomRight
             (Coord.changeUnit cornerSize)
 
@@ -168,25 +169,33 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
         opacity2 =
             opacity * Shaders.opaque |> round |> toFloat
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
+    [ { x = toFloat x
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat ty
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
+    , { x = toFloat (x + width)
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat ty
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
+    , { x = toFloat (x + width)
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
+    , { x = toFloat x
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacity2
       , primaryColor = primaryColor2
@@ -210,25 +219,33 @@ spriteWithZAndOpacityAndUserId opacityAndUserId primaryColor secondaryColor ( Qu
         secondaryColor2 =
             Color.toInt secondaryColor |> toFloat
     in
-    [ { position = Vec3.vec3 (toFloat x) (toFloat y) z
+    [ { x = toFloat x
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat ty
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat y) z
+    , { x = toFloat (x + width)
+      , y = toFloat y
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat ty
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat (x + width)) (toFloat (y + height)) z
+    , { x = toFloat (x + width)
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat (tx + w) + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
       , secondaryColor = secondaryColor2
       }
-    , { position = Vec3.vec3 (toFloat x) (toFloat (y + height)) z
+    , { x = toFloat x
+      , y = toFloat (y + height)
+      , z = z
       , texturePosition = toFloat tx + textureWidth * toFloat (ty + h)
       , opacityAndUserId = opacityAndUserId
       , primaryColor = primaryColor2
@@ -330,8 +347,8 @@ text color charScale string position =
         |> .vertices
 
 
-textWithZ : Color -> Int -> String -> Int -> Coord unit -> Float -> List Vertex
-textWithZ color charScale string lineSpacing position z =
+textWithZAndOpacityAndUserId : Float -> Color -> Int -> String -> Int -> Coord unit -> Float -> List Vertex
+textWithZAndOpacityAndUserId opacityAndUserId color charScale string lineSpacing position z =
     let
         charSize_ =
             Coord.multiplyTuple ( charScale, charScale ) charSize
@@ -349,8 +366,8 @@ textWithZ color charScale string lineSpacing position z =
                     { offsetX = state.offsetX + Coord.xRaw charSize_
                     , offsetY = state.offsetY
                     , vertices =
-                        spriteWithZ
-                            1
+                        spriteWithZAndOpacityAndUserId
+                            opacityAndUserId
                             color
                             color
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)

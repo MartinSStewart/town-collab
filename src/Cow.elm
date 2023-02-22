@@ -7,6 +7,7 @@ import Effect.WebGL
 import Math.Vector3 as Vec3
 import Point2d exposing (Point2d)
 import Shaders exposing (Vertex)
+import Sprite
 import Tile
 import Units exposing (WorldUnit)
 import Vector2d exposing (Vector2d)
@@ -23,14 +24,6 @@ cowSizeWorld =
         { x = toFloat (Coord.xRaw textureSize) / toFloat Units.tileWidth
         , y = toFloat (Coord.yRaw textureSize) / toFloat Units.tileHeight
         }
-
-
-cowPrimaryColor =
-    Color.toInt defaultColors.primaryColor |> toFloat
-
-
-cowSecondaryColor =
-    Color.toInt defaultColors.secondaryColor |> toFloat
 
 
 defaultColors : Colors
@@ -53,36 +46,10 @@ texturePosition =
 
 cowMesh : Effect.WebGL.Mesh Vertex
 cowMesh =
-    let
-        ( width, height ) =
-            Coord.toTuple textureSize |> Tuple.mapBoth toFloat toFloat
-
-        { topLeft, bottomRight, bottomLeft, topRight } =
-            Tile.texturePositionPixels texturePosition textureSize
-    in
-    Shaders.triangleFan
-        [ { position = Vec3.vec3 (-width / 2) (-height / 2) 0
-          , texturePosition = topLeft
-          , opacityAndUserId = Shaders.opaque
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        , { position = Vec3.vec3 (width / 2) (-height / 2) 0
-          , texturePosition = topRight
-          , opacityAndUserId = Shaders.opaque
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        , { position = Vec3.vec3 (width / 2) (height / 2) 0
-          , texturePosition = bottomRight
-          , opacityAndUserId = Shaders.opaque
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        , { position = Vec3.vec3 (-width / 2) (height / 2) 0
-          , texturePosition = bottomLeft
-          , opacityAndUserId = Shaders.opaque
-          , primaryColor = cowPrimaryColor
-          , secondaryColor = cowSecondaryColor
-          }
-        ]
+    Sprite.spriteWithTwoColors
+        defaultColors
+        (Coord.divide (Coord.xy -2 -2) textureSize)
+        textureSize
+        texturePosition
+        textureSize
+        |> Sprite.toMesh

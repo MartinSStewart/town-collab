@@ -70,25 +70,33 @@ flagMesh position scale color frame =
         scale2 =
             toFloat scale
     in
-    [ { position = Vec3.vec3 x2 y2 0
+    [ { x = x2
+      , y = y2
+      , z = 0
       , texturePosition = topLeft
       , opacityAndUserId = Shaders.opaque
       , primaryColor = colorVec
       , secondaryColor = 0
       }
-    , { position = Vec3.vec3 (x2 + width * scale2) y2 0
+    , { x = x2 + width * scale2
+      , y = y2
+      , z = 0
       , texturePosition = topRight
       , opacityAndUserId = Shaders.opaque
       , primaryColor = colorVec
       , secondaryColor = 0
       }
-    , { position = Vec3.vec3 (x2 + width * scale2) (y2 + height * scale2) 0
+    , { x = x2 + width * scale2
+      , y = y2 + height * scale2
+      , z = 0
       , texturePosition = bottomRight
       , opacityAndUserId = Shaders.opaque
       , primaryColor = colorVec
       , secondaryColor = 0
       }
-    , { position = Vec3.vec3 x2 (y2 + height * scale2) 0
+    , { x = x2
+      , y = y2 + height * scale2
+      , z = 0
       , texturePosition = bottomLeft
       , opacityAndUserId = Shaders.opaque
       , primaryColor = colorVec

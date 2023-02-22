@@ -1,10 +1,15 @@
 module Toolbar exposing
-    ( ViewData
+    ( actualViewPoint
+    , canDragView
     , getTileGroupTile
+    , isDisconnected
     , mapSize
+    , offsetViewPoint
+    , screenToWorld
     , showColorTextInputs
     , validateInviteEmailAddress
     , view
+    , worldToScreen
     )
 
 import AssocList
@@ -15,109 +20,158 @@ import Cursor
 import Dict exposing (Dict)
 import DisplayName
 import Duration
+import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Env
 import Id exposing (Id, MailId, UserId)
 import IdDict exposing (IdDict)
-import Keyboard
 import List.Extra as List
 import List.Nonempty
+import LocalGrid
 import MailEditor
-import PingData exposing (PingData)
 import Pixels exposing (Pixels)
-import Quantity exposing (Quantity(..))
+import Point2d exposing (Point2d)
+import Quantity exposing (Quantity(..), Rate)
+import Shaders
 import Sound
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
-import Types exposing (Hover(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), UiMsg(..))
+import Train
+import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
-import Units
+import Units exposing (WorldUnit)
 import User exposing (FrontendUser, InviteTree(..))
+import Vector2d exposing (Vector2d)
 
 
-type alias ViewData =
-    { windowSize : Coord Pixels
-    , pressedSubmitEmail : SubmitStatus EmailAddress
-    , loginTextInput : TextInput.Model
-    , hasCmdKey : Bool
-    , handColor : Maybe Colors
-    , userStatus : UserStatus
-    , primaryColorTextInput : TextInput.Model
-    , secondaryColorTextInput : TextInput.Model
-    , tileColors : AssocList.Dict TileGroup Colors
-    , tileHotkeys : Dict String TileGroup
-    , currentTool : ToolButton
-    , userId : Maybe (Id UserId)
-    , inviteTextInput : TextInput.Model
-    , inviteSubmitStatus : SubmitStatus EmailAddress
-    , musicVolume : Int
-    , soundEffectVolume : Int
-    , topMenuOpened : Maybe TopMenu
-    , mailEditor : Maybe MailEditor.Model
-    , users : IdDict UserId FrontendUser
-    , inviteTree : InviteTree
-    , isDisconnected : Bool
-    , showMap : Bool
-    , otherUsersOnline : Int
-    , showInviteTree : Bool
-    }
+view : FrontendLoaded -> Ui.Element UiHover
+view model =
+    let
+        localModel =
+            LocalGrid.localModel model.localModel
 
+        otherUsersOnline =
+            case localModel.userStatus of
+                LoggedIn { userId } ->
+                    IdDict.remove userId localModel.cursors |> IdDict.size
 
-view : ViewData -> Ui.Element UiHover UiMsg
-view data =
-    case ( data.userStatus, data.mailEditor ) of
+                NotLoggedIn ->
+                    IdDict.size localModel.cursors
+
+        toolbarElement =
+            Ui.el
+                { padding = Ui.noPadding
+                , inFront = []
+                , borderAndFill = borderAndFill
+                }
+                (case localModel.userStatus of
+                    LoggedIn loggedIn ->
+                        toolbarUi
+                            model.hasCmdKey
+                            (case IdDict.get loggedIn.userId localModel.users of
+                                Just user ->
+                                    user.handColor
+
+                                Nothing ->
+                                    Cursor.defaultColors
+                            )
+                            model.primaryColorTextInput
+                            model.secondaryColorTextInput
+                            model.tileColors
+                            model.tileHotkeys
+                            (case model.currentTool of
+                                HandTool ->
+                                    HandToolButton
+
+                                TilePlacerTool { tileGroup } ->
+                                    TilePlacerToolButton tileGroup
+
+                                TilePickerTool ->
+                                    TilePickerToolButton
+
+                                TextTool _ ->
+                                    TextToolButton
+
+                                ReportTool ->
+                                    ReportToolButton
+                            )
+
+                    NotLoggedIn ->
+                        loginToolbarUi model.pressedSubmitEmail model.loginTextInput
+                )
+    in
+    case ( localModel.userStatus, model.mailEditor ) of
         ( LoggedIn loggedIn, Just mailEditor ) ->
             MailEditor.ui
-                data.isDisconnected
-                data.windowSize
+                (isDisconnected model)
+                model.windowSize
                 MailEditorHover
-                MailEditorUiMsg
-                data.users
+                localModel.users
                 loggedIn.inbox
                 mailEditor
 
         _ ->
             Ui.bottomCenter
-                { size = data.windowSize
+                { size = model.windowSize
                 , inFront =
-                    [ if data.showInviteTree then
+                    [ case model.contextMenu of
+                        Just contextMenu ->
+                            contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
+
+                        Nothing ->
+                            Ui.none
+                    , if model.showInviteTree then
                         Ui.topRight
-                            { size = data.windowSize }
+                            { size = model.windowSize }
                             (Ui.el
                                 { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
-                                (User.drawInviteTree data.users data.inviteTree)
+                                (User.drawInviteTree localModel.users localModel.inviteTree)
                             )
 
                       else
                         Ui.none
-                    , if data.isDisconnected then
-                        MailEditor.disconnectWarning data.windowSize
+                    , if isDisconnected model then
+                        MailEditor.disconnectWarning model.windowSize
 
                       else
                         Ui.topRight
-                            { size = data.windowSize }
-                            (Ui.button
-                                { id = UsersOnlineButton
-                                , padding = Ui.paddingXY 10 4
-                                , onPress = PressedUsersOnline
-                                }
-                                (if data.otherUsersOnline == 1 then
-                                    Ui.text "1 user online"
+                            { size = model.windowSize }
+                            (Ui.row
+                                { spacing = 5, padding = Ui.noPadding }
+                                [ case localModel.userStatus of
+                                    LoggedIn loggedIn ->
+                                        if loggedIn.isGridReadOnly then
+                                            Ui.el
+                                                { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                (Ui.colorText Color.white "Placing tiles currently disabled")
 
-                                 else
-                                    Ui.text (String.fromInt data.otherUsersOnline ++ " users online")
-                                )
+                                        else
+                                            Ui.none
+
+                                    NotLoggedIn ->
+                                        Ui.none
+                                , Ui.button
+                                    { id = UsersOnlineButton
+                                    , padding = Ui.paddingXY 10 4
+                                    }
+                                    (if otherUsersOnline == 1 then
+                                        Ui.text "1 user online"
+
+                                     else
+                                        Ui.text (String.fromInt otherUsersOnline ++ " users online")
+                                    )
+                                ]
                             )
                     , Ui.row
                         { padding = Ui.noPadding, spacing = 4 }
-                        [ case data.topMenuOpened of
+                        [ case model.topMenuOpened of
                             Just (SettingsMenu nameTextInput) ->
-                                case data.userStatus of
+                                case localModel.userStatus of
                                     LoggedIn loggedIn ->
                                         settingsView
-                                            data.musicVolume
-                                            data.soundEffectVolume
+                                            model.musicVolume
+                                            model.soundEffectVolume
                                             nameTextInput
                                             loggedIn
 
@@ -125,39 +179,37 @@ view data =
                                         Ui.none
 
                             Just LoggedOutSettingsMenu ->
-                                loggedOutSettingsView data.musicVolume data.soundEffectVolume
+                                loggedOutSettingsView model.musicVolume model.soundEffectVolume
 
                             _ ->
                                 Ui.button
                                     { id = SettingsButton
                                     , padding = Ui.paddingXY 10 4
-                                    , onPress = PressedSettingsButton
                                     }
                                     (Ui.text "Settings")
-                        , case data.userStatus of
+                        , case localModel.userStatus of
                             LoggedIn loggedIn ->
                                 inviteView
-                                    (data.topMenuOpened == Just InviteMenu)
+                                    (model.topMenuOpened == Just InviteMenu)
                                     loggedIn.emailAddress
-                                    data.inviteTextInput
-                                    data.inviteSubmitStatus
+                                    model.inviteTextInput
+                                    model.inviteSubmitStatus
 
                             NotLoggedIn ->
                                 Ui.none
                         , Ui.button
                             { id = ShowMapButton
                             , padding = Ui.paddingXY 10 4
-                            , onPress = PressedShowMap
                             }
                             (Ui.text
-                                (if data.showMap then
+                                (if model.showMap then
                                     "Hide map"
 
                                  else
                                     "Show map"
                                 )
                             )
-                        , case data.userStatus of
+                        , case localModel.userStatus of
                             LoggedIn loggedIn ->
                                 let
                                     unviewedMail =
@@ -170,8 +222,6 @@ view data =
                                     Ui.customButton
                                         { id = YouGotMailButton
                                         , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
-                                        , onPress = PressedYouGotMail
-                                        , onMouseDown = Nothing
                                         , borderAndFill = Ui.defaultButtonBorderAndFill
                                         , borderAndFillFocus = Ui.defaultButtonBorderAndFill
                                         , inFront = []
@@ -191,10 +241,10 @@ view data =
                             NotLoggedIn ->
                                 Ui.none
                         ]
-                    , if data.showMap then
+                    , if model.showMap then
                         let
                             mapSize2 =
-                                mapSize data.windowSize
+                                mapSize model.windowSize
                         in
                         Ui.el
                             { padding =
@@ -211,32 +261,176 @@ view data =
                             }
                             Ui.none
                             |> Ui.ignoreInputs
-                            |> Ui.center { size = data.windowSize }
+                            |> Ui.center { size = model.windowSize }
 
                       else
                         Ui.none
                     ]
                 }
-                (Ui.el
-                    { padding = Ui.noPadding
-                    , inFront = []
-                    , borderAndFill = borderAndFill
-                    }
-                    (case data.handColor of
-                        Just handColor ->
-                            toolbarUi
-                                data.hasCmdKey
-                                handColor
-                                data.primaryColorTextInput
-                                data.secondaryColorTextInput
-                                data.tileColors
-                                data.tileHotkeys
-                                data.currentTool
+                toolbarElement
+
+
+contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover
+contextMenuView toolbarHeight contextMenu model =
+    let
+        localModel =
+            LocalGrid.localModel model.localModel
+
+        contextMenuElement : Ui.Element UiHover
+        contextMenuElement =
+            Ui.el
+                { padding = Ui.paddingXY 12 12, borderAndFill = NoBorderOrFill, inFront = [] }
+                (Ui.column
+                    { padding = Ui.noPadding, spacing = 8 }
+                    [ Ui.row
+                        { padding = Ui.noPadding, spacing = 8 }
+                        [ Ui.el
+                            { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }
+                            (Ui.text
+                                (String.fromInt (Coord.xRaw contextMenu.position)
+                                    ++ ","
+                                    ++ String.fromInt (Coord.yRaw contextMenu.position)
+                                )
+                            )
+                        , Ui.button
+                            { id = CopyPositionUrlButton, padding = Ui.paddingXY 8 4 }
+                            (Ui.text
+                                (if contextMenu.linkCopied then
+                                    " Copied! "
+
+                                 else
+                                    "Copy link"
+                                )
+                            )
+                        ]
+                    , case contextMenu.userId of
+                        Just userId ->
+                            if userId == Shaders.worldGenUserId then
+                                Ui.wrappedText 400 "Last changed by server"
+
+                            else
+                                case IdDict.get userId localModel.users of
+                                    Just user ->
+                                        let
+                                            name =
+                                                DisplayName.nameAndId user.name userId
+
+                                            isYou =
+                                                case localModel.userStatus of
+                                                    LoggedIn loggedIn ->
+                                                        loggedIn.userId == userId
+
+                                                    NotLoggedIn ->
+                                                        False
+                                        in
+                                        "Last changed by "
+                                            ++ name
+                                            ++ (if isYou then
+                                                    " (you)"
+
+                                                else
+                                                    ""
+                                               )
+                                            |> Ui.wrappedText 400
+
+                                    Nothing ->
+                                        Ui.text "Not found"
 
                         Nothing ->
-                            loginToolbarUi data.pressedSubmitEmail data.loginTextInput
-                    )
+                            Ui.none
+                    ]
                 )
+
+        position =
+            worldToScreen model (contextMenu.position |> Coord.plus (Coord.xy 1 1) |> Coord.toPoint2d) |> Coord.floorPoint
+
+        position2 =
+            worldToScreen model (Coord.toPoint2d contextMenu.position) |> Coord.floorPoint
+
+        fitsWindow =
+            model.windowSize |> Coord.minus position |> Coord.minus (Ui.size contextMenuElement)
+
+        fitsX =
+            Coord.xRaw fitsWindow > 0
+
+        fitsY =
+            Coord.yRaw fitsWindow > toolbarHeight
+
+        offset =
+            case ( fitsX, fitsY ) of
+                ( True, True ) ->
+                    position
+
+                ( True, False ) ->
+                    Coord.xy (Coord.xRaw position) (Coord.yRaw position2)
+                        |> Coord.minus (Ui.size contextMenuElement |> Coord.yOnly)
+
+                ( False, True ) ->
+                    Coord.xy (Coord.xRaw position2) (Coord.yRaw position)
+                        |> Coord.minus (Ui.size contextMenuElement |> Coord.xOnly)
+
+                ( False, False ) ->
+                    position2 |> Coord.minus (Ui.size contextMenuElement)
+    in
+    Ui.el
+        { padding =
+            { topLeft = offset, bottomRight = Coord.origin }
+        , inFront =
+            [ Ui.el
+                { padding = { topLeft = offset, bottomRight = Coord.origin }
+                , inFront = []
+                , borderAndFill = NoBorderOrFill
+                }
+                contextMenuElement
+            ]
+        , borderAndFill = NoBorderOrFill
+        }
+        (Ui.quads
+            { size = Ui.size contextMenuElement
+            , vertices =
+                Sprite.nineSlice
+                    { topLeft =
+                        if fitsX && fitsY then
+                            Coord.xy 504 69
+
+                        else
+                            Coord.xy 504 29
+                    , top = Coord.xy 510 29
+                    , topRight =
+                        if not fitsX && fitsY then
+                            Coord.xy 511 69
+
+                        else
+                            Coord.xy 511 29
+                    , left = Coord.xy 504 35
+                    , center = Coord.xy 510 35
+                    , right = Coord.xy 511 35
+                    , bottomLeft =
+                        if fitsX && not fitsY then
+                            Coord.xy 504 76
+
+                        else
+                            Coord.xy 504 36
+                    , bottom = Coord.xy 510 36
+                    , bottomRight =
+                        if not fitsX && not fitsY then
+                            Coord.xy 511 76
+
+                        else
+                            Coord.xy 511 36
+                    , cornerSize = Coord.xy 6 6
+                    , position = Coord.origin
+                    , size = Ui.size contextMenuElement
+                    , scale = 2
+                    }
+                    { primaryColor = Color.fillColor, secondaryColor = Color.outlineColor }
+            }
+        )
+
+
+isDisconnected : FrontendLoaded -> Bool
+isDisconnected model =
+    Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 20)
 
 
 mapSize : Coord Pixels -> Int
@@ -244,7 +438,7 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover UiMsg
+settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
 settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
     let
         musicVolumeInput =
@@ -252,14 +446,11 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                 "Music volume "
                 LowerMusicVolume
                 RaiseMusicVolume
-                PressedLowerMusicVolume
-                PressedRaiseMusicVolume
                 musicVolume
 
         allowEmailNotifications =
             checkbox
                 AllowEmailNotificationsCheckbox
-                PressedAllowEmailNotifications
                 loggedIn.allowEmailNotifications
                 "Allow email notifications"
     in
@@ -273,7 +464,7 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
             , padding = Ui.noPadding
             }
             ([ Ui.button
-                { id = CloseSettings, onPress = PressedCloseSettings, padding = Ui.paddingXY 10 4 }
+                { id = CloseSettings, padding = Ui.paddingXY 10 4 }
                 (Ui.text "Close")
              , Ui.column
                 { spacing = 6
@@ -284,8 +475,6 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                     "Sound effects"
                     LowerSoundEffectVolume
                     RaiseSoundEffectVolume
-                    PressedLowerSoundEffectVolume
-                    PressedRaiseSoundEffectVolume
                     soundEffectVolume
                 , Ui.column
                     { spacing = 4
@@ -302,16 +491,19 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
 
                                 Err _ ->
                                     False
-                        , onKeyDown = ChangedDisplayNameTextInput
+                        , state = nameTextInput.current
                         }
-                        nameTextInput
                     ]
                 ]
              , allowEmailNotifications
              ]
                 ++ (case loggedIn.adminData of
                         Just adminData ->
-                            [ adminView (Ui.size allowEmailNotifications |> Coord.xRaw) adminData ]
+                            [ adminView
+                                (Ui.size allowEmailNotifications |> Coord.xRaw)
+                                loggedIn.isGridReadOnly
+                                adminData
+                            ]
 
                         Nothing ->
                             []
@@ -320,8 +512,8 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
         )
 
 
-adminView : Int -> AdminData -> Ui.Element UiHover UiMsg
-adminView parentWidth adminData =
+adminView : Int -> Bool -> AdminData -> Ui.Element UiHover
+adminView parentWidth isGridReadOnly adminData =
     Ui.column
         { spacing = 8, padding = Ui.noPadding }
         [ Ui.el
@@ -341,6 +533,7 @@ adminView parentWidth adminData =
               else
                 Ui.text "(dev)"
             ]
+        , checkbox ToggleIsGridReadOnlyButton isGridReadOnly "Read only grid"
         , Ui.text
             ("Last cache regen: "
                 ++ (case adminData.lastCacheRegeneration of
@@ -354,7 +547,6 @@ adminView parentWidth adminData =
         , Ui.text "Sessions (id:count)"
         , Ui.button
             { id = ResetConnectionsButton
-            , onPress = PressedResetConnections
             , padding = Ui.paddingXY 10 4
             }
             (Ui.text "Reset connections")
@@ -379,14 +571,12 @@ adminView parentWidth adminData =
         ]
 
 
-checkbox : id -> msg -> Bool -> String -> Ui.Element id msg
-checkbox id onPress isChecked text =
+checkbox : id -> Bool -> String -> Ui.Element id
+checkbox id isChecked text =
     Ui.customButton
         { id = id
         , padding = Ui.noPadding
         , inFront = []
-        , onPress = onPress
-        , onMouseDown = Nothing
         , borderAndFill = NoBorderOrFill
         , borderAndFillFocus = NoBorderOrFill
         }
@@ -412,28 +602,26 @@ checkbox id onPress isChecked text =
         )
 
 
-volumeControl : String -> id -> id -> msg -> msg -> Int -> Ui.Element id msg
-volumeControl name lowerId raiseId pressedLower pressedRaise volume =
+volumeControl : String -> id -> id -> Int -> Ui.Element id
+volumeControl name lowerId raiseId volume =
     Ui.row
         { spacing = 8, padding = Ui.noPadding }
         [ Ui.text name
         , Ui.button
             { id = lowerId
             , padding = { topLeft = Coord.xy 6 0, bottomRight = Coord.xy 4 2 }
-            , onPress = pressedLower
             }
             (Ui.text "-")
         , Ui.text (String.padLeft 2 ' ' (String.fromInt volume) ++ "/" ++ String.fromInt Sound.maxVolume)
         , Ui.button
             { id = raiseId
             , padding = { topLeft = Coord.xy 6 0, bottomRight = Coord.xy 4 2 }
-            , onPress = pressedRaise
             }
             (Ui.text "+")
         ]
 
 
-loggedOutSettingsView : Int -> Int -> Ui.Element UiHover UiMsg
+loggedOutSettingsView : Int -> Int -> Ui.Element UiHover
 loggedOutSettingsView musicVolume soundEffectVolume =
     Ui.el
         { padding = Ui.paddingXY 8 8
@@ -445,7 +633,7 @@ loggedOutSettingsView musicVolume soundEffectVolume =
             , padding = Ui.noPadding
             }
             [ Ui.button
-                { id = CloseSettings, onPress = PressedCloseSettings, padding = Ui.paddingXY 10 4 }
+                { id = CloseSettings, padding = Ui.paddingXY 10 4 }
                 (Ui.text "Close")
             , Ui.column
                 { spacing = 6
@@ -455,15 +643,11 @@ loggedOutSettingsView musicVolume soundEffectVolume =
                     "Music volume "
                     LowerMusicVolume
                     RaiseMusicVolume
-                    PressedLowerMusicVolume
-                    PressedRaiseMusicVolume
                     musicVolume
                 , volumeControl
                     "Sound effects"
                     LowerSoundEffectVolume
                     RaiseSoundEffectVolume
-                    PressedLowerSoundEffectVolume
-                    PressedRaiseSoundEffectVolume
                     soundEffectVolume
                 ]
             ]
@@ -484,21 +668,21 @@ validateInviteEmailAddress emailAddress inviteEmailAddressText =
             Err "Invalid email"
 
 
-inviteView : Bool -> EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover UiMsg
+inviteView : Bool -> EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
 inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
     if showInvite then
         let
-            inviteForm : Ui.Element UiHover UiMsg
+            inviteForm : Ui.Element UiHover
             inviteForm =
                 Ui.column
                     { spacing = 8, padding = Ui.noPadding }
                     [ Ui.button
-                        { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                        { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
                         (Ui.text "Cancel")
                     , content
                     ]
 
-            content : Ui.Element UiHover UiMsg
+            content : Ui.Element UiHover
             content =
                 Ui.column
                     { spacing = 0, padding = Ui.noPadding }
@@ -509,14 +693,13 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
                             { id = InviteEmailAddressTextInput
                             , width = 800
                             , isValid = True
-                            , onKeyDown = ChangedInviteEmailAddressTextInput
+                            , state = inviteTextInput.current
                             }
-                            inviteTextInput
                         ]
                     , Ui.row
                         { spacing = 4, padding = { topLeft = Coord.xy 0 8, bottomRight = Coord.origin } }
                         [ Ui.button
-                            { id = SubmitInviteUser, onPress = PressedSendInviteUser, padding = Ui.paddingXY 10 4 }
+                            { id = SubmitInviteUser, padding = Ui.paddingXY 10 4 }
                             (case inviteSubmitStatus of
                                 NotSubmitted _ ->
                                     Ui.text "Send invite"
@@ -549,7 +732,7 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
                     Ui.column
                         { spacing = 0, padding = Ui.noPadding }
                         [ Ui.button
-                            { id = CloseInviteUser, onPress = PressedCloseInviteUser, padding = Ui.paddingXY 10 4 }
+                            { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
                             (Ui.text "Close")
                         , Ui.center
                             { size = Ui.size content }
@@ -566,7 +749,6 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
     else
         Ui.button
             { id = ShowInviteUser
-            , onPress = PressedShowInviteUser
             , padding = Ui.paddingXY 10 4
             }
             (Ui.text "Invite")
@@ -591,13 +773,13 @@ pressedSubmit submitStatus =
             False
 
 
-loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover UiMsg
+loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover
 loginToolbarUi pressedSubmitEmail emailTextInput =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
 
-        loginUi : Ui.Element UiHover UiMsg
+        loginUi : Ui.Element UiHover
         loginUi =
             Ui.column
                 { spacing = 10, padding = Ui.paddingXY 20 10 }
@@ -615,11 +797,10 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
 
                                 else
                                     True
-                            , onKeyDown = KeyDownEmailAddressTextInputHover
+                            , state = emailTextInput.current
                             }
-                            emailTextInput
                         , Ui.button
-                            { id = SendEmailButtonHover, onPress = PressedSendEmail, padding = Ui.paddingXY 30 4 }
+                            { id = SendEmailButtonHover, padding = Ui.paddingXY 30 4 }
                             (Ui.text "Send email")
                         ]
                     , case pressedSubmitEmail of
@@ -647,7 +828,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
     case pressedSubmitEmail of
         Submitted emailAddress ->
             let
-                submittedText : Ui.Element id msg
+                submittedText : Ui.Element id
                 submittedText =
                     "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.wrappedText 1000
             in
@@ -674,7 +855,7 @@ toolbarUi :
     -> AssocList.Dict TileGroup Colors
     -> Dict String TileGroup
     -> ToolButton
-    -> Ui.Element UiHover UiMsg
+    -> Ui.Element UiHover
 toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentToolButton =
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
@@ -692,7 +873,7 @@ selectedToolView :
     -> TextInput.Model
     -> AssocList.Dict TileGroup Colors
     -> ToolButton
-    -> Ui.Element UiHover UiMsg
+    -> Ui.Element UiHover
 selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
@@ -700,7 +881,8 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
     in
     Ui.column
         { spacing = 6, padding = Ui.paddingXY 12 8 }
-        [ Ui.text
+        [ Ui.wrappedText
+            260
             (case currentTool of
                 HandToolButton ->
                     "Pointer tool"
@@ -713,6 +895,9 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
 
                 TextToolButton ->
                     "Text"
+
+                ReportToolButton ->
+                    "Report vandalism"
             )
         , Ui.row
             { spacing = 10, padding = Ui.noPadding }
@@ -720,13 +905,13 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                 { spacing = 10, padding = Ui.noPadding }
                 [ case showPrimaryColorTextInput of
                     Just color ->
-                        colorTextInput PrimaryColorInput ChangedPrimaryColorInput primaryColorTextInput color
+                        colorTextInput PrimaryColorInput primaryColorTextInput color
 
                     Nothing ->
                         Ui.none
                 , case showSecondaryColorTextInput of
                     Just color ->
-                        colorTextInput SecondaryColorInput ChangedSecondaryColorInput secondaryColorTextInput color
+                        colorTextInput SecondaryColorInput secondaryColorTextInput color
 
                     Nothing ->
                         Ui.none
@@ -736,7 +921,6 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
                             Coord.xy
                                 (colorTextInput
                                     PrimaryColorInput
-                                    ChangedPrimaryColorInput
                                     primaryColorTextInput
                                     Color.black
                                     |> Ui.size
@@ -776,6 +960,9 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
 
                             Nothing ->
                                 Ui.none
+
+                    ReportToolButton ->
+                        Cursor.gavelCursor2
                 )
             ]
         ]
@@ -783,11 +970,10 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
 
 colorTextInput :
     id
-    -> (Bool -> Bool -> Keyboard.Key -> TextInput.Model -> UiMsg)
     -> TextInput.Model
     -> Color
-    -> Ui.Element id UiMsg
-colorTextInput id onChange textInput color =
+    -> Ui.Element id
+colorTextInput id textInput color =
     let
         padding =
             TextInput.size (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
@@ -805,9 +991,7 @@ colorTextInput id onChange textInput color =
                     }
             }
             Ui.none
-        , Ui.textInput
-            { id = id, width = primaryColorInputWidth, isValid = True, onKeyDown = onChange }
-            textInput
+        , Ui.textInput { id = id, width = primaryColorInputWidth, isValid = True, state = textInput.current }
         ]
 
 
@@ -818,7 +1002,7 @@ toolButtonUi :
     -> Dict String TileGroup
     -> ToolButton
     -> ToolButton
-    -> Ui.Element UiHover UiMsg
+    -> Ui.Element UiHover
 toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     let
         tileColors =
@@ -845,6 +1029,9 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                         Nothing ->
                             Tile.getTileGroupData BigTextGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
 
+                ReportToolButton ->
+                    Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
+
         hotkeyText : Maybe String
         hotkeyText =
             case tool of
@@ -864,7 +1051,10 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                 TextToolButton ->
                     Nothing
 
-        label : Ui.Element UiHover UiMsg
+                ReportToolButton ->
+                    Nothing
+
+        label : Ui.Element UiHover
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
@@ -878,11 +1068,12 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
 
                 TextToolButton ->
                     tileMesh tileColors (getTileGroupTile BigTextGroup 77)
+
+                ReportToolButton ->
+                    Cursor.gavelCursor2
     in
     Ui.customButton
         { id = ToolButtonHover tool
-        , onPress = PressedTool tool
-        , onMouseDown = Nothing
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of
@@ -923,9 +1114,10 @@ buttonTiles : List ToolButton
 buttonTiles =
     [ HandToolButton
     , TilePickerToolButton
+    , ReportToolButton
+    , TextToolButton
     ]
         ++ List.map TilePlacerToolButton Tile.allTileGroupsExceptText
-        ++ [ TextToolButton ]
 
 
 toolbarRowCount : number
@@ -933,7 +1125,7 @@ toolbarRowCount =
     3
 
 
-tileMesh : Colors -> Tile -> Ui.Element id msg
+tileMesh : Colors -> Tile -> Ui.Element id
 tileMesh colors tile =
     let
         data : TileData b
@@ -959,45 +1151,44 @@ tileMesh colors tile =
             else
                 spriteSize
         , vertices =
-            \position3 ->
-                if tile == EmptyTile then
-                    Sprite.sprite
-                        position3
-                        (Coord.tuple ( 28 * 2, 27 * 2 ))
-                        (Coord.xy 504 42)
-                        (Coord.xy 28 27)
+            if tile == EmptyTile then
+                Sprite.sprite
+                    Coord.origin
+                    (Coord.tuple ( 28 * 2, 27 * 2 ))
+                    (Coord.xy 504 42)
+                    (Coord.xy 28 27)
 
-                else
-                    (case data.texturePosition of
-                        Just texturePosition ->
-                            Sprite.spriteWithTwoColors
-                                colors
-                                position3
-                                spriteSize
-                                texturePosition
-                                (case tile of
-                                    BigText _ ->
-                                        size |> Coord.divide (Coord.xy 2 2)
+            else
+                (case data.texturePosition of
+                    Just texturePosition ->
+                        Sprite.spriteWithTwoColors
+                            colors
+                            Coord.origin
+                            spriteSize
+                            texturePosition
+                            (case tile of
+                                BigText _ ->
+                                    size |> Coord.divide (Coord.xy 2 2)
 
-                                    _ ->
-                                        size
-                                )
+                                _ ->
+                                    size
+                            )
 
-                        Nothing ->
-                            []
-                    )
-                        ++ (case data.texturePositionTopLayer of
-                                Just topLayer ->
-                                    Sprite.spriteWithTwoColors
-                                        colors
-                                        position3
-                                        spriteSize
-                                        topLayer.texturePosition
-                                        size
+                    Nothing ->
+                        []
+                )
+                    ++ (case data.texturePositionTopLayer of
+                            Just topLayer ->
+                                Sprite.spriteWithTwoColors
+                                    colors
+                                    Coord.origin
+                                    spriteSize
+                                    topLayer.texturePosition
+                                    size
 
-                                Nothing ->
-                                    []
-                           )
+                            Nothing ->
+                                []
+                       )
         }
 
 
@@ -1068,35 +1259,221 @@ showColorTextInputs handColor tileColors tool =
                     , showSecondaryColorTextInput = Just colors.secondaryColor
                     }
 
+        ReportToolButton ->
+            { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
+
 
 getTileGroupTile : TileGroup -> Int -> Tile
 getTileGroupTile tileGroup index =
     Tile.getTileGroupData tileGroup |> .tiles |> List.Nonempty.get index
 
 
-createInfoMesh : Maybe PingData -> Maybe (Id UserId) -> Ui.Element id msg
-createInfoMesh maybePingData maybeUserId =
+screenToWorld :
+    { a
+        | windowSize : ( Quantity Int sourceUnits, Quantity Int sourceUnits )
+        , devicePixelRatio : Float
+        , zoomFactor : Int
+        , mailEditor : Maybe b
+        , mouseLeft : MouseButtonState
+        , mouseMiddle : MouseButtonState
+        , viewPoint : ViewPoint
+        , trains : IdDict Id.TrainId Train.Train
+        , time : Effect.Time.Posix
+        , currentTool : Tool
+    }
+    -> Point2d sourceUnits Pixels
+    -> Point2d WorldUnit WorldUnit
+screenToWorld model =
     let
-        durationToString duration =
-            Duration.inMilliseconds duration |> round |> String.fromInt
+        ( w, h ) =
+            model.windowSize
     in
-    "Warning! Game is in alpha. The world is reset often.\n"
-        ++ "User ID: "
-        ++ (case maybeUserId of
-                Just userId ->
-                    String.fromInt (Id.toInt userId)
+    Point2d.translateBy
+        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
+        >> point2dAt2 (scaleForScreenToWorld model)
+        >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
+
+
+worldToScreen : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Point2d Pixels Pixels
+worldToScreen model =
+    let
+        ( w, h ) =
+            model.windowSize
+    in
+    Point2d.translateBy
+        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
+        << point2dAt2_ (scaleForScreenToWorld model)
+        << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
+
+
+point2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2 ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Point2d.unsafe
+
+
+point2dAt2_ :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Point2d sourceUnits coordinates
+    -> Point2d destinationUnits coordinates
+point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
+    let
+        { x, y } =
+            Point2d.unwrap point
+    in
+    { x = x / rateX
+    , y = y / rateY
+    }
+        |> Point2d.unsafe
+
+
+scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float units )
+scaleForScreenToWorld model =
+    ( 1 / (toFloat model.zoomFactor * toFloat Units.tileWidth) |> Quantity
+    , 1 / (toFloat model.zoomFactor * toFloat Units.tileHeight) |> Quantity
+    )
+
+
+offsetViewPoint :
+    { a
+        | devicePixelRatio : Float
+        , zoomFactor : Int
+        , viewPoint : ViewPoint
+        , trains : IdDict Id.TrainId Train.Train
+        , time : Effect.Time.Posix
+    }
+    -> Hover
+    -> Point2d sourceUnits Pixels
+    -> Point2d sourceUnits Pixels
+    -> Point2d WorldUnit WorldUnit
+offsetViewPoint model hover mouseStart mouseCurrent =
+    if canDragView hover then
+        let
+            delta : Vector2d WorldUnit WorldUnit
+            delta =
+                Vector2d.from mouseCurrent mouseStart
+                    |> vector2dAt2 (scaleForScreenToWorld model)
+                    |> Vector2d.placeIn (Units.screenFrame viewPoint2)
+
+            viewPoint2 =
+                actualViewPointHelper model
+        in
+        Point2d.translateBy delta viewPoint2
+
+    else
+        actualViewPointHelper model
+
+
+canDragView : Hover -> Bool
+canDragView hover =
+    case hover of
+        TileHover _ ->
+            True
+
+        TrainHover _ ->
+            True
+
+        UiBackgroundHover ->
+            False
+
+        MapHover ->
+            True
+
+        CowHover _ ->
+            True
+
+        UiHover _ _ ->
+            False
+
+
+actualViewPoint :
+    { a
+        | mailEditor : Maybe b
+        , mouseLeft : MouseButtonState
+        , mouseMiddle : MouseButtonState
+        , devicePixelRatio : Float
+        , zoomFactor : Int
+        , viewPoint : ViewPoint
+        , trains : IdDict Id.TrainId Train.Train
+        , time : Effect.Time.Posix
+        , currentTool : Tool
+    }
+    -> Point2d WorldUnit WorldUnit
+actualViewPoint model =
+    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
+        ( Nothing, _, MouseButtonDown { start, current, hover } ) ->
+            offsetViewPoint model hover start current
+
+        ( Nothing, MouseButtonDown { start, current, hover }, _ ) ->
+            case model.currentTool of
+                TilePlacerTool _ ->
+                    actualViewPointHelper model
+
+                TilePickerTool ->
+                    offsetViewPoint model hover start current
+
+                HandTool ->
+                    offsetViewPoint model hover start current
+
+                TextTool _ ->
+                    actualViewPointHelper model
+
+                ReportTool ->
+                    offsetViewPoint model hover start current
+
+        _ ->
+            actualViewPointHelper model
+
+
+actualViewPointHelper :
+    { a | viewPoint : ViewPoint, trains : IdDict Id.TrainId Train.Train, time : Effect.Time.Posix }
+    -> Point2d WorldUnit WorldUnit
+actualViewPointHelper model =
+    case model.viewPoint of
+        NormalViewPoint viewPoint ->
+            viewPoint
+
+        TrainViewPoint trainViewPoint ->
+            case IdDict.get trainViewPoint.trainId model.trains of
+                Just train ->
+                    let
+                        t =
+                            Quantity.ratio
+                                (Duration.from trainViewPoint.startTime model.time)
+                                (Duration.milliseconds 600)
+                                |> min 1
+                    in
+                    Point2d.interpolateFrom trainViewPoint.startViewPoint (Train.trainPosition model.time train) t
 
                 Nothing ->
-                    "Not logged in"
-           )
-        ++ "\n"
-        ++ (case maybePingData of
-                Just pingData ->
-                    ("RTT: " ++ durationToString pingData.roundTripTime ++ "ms\n")
-                        ++ ("Server offset: " ++ durationToString (PingData.pingOffset { pingData = maybePingData }) ++ "ms")
+                    trainViewPoint.startViewPoint
 
-                Nothing ->
-                    ""
-           )
-        |> Ui.text
-        |> Ui.el { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }
+
+vector2dAt2 :
+    ( Quantity Float (Rate sourceUnits destinationUnits)
+    , Quantity Float (Rate sourceUnits destinationUnits)
+    )
+    -> Vector2d sourceUnits coordinates
+    -> Vector2d destinationUnits coordinates
+vector2dAt2 ( Quantity rateX, Quantity rateY ) vector =
+    let
+        { x, y } =
+            Vector2d.unwrap vector
+    in
+    { x = x * rateX
+    , y = y * rateY
+    }
+        |> Vector2d.unsafe

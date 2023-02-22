@@ -1,8 +1,9 @@
 module Ui exposing
     ( BorderAndFill(..)
-    , Element
+    , Element(..)
     , HoverType(..)
     , Padding
+    , UiEvent(..)
     , bottomCenter
     , bottomLeft
     , button
@@ -14,9 +15,7 @@ module Ui exposing
     , customButton
     , defaultButtonBorderAndFill
     , el
-    , findButton
-    , findTextInput
-    , handleKeyDown
+    , findElement
     , hover
     , ignoreInputs
     , noPadding
@@ -35,6 +34,7 @@ module Ui exposing
     , textInput
     , topRight
     , view
+    , visuallyEqual
     , wrappedText
     )
 
@@ -58,19 +58,25 @@ type alias RowColumn =
     }
 
 
-type alias ButtonData id msg =
+type alias ButtonData id =
     { id : id
     , padding : Padding
     , borderAndFill : BorderAndFill
     , borderAndFillFocus : BorderAndFill
     , cachedSize : Coord Pixels
-    , inFront : List (Element id msg)
-    , onPress : msg
-    , onMouseDown : Maybe msg
+    , inFront : List (Element id)
     }
 
 
-type Element id msg
+type UiEvent
+    = MouseDown { elementPosition : Coord Pixels }
+    | MousePressed { elementPosition : Coord Pixels }
+    | MouseMove { elementPosition : Coord Pixels }
+    | KeyDown Keyboard.Key
+    | PastedText String
+
+
+type Element id
     = Text
         { outline : Maybe Color
         , color : Color
@@ -82,22 +88,21 @@ type Element id msg
         { id : id
         , width : Int
         , isValid : Bool
-        , onKeyDown : Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg
+        , state : TextInput.State
         }
-        TextInput.Model
-    | Button (ButtonData id msg) (Element id msg)
-    | Row RowColumn (List (Element id msg))
-    | Column RowColumn (List (Element id msg))
+    | Button (ButtonData id) (Element id)
+    | Row RowColumn (List (Element id))
+    | Column RowColumn (List (Element id))
     | Single
         { padding : Padding
         , borderAndFill : BorderAndFill
-        , inFront : List (Element id msg)
+        , inFront : List (Element id)
         , cachedSize : Coord Pixels
-        , ignoreInputs : Bool
         }
-        (Element id msg)
-    | Quads { size : Coord Pixels, vertices : Coord Pixels -> List Vertex }
+        (Element id)
+    | Quads { size : Coord Pixels, vertices : List Vertex }
     | Empty
+    | IgnoreInputs (Element id)
 
 
 type BorderAndFill
@@ -108,6 +113,58 @@ type BorderAndFill
 
 type alias Padding =
     { topLeft : Coord Pixels, bottomRight : Coord Pixels }
+
+
+visuallyEqual : Element id -> Element id -> Bool
+visuallyEqual a b =
+    case ( a, b ) of
+        ( Single aData aChild, Single bData bChild ) ->
+            (aData.padding == bData.padding)
+                && (aData.borderAndFill == bData.borderAndFill)
+                && List.all identity (List.map2 visuallyEqual aData.inFront bData.inFront)
+                && visuallyEqual aChild bChild
+
+        ( Row aRow aChildren, Row bRow bChildren ) ->
+            (aRow.spacing == bRow.spacing)
+                && (aRow.padding == bRow.padding)
+                && List.all identity (List.map2 visuallyEqual aChildren bChildren)
+
+        ( Column aColumn aChildren, Column bColumn bChildren ) ->
+            (aColumn.spacing == bColumn.spacing)
+                && (aColumn.padding == bColumn.padding)
+                && List.all identity (List.map2 visuallyEqual aChildren bChildren)
+
+        ( Text aText, Text bText ) ->
+            (aText.text == bText.text)
+                && (aText.outline == bText.outline)
+                && (aText.color == bText.color)
+                && (aText.scale == bText.scale)
+                && (aText.text == bText.text)
+
+        ( TextInput aTextInput, TextInput bTextInput ) ->
+            (aTextInput.width == bTextInput.width)
+                && (aTextInput.isValid == bTextInput.isValid)
+                && (aTextInput.state == bTextInput.state)
+
+        ( Button aButton aChild, Button bButton bChild ) ->
+            (aButton.padding == bButton.padding)
+                && (aButton.borderAndFill == bButton.borderAndFill)
+                && (aButton.borderAndFillFocus == bButton.borderAndFillFocus)
+                && (List.length aButton.inFront == List.length bButton.inFront)
+                && List.all identity (List.map2 visuallyEqual aButton.inFront bButton.inFront)
+                && visuallyEqual aChild bChild
+
+        ( Quads aQuad, Quads bQuad ) ->
+            aQuad == bQuad
+
+        ( Empty, Empty ) ->
+            True
+
+        ( IgnoreInputs aChild, IgnoreInputs bChild ) ->
+            visuallyEqual aChild bChild
+
+        _ ->
+            False
 
 
 noPadding : Padding
@@ -125,7 +182,7 @@ paddingXY2 coord =
     { topLeft = coord, bottomRight = coord }
 
 
-text : String -> Element id msg
+text : String -> Element id
 text text2 =
     Text
         { outline = Nothing
@@ -136,7 +193,7 @@ text text2 =
         }
 
 
-scaledText : Int -> String -> Element id msg
+scaledText : Int -> String -> Element id
 scaledText scale text2 =
     Text
         { outline = Nothing
@@ -147,7 +204,7 @@ scaledText scale text2 =
         }
 
 
-colorText : Color -> String -> Element id msg
+colorText : Color -> String -> Element id
 colorText color text2 =
     Text
         { outline = Nothing
@@ -158,7 +215,7 @@ colorText color text2 =
         }
 
 
-colorScaledText : Color -> Int -> String -> Element id msg
+colorScaledText : Color -> Int -> String -> Element id
 colorScaledText color scale text2 =
     Text
         { outline = Nothing
@@ -169,7 +226,7 @@ colorScaledText color scale text2 =
         }
 
 
-outlinedText : { outline : Color, color : Color, text : String } -> Element id msg
+outlinedText : { outline : Color, color : Color, text : String } -> Element id
 outlinedText data =
     Text
         { outline = Just data.outline
@@ -235,7 +292,7 @@ addLineBreaks charWidth maxWidth list text2 =
         text2 :: list
 
 
-wrappedText : Int -> String -> Element id msg
+wrappedText : Int -> String -> Element id
 wrappedText maxWidth text2 =
     let
         charWidth : Int
@@ -259,19 +316,18 @@ wrappedText maxWidth text2 =
 
 
 textInput :
-    { id : id, width : Int, isValid : Bool, onKeyDown : Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg }
-    -> TextInput.Model
-    -> Element id msg
+    { id : id, width : Int, isValid : Bool, state : TextInput.State }
+    -> Element id
 textInput =
     TextInput
 
 
-none : Element id msg
+none : Element id
 none =
     Empty
 
 
-button : { id : id, padding : Padding, onPress : msg } -> Element id msg -> Element id msg
+button : { id : id, padding : Padding } -> Element id -> Element id
 button data child =
     Button
         { id = data.id
@@ -288,8 +344,6 @@ button data child =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
                 (size child)
-        , onPress = data.onPress
-        , onMouseDown = Nothing
         }
         child
 
@@ -306,14 +360,12 @@ defaultButtonBorderAndFill =
 customButton :
     { id : id
     , padding : Padding
-    , inFront : List (Element id msg)
-    , onPress : msg
-    , onMouseDown : Maybe msg
+    , inFront : List (Element id)
     , borderAndFill : BorderAndFill
     , borderAndFillFocus : BorderAndFill
     }
-    -> Element id msg
-    -> Element id msg
+    -> Element id
+    -> Element id
 customButton data child =
     Button
         { id = data.id
@@ -325,54 +377,53 @@ customButton data child =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
                 (size child)
-        , onPress = data.onPress
-        , onMouseDown = data.onMouseDown
         }
         child
 
 
-row :
-    { spacing : Int, padding : Padding }
-    -> List (Element id msg)
-    -> Element id msg
+row : { spacing : Int, padding : Padding } -> List (Element id) -> Element id
 row data children =
+    let
+        children2 =
+            List.filter (\a -> a /= Empty) children
+    in
     Row
         { spacing = data.spacing
         , padding = data.padding
-        , cachedSize = rowSize data children
+        , cachedSize = rowSize data children2
         }
-        children
+        (List.filter (\a -> a /= Empty) children2)
 
 
-column :
-    { spacing : Int, padding : Padding }
-    -> List (Element id msg)
-    -> Element id msg
+column : { spacing : Int, padding : Padding } -> List (Element id) -> Element id
 column data children =
+    let
+        children2 =
+            List.filter (\a -> a /= Empty) children
+    in
     Column
         { spacing = data.spacing
         , padding = data.padding
-        , cachedSize = columnSize data children
+        , cachedSize = columnSize data children2
         }
-        children
+        children2
 
 
 el :
-    { padding : Padding, inFront : List (Element id msg), borderAndFill : BorderAndFill }
-    -> Element id msg
-    -> Element id msg
+    { padding : Padding, inFront : List (Element id), borderAndFill : BorderAndFill }
+    -> Element id
+    -> Element id
 el data element2 =
     Single
         { padding = data.padding
         , borderAndFill = data.borderAndFill
         , inFront = data.inFront
         , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
-        , ignoreInputs = False
         }
         element2
 
 
-center : { size : Coord Pixels } -> Element id msg -> Element id msg
+center : { size : Coord Pixels } -> Element id -> Element id
 center data element2 =
     let
         size2 : Coord Pixels
@@ -391,12 +442,11 @@ center data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
 
-topRight : { size : Coord Pixels } -> Element id msg -> Element id msg
+topRight : { size : Coord Pixels } -> Element id -> Element id
 topRight data element2 =
     let
         ( sizeX, sizeY ) =
@@ -413,12 +463,11 @@ topRight data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
 
-bottomLeft : { size : Coord Pixels } -> Element id msg -> Element id msg
+bottomLeft : { size : Coord Pixels } -> Element id -> Element id
 bottomLeft data element2 =
     let
         ( sizeX, sizeY ) =
@@ -435,12 +484,11 @@ bottomLeft data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
 
-bottomCenter : { size : Coord Pixels, inFront : List (Element id msg) } -> Element id msg -> Element id msg
+bottomCenter : { size : Coord Pixels, inFront : List (Element id) } -> Element id -> Element id
 bottomCenter data element2 =
     let
         ( sizeX, sizeY ) =
@@ -460,42 +508,34 @@ bottomCenter data element2 =
         , inFront = data.inFront
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
-        , ignoreInputs = False
         }
         element2
 
 
-ignoreInputs : Element id msg -> Element id msg
-ignoreInputs element2 =
-    Single
-        { padding = noPadding
-        , inFront = []
-        , borderAndFill = NoBorderOrFill
-        , cachedSize = size element2
-        , ignoreInputs = True
-        }
-        element2
+ignoreInputs : Element id -> Element id
+ignoreInputs =
+    IgnoreInputs
 
 
-sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id msg
+sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id
 sprite data =
     Quads
         { size = data.size
-        , vertices = \position -> Sprite.sprite position data.size data.texturePosition data.textureSize
+        , vertices = Sprite.sprite Coord.origin data.size data.texturePosition data.textureSize
         }
 
 
 colorSprite :
     { colors : Colors, size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels }
-    -> Element id msg
+    -> Element id
 colorSprite data =
     Quads
         { size = data.size
-        , vertices = \position -> Sprite.spriteWithTwoColors data.colors position data.size data.texturePosition data.textureSize
+        , vertices = Sprite.spriteWithTwoColors data.colors Coord.origin data.size data.texturePosition data.textureSize
         }
 
 
-quads : { size : Coord Pixels, vertices : Coord Pixels -> List Vertex } -> Element id msg
+quads : { size : Coord Pixels, vertices : List Vertex } -> Element id
 quads =
     Quads
 
@@ -506,18 +546,18 @@ type HoverType id msg
     | BackgroundHover
 
 
-hover : Coord Pixels -> Element id msg -> HoverType id msg
+hover : Coord Pixels -> Element id -> HoverType id msg
 hover point element2 =
     hoverHelper point Coord.origin element2
 
 
-hoverHelper : Coord Pixels -> Coord Pixels -> Element id msg -> HoverType id msg
+hoverHelper : Coord Pixels -> Coord Pixels -> Element id -> HoverType id msg
 hoverHelper point elementPosition element2 =
     case element2 of
         Text _ ->
             NoHover
 
-        TextInput data _ ->
+        TextInput data ->
             if Bounds.fromCoordAndSize elementPosition (TextInput.size (Quantity data.width)) |> Bounds.contains point then
                 InputHover { id = data.id, position = elementPosition }
 
@@ -538,55 +578,54 @@ hoverHelper point elementPosition element2 =
             hoverRowColumnHelper False point elementPosition data children
 
         Single data child ->
-            if data.ignoreInputs then
-                NoHover
+            let
+                hover2 : HoverType id msg
+                hover2 =
+                    List.foldl
+                        (\inFront hover4 ->
+                            case hover4 of
+                                NoHover ->
+                                    hoverHelper point elementPosition inFront
 
-            else
-                let
-                    hover2 : HoverType id msg
-                    hover2 =
-                        List.foldl
-                            (\inFront hover4 ->
-                                case hover4 of
-                                    NoHover ->
-                                        hoverHelper point elementPosition inFront
+                                InputHover _ ->
+                                    hover4
 
-                                    InputHover _ ->
-                                        hover4
+                                BackgroundHover ->
+                                    hover4
+                        )
+                        NoHover
+                        data.inFront
 
-                                    BackgroundHover ->
-                                        hover4
-                            )
-                            NoHover
-                            data.inFront
+                hover3 : HoverType id msg
+                hover3 =
+                    case hover2 of
+                        NoHover ->
+                            hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
 
-                    hover3 : HoverType id msg
-                    hover3 =
-                        case hover2 of
-                            NoHover ->
-                                hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
+                        InputHover _ ->
+                            hover2
 
-                            InputHover _ ->
-                                hover2
+                        BackgroundHover ->
+                            hover2
+            in
+            case ( data.borderAndFill, hover3 ) of
+                ( BorderAndFill _, NoHover ) ->
+                    if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
+                        BackgroundHover
 
-                            BackgroundHover ->
-                                hover2
-                in
-                case ( data.borderAndFill, hover3 ) of
-                    ( BorderAndFill _, NoHover ) ->
-                        if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                            BackgroundHover
+                    else
+                        NoHover
 
-                        else
-                            NoHover
-
-                    _ ->
-                        hover3
+                _ ->
+                    hover3
 
         Quads _ ->
             NoHover
 
         Empty ->
+            NoHover
+
+        IgnoreInputs _ ->
             NoHover
 
 
@@ -595,7 +634,7 @@ hoverRowColumnHelper :
     -> Coord Pixels
     -> Coord Pixels
     -> RowColumn
-    -> List (Element id msg)
+    -> List (Element id)
     -> HoverType id msg
 hoverRowColumnHelper isRow point elementPosition data children =
     List.foldl
@@ -626,12 +665,12 @@ hoverRowColumnHelper isRow point elementPosition data children =
         |> .hover
 
 
-view : Maybe id -> Element id msg -> WebGL.Mesh Vertex
+view : Maybe id -> Element id -> WebGL.Mesh Vertex
 view focus element2 =
     viewHelper focus Coord.origin [] element2 |> Sprite.toMesh
 
 
-verticesHelper : Maybe id -> Coord Pixels -> List Vertex -> { a | inFront : List (Element id msg) } -> List Vertex
+verticesHelper : Maybe id -> Coord Pixels -> List Vertex -> { a | inFront : List (Element id) } -> List Vertex
 verticesHelper focus position vertices data =
     List.foldl
         (\inFront vertices3 ->
@@ -641,7 +680,7 @@ verticesHelper focus position vertices data =
         data.inFront
 
 
-viewHelper : Maybe id -> Coord Pixels -> List Vertex -> Element id msg -> List Vertex
+viewHelper : Maybe id -> Coord Pixels -> List Vertex -> Element id -> List Vertex
 viewHelper focus position vertices element2 =
     case element2 of
         Text data ->
@@ -654,8 +693,8 @@ viewHelper focus position vertices element2 =
             )
                 ++ vertices
 
-        TextInput data model ->
-            TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid model ++ vertices
+        TextInput data ->
+            TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid data.state ++ vertices
 
         Button data child ->
             borderAndFillView position
@@ -717,10 +756,25 @@ viewHelper focus position vertices element2 =
                 ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Quads data ->
-            data.vertices position ++ vertices
+            List.map
+                (\v ->
+                    { x = v.x + toFloat (Coord.xRaw position)
+                    , y = v.y + toFloat (Coord.yRaw position)
+                    , z = v.z
+                    , texturePosition = v.texturePosition
+                    , opacityAndUserId = v.opacityAndUserId
+                    , primaryColor = v.primaryColor
+                    , secondaryColor = v.secondaryColor
+                    }
+                )
+                data.vertices
+                ++ vertices
 
         Empty ->
             vertices
+
+        IgnoreInputs element ->
+            viewHelper focus position vertices element
 
 
 borderAndFillView :
@@ -744,13 +798,13 @@ borderAndFillView position borderAndBackground size2 =
                     (size2 |> Coord.minus (Coord.scalar 2 (Coord.xy borderWidth borderWidth)))
 
 
-size : Element id msg -> Coord Pixels
+size : Element id -> Coord Pixels
 size element2 =
     case element2 of
         Text data ->
             data.cachedSize
 
-        TextInput data _ ->
+        TextInput data ->
             TextInput.size (Quantity data.width)
 
         Button data _ ->
@@ -771,8 +825,11 @@ size element2 =
         Empty ->
             Coord.origin
 
+        IgnoreInputs element ->
+            size element
 
-rowSize : { a | spacing : Int, padding : Padding } -> List (Element id msg) -> Coord Pixels
+
+rowSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
 rowSize data children =
     List.foldl
         (\child ( x, y ) ->
@@ -796,7 +853,7 @@ rowSize data children =
            )
 
 
-columnSize : { a | spacing : Int, padding : Padding } -> List (Element id msg) -> Coord Pixels
+columnSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
 columnSize data children =
     List.foldl
         (\child ( x, y ) ->
@@ -820,50 +877,18 @@ columnSize data children =
            )
 
 
-findTextInput : id -> Element id msg -> Maybe ( Bool -> Bool -> Keyboard.Key -> TextInput.Model -> msg, TextInput.Model )
-findTextInput id element =
-    case element of
-        Text _ ->
-            Nothing
-
-        TextInput data textInput2 ->
-            if id == data.id then
-                Just ( data.onKeyDown, textInput2 )
-
-            else
-                Nothing
-
-        Button _ _ ->
-            Nothing
-
-        Row _ children ->
-            List.findMap (findTextInput id) children
-
-        Column _ children ->
-            List.findMap (findTextInput id) children
-
-        Single data child ->
-            List.findMap (findTextInput id) (child :: data.inFront)
-
-        Quads _ ->
-            Nothing
-
-        Empty ->
-            Nothing
-
-
-findButton : id -> Element id msg -> Maybe { buttonData : ButtonData id msg, position : Coord Pixels }
-findButton id element =
+findElement : id -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
+findElement id element =
     findButtonHelper id Coord.origin element
 
 
-findButtonHelper : id -> Coord Pixels -> Element id msg -> Maybe { buttonData : ButtonData id msg, position : Coord Pixels }
+findButtonHelper : id -> Coord Pixels -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
 findButtonHelper id position element =
     case element of
         Text _ ->
             Nothing
 
-        TextInput _ _ ->
+        TextInput _ ->
             Nothing
 
         Button data _ ->
@@ -931,32 +956,11 @@ findButtonHelper id position element =
         Empty ->
             Nothing
 
-
-handleKeyDown :
-    (msg -> model -> model2)
-    -> msg
-    -> Element id msg
-    -> Maybe id
-    -> Bool
-    -> Bool
-    -> Keyboard.Key
-    -> model
-    -> model2
-handleKeyDown updateFunc keyUnhandled element maybeFocus ctrlOrMetaDown shiftDown key model =
-    case maybeFocus of
-        Just focus ->
-            case findTextInput focus element of
-                Just ( onKeyDown, textInput2 ) ->
-                    updateFunc (onKeyDown ctrlOrMetaDown shiftDown key textInput2) model
-
-                Nothing ->
-                    updateFunc keyUnhandled model
-
-        Nothing ->
-            updateFunc keyUnhandled model
+        IgnoreInputs child ->
+            findButtonHelper id position child
 
 
-tabForward : id -> Element id msg -> id
+tabForward : id -> Element id -> id
 tabForward id element =
     case tabHelper True False id element of
         NotFound ->
@@ -977,7 +981,7 @@ tabForward id element =
             id2
 
 
-tabBackward : id -> Element id msg -> id
+tabBackward : id -> Element id -> id
 tabBackward id element =
     case tabHelper False False id element of
         NotFound ->
@@ -998,7 +1002,7 @@ tabBackward id element =
             id2
 
 
-tabHelper : Bool -> Bool -> id -> Element id msg -> TabForward id
+tabHelper : Bool -> Bool -> id -> Element id -> TabForward id
 tabHelper stepForward hasFoundId id element =
     case element of
         Text _ ->
@@ -1008,7 +1012,7 @@ tabHelper stepForward hasFoundId id element =
             else
                 NotFound
 
-        TextInput data _ ->
+        TextInput data ->
             if hasFoundId then
                 FoundNextId data.id
 
@@ -1051,8 +1055,11 @@ tabHelper stepForward hasFoundId id element =
             else
                 NotFound
 
+        IgnoreInputs _ ->
+            NotFound
 
-rowColumnTabHelper : Bool -> Bool -> id -> List (Element id msg) -> TabForward id
+
+rowColumnTabHelper : Bool -> Bool -> id -> List (Element id) -> TabForward id
 rowColumnTabHelper stepForward hasFoundId id children =
     (if stepForward then
         List.foldl

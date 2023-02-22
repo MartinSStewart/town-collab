@@ -13,7 +13,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change(..), Cow, UserStatus(..))
+import Change exposing (BackendReport, Change(..), Cow, Report, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
@@ -74,10 +74,10 @@ import Terrain
 import TextInput exposing (OutMsg(..))
 import Tile exposing (CollisionMask(..), DefaultColor(..), RailPathType(..), Tile(..), TileData, TileGroup(..))
 import Time
-import Toolbar exposing (ViewData)
+import Toolbar
 import Train exposing (Status(..), Train)
 import Types exposing (..)
-import Ui
+import Ui exposing (UiEvent)
 import Units exposing (CellUnit, MailPixelUnit, TileLocalUnit, WorldUnit)
 import Untrusted
 import Url exposing (Url)
@@ -358,6 +358,18 @@ audioLoaded audioData model =
         )
         model.railToggles
         |> Audio.group
+    , case model.lastReportTilePlaced of
+        Just time ->
+            playSound PopSound time |> Audio.scaleVolume 0.4
+
+        Nothing ->
+            Audio.silence
+    , case model.lastReportTileRemoved of
+        Just time ->
+            playSound EraseSound time |> Audio.scaleVolume 0.4
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
         |> Audio.scaleVolumeAt [ ( model.startTime, 0 ), ( Duration.addTo model.startTime Duration.second, 1 ) ]
@@ -475,17 +487,39 @@ loadedInit :
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
 loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
     let
-        currentTile =
+        currentTool2 =
             HandTool
 
         defaultTileColors =
             AssocList.empty
 
-        focus =
-            MapHover
-
         currentUserId2 =
             currentUserId loadedLocalModel
+
+        viewpoint =
+            Coord.toPoint2d loading.viewPoint |> NormalViewPoint
+
+        mouseLeft =
+            MouseButtonUp { current = loading.mousePosition }
+
+        mouseMiddle =
+            MouseButtonUp { current = loading.mousePosition }
+
+        previousUpdateMeshData : UpdateMeshesData
+        previousUpdateMeshData =
+            { localModel = loadedLocalModel.localModel
+            , pressedKeys = []
+            , currentTool = currentTool2
+            , mouseLeft = mouseLeft
+            , mouseMiddle = mouseMiddle
+            , windowSize = loading.windowSize
+            , devicePixelRatio = loading.devicePixelRatio
+            , zoomFactor = loading.zoomFactor
+            , mailEditor = Nothing
+            , viewPoint = viewpoint
+            , trains = loadedLocalModel.trains
+            , time = time
+            }
 
         model : FrontendLoaded
         model =
@@ -493,7 +527,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , localModel = loadedLocalModel.localModel
             , trains = loadedLocalModel.trains
             , meshes = Dict.empty
-            , viewPoint = Coord.toPoint2d loading.viewPoint |> NormalViewPoint
+            , viewPoint = viewpoint
             , viewPointLastInterval = Point2d.origin
             , texture = texture
             , simplexNoiseLookup = simplexNoiseLookup
@@ -504,8 +538,8 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , cssCanvasSize = loading.cssCanvasSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , mouseLeft = MouseButtonUp { current = loading.mousePosition }
-            , mouseMiddle = MouseButtonUp { current = loading.mousePosition }
+            , mouseLeft = mouseLeft
+            , mouseMiddle = mouseMiddle
             , pendingChanges = []
             , undoAddLast = Effect.Time.millisToPosix 0
             , time = time
@@ -528,10 +562,11 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
                     _ ->
                         Nothing
             , lastMailEditorToggle = Nothing
-            , currentTool = currentTile
+            , currentTool = currentTool2
             , lastTileRotation = []
             , lastPlacementError = Nothing
             , tileHotkeys = defaultTileHotkeys
+            , ui = Ui.none
             , uiMesh = Shaders.triangleFan []
             , previousTileHover = Nothing
             , lastHouseClick = Nothing
@@ -543,7 +578,8 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , tileColors = defaultTileColors
             , primaryColorTextInput = TextInput.init
             , secondaryColorTextInput = TextInput.init
-            , focus = focus
+            , focus = Nothing
+            , previousFocus = Nothing
             , music =
                 { startTime = Duration.addTo time (Duration.seconds 10)
                 , sound =
@@ -580,11 +616,18 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , lastCheckConnection = time
             , showMap = False
             , showInviteTree = False
-            , selectedUserId = Nothing
+            , contextMenu = Nothing
+            , previousUpdateMeshData = previousUpdateMeshData
+            , reportsMesh =
+                createReportsMesh
+                    (getReports loadedLocalModel.localModel)
+                    (getAdminReports loadedLocalModel.localModel)
+            , lastReportTilePlaced = Nothing
+            , lastReportTileRemoved = Nothing
             }
                 |> setCurrentTool HandToolButton
     in
-    ( updateMeshes True model model
+    ( updateMeshes model
     , Command.batch
         [ Effect.WebGL.Texture.loadWith
             { magnify = Effect.WebGL.Texture.nearest
@@ -600,6 +643,31 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
     )
         |> viewBoundsUpdate
         |> Tuple.mapFirst Loaded
+
+
+getReports : LocalModel a LocalGrid -> List Report
+getReports localModel =
+    case LocalGrid.localModel localModel |> .userStatus of
+        LoggedIn loggedIn ->
+            loggedIn.reports
+
+        NotLoggedIn ->
+            []
+
+
+getAdminReports : LocalModel a LocalGrid -> IdDict UserId (Nonempty BackendReport)
+getAdminReports localModel =
+    case LocalGrid.localModel localModel |> .userStatus of
+        LoggedIn loggedIn ->
+            case loggedIn.adminData of
+                Just adminData ->
+                    adminData.reported
+
+                Nothing ->
+                    IdDict.empty
+
+        NotLoggedIn ->
+            IdDict.empty
 
 
 init : Url -> Effect.Browser.Navigation.Key -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
@@ -822,6 +890,9 @@ update audioData msg model =
                                     TextTool Nothing ->
                                         Cursor.TextTool Nothing
 
+                                    ReportTool ->
+                                        Cursor.ReportTool
+
                             newTool : Cursor.OtherUsersTool
                             newTool =
                                 currentTool newModel |> toolToCursorTool
@@ -834,9 +905,54 @@ update audioData msg model =
                         , cmd
                         )
                    )
-                |> Tuple.mapFirst (updateMeshes False frontendLoaded)
                 |> viewBoundsUpdate
+                |> Tuple.mapFirst (reportsMeshUpdate frontendLoaded)
                 |> Tuple.mapFirst Loaded
+
+
+reportsMeshUpdate : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
+reportsMeshUpdate oldModel newModel =
+    let
+        newReports =
+            getReports newModel.localModel
+
+        newAdminReports =
+            getAdminReports newModel.localModel
+    in
+    if getReports oldModel.localModel == newReports && getAdminReports oldModel.localModel == newAdminReports then
+        newModel
+
+    else
+        { newModel | reportsMesh = createReportsMesh newReports newAdminReports }
+
+
+createReportsMesh : List Report -> IdDict UserId (Nonempty BackendReport) -> Effect.WebGL.Mesh Vertex
+createReportsMesh localReports adminReports =
+    List.concatMap
+        (\( _, reports ) ->
+            List.Nonempty.toList reports
+                |> List.concatMap
+                    (\report ->
+                        Sprite.spriteWithColor
+                            Color.adminReportColor
+                            (Coord.multiply Units.tileSize report.position)
+                            Units.tileSize
+                            (Coord.xy 100 738)
+                            Units.tileSize
+                    )
+        )
+        (IdDict.toList adminReports)
+        ++ List.concatMap
+            (\report ->
+                Sprite.spriteWithColor
+                    Color.localReportColor
+                    (Coord.multiply Units.tileSize report.position)
+                    Units.tileSize
+                    (Coord.xy 100 738)
+                    Units.tileSize
+            )
+            localReports
+        |> Sprite.toMesh
 
 
 removeLastCursorMove : FrontendLoaded -> FrontendLoaded
@@ -923,8 +1039,8 @@ updateLoaded audioData msg model =
                             )
 
                         Nothing ->
-                            case ( model.focus, model.currentTool, key ) of
-                                ( _, _, Keyboard.Tab ) ->
+                            case ( model.focus, key ) of
+                                ( _, Keyboard.Tab ) ->
                                     ( setFocus
                                         (if keyDown Keyboard.Shift model then
                                             previousFocus model
@@ -936,147 +1052,8 @@ updateLoaded audioData msg model =
                                     , Command.none
                                     )
 
-                                ( UiHover EmailAddressTextInputHover _, _, Keyboard.Enter ) ->
-                                    sendEmail model
-
-                                ( UiHover id data, _, Keyboard.Enter ) ->
-                                    case Ui.findButton id (Toolbar.view (getViewModel model)) of
-                                        Just { buttonData } ->
-                                            uiUpdate data.position buttonData.onPress model
-
-                                        Nothing ->
-                                            ( model, Command.none )
-
-                                ( UiHover PrimaryColorInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
-
-                                ( UiHover SecondaryColorInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
-
-                                ( UiHover EmailAddressTextInputHover _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
-
-                                ( UiHover InviteEmailAddressTextInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
-
-                                ( UiHover DisplayNameTextInput _, _, Keyboard.Escape ) ->
-                                    ( setFocus MapHover model, Command.none )
-
-                                ( UiHover PrimaryColorInput _, tool, _ ) ->
-                                    case currentUserId model of
-                                        Just userId ->
-                                            handleKeyDownColorInput
-                                                userId
-                                                (\a b -> { b | primaryColorTextInput = a })
-                                                (\color a -> { a | primaryColor = color })
-                                                tool
-                                                key
-                                                model
-                                                model.primaryColorTextInput
-
-                                        Nothing ->
-                                            ( model, Command.none )
-
-                                ( UiHover SecondaryColorInput _, tool, _ ) ->
-                                    case currentUserId model of
-                                        Just userId ->
-                                            handleKeyDownColorInput
-                                                userId
-                                                (\a b -> { b | secondaryColorTextInput = a })
-                                                (\color a -> { a | secondaryColor = color })
-                                                tool
-                                                key
-                                                model
-                                                model.secondaryColorTextInput
-
-                                        Nothing ->
-                                            ( model, Command.none )
-
-                                ( UiHover EmailAddressTextInputHover _, _, _ ) ->
-                                    let
-                                        ( newTextInput, outMsg ) =
-                                            TextInput.keyMsg
-                                                (ctrlOrMeta model)
-                                                (keyDown Keyboard.Shift model)
-                                                key
-                                                model.loginTextInput
-                                    in
-                                    ( { model | loginTextInput = newTextInput }
-                                    , case outMsg of
-                                        CopyText text ->
-                                            Ports.copyToClipboard text
-
-                                        PasteText ->
-                                            Ports.readFromClipboardRequest
-
-                                        NoOutMsg ->
-                                            Command.none
-                                    )
-
-                                ( UiHover InviteEmailAddressTextInput _, _, _ ) ->
-                                    let
-                                        ( newTextInput, outMsg ) =
-                                            TextInput.keyMsg
-                                                (ctrlOrMeta model)
-                                                (keyDown Keyboard.Shift model)
-                                                key
-                                                model.inviteTextInput
-                                    in
-                                    ( { model | inviteTextInput = newTextInput }
-                                    , case outMsg of
-                                        CopyText text ->
-                                            Ports.copyToClipboard text
-
-                                        PasteText ->
-                                            Ports.readFromClipboardRequest
-
-                                        NoOutMsg ->
-                                            Command.none
-                                    )
-
-                                ( UiHover DisplayNameTextInput _, _, _ ) ->
-                                    case model.topMenuOpened of
-                                        Just (SettingsMenu nameTextInput) ->
-                                            let
-                                                ( newTextInput, outMsg ) =
-                                                    TextInput.keyMsg
-                                                        (ctrlOrMeta model)
-                                                        (keyDown Keyboard.Shift model)
-                                                        key
-                                                        nameTextInput
-
-                                                ( model2, outMsg2 ) =
-                                                    case ( DisplayName.fromString nameTextInput.current.text, DisplayName.fromString newTextInput.current.text ) of
-                                                        ( Ok old, Ok new ) ->
-                                                            if old == new then
-                                                                ( model, LocalGrid.NoOutMsg )
-
-                                                            else
-                                                                updateLocalModel (Change.ChangeDisplayName new) model
-
-                                                        ( Err _, Ok new ) ->
-                                                            updateLocalModel (Change.ChangeDisplayName new) model
-
-                                                        _ ->
-                                                            ( model, LocalGrid.NoOutMsg )
-
-                                                model3 =
-                                                    handleOutMsg False ( model2, outMsg2 )
-                                            in
-                                            ( { model3 | topMenuOpened = SettingsMenu newTextInput |> Just }
-                                            , case outMsg of
-                                                CopyText text ->
-                                                    Ports.copyToClipboard text
-
-                                                PasteText ->
-                                                    Ports.readFromClipboardRequest
-
-                                                NoOutMsg ->
-                                                    Command.none
-                                            )
-
-                                        _ ->
-                                            ( model, Command.none )
+                                ( Just id, _ ) ->
+                                    uiUpdate id (Ui.KeyDown key) model
 
                                 _ ->
                                     keyMsgCanvasUpdate key model
@@ -1094,18 +1071,13 @@ updateLoaded audioData msg model =
             let
                 hover =
                     hoverAt model mousePosition
-
-                mousePosition2 : Coord Pixels
-                mousePosition2 =
-                    mousePosition
-                        |> Coord.roundPoint
             in
             if button == MainButton then
                 { model
                     | mouseLeft =
                         MouseButtonDown
                             { start = mousePosition
-                            , start_ = screenToWorld model mousePosition
+                            , start_ = Toolbar.screenToWorld model mousePosition
                             , current = mousePosition
                             , hover = hover
                             }
@@ -1139,87 +1111,14 @@ updateLoaded audioData msg model =
                                             , Command.none
                                             )
 
+                                        ReportTool ->
+                                            ( model2, Command.none )
+
                                 UiHover id data ->
-                                    case id of
-                                        PrimaryColorInput ->
-                                            ( { model2
-                                                | primaryColorTextInput =
-                                                    TextInput.mouseDown
-                                                        mousePosition2
-                                                        data.position
-                                                        model2.primaryColorTextInput
-                                              }
-                                                |> setFocus (UiHover PrimaryColorInput data)
-                                            , Command.none
-                                            )
-
-                                        SecondaryColorInput ->
-                                            ( { model2
-                                                | secondaryColorTextInput =
-                                                    TextInput.mouseDown
-                                                        mousePosition2
-                                                        data.position
-                                                        model2.secondaryColorTextInput
-                                              }
-                                                |> setFocus (UiHover SecondaryColorInput data)
-                                            , Command.none
-                                            )
-
-                                        EmailAddressTextInputHover ->
-                                            ( { model2
-                                                | loginTextInput =
-                                                    TextInput.mouseDown
-                                                        mousePosition2
-                                                        data.position
-                                                        model2.loginTextInput
-                                              }
-                                                |> setFocus hover
-                                            , Command.none
-                                            )
-
-                                        InviteEmailAddressTextInput ->
-                                            ( { model2
-                                                | inviteTextInput =
-                                                    TextInput.mouseDown
-                                                        mousePosition2
-                                                        data.position
-                                                        model2.inviteTextInput
-                                              }
-                                                |> setFocus hover
-                                            , Command.none
-                                            )
-
-                                        DisplayNameTextInput ->
-                                            case model2.topMenuOpened of
-                                                Just (SettingsMenu nameTextInput) ->
-                                                    ( { model2
-                                                        | topMenuOpened =
-                                                            TextInput.mouseDown
-                                                                mousePosition2
-                                                                data.position
-                                                                nameTextInput
-                                                                |> SettingsMenu
-                                                                |> Just
-                                                      }
-                                                        |> setFocus hover
-                                                    , Command.none
-                                                    )
-
-                                                _ ->
-                                                    ( model2, Command.none )
-
-                                        _ ->
-                                            case Toolbar.view (getViewModel model) |> Ui.findButton id of
-                                                Just { buttonData } ->
-                                                    case buttonData.onMouseDown of
-                                                        Just onMouseDown2 ->
-                                                            uiUpdate data.position onMouseDown2 model2
-
-                                                        Nothing ->
-                                                            ( model2, Command.none )
-
-                                                Nothing ->
-                                                    ( model2, Command.none )
+                                    uiUpdate
+                                        id
+                                        (Ui.MouseDown { elementPosition = data.position })
+                                        model2
 
                                 _ ->
                                     ( model2, Command.none )
@@ -1230,7 +1129,7 @@ updateLoaded audioData msg model =
                     | mouseMiddle =
                         MouseButtonDown
                             { start = mousePosition
-                            , start_ = screenToWorld model mousePosition
+                            , start_ = Toolbar.screenToWorld model mousePosition
                             , current = mousePosition
                             , hover = hover
                             }
@@ -1255,26 +1154,26 @@ updateLoaded audioData msg model =
                                     model.viewPoint
 
                                 Nothing ->
-                                    offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
+                                    Toolbar.offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
                       }
                     , Command.none
                     )
 
                 ( SecondButton, _, _ ) ->
                     let
+                        position =
+                            Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
+
                         maybeTile =
-                            Grid.getTile
-                                (screenToWorld model mousePosition |> Coord.floorPoint)
-                                (LocalGrid.localModel model.localModel).grid
+                            Grid.getTile position (LocalGrid.localModel model.localModel).grid
                     in
                     ( { model
-                        | selectedUserId =
-                            case maybeTile of
-                                Just tile ->
-                                    Just tile.userId
-
-                                Nothing ->
-                                    Nothing
+                        | contextMenu =
+                            Just
+                                { userId = Maybe.map .userId maybeTile
+                                , position = position
+                                , linkCopied = False
+                                }
                       }
                     , Command.none
                     )
@@ -1355,11 +1254,6 @@ updateLoaded audioData msg model =
                         _ ->
                             Nothing
 
-                mousePosition2 : Coord Pixels
-                mousePosition2 =
-                    mousePosition
-                        |> Coord.roundPoint
-
                 placeTileHelper model2 =
                     case currentTool model2 of
                         TilePlacerTool { tileGroup, index } ->
@@ -1373,8 +1267,11 @@ updateLoaded audioData msg model =
 
                         TextTool _ ->
                             model2
+
+                        ReportTool ->
+                            model2
             in
-            ( { model
+            { model
                 | mouseLeft =
                     case model.mouseLeft of
                         MouseButtonDown mouseState ->
@@ -1390,141 +1287,37 @@ updateLoaded audioData msg model =
                         MouseButtonUp _ ->
                             MouseButtonUp { current = mousePosition }
                 , previousTileHover = tileHover_
-              }
+            }
                 |> (\model2 ->
                         case model2.mouseLeft of
                             MouseButtonDown { hover } ->
                                 case hover of
                                     UiBackgroundHover ->
-                                        model2
+                                        ( model2, Command.none )
 
                                     TileHover _ ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                                     TrainHover _ ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                                     MapHover ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                                     UiHover uiHover data ->
-                                        case uiHover of
-                                            PrimaryColorInput ->
-                                                { model2
-                                                    | primaryColorTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.primaryColorTextInput
-                                                }
-
-                                            SecondaryColorInput ->
-                                                { model2
-                                                    | secondaryColorTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.secondaryColorTextInput
-                                                }
-
-                                            EmailAddressTextInputHover ->
-                                                { model2
-                                                    | loginTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.loginTextInput
-                                                }
-
-                                            SendEmailButtonHover ->
-                                                model2
-
-                                            ToolButtonHover _ ->
-                                                model2
-
-                                            ShowInviteUser ->
-                                                model2
-
-                                            CloseInviteUser ->
-                                                model2
-
-                                            SubmitInviteUser ->
-                                                model2
-
-                                            InviteEmailAddressTextInput ->
-                                                { model2
-                                                    | inviteTextInput =
-                                                        TextInput.mouseDownMove
-                                                            mousePosition2
-                                                            data.position
-                                                            model2.inviteTextInput
-                                                }
-
-                                            LowerMusicVolume ->
-                                                model2
-
-                                            RaiseMusicVolume ->
-                                                model2
-
-                                            LowerSoundEffectVolume ->
-                                                model2
-
-                                            RaiseSoundEffectVolume ->
-                                                model2
-
-                                            SettingsButton ->
-                                                model2
-
-                                            CloseSettings ->
-                                                model2
-
-                                            DisplayNameTextInput ->
-                                                { model2
-                                                    | topMenuOpened =
-                                                        case model2.topMenuOpened of
-                                                            Just (SettingsMenu nameTextInput) ->
-                                                                TextInput.mouseDownMove
-                                                                    mousePosition2
-                                                                    data.position
-                                                                    nameTextInput
-                                                                    |> SettingsMenu
-                                                                    |> Just
-
-                                                            _ ->
-                                                                model2.topMenuOpened
-                                                }
-
-                                            MailEditorHover mailEditorHover ->
-                                                model2
-
-                                            YouGotMailButton ->
-                                                model2
-
-                                            ShowMapButton ->
-                                                model2
-
-                                            AllowEmailNotificationsCheckbox ->
-                                                model2
-
-                                            ResetConnectionsButton ->
-                                                model2
-
-                                            UsersOnlineButton ->
-                                                model2
+                                        uiUpdate uiHover (Ui.MouseMove { elementPosition = data.position }) model2
 
                                     CowHover _ ->
-                                        placeTileHelper model2
+                                        ( placeTileHelper model2, Command.none )
 
                             _ ->
-                                model2
+                                ( model2, Command.none )
                    )
-            , Command.none
-            )
 
         ShortIntervalElapsed time ->
             let
                 actualViewPoint_ =
-                    actualViewPoint model
+                    Toolbar.actualViewPoint model
 
                 model2 =
                     { model | time = time, viewPointLastInterval = actualViewPoint_ }
@@ -1617,7 +1410,7 @@ updateLoaded audioData msg model =
 
                 oldViewPoint : Point2d WorldUnit WorldUnit
                 oldViewPoint =
-                    actualViewPoint model
+                    Toolbar.actualViewPoint model
 
                 newViewPoint : Point2d WorldUnit WorldUnit
                 newViewPoint =
@@ -1639,22 +1432,7 @@ updateLoaded audioData msg model =
 
                         _ ->
                             case model.focus of
-                                TileHover _ ->
-                                    True
-
-                                TrainHover _ ->
-                                    True
-
-                                MapHover ->
-                                    True
-
-                                CowHover _ ->
-                                    True
-
-                                UiBackgroundHover ->
-                                    True
-
-                                UiHover uiHover _ ->
+                                Just uiHover ->
                                     case uiHover of
                                         EmailAddressTextInputHover ->
                                             False
@@ -1722,6 +1500,18 @@ updateLoaded audioData msg model =
                                         UsersOnlineButton ->
                                             True
 
+                                        CopyPositionUrlButton ->
+                                            True
+
+                                        ReportUserButton ->
+                                            True
+
+                                        ToggleIsGridReadOnlyButton ->
+                                            True
+
+                                Nothing ->
+                                    True
+
                 model2 =
                     { model
                         | time = time
@@ -1759,16 +1549,34 @@ updateLoaded audioData msg model =
                             else
                                 model.scrollThreshold + 1
                     }
+
+                model3 =
+                    case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTool ) of
+                        ( ( True, _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
+                            placeTile True currentTile.tileGroup currentTile.index model2
+
+                        ( ( _, TrainViewPoint _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
+                            placeTile True currentTile.tileGroup currentTile.index model2
+
+                        _ ->
+                            model2
+
+                model4 =
+                    updateMeshes model3
+
+                newUi =
+                    Toolbar.view model4
             in
-            ( case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTool ) of
-                ( ( True, _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
-                    placeTile True currentTile.tileGroup currentTile.index model2
+            ( { model4
+                | ui = newUi
+                , previousFocus = model4.focus
+                , uiMesh =
+                    if Ui.visuallyEqual newUi model4.ui && model4.focus == model4.previousFocus then
+                        model4.uiMesh
 
-                ( ( _, TrainViewPoint _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
-                    placeTile True currentTile.tileGroup currentTile.index model2
-
-                _ ->
-                    model2
+                    else
+                        Ui.view model4.focus newUi
+              }
             , Command.none
             )
 
@@ -1787,135 +1595,12 @@ updateLoaded audioData msg model =
                     ( model, Command.none )
 
         PastedText text ->
-            let
-                pasteTextTool () =
-                    ( case model.currentTool of
-                        TextTool (Just _) ->
-                            String.foldl placeChar model (String.left 200 text)
-
-                        _ ->
-                            model
-                    , Command.none
-                    )
-            in
             case model.focus of
-                TileHover _ ->
-                    pasteTextTool ()
+                Just id ->
+                    uiUpdate id (Ui.PastedText text) model
 
-                TrainHover _ ->
-                    pasteTextTool ()
-
-                MapHover ->
-                    pasteTextTool ()
-
-                CowHover _ ->
-                    pasteTextTool ()
-
-                UiBackgroundHover ->
-                    pasteTextTool ()
-
-                UiHover uiHover _ ->
-                    case uiHover of
-                        EmailAddressTextInputHover ->
-                            ( { model | loginTextInput = TextInput.paste text model.loginTextInput }
-                            , Command.none
-                            )
-
-                        SendEmailButtonHover ->
-                            pasteTextTool ()
-
-                        PrimaryColorInput ->
-                            case currentUserId model of
-                                Just userId ->
-                                    TextInput.paste text model.primaryColorTextInput
-                                        |> colorTextInputAdjustText
-                                        |> handleKeyDownColorInputHelper
-                                            userId
-                                            (\a b -> { b | primaryColorTextInput = a })
-                                            (\a b -> { b | primaryColor = a })
-                                            model.currentTool
-                                            model
-
-                                Nothing ->
-                                    pasteTextTool ()
-
-                        SecondaryColorInput ->
-                            case currentUserId model of
-                                Just userId ->
-                                    TextInput.paste text model.secondaryColorTextInput
-                                        |> colorTextInputAdjustText
-                                        |> handleKeyDownColorInputHelper
-                                            userId
-                                            (\a b -> { b | secondaryColorTextInput = a })
-                                            (\a b -> { b | secondaryColor = a })
-                                            model.currentTool
-                                            model
-
-                                Nothing ->
-                                    pasteTextTool ()
-
-                        ToolButtonHover _ ->
-                            pasteTextTool ()
-
-                        ShowInviteUser ->
-                            pasteTextTool ()
-
-                        CloseInviteUser ->
-                            pasteTextTool ()
-
-                        SubmitInviteUser ->
-                            pasteTextTool ()
-
-                        InviteEmailAddressTextInput ->
-                            ( { model | inviteTextInput = TextInput.paste text model.inviteTextInput }, Command.none )
-
-                        LowerMusicVolume ->
-                            pasteTextTool ()
-
-                        RaiseMusicVolume ->
-                            pasteTextTool ()
-
-                        LowerSoundEffectVolume ->
-                            pasteTextTool ()
-
-                        RaiseSoundEffectVolume ->
-                            pasteTextTool ()
-
-                        SettingsButton ->
-                            pasteTextTool ()
-
-                        CloseSettings ->
-                            pasteTextTool ()
-
-                        DisplayNameTextInput ->
-                            case model.topMenuOpened of
-                                Just (SettingsMenu nameTextInput) ->
-                                    ( { model
-                                        | topMenuOpened = TextInput.paste text nameTextInput |> SettingsMenu |> Just
-                                      }
-                                    , Command.none
-                                    )
-
-                                _ ->
-                                    pasteTextTool ()
-
-                        MailEditorHover mailEditorHover ->
-                            pasteTextTool ()
-
-                        YouGotMailButton ->
-                            pasteTextTool ()
-
-                        ShowMapButton ->
-                            pasteTextTool ()
-
-                        AllowEmailNotificationsCheckbox ->
-                            pasteTextTool ()
-
-                        ResetConnectionsButton ->
-                            pasteTextTool ()
-
-                        UsersOnlineButton ->
-                            pasteTextTool ()
+                Nothing ->
+                    pasteTextTool text model
 
         GotUserAgentPlatform _ ->
             ( model, Command.none )
@@ -1924,6 +1609,17 @@ updateLoaded audioData msg model =
             ( { model | musicVolume = userSettings.musicVolume, soundEffectVolume = userSettings.soundEffectVolume }
             , Command.none
             )
+
+
+pasteTextTool text model =
+    ( case model.currentTool of
+        TextTool (Just _) ->
+            String.foldl placeChar model (String.left 200 text)
+
+        _ ->
+            model
+    , Command.none
+    )
 
 
 tileRotationHelper : AudioData -> Int -> { a | tileGroup : TileGroup, index : Int } -> FrontendLoaded -> FrontendLoaded
@@ -1957,40 +1653,24 @@ tileRotationHelper audioData offset tile model =
         }
 
 
-previousFocus : FrontendLoaded -> Hover
+previousFocus : FrontendLoaded -> Maybe UiHover
 previousFocus model =
     case model.focus of
-        UiHover hoverId _ ->
-            UiHover (Toolbar.view (getViewModel model) |> Ui.tabBackward hoverId) { position = Coord.origin }
+        Just hoverId ->
+            Just (Ui.tabBackward hoverId model.ui)
 
         _ ->
-            model.focus
-
-
-currentTileGroup : FrontendLoaded -> Maybe TileGroup
-currentTileGroup model =
-    case model.currentTool of
-        TilePlacerTool { tileGroup } ->
-            Just tileGroup
-
-        HandTool ->
-            Nothing
-
-        TilePickerTool ->
-            Nothing
-
-        TextTool record ->
             Nothing
 
 
-nextFocus : FrontendLoaded -> Hover
+nextFocus : FrontendLoaded -> Maybe UiHover
 nextFocus model =
     case model.focus of
-        UiHover hoverId _ ->
-            UiHover (Toolbar.view (getViewModel model) |> Ui.tabForward hoverId) { position = Coord.origin }
+        Just hoverId ->
+            Just (Ui.tabForward hoverId model.ui)
 
         _ ->
-            model.focus
+            Nothing
 
 
 colorTextInputAdjustText : TextInput.Model -> TextInput.Model
@@ -2128,6 +1808,9 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
               }
             , Command.none
             )
+
+        ReportTool ->
+            ( model, Command.none )
     )
         |> Tuple.mapFirst (setTextInputModel newTextInput)
         |> Tuple.mapFirst
@@ -2158,65 +1841,14 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
 
                                     TextTool record ->
                                         m.currentTool
+
+                                    ReportTool ->
+                                        m.currentTool
                         }
 
                     Nothing ->
                         m
             )
-
-
-getViewModel : FrontendLoaded -> ViewData
-getViewModel model =
-    let
-        localModel =
-            LocalGrid.localModel model.localModel
-
-        maybeUserId =
-            currentUserId model
-    in
-    { windowSize = model.windowSize
-    , pressedSubmitEmail = model.pressedSubmitEmail
-    , loginTextInput = model.loginTextInput
-    , hasCmdKey = model.hasCmdKey
-    , handColor = Maybe.map (\userId -> getHandColor userId model) (currentUserId model)
-    , userStatus = localModel.userStatus
-    , primaryColorTextInput = model.primaryColorTextInput
-    , secondaryColorTextInput = model.secondaryColorTextInput
-    , tileColors = model.tileColors
-    , tileHotkeys = model.tileHotkeys
-    , currentTool =
-        case model.currentTool of
-            HandTool ->
-                HandToolButton
-
-            TilePlacerTool { tileGroup } ->
-                TilePlacerToolButton tileGroup
-
-            TilePickerTool ->
-                TilePickerToolButton
-
-            TextTool _ ->
-                TextToolButton
-    , userId = maybeUserId
-    , topMenuOpened = model.topMenuOpened
-    , inviteTextInput = model.inviteTextInput
-    , inviteSubmitStatus = model.inviteSubmitStatus
-    , musicVolume = model.musicVolume
-    , soundEffectVolume = model.soundEffectVolume
-    , mailEditor = model.mailEditor
-    , users = localModel.users
-    , inviteTree = localModel.inviteTree
-    , isDisconnected = isDisconnected model
-    , showMap = model.showMap
-    , otherUsersOnline =
-        case maybeUserId of
-            Just userId ->
-                IdDict.remove userId localModel.cursors |> IdDict.size
-
-            Nothing ->
-                IdDict.size localModel.cursors
-    , showInviteTree = model.showInviteTree
-    }
 
 
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
@@ -2227,7 +1859,7 @@ hoverAt model mousePosition =
             mousePosition
                 |> Coord.roundPoint
     in
-    case Ui.hover mousePosition2 (Toolbar.view (getViewModel model)) of
+    case Ui.hover mousePosition2 model.ui of
         Ui.InputHover data ->
             UiHover data.id { position = data.position }
 
@@ -2238,7 +1870,7 @@ hoverAt model mousePosition =
             let
                 mouseWorldPosition_ : Point2d WorldUnit WorldUnit
                 mouseWorldPosition_ =
-                    screenToWorld model mousePosition
+                    Toolbar.screenToWorld model mousePosition
 
                 tileHover : Maybe Hover
                 tileHover =
@@ -2270,6 +1902,9 @@ hoverAt model mousePosition =
                                     else
                                         Nothing
 
+                                ReportTool ->
+                                    TileHover tile |> Just
+
                         Nothing ->
                             Nothing
 
@@ -2299,6 +1934,9 @@ hoverAt model mousePosition =
                                 |> Quantity.minimumBy Tuple.second
 
                         TextTool _ ->
+                            Nothing
+
+                        ReportTool ->
                             Nothing
 
                 localGrid : LocalGrid_
@@ -2333,6 +1971,9 @@ hoverAt model mousePosition =
 
                         TextTool _ ->
                             Nothing
+
+                        ReportTool ->
+                            Nothing
             in
             case trainHovers of
                 Just ( train, _ ) ->
@@ -2366,16 +2007,40 @@ keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command
 keyMsgCanvasUpdate key model =
     case ( key, ctrlOrMeta model ) of
         ( Keyboard.Character "z", True ) ->
-            ( updateLocalModel Change.LocalUndo model |> Tuple.first, Command.none )
+            ( case model.currentTool of
+                ReportTool ->
+                    model
+
+                _ ->
+                    updateLocalModel Change.LocalUndo model |> handleOutMsg False
+            , Command.none
+            )
 
         ( Keyboard.Character "Z", True ) ->
-            ( updateLocalModel Change.LocalRedo model |> Tuple.first, Command.none )
+            ( case model.currentTool of
+                ReportTool ->
+                    model
+
+                _ ->
+                    updateLocalModel Change.LocalRedo model |> handleOutMsg False
+            , Command.none
+            )
 
         ( Keyboard.Character "y", True ) ->
-            ( updateLocalModel Change.LocalRedo model |> Tuple.first, Command.none )
+            ( case model.currentTool of
+                ReportTool ->
+                    model
+
+                _ ->
+                    updateLocalModel Change.LocalRedo model |> handleOutMsg False
+            , Command.none
+            )
 
         ( Keyboard.Escape, _ ) ->
-            if model.showMap then
+            if model.contextMenu /= Nothing then
+                ( { model | contextMenu = Nothing }, Command.none )
+
+            else if model.showMap then
                 ( { model | showMap = False }, Command.none )
 
             else
@@ -2397,7 +2062,7 @@ keyMsgCanvasUpdate key model =
                                     | viewPoint =
                                         case model.viewPoint of
                                             TrainViewPoint _ ->
-                                                actualViewPoint model |> NormalViewPoint
+                                                Toolbar.actualViewPoint model |> NormalViewPoint
 
                                             NormalViewPoint _ ->
                                                 model.viewPoint
@@ -2407,6 +2072,9 @@ keyMsgCanvasUpdate key model =
                         setCurrentTool TextToolButton model
 
                     TextTool Nothing ->
+                        setCurrentTool HandToolButton model
+
+                    ReportTool ->
                         setCurrentTool HandToolButton model
                 , Command.none
                 )
@@ -2516,7 +2184,7 @@ shiftTextCursor offset model =
                                 model.viewPoint
 
                             else
-                                actualViewPoint model
+                                Toolbar.actualViewPoint model
                                     |> Point2d.translateBy (Coord.toVector2d offset)
                                     |> NormalViewPoint
                     }
@@ -2524,7 +2192,7 @@ shiftTextCursor offset model =
                 Nothing ->
                     { model
                         | viewPoint =
-                            actualViewPoint model
+                            Toolbar.actualViewPoint model
                                 |> Point2d.translateBy (Coord.toVector2d offset)
                                 |> NormalViewPoint
                     }
@@ -2619,6 +2287,9 @@ setCurrentTool tool model =
 
                 TextToolButton ->
                     getTileColor BigTextGroup model
+
+                ReportToolButton ->
+                    { primaryColor = Color.white, secondaryColor = Color.black }
     in
     setCurrentToolWithColors tool colors model
 
@@ -2643,6 +2314,9 @@ setCurrentToolWithColors tool colors model =
 
                 TextToolButton ->
                     TextTool Nothing
+
+                ReportToolButton ->
+                    ReportTool
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
         , tileColors =
@@ -2658,6 +2332,9 @@ setCurrentToolWithColors tool colors model =
 
                 TextToolButton ->
                     AssocList.insert BigTextGroup colors model.tileColors
+
+                ReportToolButton ->
+                    model.tileColors
     }
 
 
@@ -2816,12 +2493,27 @@ mainMouseButtonUp mousePosition previousMouseState model =
         isSmallDistance2 =
             isSmallDistance previousMouseState mousePosition
 
+        hoverAt2 : Hover
         hoverAt2 =
             hoverAt model mousePosition
 
         model2 =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
+                , contextMenu =
+                    case hoverAt2 of
+                        UiHover _ _ ->
+                            model.contextMenu
+
+                        UiBackgroundHover ->
+                            model.contextMenu
+
+                        _ ->
+                            if isSmallDistance2 then
+                                Nothing
+
+                            else
+                                model.contextMenu
                 , viewPoint =
                     case ( model.mailEditor, model.mouseMiddle ) of
                         ( Nothing, MouseButtonUp _ ) ->
@@ -2830,7 +2522,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                     model.viewPoint
 
                                 HandTool ->
-                                    offsetViewPoint
+                                    Toolbar.offsetViewPoint
                                         model
                                         previousMouseState.hover
                                         previousMouseState.start
@@ -2838,7 +2530,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         |> NormalViewPoint
 
                                 TilePickerTool ->
-                                    offsetViewPoint
+                                    Toolbar.offsetViewPoint
                                         model
                                         previousMouseState.hover
                                         previousMouseState.start
@@ -2848,12 +2540,20 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 TextTool _ ->
                                     model.viewPoint
 
+                                ReportTool ->
+                                    Toolbar.offsetViewPoint
+                                        model
+                                        previousMouseState.hover
+                                        previousMouseState.start
+                                        mousePosition
+                                        |> NormalViewPoint
+
                         _ ->
                             model.viewPoint
             }
                 |> (\m ->
                         if isSmallDistance2 then
-                            setFocus hoverAt2 m
+                            setFocus (getUiHover hoverAt2) m
 
                         else
                             m
@@ -2906,6 +2606,29 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                     TextTool _ ->
                                         ( model2, Command.none )
 
+                                    ReportTool ->
+                                        let
+                                            position =
+                                                mouseWorldPosition model2 |> Coord.floorPoint
+                                        in
+                                        ( (if List.any (\report -> report.position == position) (getReports model2.localModel) then
+                                            updateLocalModel
+                                                (Change.RemoveReport position)
+                                                { model2 | lastReportTileRemoved = Just model2.time }
+
+                                           else
+                                            updateLocalModel
+                                                (Change.ReportVandalism
+                                                    { position = position
+                                                    , reportedUser = data.userId
+                                                    }
+                                                )
+                                                { model2 | lastReportTilePlaced = Just model2.time }
+                                          )
+                                            |> handleOutMsg False
+                                        , Command.none
+                                        )
+
                             Nothing ->
                                 ( model2, Command.none )
 
@@ -2930,14 +2653,32 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         ( setTrainViewPoint trainId model2, Command.none )
 
                     MapHover ->
-                        ( case previousMouseState.hover of
-                            TrainHover { trainId, train } ->
-                                setTrainViewPoint trainId model2
+                        case currentTool model2 of
+                            ReportTool ->
+                                let
+                                    position =
+                                        mouseWorldPosition model2 |> Coord.floorPoint
+                                in
+                                ( if List.any (\report -> report.position == position) (getReports model2.localModel) then
+                                    updateLocalModel
+                                        (Change.RemoveReport position)
+                                        { model2 | lastReportTileRemoved = Just model2.time }
+                                        |> handleOutMsg False
+
+                                  else
+                                    model2
+                                , Command.none
+                                )
 
                             _ ->
-                                model2
-                        , Command.none
-                        )
+                                ( case previousMouseState.hover of
+                                    TrainHover { trainId, train } ->
+                                        setTrainViewPoint trainId model2
+
+                                    _ ->
+                                        model2
+                                , Command.none
+                                )
 
                     CowHover { cowId } ->
                         let
@@ -2947,12 +2688,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
                         ( model3, Command.none )
 
                     UiHover id data ->
-                        case Ui.findButton id (Toolbar.view (getViewModel model2)) of
-                            Just { buttonData } ->
-                                uiUpdate data.position buttonData.onPress model2
-
-                            Nothing ->
-                                ( model2, Command.none )
+                        uiUpdate
+                            id
+                            (Ui.MousePressed { elementPosition = data.position })
+                            model2
 
     else
         ( model2, Command.none )
@@ -2976,114 +2715,301 @@ handleMailEditorOutMsg outMsg model =
         |> handleOutMsg False
 
 
-uiUpdate : Coord Pixels -> UiMsg -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-uiUpdate elementPosition msg model =
-    case msg of
-        PressedCloseInviteUser ->
-            ( { model | topMenuOpened = Nothing }, Command.none )
+sendInvite : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend msg )
+sendInvite model =
+    case ( LocalGrid.localModel model.localModel |> .userStatus, model.inviteSubmitStatus ) of
+        ( LoggedIn loggedIn, NotSubmitted _ ) ->
+            case Toolbar.validateInviteEmailAddress loggedIn.emailAddress model.inviteTextInput.current.text of
+                Ok emailAddress ->
+                    ( { model | inviteSubmitStatus = Submitting }
+                    , Effect.Lamdera.sendToBackend (SendInviteEmailRequest (Untrusted.untrust emailAddress))
+                    )
 
-        PressedShowInviteUser ->
-            ( { model | topMenuOpened = Just InviteMenu }, Command.none )
+                Err _ ->
+                    ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }, Command.none )
 
-        PressedSendInviteUser ->
-            case ( LocalGrid.localModel model.localModel |> .userStatus, model.inviteSubmitStatus ) of
-                ( LoggedIn loggedIn, NotSubmitted _ ) ->
-                    case Toolbar.validateInviteEmailAddress loggedIn.emailAddress model.inviteTextInput.current.text of
-                        Ok emailAddress ->
-                            ( { model | inviteSubmitStatus = Submitting }
-                            , Effect.Lamdera.sendToBackend (SendInviteEmailRequest (Untrusted.untrust emailAddress))
-                            )
+        _ ->
+            ( model, Command.none )
 
-                        Err _ ->
-                            ( { model | inviteSubmitStatus = NotSubmitted { pressedSubmit = True } }, Command.none )
+
+onPress event updateFunc model =
+    case event of
+        Ui.MousePressed data ->
+            updateFunc ()
+
+        Ui.KeyDown Keyboard.Enter ->
+            updateFunc ()
+
+        Ui.KeyDown key ->
+            keyMsgCanvasUpdate key model
+
+        _ ->
+            ( model, Command.none )
+
+
+uiUpdate : UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+uiUpdate id event model =
+    case id of
+        CloseInviteUser ->
+            onPress event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+
+        ShowInviteUser ->
+            onPress event (\() -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
+
+        SubmitInviteUser ->
+            onPress event (\() -> sendInvite model) model
+
+        SendEmailButtonHover ->
+            onPress event (\() -> sendEmail model) model
+
+        ToolButtonHover tool ->
+            onPress event (\() -> ( setCurrentTool tool model, Command.none )) model
+
+        InviteEmailAddressTextInput ->
+            textInputUpdate
+                InviteEmailAddressTextInput
+                (\_ model2 -> model2)
+                (\() -> sendInvite model)
+                model.inviteTextInput
+                (\a -> { model | inviteTextInput = a })
+                event
+                model
+
+        EmailAddressTextInputHover ->
+            textInputUpdate
+                EmailAddressTextInputHover
+                (\_ model2 -> model2)
+                (\() -> sendEmail model)
+                model.loginTextInput
+                (\a -> { model | loginTextInput = a })
+                event
+                model
+
+        PrimaryColorInput ->
+            case event of
+                Ui.MouseMove { elementPosition } ->
+                    ( { model
+                        | primaryColorTextInput =
+                            TextInput.mouseDownMove
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.primaryColorTextInput
+                      }
+                    , Command.none
+                    )
+
+                Ui.MouseDown { elementPosition } ->
+                    ( { model
+                        | primaryColorTextInput =
+                            TextInput.mouseDown
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.primaryColorTextInput
+                      }
+                        |> setFocus (Just PrimaryColorInput)
+                    , Command.none
+                    )
+
+                Ui.KeyDown Keyboard.Escape ->
+                    ( setFocus Nothing model, Command.none )
+
+                Ui.KeyDown key ->
+                    case currentUserId model of
+                        Just userId ->
+                            handleKeyDownColorInput
+                                userId
+                                (\a b -> { b | primaryColorTextInput = a })
+                                (\color a -> { a | primaryColor = color })
+                                model.currentTool
+                                key
+                                model
+                                model.primaryColorTextInput
+
+                        Nothing ->
+                            ( model, Command.none )
+
+                Ui.PastedText text ->
+                    case currentUserId model of
+                        Just userId ->
+                            TextInput.paste text model.primaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    userId
+                                    (\a b -> { b | primaryColorTextInput = a })
+                                    (\a b -> { b | primaryColor = a })
+                                    model.currentTool
+                                    model
+
+                        Nothing ->
+                            pasteTextTool text model
 
                 _ ->
                     ( model, Command.none )
 
-        PressedSendEmail ->
-            sendEmail model
+        SecondaryColorInput ->
+            case event of
+                Ui.MouseMove { elementPosition } ->
+                    ( { model
+                        | secondaryColorTextInput =
+                            TextInput.mouseDownMove
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.secondaryColorTextInput
+                      }
+                    , Command.none
+                    )
 
-        PressedTool tool ->
-            ( setCurrentTool tool model, Command.none )
+                Ui.MouseDown { elementPosition } ->
+                    ( { model
+                        | secondaryColorTextInput =
+                            TextInput.mouseDown
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                elementPosition
+                                model.secondaryColorTextInput
+                      }
+                        |> setFocus (Just SecondaryColorInput)
+                    , Command.none
+                    )
 
-        ChangedInviteEmailAddressTextInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | inviteTextInput = textInput }, Command.none )
+                Ui.KeyDown Keyboard.Escape ->
+                    ( setFocus Nothing model, Command.none )
 
-        KeyDownEmailAddressTextInputHover ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | loginTextInput = textInput }, Command.none )
+                Ui.KeyDown key ->
+                    case currentUserId model of
+                        Just userId ->
+                            handleKeyDownColorInput
+                                userId
+                                (\a b -> { b | secondaryColorTextInput = a })
+                                (\color a -> { a | secondaryColor = color })
+                                model.currentTool
+                                key
+                                model
+                                model.secondaryColorTextInput
 
-        ChangedPrimaryColorInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | primaryColorTextInput = textInput }, Command.none )
+                        Nothing ->
+                            ( model, Command.none )
 
-        ChangedSecondaryColorInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model | secondaryColorTextInput = textInput }, Command.none )
+                Ui.PastedText text ->
+                    case currentUserId model of
+                        Just userId ->
+                            TextInput.paste text model.secondaryColorTextInput
+                                |> colorTextInputAdjustText
+                                |> handleKeyDownColorInputHelper
+                                    userId
+                                    (\a b -> { b | secondaryColorTextInput = a })
+                                    (\a b -> { b | secondaryColor = a })
+                                    model.currentTool
+                                    model
 
-        PressedLowerMusicVolume ->
-            { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings
+                        Nothing ->
+                            pasteTextTool text model
 
-        PressedRaiseMusicVolume ->
-            { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
+                _ ->
+                    ( model, Command.none )
 
-        PressedLowerSoundEffectVolume ->
-            { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings
+        LowerMusicVolume ->
+            onPress
+                event
+                (\() -> { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings)
+                model
 
-        PressedRaiseSoundEffectVolume ->
-            { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings
+        RaiseMusicVolume ->
+            onPress
+                event
+                (\() -> { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
+                model
 
-        PressedSettingsButton ->
-            let
-                localModel =
-                    LocalGrid.localModel model.localModel
-            in
-            ( { model
-                | topMenuOpened =
-                    case localModel.userStatus of
-                        LoggedIn loggedIn ->
-                            TextInput.init
-                                |> TextInput.withText
-                                    (case IdDict.get loggedIn.userId localModel.users of
-                                        Just user ->
-                                            DisplayName.toString user.name
+        LowerSoundEffectVolume ->
+            onPress
+                event
+                (\() -> { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings)
+                model
 
-                                        Nothing ->
-                                            DisplayName.toString DisplayName.default
-                                    )
-                                |> SettingsMenu
-                                |> Just
+        RaiseSoundEffectVolume ->
+            onPress
+                event
+                (\() -> { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
+                model
 
-                        NotLoggedIn ->
-                            Just LoggedOutSettingsMenu
-              }
-            , Command.none
-            )
+        SettingsButton ->
+            onPress
+                event
+                (\() ->
+                    let
+                        localModel =
+                            LocalGrid.localModel model.localModel
+                    in
+                    ( { model
+                        | topMenuOpened =
+                            case localModel.userStatus of
+                                LoggedIn loggedIn ->
+                                    TextInput.init
+                                        |> TextInput.withText
+                                            (case IdDict.get loggedIn.userId localModel.users of
+                                                Just user ->
+                                                    DisplayName.toString user.name
 
-        PressedCloseSettings ->
-            ( { model | topMenuOpened = Nothing }, Command.none )
+                                                Nothing ->
+                                                    DisplayName.toString DisplayName.default
+                                            )
+                                        |> SettingsMenu
+                                        |> Just
 
-        ChangedDisplayNameTextInput ctrlOrMetaDown shiftDown key textInput ->
-            ( { model
-                | topMenuOpened =
-                    case model.topMenuOpened of
-                        Just (SettingsMenu _) ->
-                            SettingsMenu textInput |> Just
+                                NotLoggedIn ->
+                                    Just LoggedOutSettingsMenu
+                      }
+                    , Command.none
+                    )
+                )
+                model
 
-                        _ ->
-                            Nothing
-              }
-            , Command.none
-            )
+        CloseSettings ->
+            onPress event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
 
-        MailEditorUiMsg mailEditorMsg ->
+        DisplayNameTextInput ->
+            case model.topMenuOpened of
+                Just (SettingsMenu nameTextInput) ->
+                    textInputUpdate
+                        DisplayNameTextInput
+                        (\newTextInput model3 ->
+                            let
+                                ( model2, outMsg2 ) =
+                                    case ( DisplayName.fromString nameTextInput.current.text, DisplayName.fromString newTextInput.current.text ) of
+                                        ( Ok old, Ok new ) ->
+                                            if old == new then
+                                                ( model3, LocalGrid.NoOutMsg )
+
+                                            else
+                                                updateLocalModel (Change.ChangeDisplayName new) model3
+
+                                        ( Err _, Ok new ) ->
+                                            updateLocalModel (Change.ChangeDisplayName new) model3
+
+                                        _ ->
+                                            ( model3, LocalGrid.NoOutMsg )
+                            in
+                            handleOutMsg False ( model2, outMsg2 )
+                        )
+                        (\_ -> ( model, Command.none ))
+                        nameTextInput
+                        (\a -> { model | topMenuOpened = Just (SettingsMenu a) })
+                        event
+                        model
+
+                _ ->
+                    ( model, Command.none )
+
+        MailEditorHover mailEditorId ->
             case model.mailEditor of
                 Just mailEditor ->
                     let
-                        mousePosition2 : Coord Pixels
-                        mousePosition2 =
-                            mouseScreenPosition model
-                                |> Coord.roundPoint
-
                         ( newMailEditor, outMsg ) =
-                            MailEditor.uiUpdate model elementPosition mousePosition2 mailEditorMsg mailEditor
+                            MailEditor.uiUpdate
+                                model
+                                (mouseScreenPosition model |> Coord.roundPoint)
+                                mailEditorId
+                                event
+                                mailEditor
 
                         model2 =
                             { model
@@ -3103,30 +3029,165 @@ uiUpdate elementPosition msg model =
                 Nothing ->
                     ( model, Command.none )
 
-        PressedYouGotMail ->
-            ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )
+        YouGotMailButton ->
+            onPress event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
 
-        PressedShowMap ->
-            ( { model | showMap = not model.showMap }, Command.none )
+        ShowMapButton ->
+            onPress event (\() -> ( { model | showMap = not model.showMap }, Command.none )) model
 
-        PressedAllowEmailNotifications ->
-            ( case LocalGrid.localModel model.localModel |> .userStatus of
-                LoggedIn loggedIn ->
-                    updateLocalModel
-                        (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
-                        model
-                        |> handleOutMsg False
+        AllowEmailNotificationsCheckbox ->
+            onPress
+                event
+                (\() ->
+                    ( case LocalGrid.localModel model.localModel |> .userStatus of
+                        LoggedIn loggedIn ->
+                            updateLocalModel
+                                (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
+                                model
+                                |> handleOutMsg False
 
-                NotLoggedIn ->
-                    model
+                        NotLoggedIn ->
+                            model
+                    , Command.none
+                    )
+                )
+                model
+
+        ResetConnectionsButton ->
+            onPress
+                event
+                (\() -> ( updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False, Command.none ))
+                model
+
+        UsersOnlineButton ->
+            onPress event (\_ -> ( { model | showInviteTree = not model.showInviteTree }, Command.none )) model
+
+        CopyPositionUrlButton ->
+            onPress
+                event
+                (\() ->
+                    case model.contextMenu of
+                        Just contextMenu ->
+                            ( { model | contextMenu = Just { contextMenu | linkCopied = True } }
+                            , Ports.copyToClipboard (Env.domain ++ Route.encode (Route.internalRoute contextMenu.position))
+                            )
+
+                        Nothing ->
+                            ( model, Command.none )
+                )
+                model
+
+        ReportUserButton ->
+            onPress
+                event
+                (\() ->
+                    ( case model.contextMenu of
+                        Just contextMenu ->
+                            case contextMenu.userId of
+                                Just userId ->
+                                    updateLocalModel
+                                        (Change.ReportVandalism { reportedUser = userId, position = contextMenu.position })
+                                        model
+                                        |> handleOutMsg False
+
+                                Nothing ->
+                                    model
+
+                        Nothing ->
+                            model
+                    , Command.none
+                    )
+                )
+                model
+
+        ToggleIsGridReadOnlyButton ->
+            onPress
+                event
+                (\() ->
+                    ( case LocalGrid.localModel model.localModel |> .userStatus of
+                        LoggedIn { isGridReadOnly } ->
+                            updateLocalModel
+                                (Change.AdminSetGridReadOnly (not isGridReadOnly) |> Change.AdminChange)
+                                model
+                                |> handleOutMsg False
+
+                        NotLoggedIn ->
+                            model
+                    , Command.none
+                    )
+                )
+                model
+
+
+textInputUpdate :
+    UiHover
+    -> (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
+    -> (() -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
+    -> TextInput.Model
+    -> (TextInput.Model -> FrontendLoaded)
+    -> UiEvent
+    -> FrontendLoaded
+    -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
+textInputUpdate id textChanged onEnter textInput setTextInput event model =
+    case event of
+        Ui.PastedText text ->
+            let
+                textInput2 =
+                    TextInput.paste text textInput
+            in
+            ( setTextInput textInput2 |> textChanged textInput2
             , Command.none
             )
 
-        PressedResetConnections ->
-            ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none )
+        Ui.MouseDown { elementPosition } ->
+            ( TextInput.mouseDown
+                (mouseScreenPosition model |> Coord.roundPoint)
+                elementPosition
+                textInput
+                |> setTextInput
+                |> setFocus (Just id)
+            , Command.none
+            )
 
-        PressedUsersOnline ->
-            ( { model | showInviteTree = not model.showInviteTree }, Command.none )
+        Ui.KeyDown Keyboard.Escape ->
+            ( setFocus Nothing model, Command.none )
+
+        Ui.KeyDown Keyboard.Enter ->
+            onEnter ()
+
+        Ui.KeyDown key ->
+            let
+                ( newTextInput, outMsg ) =
+                    TextInput.keyMsg
+                        (ctrlOrMeta model)
+                        (keyDown Keyboard.Shift model)
+                        key
+                        textInput
+            in
+            ( setTextInput newTextInput |> textChanged newTextInput
+            , case outMsg of
+                CopyText text ->
+                    Ports.copyToClipboard text
+
+                PasteText ->
+                    Ports.readFromClipboardRequest
+
+                NoOutMsg ->
+                    Command.none
+            )
+
+        Ui.MousePressed _ ->
+            ( model, Command.none )
+
+        Ui.MouseMove { elementPosition } ->
+            case model.mouseLeft of
+                MouseButtonDown { current } ->
+                    ( TextInput.mouseDownMove (Coord.roundPoint current) elementPosition textInput |> setTextInput
+                    , Command.none
+                    )
+
+                MouseButtonUp _ ->
+                    ( model, Command.none )
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -3156,34 +3217,34 @@ sendEmail model2 =
             ( model2, Command.none )
 
 
-isPrimaryColorInput : Hover -> Bool
+isPrimaryColorInput : Maybe UiHover -> Bool
 isPrimaryColorInput hover =
     case hover of
-        UiHover PrimaryColorInput _ ->
+        Just PrimaryColorInput ->
             True
 
         _ ->
             False
 
 
-isSecondaryColorInput : Hover -> Bool
+isSecondaryColorInput : Maybe UiHover -> Bool
 isSecondaryColorInput hover =
     case hover of
-        UiHover SecondaryColorInput _ ->
+        Just SecondaryColorInput ->
             True
 
         _ ->
             False
 
 
-setFocus : Hover -> FrontendLoaded -> FrontendLoaded
+setFocus : Maybe UiHover -> FrontendLoaded -> FrontendLoaded
 setFocus newFocus model =
     { model
         | focus = newFocus
         , currentTool =
             case model.currentTool of
                 TextTool _ ->
-                    if newFocus == MapHover then
+                    if newFocus == Nothing then
                         model.currentTool
 
                     else
@@ -3211,6 +3272,9 @@ setFocus newFocus model =
                             TextTool _ ->
                                 model.primaryColorTextInput
                                     |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).primaryColor)
+
+                            ReportTool ->
+                                model.primaryColorTextInput
 
                     else if not (isPrimaryColorInput model.focus) && isPrimaryColorInput newFocus then
                         TextInput.selectAll model.primaryColorTextInput
@@ -3241,6 +3305,9 @@ setFocus newFocus model =
                                 model.secondaryColorTextInput
                                     |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).secondaryColor)
 
+                            ReportTool ->
+                                model.secondaryColorTextInput
+
                     else if not (isSecondaryColorInput model.focus) && isSecondaryColorInput newFocus then
                         TextInput.selectAll model.secondaryColorTextInput
 
@@ -3270,7 +3337,7 @@ setTrainViewPoint trainId model =
         | viewPoint =
             TrainViewPoint
                 { trainId = trainId
-                , startViewPoint = actualViewPoint model
+                , startViewPoint = Toolbar.actualViewPoint model
                 , startTime = model.time
                 }
     }
@@ -3306,88 +3373,6 @@ updateLocalModel msg model =
             ( model, LocalGrid.NoOutMsg )
 
 
-screenToWorld : FrontendLoaded -> Point2d Pixels Pixels -> Point2d WorldUnit WorldUnit
-screenToWorld model =
-    let
-        ( w, h ) =
-            model.windowSize
-    in
-    Point2d.translateBy
-        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5)
-        >> point2dAt2 (scaleForScreenToWorld model)
-        >> Point2d.placeIn (Units.screenFrame (actualViewPoint model))
-
-
-worldToScreen : FrontendLoaded -> Point2d WorldUnit WorldUnit -> Point2d Pixels Pixels
-worldToScreen model =
-    let
-        ( w, h ) =
-            model.windowSize
-    in
-    Point2d.translateBy
-        (Vector2d.xy (Quantity.toFloatQuantity w) (Quantity.toFloatQuantity h) |> Vector2d.scaleBy -0.5 |> Vector2d.reverse)
-        << point2dAt2_ (scaleForScreenToWorld model)
-        << Point2d.relativeTo (Units.screenFrame (actualViewPoint model))
-
-
-vector2dAt2 :
-    ( Quantity Float (Rate sourceUnits destinationUnits)
-    , Quantity Float (Rate sourceUnits destinationUnits)
-    )
-    -> Vector2d sourceUnits coordinates
-    -> Vector2d destinationUnits coordinates
-vector2dAt2 ( Quantity rateX, Quantity rateY ) vector =
-    let
-        { x, y } =
-            Vector2d.unwrap vector
-    in
-    { x = x * rateX
-    , y = y * rateY
-    }
-        |> Vector2d.unsafe
-
-
-point2dAt2 :
-    ( Quantity Float (Rate sourceUnits destinationUnits)
-    , Quantity Float (Rate sourceUnits destinationUnits)
-    )
-    -> Point2d sourceUnits coordinates
-    -> Point2d destinationUnits coordinates
-point2dAt2 ( Quantity rateX, Quantity rateY ) point =
-    let
-        { x, y } =
-            Point2d.unwrap point
-    in
-    { x = x * rateX
-    , y = y * rateY
-    }
-        |> Point2d.unsafe
-
-
-point2dAt2_ :
-    ( Quantity Float (Rate sourceUnits destinationUnits)
-    , Quantity Float (Rate sourceUnits destinationUnits)
-    )
-    -> Point2d sourceUnits coordinates
-    -> Point2d destinationUnits coordinates
-point2dAt2_ ( Quantity rateX, Quantity rateY ) point =
-    let
-        { x, y } =
-            Point2d.unwrap point
-    in
-    { x = x / rateX
-    , y = y / rateY
-    }
-        |> Point2d.unsafe
-
-
-scaleForScreenToWorld : { a | devicePixelRatio : Float, zoomFactor : Int } -> ( Quantity Float units, Quantity Float units )
-scaleForScreenToWorld model =
-    ( 1 / (toFloat model.zoomFactor * toFloat Units.tileWidth) |> Quantity
-    , 1 / (toFloat model.zoomFactor * toFloat Units.tileHeight) |> Quantity
-    )
-
-
 windowResizedUpdate :
     Coord CssPixel
     -> { b | cssWindowSize : Coord CssPixel, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixel, devicePixelRatio : Float }
@@ -3418,9 +3403,22 @@ devicePixelRatioChanged devicePixelRatio model =
     )
 
 
-mouseWorldPosition : FrontendLoaded -> Point2d WorldUnit WorldUnit
+mouseWorldPosition :
+    { a
+        | mouseLeft : MouseButtonState
+        , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
+        , devicePixelRatio : Float
+        , zoomFactor : Int
+        , mailEditor : Maybe b
+        , mouseMiddle : MouseButtonState
+        , viewPoint : ViewPoint
+        , trains : IdDict TrainId Train
+        , time : Effect.Time.Posix
+        , currentTool : Tool
+    }
+    -> Point2d WorldUnit WorldUnit
 mouseWorldPosition model =
-    mouseScreenPosition model |> screenToWorld model
+    mouseScreenPosition model |> Toolbar.screenToWorld model
 
 
 mouseScreenPosition : { a | mouseLeft : MouseButtonState } -> Point2d Pixels Pixels
@@ -3433,7 +3431,22 @@ mouseScreenPosition model =
             current
 
 
-cursorPosition : TileData WorldUnit -> FrontendLoaded -> Coord WorldUnit
+cursorPosition :
+    { a | size : Coord WorldUnit }
+    ->
+        { b
+            | mouseLeft : MouseButtonState
+            , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
+            , devicePixelRatio : Float
+            , zoomFactor : Int
+            , mailEditor : Maybe c
+            , mouseMiddle : MouseButtonState
+            , viewPoint : ViewPoint
+            , trains : IdDict TrainId Train
+            , time : Effect.Time.Posix
+            , currentTool : Tool
+        }
+    -> Coord WorldUnit
 cursorPosition tileData model =
     mouseWorldPosition model
         |> Coord.floorPoint
@@ -3549,13 +3562,18 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                     removedTiles =
                         case outMsg of
                             LocalGrid.TilesRemoved tiles ->
-                                List.map
+                                List.filterMap
                                     (\removedTile ->
-                                        { tile = removedTile.tile
-                                        , time = model.time
-                                        , position = removedTile.position
-                                        , colors = removedTile.colors
-                                        }
+                                        if removedTile.tile == EmptyTile then
+                                            Nothing
+
+                                        else
+                                            Just
+                                                { tile = removedTile.tile
+                                                , time = model.time
+                                                , position = removedTile.position
+                                                , colors = removedTile.colors
+                                                }
                                     )
                                     tiles
 
@@ -3634,7 +3652,7 @@ createDebrisMesh appStartTime removedTiles =
                         y + height
                     )
     in
-    List.map
+    List.concatMap
         (\{ position, tile, time, colors } ->
             let
                 data =
@@ -3676,7 +3694,6 @@ createDebrisMesh appStartTime removedTiles =
                    )
         )
         list
-        |> List.concat
         |> Sprite.toMesh
 
 
@@ -3777,9 +3794,12 @@ keyDown key { pressedKeys } =
     List.any ((==) key) pressedKeys
 
 
-updateMeshes : Bool -> FrontendLoaded -> FrontendLoaded -> FrontendLoaded
-updateMeshes forceUpdate oldModel newModel =
+updateMeshes : FrontendLoaded -> FrontendLoaded
+updateMeshes newModel =
     let
+        oldModel =
+            newModel.previousUpdateMeshData
+
         oldCells : Dict ( Int, Int ) GridCell.Cell
         oldCells =
             LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
@@ -3830,6 +3850,9 @@ updateMeshes forceUpdate oldModel newModel =
                 TextTool _ ->
                     Nothing
 
+                ReportTool ->
+                    Nothing
+
         oldCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
         oldCurrentTile =
             currentTile oldModel
@@ -3854,6 +3877,7 @@ updateMeshes forceUpdate oldModel newModel =
             in
             { foreground =
                 Grid.foregroundMesh2
+                    newShowEmptyTiles
                     (case ( newCurrentTile, newMaybeUserId ) of
                         ( Just newCurrentTile_, Just userId ) ->
                             if
@@ -3889,8 +3913,11 @@ updateMeshes forceUpdate oldModel newModel =
                         Grid.backgroundMesh coord
             }
 
-        viewModel =
-            getViewModel newModel
+        newShowEmptyTiles =
+            newModel.currentTool == ReportTool
+
+        oldShowEmptyTiles =
+            newModel.previousUpdateMeshData.currentTool == ReportTool
     in
     { newModel
         | meshes =
@@ -3898,7 +3925,7 @@ updateMeshes forceUpdate oldModel newModel =
                 (\coord newCell ->
                     case Dict.get coord oldCells of
                         Just oldCell ->
-                            if oldCell == newCell then
+                            if oldCell == newCell && (newShowEmptyTiles == oldShowEmptyTiles) then
                                 if
                                     ((Maybe.map .cellPosition newCurrentTile
                                         |> Maybe.withDefault Set.empty
@@ -3928,12 +3955,20 @@ updateMeshes forceUpdate oldModel newModel =
                             newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
                 )
                 newCells
-        , uiMesh =
-            if (viewModel == getViewModel oldModel) && newModel.focus == oldModel.focus && not forceUpdate then
-                newModel.uiMesh
-
-            else
-                Toolbar.view viewModel |> Ui.view (getUiHover newModel.focus)
+        , previousUpdateMeshData =
+            { localModel = newModel.localModel
+            , pressedKeys = newModel.pressedKeys
+            , currentTool = newModel.currentTool
+            , mouseLeft = newModel.mouseLeft
+            , windowSize = newModel.windowSize
+            , devicePixelRatio = newModel.devicePixelRatio
+            , zoomFactor = newModel.zoomFactor
+            , mailEditor = newModel.mailEditor
+            , mouseMiddle = newModel.mouseMiddle
+            , viewPoint = newModel.viewPoint
+            , trains = newModel.trains
+            , time = newModel.time
+            }
     }
 
 
@@ -3990,98 +4025,6 @@ viewBoundsUpdate ( model, cmd ) =
         )
 
 
-canDragView : Hover -> Bool
-canDragView hover =
-    case hover of
-        TileHover _ ->
-            True
-
-        TrainHover _ ->
-            True
-
-        UiBackgroundHover ->
-            False
-
-        MapHover ->
-            True
-
-        CowHover _ ->
-            True
-
-        UiHover _ _ ->
-            False
-
-
-offsetViewPoint :
-    FrontendLoaded
-    -> Hover
-    -> Point2d Pixels Pixels
-    -> Point2d Pixels Pixels
-    -> Point2d WorldUnit WorldUnit
-offsetViewPoint model hover mouseStart mouseCurrent =
-    if canDragView hover then
-        let
-            delta : Vector2d WorldUnit WorldUnit
-            delta =
-                Vector2d.from mouseCurrent mouseStart
-                    |> vector2dAt2 (scaleForScreenToWorld model)
-                    |> Vector2d.placeIn (Units.screenFrame viewPoint2)
-
-            viewPoint2 =
-                actualViewPointHelper model
-        in
-        Point2d.translateBy delta viewPoint2
-
-    else
-        actualViewPointHelper model
-
-
-actualViewPoint : FrontendLoaded -> Point2d WorldUnit WorldUnit
-actualViewPoint model =
-    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( Nothing, _, MouseButtonDown { start, current, hover } ) ->
-            offsetViewPoint model hover start current
-
-        ( Nothing, MouseButtonDown { start, current, hover }, _ ) ->
-            case model.currentTool of
-                TilePlacerTool _ ->
-                    actualViewPointHelper model
-
-                TilePickerTool ->
-                    offsetViewPoint model hover start current
-
-                HandTool ->
-                    offsetViewPoint model hover start current
-
-                TextTool _ ->
-                    actualViewPointHelper model
-
-        _ ->
-            actualViewPointHelper model
-
-
-actualViewPointHelper : FrontendLoaded -> Point2d WorldUnit WorldUnit
-actualViewPointHelper model =
-    case model.viewPoint of
-        NormalViewPoint viewPoint ->
-            viewPoint
-
-        TrainViewPoint trainViewPoint ->
-            case IdDict.get trainViewPoint.trainId model.trains of
-                Just train ->
-                    let
-                        t =
-                            Quantity.ratio
-                                (Duration.from trainViewPoint.startTime model.time)
-                                (Duration.milliseconds 600)
-                                |> min 1
-                    in
-                    Point2d.interpolateFrom trainViewPoint.startViewPoint (Train.trainPosition model.time train) t
-
-                Nothing ->
-                    trainViewPoint.startViewPoint
-
-
 updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
 updateFromBackend msg model =
     case ( model, msg ) of
@@ -4133,7 +4076,9 @@ updateFromBackend msg model =
             )
 
         ( Loaded loaded, _ ) ->
-            updateLoadedFromBackend msg loaded |> Tuple.mapFirst (updateMeshes False loaded) |> Tuple.mapFirst Loaded
+            updateLoadedFromBackend msg loaded
+                |> Tuple.mapFirst (reportsMeshUpdate loaded)
+                |> Tuple.mapFirst Loaded
 
         _ ->
             ( model, Command.none )
@@ -4400,11 +4345,6 @@ debugTimeOffset =
     Duration.seconds 0
 
 
-isDisconnected : FrontendLoaded -> Bool
-isDisconnected model =
-    Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 20)
-
-
 view : AudioData -> FrontendModel_ -> Browser.Document FrontendMsg_
 view audioData model =
     { title =
@@ -4413,7 +4353,7 @@ view audioData model =
                 "Town Collab"
 
             Loaded loaded ->
-                if isDisconnected loaded then
+                if Toolbar.isDisconnected loaded then
                     "Town Collab (disconnected)"
 
                 else
@@ -4479,7 +4419,7 @@ viewLoadingBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewLoadingBoundingBox model =
     let
         viewMin =
-            screenToWorld model Point2d.origin
+            Toolbar.screenToWorld model Point2d.origin
                 |> Point2d.translateBy
                     (Coord.tuple ( -2, -2 )
                         |> Units.cellToTile
@@ -4487,14 +4427,14 @@ viewLoadingBoundingBox model =
                     )
 
         viewMax =
-            screenToWorld model (Coord.toPoint2d model.windowSize)
+            Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize)
     in
     BoundingBox2d.from viewMin viewMax
 
 
 viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewBoundingBox model =
-    BoundingBox2d.from (screenToWorld model Point2d.origin) (screenToWorld model (Coord.toPoint2d model.windowSize))
+    BoundingBox2d.from (Toolbar.screenToWorld model Point2d.origin) (Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
 loadingCanvasView : FrontendLoading -> Html FrontendMsg_
@@ -4556,6 +4496,7 @@ loadingCanvasView model =
                     , textureSize = textureSize
                     , color = Vec4.vec4 1 1 1 1
                     , userId = Shaders.noUserIdSelected
+                    , time = 0
                     }
                     :: (case tryLoading model of
                             Just _ ->
@@ -4580,6 +4521,7 @@ loadingCanvasView model =
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected
+                                    , time = 0
                                     }
                                 ]
 
@@ -4601,6 +4543,7 @@ loadingCanvasView model =
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected
+                                    , time = 0
                                     }
                                 ]
                        )
@@ -4687,7 +4630,9 @@ startButtonHighlightMesh =
         |> Sprite.toMesh
 
 
-currentTool : FrontendLoaded -> Tool
+currentTool :
+    { a | localModel : LocalModel Change LocalGrid, pressedKeys : List Keyboard.Key, currentTool : Tool }
+    -> Tool
 currentTool model =
     case currentUserId model of
         Just _ ->
@@ -4807,6 +4752,26 @@ cursorSprite hover model =
 
                                                 UiHover _ _ ->
                                                     PointerCursor
+
+                                        ReportTool ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
+
+                                                TileHover _ ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                TrainHover _ ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                MapHover ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                CowHover _ ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                UiHover _ _ ->
+                                                    PointerCursor
                             , scale = 1
                             }
             in
@@ -4854,14 +4819,14 @@ isDraggingView hover model =
                     Nothing
 
                 TilePickerTool ->
-                    if canDragView hover then
+                    if Toolbar.canDragView hover then
                         Just a
 
                     else
                         Nothing
 
                 HandTool ->
-                    if canDragView hover then
+                    if Toolbar.canDragView hover then
                         Just a
 
                     else
@@ -4869,6 +4834,13 @@ isDraggingView hover model =
 
                 TextTool _ ->
                     Nothing
+
+                ReportTool ->
+                    if Toolbar.canDragView hover then
+                        Just a
+
+                    else
+                        Nothing
 
         _ ->
             Nothing
@@ -4918,6 +4890,10 @@ mouseListeners model =
     ]
 
 
+shaderTime model =
+    Duration.from model.startTime model.time |> Duration.inSeconds
+
+
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
     case Effect.WebGL.Texture.unwrap model.texture of
@@ -4934,7 +4910,7 @@ canvasView audioData model =
                     Coord.toTuple model.cssCanvasSize
 
                 { x, y } =
-                    Point2d.unwrap (actualViewPoint model)
+                    Point2d.unwrap (Toolbar.actualViewPoint model)
 
                 viewMatrix =
                     Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
@@ -4943,24 +4919,27 @@ canvasView audioData model =
                             (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                             0
 
-                mouseScreenPosition_ : Point2d Pixels Pixels
-                mouseScreenPosition_ =
-                    mouseScreenPosition model
-
                 localGrid : LocalGrid_
                 localGrid =
                     LocalGrid.localModel model.localModel
 
+                hoverAt2 : Hover
+                hoverAt2 =
+                    hoverAt model (mouseScreenPosition model)
+
                 showMousePointer =
-                    cursorSprite (hoverAt model (mouseScreenPosition model)) model
+                    cursorSprite hoverAt2 model
 
                 ( mailPosition, mailSize ) =
-                    case Toolbar.view (getViewModel model) |> Ui.findButton (MailEditorHover MailEditor.MailButton) of
+                    case Ui.findElement (MailEditorHover MailEditor.MailButton) model.ui of
                         Just mailButton ->
                             ( mailButton.position, mailButton.buttonData.cachedSize )
 
                         Nothing ->
                             ( Coord.origin, Coord.origin )
+
+                shaderTime2 =
+                    shaderTime model
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4997,18 +4976,32 @@ canvasView audioData model =
                                     )
                                     model.meshes
                         in
-                        drawBackground meshes viewMatrix texture
-                            ++ drawForeground model.selectedUserId meshes viewMatrix texture
+                        drawBackground meshes viewMatrix texture shaderTime2
+                            ++ drawForeground
+                                model.contextMenu
+                                model.currentTool
+                                hoverAt2
+                                meshes
+                                viewMatrix
+                                texture
+                                shaderTime2
                             ++ Train.draw
-                                model.selectedUserId
+                                (case model.contextMenu of
+                                    Just contextMenu ->
+                                        contextMenu.userId
+
+                                    Nothing ->
+                                        Nothing
+                                )
                                 model.time
                                 localGrid.mail
                                 model.trains
                                 viewMatrix
                                 trainTexture
                                 viewBounds_
-                            ++ drawCows texture viewMatrix model
-                            ++ drawFlags texture viewMatrix model
+                                shaderTime2
+                            ++ drawCows texture viewMatrix model shaderTime2
+                            ++ drawFlags texture viewMatrix model shaderTime2
                             ++ [ Effect.WebGL.entityWith
                                     [ Shaders.blend ]
                                     Shaders.debrisVertexShader
@@ -5017,16 +5010,18 @@ canvasView audioData model =
                                     { view = viewMatrix
                                     , texture = texture
                                     , textureSize = textureSize
-                                    , time = Duration.from model.startTime model.time |> Duration.inSeconds
+                                    , time = shaderTime2
+                                    , time2 = shaderTime2
                                     , color = Vec4.vec4 1 1 1 1
                                     }
+                               , drawReports texture viewMatrix model.reportsMesh
                                ]
-                            ++ drawOtherCursors texture viewMatrix model
-                            ++ drawSpeechBubble texture viewMatrix model
-                            ++ drawTilePlacer audioData viewMatrix texture model
+                            ++ drawOtherCursors texture viewMatrix model shaderTime2
+                            ++ drawSpeechBubble texture viewMatrix model shaderTime2
+                            ++ drawTilePlacer audioData viewMatrix texture model shaderTime2
                             ++ (case model.mailEditor of
                                     Just _ ->
-                                        [ MailEditor.backgroundLayer texture ]
+                                        [ MailEditor.backgroundLayer texture shaderTime2 ]
 
                                     Nothing ->
                                         []
@@ -5043,6 +5038,7 @@ canvasView audioData model =
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected
+                                    , time = shaderTime2
                                     }
                                ]
                             ++ drawMap model
@@ -5057,13 +5053,14 @@ canvasView audioData model =
                                             windowHeight
                                             model
                                             mailEditor
+                                            shaderTime2
 
                                     Nothing ->
                                         []
                                )
                             ++ (case currentUserId model of
                                     Just userId ->
-                                        drawCursor showMousePointer texture viewMatrix userId model
+                                        drawCursor showMousePointer texture viewMatrix userId model shaderTime2
 
                                     Nothing ->
                                         []
@@ -5077,8 +5074,24 @@ canvasView audioData model =
             Html.text ""
 
 
-drawCows : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
-drawCows texture viewMatrix model =
+drawReports : WebGL.Texture.Texture -> Mat4 -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
+drawReports texture viewMatrix reportsMesh =
+    Effect.WebGL.entityWith
+        [ Shaders.blend ]
+        Shaders.vertexShader
+        Shaders.fragmentShader
+        reportsMesh
+        { view = viewMatrix
+        , texture = texture
+        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , color = Vec4.vec4 1 1 1 1
+        , userId = Shaders.noUserIdSelected
+        , time = 0
+        }
+
+
+drawCows : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawCows texture viewMatrix model shaderTime2 =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -5112,6 +5125,7 @@ drawCows texture viewMatrix model =
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
+                            , time = shaderTime2
                             }
                             |> Just
 
@@ -5124,8 +5138,8 @@ drawCows texture viewMatrix model =
         (IdDict.toList localGrid.cows)
 
 
-drawFlags : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
-drawFlags texture viewMatrix model =
+drawFlags : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawFlags texture viewMatrix model shaderTime2 =
     List.filterMap
         (\flag ->
             let
@@ -5161,6 +5175,7 @@ drawFlags texture viewMatrix model =
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
+                        , time = shaderTime2
                         }
                         |> Just
 
@@ -5170,8 +5185,8 @@ drawFlags texture viewMatrix model =
         (getFlags model)
 
 
-drawSpeechBubble : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
-drawSpeechBubble texture viewMatrix model =
+drawSpeechBubble : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawSpeechBubble texture viewMatrix model shaderTime2 =
     List.filterMap
         (\{ position, isRadio } ->
             let
@@ -5218,6 +5233,7 @@ drawSpeechBubble texture viewMatrix model =
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
+                        , time = shaderTime2
                         }
                         |> Just
 
@@ -5227,8 +5243,8 @@ drawSpeechBubble texture viewMatrix model =
         (getSpeechBubbles model)
 
 
-drawTilePlacer : AudioData -> Mat4 -> WebGL.Texture.Texture -> FrontendLoaded -> List Effect.WebGL.Entity
-drawTilePlacer audioData viewMatrix texture model =
+drawTilePlacer : AudioData -> Mat4 -> WebGL.Texture.Texture -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawTilePlacer audioData viewMatrix texture model shaderTime2 =
     let
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -5314,6 +5330,7 @@ drawTilePlacer audioData viewMatrix texture model =
                     else
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
+                , time = shaderTime2
                 }
             ]
 
@@ -5349,6 +5366,7 @@ drawTilePlacer audioData viewMatrix texture model =
                     else
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
+                , time = shaderTime2
                 }
             ]
 
@@ -5377,7 +5395,7 @@ drawMap model =
                         |> Mat4.translate3 -0.5 -0.5 -0.5
                 , texture = simplexNoiseLookup
                 , cellPosition =
-                    actualViewPoint model
+                    Toolbar.actualViewPoint model
                         |> Grid.worldToCellPoint
                         |> Point2d.unwrap
                         |> Vec2.fromRecord
@@ -5413,8 +5431,8 @@ lastPlacementOffset audioData model =
             0
 
 
-drawOtherCursors : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> List Effect.WebGL.Entity
-drawOtherCursors texture viewMatrix model =
+drawOtherCursors : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawOtherCursors texture viewMatrix model shaderTime2 =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -5471,6 +5489,9 @@ drawOtherCursors texture viewMatrix model =
 
                                             Cursor.TextTool Nothing ->
                                                 DefaultSpriteCursor
+
+                                            Cursor.ReportTool ->
+                                                GavelSpriteCursor
                                 )
                                 mesh
                             )
@@ -5490,6 +5511,7 @@ drawOtherCursors texture viewMatrix model =
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
+                            , time = shaderTime2
                             }
                             |> Just
 
@@ -5504,8 +5526,9 @@ drawCursor :
     -> Mat4
     -> Id UserId
     -> FrontendLoaded
+    -> Float
     -> List Effect.WebGL.Entity
-drawCursor showMousePointer texture viewMatrix userId model =
+drawCursor showMousePointer texture viewMatrix userId model shaderTime2 =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -5543,6 +5566,7 @@ drawCursor showMousePointer texture viewMatrix userId model =
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , color = Vec4.vec4 1 1 1 1
                                 , userId = Shaders.noUserIdSelected
+                                , time = shaderTime2
                                 }
                             ]
 
@@ -5652,12 +5676,15 @@ getFlags model =
 
 
 drawForeground :
-    Maybe (Id userId)
+    Maybe ContextMenu
+    -> Tool
+    -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Mat4
     -> WebGL.Texture.Texture
+    -> Float
     -> List Effect.WebGL.Entity
-drawForeground maybeSelectedUserId meshes viewMatrix texture =
+drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture shaderTime2 =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5674,12 +5701,28 @@ drawForeground maybeSelectedUserId meshes viewMatrix texture =
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId =
-                        case maybeSelectedUserId of
-                            Just selectedUserId ->
-                                Id.toInt selectedUserId |> toFloat
+                        case maybeContextMenu of
+                            Just contextMenu ->
+                                case contextMenu.userId of
+                                    Just userId ->
+                                        Id.toInt userId |> toFloat
+
+                                    Nothing ->
+                                        -3
 
                             Nothing ->
-                                -3
+                                case currentTool2 of
+                                    ReportTool ->
+                                        case hoverAt2 of
+                                            TileHover { userId } ->
+                                                Id.toInt userId |> toFloat
+
+                                            _ ->
+                                                -3
+
+                                    _ ->
+                                        -3
+                    , time = shaderTime2
                     }
             )
 
@@ -5688,8 +5731,9 @@ drawBackground :
     Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Mat4
     -> WebGL.Texture.Texture
+    -> Float
     -> List Effect.WebGL.Entity
-drawBackground meshes viewMatrix texture =
+drawBackground meshes viewMatrix texture time =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5706,6 +5750,7 @@ drawBackground meshes viewMatrix texture =
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId = Shaders.noUserIdSelected
+                    , time = time
                     }
             )
 
@@ -5827,6 +5872,7 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         , cornerSize = Coord.xy 6 6
         , position = Coord.xy 0 0
         , size = Sprite.textSize 1 text |> Coord.plus (Coord.multiplyTuple ( 2, 2 ) padding)
+        , scale = 1
         }
         colors
         ++ Sprite.shiverText frame 1 "Help!" padding
