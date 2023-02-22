@@ -3217,8 +3217,6 @@ zOrderBackToFront =
     , RailTopToLeft_SplitDown
     , MowedGrass1
     , MowedGrass4
-    , PineTree1
-    , PineTree2
     , LogCabinDown
     , LogCabinRight
     , LogCabinUp
@@ -3245,6 +3243,12 @@ zOrderBackToFront =
     , BusStopRight
     , BusStopUp
     , Statue
+    , CornerHouseDownRight
+    , CornerHouseDownLeft
+    , CornerHouseUpLeft
+    , CornerHouseUpRight
+    , PineTree1
+    , PineTree2
     , Flowers1
     , Flowers2
     , ApartmentDown
@@ -3263,10 +3267,6 @@ zOrderBackToFront =
     , HedgePillarDownRight
     , HedgePillarUpLeft
     , HedgePillarUpRight
-    , CornerHouseDownRight
-    , CornerHouseDownLeft
-    , CornerHouseUpLeft
-    , CornerHouseUpRight
     , RockDown
     , RockLeft
     , RockRight
