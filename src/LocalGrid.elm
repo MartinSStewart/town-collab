@@ -3,16 +3,18 @@ module LocalGrid exposing
     , LocalGrid_
     , OutMsg(..)
     , addCows
+    , addReported
     , getCowsForCell
     , incrementUndoCurrent
     , init
     , localModel
+    , removeReported
     , update
     , updateFromBackend
     )
 
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), BackendReport, Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -392,10 +394,6 @@ updateLocalChange localChange model =
         ReportVandalism report ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    let
-                        _ =
-                            Debug.log "a" report
-                    in
                     ( { model | userStatus = LoggedIn { loggedIn | reports = report :: loggedIn.reports } }
                     , NoOutMsg
                     )
@@ -677,6 +675,95 @@ updateServerChange serverChange model =
 
                 NotLoggedIn ->
                     ( model, NoOutMsg )
+
+        ServerVandalismReportedToAdmin reportedBy backendReport ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model
+                        | userStatus =
+                            LoggedIn
+                                { loggedIn
+                                    | adminData =
+                                        case loggedIn.adminData of
+                                            Just adminData ->
+                                                { adminData
+                                                    | reported =
+                                                        addReported reportedBy backendReport adminData.reported
+                                                }
+                                                    |> Just
+
+                                            Nothing ->
+                                                Nothing
+                                }
+                      }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
+        ServerVandalismRemovedToAdmin reportedBy position ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model
+                        | userStatus =
+                            LoggedIn
+                                { loggedIn
+                                    | adminData =
+                                        case loggedIn.adminData of
+                                            Just adminData ->
+                                                { adminData
+                                                    | reported =
+                                                        removeReported reportedBy position adminData.reported
+                                                }
+                                                    |> Just
+
+                                            Nothing ->
+                                                Nothing
+                                }
+                      }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
+
+addReported :
+    Id UserId
+    -> BackendReport
+    -> IdDict UserId (Nonempty BackendReport)
+    -> IdDict UserId (Nonempty BackendReport)
+addReported userId report reported =
+    IdDict.update
+        userId
+        (\maybeList ->
+            (case maybeList of
+                Just nonempty ->
+                    List.Nonempty.cons report nonempty
+
+                Nothing ->
+                    List.Nonempty.singleton report
+            )
+                |> Just
+        )
+        reported
+
+
+removeReported userId position reported =
+    IdDict.update
+        userId
+        (\maybeList ->
+            case maybeList of
+                Just nonempty ->
+                    List.Nonempty.toList nonempty
+                        |> List.filter (\report -> report.position /= position)
+                        |> List.Nonempty.fromList
+
+                Nothing ->
+                    Nothing
+        )
+        reported
 
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )

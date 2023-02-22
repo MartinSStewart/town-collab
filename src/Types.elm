@@ -37,7 +37,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change, Cow, ServerChange, UserStatus)
+import Change exposing (BackendReport, Change, Cow, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -335,14 +335,10 @@ type alias BackendModel =
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
-    , reported : IdDict UserId (Nonempty Report)
+    , reported : IdDict UserId (Nonempty BackendReport)
     , isGridReadOnly : Bool
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     }
-
-
-type alias Report =
-    { reportedUser : Id UserId, position : Coord WorldUnit, reportedAt : Effect.Time.Posix }
 
 
 type LoginRequestedBy

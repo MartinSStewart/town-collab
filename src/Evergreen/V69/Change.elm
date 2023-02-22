@@ -20,6 +20,11 @@ import Evergreen.V69.User
 import List.Nonempty
 
 
+type AdminChange
+    = AdminResetSessions
+    | AdminSetGridReadOnly Bool
+
+
 type alias Report =
     { reportedUser : Evergreen.V69.Id.Id Evergreen.V69.Id.UserId
     , position : Evergreen.V69.Coord.Coord Evergreen.V69.Units.WorldUnit
@@ -51,13 +56,20 @@ type LocalChange
     | ViewedMail (Evergreen.V69.Id.Id Evergreen.V69.Id.MailId)
     | SetAllowEmailNotifications Bool
     | ChangeTool Evergreen.V69.Cursor.OtherUsersTool
-    | AdminResetSessions
+    | AdminChange AdminChange
     | ReportVandalism Report
     | RemoveReport (Evergreen.V69.Coord.Coord Evergreen.V69.Units.WorldUnit)
 
 
 type alias Cow =
     { position : Evergreen.V69.Point2d.Point2d Evergreen.V69.Units.WorldUnit Evergreen.V69.Units.WorldUnit
+    }
+
+
+type alias BackendReport =
+    { reportedUser : Evergreen.V69.Id.Id Evergreen.V69.Id.UserId
+    , position : Evergreen.V69.Coord.Coord Evergreen.V69.Units.WorldUnit
+    , reportedAt : Effect.Time.Posix
     }
 
 
@@ -68,6 +80,7 @@ type alias AdminData =
             { userId : Maybe (Evergreen.V69.Id.Id Evergreen.V69.Id.UserId)
             , connectionCount : Int
             }
+    , reported : Evergreen.V69.IdDict.IdDict Evergreen.V69.Id.UserId (List.Nonempty.Nonempty BackendReport)
     }
 
 
@@ -82,6 +95,7 @@ type alias LoggedIn_ =
     , allowEmailNotifications : Bool
     , adminData : Maybe AdminData
     , reports : List Report
+    , isGridReadOnly : Bool
     }
 
 
@@ -125,6 +139,9 @@ type ServerChange
     | ServerViewedMail (Evergreen.V69.Id.Id Evergreen.V69.Id.MailId) (Evergreen.V69.Id.Id Evergreen.V69.Id.UserId)
     | ServerNewCows (List.Nonempty.Nonempty ( Evergreen.V69.Id.Id Evergreen.V69.Id.CowId, Cow ))
     | ServerChangeTool (Evergreen.V69.Id.Id Evergreen.V69.Id.UserId) Evergreen.V69.Cursor.OtherUsersTool
+    | ServerGridReadOnly Bool
+    | ServerVandalismReportedToAdmin (Evergreen.V69.Id.Id Evergreen.V69.Id.UserId) BackendReport
+    | ServerVandalismRemovedToAdmin (Evergreen.V69.Id.Id Evergreen.V69.Id.UserId) (Evergreen.V69.Coord.Coord Evergreen.V69.Units.WorldUnit)
 
 
 type ClientChange

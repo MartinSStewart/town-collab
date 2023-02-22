@@ -114,7 +114,15 @@ migrateBackendModel old =
             old.pendingLoginTokens
     , invites = migrateAssocList migrateSecretId migrateInvite old.invites
     , lastCacheRegeneration = old.lastCacheRegeneration
-    , reported = Evergreen.V69.IdDict.RBEmpty_elm_builtin
+    , isGridReadOnly =
+        -- TODO
+        False
+    , reported =
+        -- TODO
+        Evergreen.V69.IdDict.RBEmpty_elm_builtin
+    , lastReportEmailToAdmin =
+        -- TODO
+        Nothing
     }
 
 

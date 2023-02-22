@@ -1,6 +1,7 @@
 module Change exposing
     ( AdminChange(..)
     , AdminData
+    , BackendReport
     , Change(..)
     , ClientChange(..)
     , Cow
@@ -101,6 +102,8 @@ type ServerChange
     | ServerNewCows (Nonempty ( Id CowId, Cow ))
     | ServerChangeTool (Id UserId) Cursor.OtherUsersTool
     | ServerGridReadOnly Bool
+    | ServerVandalismReportedToAdmin (Id UserId) BackendReport
+    | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
 
 
 type alias Cow =
@@ -135,4 +138,9 @@ type alias Report =
 type alias AdminData =
     { lastCacheRegeneration : Maybe Effect.Time.Posix
     , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
+    , reported : IdDict UserId (Nonempty BackendReport)
     }
+
+
+type alias BackendReport =
+    { reportedUser : Id UserId, position : Coord WorldUnit, reportedAt : Effect.Time.Posix }

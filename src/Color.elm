@@ -1,6 +1,7 @@
 module Color exposing
     ( Color(..)
     , Colors
+    , adminReportColor
     , black
     , errorColor
     , fillColor
@@ -11,6 +12,7 @@ module Color exposing
     , getGreen
     , getRed
     , highlightColor
+    , localReportColor
     , outlineColor
     , rgb255
     , toHexCode
@@ -68,6 +70,16 @@ white =
 errorColor : Color
 errorColor =
     rgb255 185 0 0
+
+
+adminReportColor : Color
+adminReportColor =
+    rgb255 0 0 255
+
+
+localReportColor : Color
+localReportColor =
+    rgb255 255 0 0
 
 
 outlineColor : Color

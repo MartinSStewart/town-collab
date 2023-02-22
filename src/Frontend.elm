@@ -13,7 +13,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change(..), Cow, Report, UserStatus(..))
+import Change exposing (BackendReport, Change(..), Cow, Report, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
@@ -618,7 +618,10 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , showInviteTree = False
             , contextMenu = Nothing
             , previousUpdateMeshData = previousUpdateMeshData
-            , reportsMesh = getReports loadedLocalModel.localModel |> createReportsMesh
+            , reportsMesh =
+                createReportsMesh
+                    (getReports loadedLocalModel.localModel)
+                    (getAdminReports loadedLocalModel.localModel)
             , lastReportTilePlaced = Nothing
             , lastReportTileRemoved = Nothing
             }
@@ -650,6 +653,21 @@ getReports localModel =
 
         NotLoggedIn ->
             []
+
+
+getAdminReports : LocalModel a LocalGrid -> IdDict UserId (Nonempty BackendReport)
+getAdminReports localModel =
+    case LocalGrid.localModel localModel |> .userStatus of
+        LoggedIn loggedIn ->
+            case loggedIn.adminData of
+                Just adminData ->
+                    adminData.reported
+
+                Nothing ->
+                    IdDict.empty
+
+        NotLoggedIn ->
+            IdDict.empty
 
 
 init : Url -> Effect.Browser.Navigation.Key -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
@@ -897,25 +915,43 @@ reportsMeshUpdate oldModel newModel =
     let
         newReports =
             getReports newModel.localModel
+
+        newAdminReports =
+            getAdminReports newModel.localModel
     in
-    if getReports oldModel.localModel == newReports then
+    if getReports oldModel.localModel == newReports && getAdminReports oldModel.localModel == newAdminReports then
         newModel
 
     else
-        { newModel | reportsMesh = createReportsMesh newReports }
+        { newModel | reportsMesh = createReportsMesh newReports newAdminReports }
 
 
-createReportsMesh : List Report -> Effect.WebGL.Mesh Vertex
-createReportsMesh reports =
+createReportsMesh : List Report -> IdDict UserId (Nonempty BackendReport) -> Effect.WebGL.Mesh Vertex
+createReportsMesh localReports adminReports =
     List.concatMap
-        (\report ->
-            Sprite.sprite
-                (Coord.multiply Units.tileSize report.position)
-                Units.tileSize
-                (Coord.xy 100 738)
-                Units.tileSize
+        (\( _, reports ) ->
+            List.Nonempty.toList reports
+                |> List.concatMap
+                    (\report ->
+                        Sprite.spriteWithColor
+                            Color.adminReportColor
+                            (Coord.multiply Units.tileSize report.position)
+                            Units.tileSize
+                            (Coord.xy 100 738)
+                            Units.tileSize
+                    )
         )
-        reports
+        (IdDict.toList adminReports)
+        ++ List.concatMap
+            (\report ->
+                Sprite.spriteWithColor
+                    Color.localReportColor
+                    (Coord.multiply Units.tileSize report.position)
+                    Units.tileSize
+                    (Coord.xy 100 738)
+                    Units.tileSize
+            )
+            localReports
         |> Sprite.toMesh
 
 
@@ -1971,13 +2007,34 @@ keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command
 keyMsgCanvasUpdate key model =
     case ( key, ctrlOrMeta model ) of
         ( Keyboard.Character "z", True ) ->
-            ( updateLocalModel Change.LocalUndo model |> Tuple.first, Command.none )
+            ( case model.currentTool of
+                ReportTool ->
+                    model
+
+                _ ->
+                    updateLocalModel Change.LocalUndo model |> handleOutMsg False
+            , Command.none
+            )
 
         ( Keyboard.Character "Z", True ) ->
-            ( updateLocalModel Change.LocalRedo model |> Tuple.first, Command.none )
+            ( case model.currentTool of
+                ReportTool ->
+                    model
+
+                _ ->
+                    updateLocalModel Change.LocalRedo model |> handleOutMsg False
+            , Command.none
+            )
 
         ( Keyboard.Character "y", True ) ->
-            ( updateLocalModel Change.LocalRedo model |> Tuple.first, Command.none )
+            ( case model.currentTool of
+                ReportTool ->
+                    model
+
+                _ ->
+                    updateLocalModel Change.LocalRedo model |> handleOutMsg False
+            , Command.none
+            )
 
         ( Keyboard.Escape, _ ) ->
             if model.contextMenu /= Nothing then
@@ -4019,7 +4076,9 @@ updateFromBackend msg model =
             )
 
         ( Loaded loaded, _ ) ->
-            updateLoadedFromBackend msg loaded |> Tuple.mapFirst Loaded
+            updateLoadedFromBackend msg loaded
+                |> Tuple.mapFirst (reportsMeshUpdate loaded)
+                |> Tuple.mapFirst Loaded
 
         _ ->
             ( model, Command.none )
@@ -4926,7 +4985,6 @@ canvasView audioData model =
                                 viewMatrix
                                 texture
                                 shaderTime2
-                            ++ [ drawReports texture viewMatrix model.reportsMesh ]
                             ++ Train.draw
                                 (case model.contextMenu of
                                     Just contextMenu ->
@@ -4956,6 +5014,7 @@ canvasView audioData model =
                                     , time2 = shaderTime2
                                     , color = Vec4.vec4 1 1 1 1
                                     }
+                               , drawReports texture viewMatrix model.reportsMesh
                                ]
                             ++ drawOtherCursors texture viewMatrix model shaderTime2
                             ++ drawSpeechBubble texture viewMatrix model shaderTime2

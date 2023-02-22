@@ -160,6 +160,7 @@ type UiHover
     | UsersOnlineButton
     | CopyPositionUrlButton
     | ReportUserButton
+    | ToggleIsGridReadOnlyButton
 
 
 type Hover
@@ -349,6 +350,8 @@ type alias FrontendLoaded =
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
     , reportsMesh : WebGL.Mesh Evergreen.V69.Shaders.Vertex
+    , lastReportTilePlaced : Maybe Effect.Time.Posix
+    , lastReportTileRemoved : Maybe Effect.Time.Posix
     }
 
 
@@ -399,13 +402,6 @@ type alias Invite =
     }
 
 
-type alias Report =
-    { reportedUser : Evergreen.V69.Id.Id Evergreen.V69.Id.UserId
-    , position : Evergreen.V69.Coord.Coord Evergreen.V69.Units.WorldUnit
-    , reportedAt : Effect.Time.Posix
-    }
-
-
 type alias BackendModel =
     { grid : Evergreen.V69.Grid.Grid
     , userSessions :
@@ -431,7 +427,9 @@ type alias BackendModel =
             }
     , invites : AssocList.Dict (Evergreen.V69.Id.SecretId Evergreen.V69.Route.InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
-    , reported : Evergreen.V69.IdDict.IdDict Evergreen.V69.Id.UserId (List.Nonempty.Nonempty Report)
+    , reported : Evergreen.V69.IdDict.IdDict Evergreen.V69.Id.UserId (List.Nonempty.Nonempty Evergreen.V69.Change.BackendReport)
+    , isGridReadOnly : Bool
+    , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     }
 
 
@@ -460,6 +458,7 @@ type BackendMsg
     | CheckConnectionTimeElapsed
     | SentMailNotification Effect.Time.Posix Evergreen.V69.EmailAddress.EmailAddress (Result Effect.Http.Error Evergreen.V69.Postmark.PostmarkSendResponse)
     | RegenerateCache Effect.Time.Posix
+    | SentReportVandalismAdminEmail Effect.Time.Posix Evergreen.V69.EmailAddress.EmailAddress (Result Effect.Http.Error Evergreen.V69.Postmark.PostmarkSendResponse)
 
 
 type alias LoadingData_ =
@@ -472,6 +471,7 @@ type alias LoadingData_ =
     , cursors : Evergreen.V69.IdDict.IdDict Evergreen.V69.Id.UserId Evergreen.V69.Cursor.Cursor
     , users : Evergreen.V69.IdDict.IdDict Evergreen.V69.Id.UserId Evergreen.V69.User.FrontendUser
     , inviteTree : Evergreen.V69.User.InviteTree
+    , isGridReadOnly : Bool
     }
 
 
