@@ -1456,6 +1456,9 @@ updateLoaded audioData msg model =
                                         ReportUserButton ->
                                             True
 
+                                        ToggleIsGridReadOnlyButton ->
+                                            True
+
                                 Nothing ->
                                     True
 
@@ -2973,7 +2976,7 @@ uiUpdate id event model =
         ResetConnectionsButton ->
             onPress
                 event
-                (\_ -> ( updateLocalModel Change.AdminResetSessions model |> handleOutMsg False, Command.none ))
+                (\_ -> ( updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False, Command.none ))
                 model
 
         UsersOnlineButton ->
@@ -3011,6 +3014,24 @@ uiUpdate id event model =
                                     model
 
                         Nothing ->
+                            model
+                    , Command.none
+                    )
+                )
+                model
+
+        ToggleIsGridReadOnlyButton ->
+            onPress
+                event
+                (\_ ->
+                    ( case LocalGrid.localModel model.localModel |> .userStatus of
+                        LoggedIn { isGridReadOnly } ->
+                            updateLocalModel
+                                (Change.AdminSetGridReadOnly (not isGridReadOnly) |> Change.AdminChange)
+                                model
+                                |> handleOutMsg False
+
+                        NotLoggedIn ->
                             model
                     , Command.none
                     )

@@ -12,7 +12,7 @@ module LocalGrid exposing
     )
 
 import Bounds exposing (Bounds)
-import Change exposing (Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -389,34 +389,6 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
-        AdminResetSessions ->
-            ( case model.userStatus of
-                LoggedIn loggedIn ->
-                    case loggedIn.adminData of
-                        Just adminData ->
-                            { model
-                                | userStatus =
-                                    LoggedIn
-                                        { loggedIn
-                                            | adminData =
-                                                { adminData
-                                                    | userSessions =
-                                                        List.map
-                                                            (\data -> { data | connectionCount = 0 })
-                                                            adminData.userSessions
-                                                }
-                                                    |> Just
-                                        }
-                            }
-
-                        Nothing ->
-                            model
-
-                NotLoggedIn ->
-                    model
-            , NoOutMsg
-            )
-
         ReportVandalism report ->
             case model.userStatus of
                 LoggedIn loggedIn ->
@@ -447,6 +419,46 @@ updateLocalChange localChange model =
 
                 NotLoggedIn ->
                     ( model, NoOutMsg )
+
+        AdminChange adminChange ->
+            case adminChange of
+                AdminResetSessions ->
+                    ( case model.userStatus of
+                        LoggedIn loggedIn ->
+                            case loggedIn.adminData of
+                                Just adminData ->
+                                    { model
+                                        | userStatus =
+                                            LoggedIn
+                                                { loggedIn
+                                                    | adminData =
+                                                        { adminData
+                                                            | userSessions =
+                                                                List.map
+                                                                    (\data -> { data | connectionCount = 0 })
+                                                                    adminData.userSessions
+                                                        }
+                                                            |> Just
+                                                }
+                                    }
+
+                                Nothing ->
+                                    model
+
+                        NotLoggedIn ->
+                            model
+                    , NoOutMsg
+                    )
+
+                AdminSetGridReadOnly isGridReadOnly ->
+                    case model.userStatus of
+                        LoggedIn loggedIn ->
+                            ( { model | userStatus = LoggedIn { loggedIn | isGridReadOnly = isGridReadOnly } }
+                            , NoOutMsg
+                            )
+
+                        NotLoggedIn ->
+                            ( model, NoOutMsg )
 
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -655,6 +667,16 @@ updateServerChange serverChange model =
               }
             , NoOutMsg
             )
+
+        ServerGridReadOnly isGridReadOnly ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model | userStatus = LoggedIn { loggedIn | isGridReadOnly = isGridReadOnly } }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
 
 
 pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )

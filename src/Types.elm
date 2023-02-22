@@ -305,6 +305,7 @@ type UiHover
     | UsersOnlineButton
     | CopyPositionUrlButton
     | ReportUserButton
+    | ToggleIsGridReadOnlyButton
 
 
 type alias BackendModel =
@@ -333,6 +334,7 @@ type alias BackendModel =
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
     , reported : IdDict UserId (Nonempty Report)
+    , isGridReadOnly : Bool
     }
 
 
@@ -463,4 +465,5 @@ type alias LoadingData_ =
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree
+    , isGridReadOnly : Bool
     }

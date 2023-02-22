@@ -137,16 +137,31 @@ view model =
                       else
                         Ui.topRight
                             { size = model.windowSize }
-                            (Ui.button
-                                { id = UsersOnlineButton
-                                , padding = Ui.paddingXY 10 4
-                                }
-                                (if otherUsersOnline == 1 then
-                                    Ui.text "1 user online"
+                            (Ui.row
+                                { spacing = 5, padding = Ui.noPadding }
+                                [ case localModel.userStatus of
+                                    LoggedIn loggedIn ->
+                                        if loggedIn.isGridReadOnly then
+                                            Ui.el
+                                                { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                (Ui.colorText Color.white "Placing tiles currently disabled")
 
-                                 else
-                                    Ui.text (String.fromInt otherUsersOnline ++ " users online")
-                                )
+                                        else
+                                            Ui.none
+
+                                    NotLoggedIn ->
+                                        Ui.none
+                                , Ui.button
+                                    { id = UsersOnlineButton
+                                    , padding = Ui.paddingXY 10 4
+                                    }
+                                    (if otherUsersOnline == 1 then
+                                        Ui.text "1 user online"
+
+                                     else
+                                        Ui.text (String.fromInt otherUsersOnline ++ " users online")
+                                    )
+                                ]
                             )
                     , Ui.row
                         { padding = Ui.noPadding, spacing = 4 }
@@ -484,7 +499,11 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
              ]
                 ++ (case loggedIn.adminData of
                         Just adminData ->
-                            [ adminView (Ui.size allowEmailNotifications |> Coord.xRaw) adminData ]
+                            [ adminView
+                                (Ui.size allowEmailNotifications |> Coord.xRaw)
+                                loggedIn.isGridReadOnly
+                                adminData
+                            ]
 
                         Nothing ->
                             []
@@ -493,8 +512,8 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
         )
 
 
-adminView : Int -> AdminData -> Ui.Element UiHover
-adminView parentWidth adminData =
+adminView : Int -> Bool -> AdminData -> Ui.Element UiHover
+adminView parentWidth isGridReadOnly adminData =
     Ui.column
         { spacing = 8, padding = Ui.noPadding }
         [ Ui.el
@@ -514,6 +533,7 @@ adminView parentWidth adminData =
               else
                 Ui.text "(dev)"
             ]
+        , checkbox ToggleIsGridReadOnlyButton isGridReadOnly "Read only grid"
         , Ui.text
             ("Last cache regen: "
                 ++ (case adminData.lastCacheRegeneration of

@@ -1,5 +1,6 @@
 module Change exposing
-    ( AdminData
+    ( AdminChange(..)
+    , AdminData
     , Change(..)
     , ClientChange(..)
     , Cow
@@ -55,9 +56,14 @@ type LocalChange
     | ViewedMail (Id MailId)
     | SetAllowEmailNotifications Bool
     | ChangeTool Cursor.OtherUsersTool
-    | AdminResetSessions
+    | AdminChange AdminChange
     | ReportVandalism Report
     | RemoveReport (Coord WorldUnit)
+
+
+type AdminChange
+    = AdminResetSessions
+    | AdminSetGridReadOnly Bool
 
 
 type ClientChange
@@ -94,6 +100,7 @@ type ServerChange
     | ServerViewedMail (Id MailId) (Id UserId)
     | ServerNewCows (Nonempty ( Id CowId, Cow ))
     | ServerChangeTool (Id UserId) Cursor.OtherUsersTool
+    | ServerGridReadOnly Bool
 
 
 type alias Cow =
@@ -117,6 +124,7 @@ type alias LoggedIn_ =
     , allowEmailNotifications : Bool
     , adminData : Maybe AdminData
     , reports : List Report
+    , isGridReadOnly : Bool
     }
 
 
