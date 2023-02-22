@@ -62,6 +62,11 @@ postmarkApiKey =
 
 domain : String
 domain =
+    domain2
+
+
+domain2 : String
+domain2 =
     "http://localhost:8000"
 
 
