@@ -2658,7 +2658,10 @@ sendInvite model =
 onPress event updateFunc model =
     case event of
         Ui.MousePressed data ->
-            updateFunc data
+            updateFunc ()
+
+        Ui.KeyDown Keyboard.Enter ->
+            updateFunc ()
 
         Ui.KeyDown key ->
             keyMsgCanvasUpdate key model
@@ -2671,19 +2674,19 @@ uiUpdate : UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command Fro
 uiUpdate id event model =
     case id of
         CloseInviteUser ->
-            onPress event (\_ -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+            onPress event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
 
         ShowInviteUser ->
-            onPress event (\_ -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
+            onPress event (\() -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
 
         SubmitInviteUser ->
-            onPress event (\_ -> sendInvite model) model
+            onPress event (\() -> sendInvite model) model
 
         SendEmailButtonHover ->
-            onPress event (\_ -> sendEmail model) model
+            onPress event (\() -> sendEmail model) model
 
         ToolButtonHover tool ->
-            onPress event (\_ -> ( setCurrentTool tool model, Command.none )) model
+            onPress event (\() -> ( setCurrentTool tool model, Command.none )) model
 
         InviteEmailAddressTextInput ->
             textInputUpdate
@@ -2830,31 +2833,31 @@ uiUpdate id event model =
         LowerMusicVolume ->
             onPress
                 event
-                (\_ -> { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings)
+                (\() -> { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings)
                 model
 
         RaiseMusicVolume ->
             onPress
                 event
-                (\_ -> { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
+                (\() -> { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
                 model
 
         LowerSoundEffectVolume ->
             onPress
                 event
-                (\_ -> { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings)
+                (\() -> { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings)
                 model
 
         RaiseSoundEffectVolume ->
             onPress
                 event
-                (\_ -> { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
+                (\() -> { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
                 model
 
         SettingsButton ->
             onPress
                 event
-                (\_ ->
+                (\() ->
                     let
                         localModel =
                             LocalGrid.localModel model.localModel
@@ -2884,7 +2887,7 @@ uiUpdate id event model =
                 model
 
         CloseSettings ->
-            onPress event (\_ -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+            onPress event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
 
         DisplayNameTextInput ->
             case model.topMenuOpened of
@@ -2950,15 +2953,15 @@ uiUpdate id event model =
                     ( model, Command.none )
 
         YouGotMailButton ->
-            onPress event (\_ -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
+            onPress event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
 
         ShowMapButton ->
-            onPress event (\_ -> ( { model | showMap = not model.showMap }, Command.none )) model
+            onPress event (\() -> ( { model | showMap = not model.showMap }, Command.none )) model
 
         AllowEmailNotificationsCheckbox ->
             onPress
                 event
-                (\_ ->
+                (\() ->
                     ( case LocalGrid.localModel model.localModel |> .userStatus of
                         LoggedIn loggedIn ->
                             updateLocalModel
@@ -2976,7 +2979,7 @@ uiUpdate id event model =
         ResetConnectionsButton ->
             onPress
                 event
-                (\_ -> ( updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False, Command.none ))
+                (\() -> ( updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False, Command.none ))
                 model
 
         UsersOnlineButton ->
@@ -2985,7 +2988,7 @@ uiUpdate id event model =
         CopyPositionUrlButton ->
             onPress
                 event
-                (\_ ->
+                (\() ->
                     case model.contextMenu of
                         Just contextMenu ->
                             ( { model | contextMenu = Just { contextMenu | linkCopied = True } }
@@ -3000,7 +3003,7 @@ uiUpdate id event model =
         ReportUserButton ->
             onPress
                 event
-                (\_ ->
+                (\() ->
                     ( case model.contextMenu of
                         Just contextMenu ->
                             case contextMenu.userId of
@@ -3023,7 +3026,7 @@ uiUpdate id event model =
         ToggleIsGridReadOnlyButton ->
             onPress
                 event
-                (\_ ->
+                (\() ->
                     ( case LocalGrid.localModel model.localModel |> .userStatus of
                         LoggedIn { isGridReadOnly } ->
                             updateLocalModel

@@ -1162,10 +1162,10 @@ trainEngineMesh teleportAmount frame =
             -5
 
         y =
-            toFloat frame * 36
+            toFloat frame * 36 |> round |> toFloat
 
         y2 =
-            y + toFloat h - (teleportAmount * toFloat h)
+            y + toFloat h - (teleportAmount * toFloat h) |> round |> toFloat
 
         ( w, h ) =
             Coord.toTuple trainSize
