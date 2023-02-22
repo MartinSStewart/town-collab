@@ -308,7 +308,7 @@ gavelSize =
 gavelCursorMesh : List Vertex
 gavelCursorMesh =
     Sprite.sprite
-        (Coord.xy 0 0)
+        (Coord.xy -4 -4)
         gavelSize
         (Coord.xy 504 82)
         gavelSize

@@ -308,52 +308,15 @@ contextMenuView toolbarHeight contextMenu model =
                                                     NotLoggedIn ->
                                                         False
                                         in
-                                        Ui.column
-                                            { padding = Ui.noPadding, spacing = 8 }
-                                            [ "Last changed by "
-                                                ++ name
-                                                ++ (if isYou then
-                                                        " (you)"
+                                        "Last changed by "
+                                            ++ name
+                                            ++ (if isYou then
+                                                    " (you)"
 
-                                                    else
-                                                        ""
-                                                   )
-                                                |> Ui.wrappedText 400
-                                            , case localModel.userStatus of
-                                                LoggedIn loggedIn ->
-                                                    if isYou then
-                                                        Ui.none
-
-                                                    else if
-                                                        List.any
-                                                            (\a -> a.position == contextMenu.position)
-                                                            loggedIn.reports
-                                                    then
-                                                        Ui.colorText Color.errorColor "Report sent!"
-
-                                                    else
-                                                        Ui.customButton
-                                                            { id = ReportUserButton
-                                                            , padding = Ui.paddingXY 16 4
-                                                            , inFront = []
-                                                            , borderAndFill =
-                                                                BorderAndFill
-                                                                    { borderWidth = 2
-                                                                    , borderColor = Color.errorColor
-                                                                    , fillColor = Color.fillColor2
-                                                                    }
-                                                            , borderAndFillFocus =
-                                                                BorderAndFill
-                                                                    { borderWidth = 2
-                                                                    , borderColor = Color.errorColor
-                                                                    , fillColor = Color.highlightColor
-                                                                    }
-                                                            }
-                                                            (Ui.colorText Color.errorColor "Report as vandalism")
-
-                                                NotLoggedIn ->
-                                                    Ui.none
-                                            ]
+                                                else
+                                                    ""
+                                               )
+                                            |> Ui.wrappedText 400
 
                                     Nothing ->
                                         Ui.text "Not found"
@@ -898,7 +861,8 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
     in
     Ui.column
         { spacing = 6, padding = Ui.paddingXY 12 8 }
-        [ Ui.text
+        [ Ui.wrappedText
+            260
             (case currentTool of
                 HandToolButton ->
                     "Pointer tool"

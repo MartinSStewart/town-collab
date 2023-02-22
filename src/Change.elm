@@ -56,7 +56,8 @@ type LocalChange
     | SetAllowEmailNotifications Bool
     | ChangeTool Cursor.OtherUsersTool
     | AdminResetSessions
-    | ReportChange Report
+    | ReportVandalism Report
+    | RemoveReport (Coord WorldUnit)
 
 
 type ClientChange

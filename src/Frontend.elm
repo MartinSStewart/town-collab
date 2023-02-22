@@ -13,7 +13,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (Change(..), Cow, UserStatus(..))
+import Change exposing (Change(..), Cow, Report, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
@@ -606,6 +606,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , showInviteTree = False
             , contextMenu = Nothing
             , previousUpdateMeshData = previousUpdateMeshData
+            , reportsMesh = getReports loadedLocalModel.localModel |> createReportsMesh
             }
                 |> setCurrentTool HandToolButton
     in
@@ -625,6 +626,16 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
     )
         |> viewBoundsUpdate
         |> Tuple.mapFirst Loaded
+
+
+getReports : LocalModel a LocalGrid -> List Report
+getReports localModel =
+    case LocalGrid.localModel localModel |> .userStatus of
+        LoggedIn loggedIn ->
+            loggedIn.reports
+
+        NotLoggedIn ->
+            []
 
 
 init : Url -> Effect.Browser.Navigation.Key -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
@@ -863,7 +874,35 @@ update audioData msg model =
                         )
                    )
                 |> viewBoundsUpdate
+                |> Tuple.mapFirst (reportsMeshUpdate frontendLoaded)
                 |> Tuple.mapFirst Loaded
+
+
+reportsMeshUpdate : FrontendLoaded -> FrontendLoaded -> FrontendLoaded
+reportsMeshUpdate oldModel newModel =
+    let
+        newReports =
+            getReports newModel.localModel
+    in
+    if getReports oldModel.localModel == newReports then
+        newModel
+
+    else
+        { newModel | reportsMesh = createReportsMesh newReports }
+
+
+createReportsMesh : List Report -> Effect.WebGL.Mesh Vertex
+createReportsMesh reports =
+    List.concatMap
+        (\report ->
+            Sprite.sprite
+                (Coord.multiply Units.tileSize report.position)
+                Units.tileSize
+                (Coord.xy 100 738)
+                Units.tileSize
+        )
+        reports
+        |> Sprite.toMesh
 
 
 removeLastCursorMove : FrontendLoaded -> FrontendLoaded
@@ -1811,11 +1850,7 @@ hoverAt model mousePosition =
                                         Nothing
 
                                 ReportTool ->
-                                    if ctrlOrMeta model then
-                                        TileHover tile |> Just
-
-                                    else
-                                        Nothing
+                                    TileHover tile |> Just
 
                         Nothing ->
                             Nothing
@@ -2498,8 +2533,20 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         ( model2, Command.none )
 
                                     ReportTool ->
+                                        let
+                                            position =
+                                                mouseWorldPosition model2 |> Coord.floorPoint
+                                        in
                                         ( updateLocalModel
-                                            (Change.ReportChange { position = data.position, reportedUser = data.userId })
+                                            (if List.any (\report -> report.position == position) (getReports model2.localModel) then
+                                                Change.RemoveReport position
+
+                                             else
+                                                Change.ReportVandalism
+                                                    { position = position
+                                                    , reportedUser = data.userId
+                                                    }
+                                            )
                                             model2
                                             |> handleOutMsg False
                                         , Command.none
@@ -2529,14 +2576,29 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         ( setTrainViewPoint trainId model2, Command.none )
 
                     MapHover ->
-                        ( case previousMouseState.hover of
-                            TrainHover { trainId, train } ->
-                                setTrainViewPoint trainId model2
+                        case currentTool model2 of
+                            ReportTool ->
+                                let
+                                    position =
+                                        mouseWorldPosition model2 |> Coord.floorPoint
+                                in
+                                ( if List.any (\report -> report.position == position) (getReports model2.localModel) then
+                                    updateLocalModel (Change.RemoveReport position) model2 |> handleOutMsg False
+
+                                  else
+                                    model2
+                                , Command.none
+                                )
 
                             _ ->
-                                model2
-                        , Command.none
-                        )
+                                ( case previousMouseState.hover of
+                                    TrainHover { trainId, train } ->
+                                        setTrainViewPoint trainId model2
+
+                                    _ ->
+                                        model2
+                                , Command.none
+                                )
 
                     CowHover { cowId } ->
                         let
@@ -2941,7 +3003,7 @@ uiUpdate id event model =
                             case contextMenu.userId of
                                 Just userId ->
                                     updateLocalModel
-                                        (Change.ReportChange { reportedUser = userId, position = contextMenu.position })
+                                        (Change.ReportVandalism { reportedUser = userId, position = contextMenu.position })
                                         model
                                         |> handleOutMsg False
 
@@ -4758,8 +4820,12 @@ canvasView audioData model =
                 localGrid =
                     LocalGrid.localModel model.localModel
 
+                hoverAt2 : Hover
+                hoverAt2 =
+                    hoverAt model (mouseScreenPosition model)
+
                 showMousePointer =
-                    cursorSprite (hoverAt model (mouseScreenPosition model)) model
+                    cursorSprite hoverAt2 model
 
                 ( mailPosition, mailSize ) =
                     case Ui.findElement (MailEditorHover MailEditor.MailButton) model.ui of
@@ -4808,7 +4874,15 @@ canvasView audioData model =
                                     model.meshes
                         in
                         drawBackground meshes viewMatrix texture shaderTime2
-                            ++ drawForeground model.contextMenu meshes viewMatrix texture shaderTime2
+                            ++ drawForeground
+                                model.contextMenu
+                                model.currentTool
+                                hoverAt2
+                                meshes
+                                viewMatrix
+                                texture
+                                shaderTime2
+                            ++ [ drawReports texture viewMatrix model.reportsMesh ]
                             ++ Train.draw
                                 (case model.contextMenu of
                                     Just contextMenu ->
@@ -4895,6 +4969,22 @@ canvasView audioData model =
 
         Nothing ->
             Html.text ""
+
+
+drawReports : WebGL.Texture.Texture -> Mat4 -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
+drawReports texture viewMatrix reportsMesh =
+    Effect.WebGL.entityWith
+        [ Shaders.blend ]
+        Shaders.vertexShader
+        Shaders.fragmentShader
+        reportsMesh
+        { view = viewMatrix
+        , texture = texture
+        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , color = Vec4.vec4 1 1 1 1
+        , userId = Shaders.noUserIdSelected
+        , time = 0
+        }
 
 
 drawCows : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
@@ -5484,12 +5574,14 @@ getFlags model =
 
 drawForeground :
     Maybe ContextMenu
+    -> Tool
+    -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Mat4
     -> WebGL.Texture.Texture
     -> Float
     -> List Effect.WebGL.Entity
-drawForeground maybeContextMenu meshes viewMatrix texture shaderTime2 =
+drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture shaderTime2 =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5516,7 +5608,17 @@ drawForeground maybeContextMenu meshes viewMatrix texture shaderTime2 =
                                         -3
 
                             Nothing ->
-                                -3
+                                case currentTool2 of
+                                    ReportTool ->
+                                        case hoverAt2 of
+                                            TileHover { userId } ->
+                                                Id.toInt userId |> toFloat
+
+                                            _ ->
+                                                -3
+
+                                    _ ->
+                                        -3
                     , time = shaderTime2
                     }
             )

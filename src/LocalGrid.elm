@@ -417,10 +417,31 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
-        ReportChange report ->
+        ReportVandalism report ->
             case model.userStatus of
                 LoggedIn loggedIn ->
+                    let
+                        _ =
+                            Debug.log "a" report
+                    in
                     ( { model | userStatus = LoggedIn { loggedIn | reports = report :: loggedIn.reports } }
+                    , NoOutMsg
+                    )
+
+                NotLoggedIn ->
+                    ( model, NoOutMsg )
+
+        RemoveReport position ->
+            case model.userStatus of
+                LoggedIn loggedIn ->
+                    ( { model
+                        | userStatus =
+                            LoggedIn
+                                { loggedIn
+                                    | reports =
+                                        List.filter (\report -> report.position /= position) loggedIn.reports
+                                }
+                      }
                     , NoOutMsg
                     )
 

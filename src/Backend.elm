@@ -1248,7 +1248,7 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             else
                 ( model, invalidChange, Nothing )
 
-        ReportChange report ->
+        ReportVandalism report ->
             ( { model
                 | reported =
                     IdDict.update
@@ -1271,6 +1271,27 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                                         }
                             )
                                 |> Just
+                        )
+                        model.reported
+              }
+            , originalChange
+            , Nothing
+            )
+
+        RemoveReport position ->
+            ( { model
+                | reported =
+                    IdDict.update
+                        userId
+                        (\maybeList ->
+                            case maybeList of
+                                Just nonempty ->
+                                    Nonempty.toList nonempty
+                                        |> List.filter (\report -> report.position /= position)
+                                        |> Nonempty.fromList
+
+                                Nothing ->
+                                    Nothing
                         )
                         model.reported
               }

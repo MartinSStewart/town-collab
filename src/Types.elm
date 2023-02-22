@@ -214,6 +214,7 @@ type alias FrontendLoaded =
     , showInviteTree : Bool
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
+    , reportsMesh : WebGL.Mesh Vertex
     }
 
 
