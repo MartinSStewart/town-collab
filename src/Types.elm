@@ -337,6 +337,7 @@ type alias BackendModel =
     , lastCacheRegeneration : Maybe Effect.Time.Posix
     , reported : IdDict UserId (Nonempty Report)
     , isGridReadOnly : Bool
+    , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     }
 
 
@@ -438,6 +439,7 @@ type BackendMsg
     | CheckConnectionTimeElapsed
     | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | RegenerateCache Effect.Time.Posix
+    | SentReportVandalismAdminEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
 
 
 type ToFrontend

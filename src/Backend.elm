@@ -98,6 +98,7 @@ init =
             , lastCacheRegeneration = Nothing
             , reported = IdDict.empty
             , isGridReadOnly = False
+            , lastReportEmailToAdmin = Nothing
             }
     in
     case Env.adminEmail of
@@ -111,6 +112,11 @@ init =
 adminId : Id UserId
 adminId =
     Id.fromInt 0
+
+
+getAdminUser : BackendModel -> Maybe BackendUserData
+getAdminUser model =
+    IdDict.get adminId model.users
 
 
 sendEmail :
@@ -268,6 +274,14 @@ update isProduction msg model =
               }
             , Command.none
             )
+
+        SentReportVandalismAdminEmail sendTime emailAddress result ->
+            case result of
+                Ok _ ->
+                    ( model, Command.none )
+
+                Err error ->
+                    ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
 
 
 handleWorldUpdate : Bool -> Effect.Time.Posix -> Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
@@ -535,14 +549,15 @@ asUser sessionId model updateFunc =
 
 
 broadcastLocalChange :
-    Effect.Time.Posix
+    Bool
+    -> Effect.Time.Posix
     -> ClientId
     -> Nonempty ( Id EventId, Change.LocalChange )
     -> Id UserId
     -> BackendUserData
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-broadcastLocalChange time clientId changes userId user model =
+broadcastLocalChange isProduction time clientId changes userId user model =
     let
         ( model2, ( eventId, originalChange ), firstMsg ) =
             updateLocalChange time userId user (Nonempty.head changes) model
@@ -570,20 +585,66 @@ broadcastLocalChange time clientId changes userId user model =
                     , Nonempty.singleton firstMsg
                     )
                 |> (\( a, b, c ) -> ( a, Nonempty.reverse b, Nonempty.reverse c ))
+
+        vandalismReported : Bool
+        vandalismReported =
+            Nonempty.any
+                (\( _, change ) ->
+                    case change of
+                        ReportVandalism _ ->
+                            True
+
+                        _ ->
+                            False
+                )
+                changes
+
+        sendReportVandalismEmail : Bool
+        sendReportVandalismEmail =
+            case ( vandalismReported, model3.lastReportEmailToAdmin ) of
+                ( True, Just lastReportEmailToAdmin ) ->
+                    Duration.from lastReportEmailToAdmin time |> Quantity.greaterThan (Duration.minutes 5)
+
+                ( True, Nothing ) ->
+                    True
+
+                ( False, _ ) ->
+                    False
     in
-    ( model3
-    , broadcast
-        (\_ clientId_ ->
-            if clientId == clientId_ then
-                ChangeBroadcast originalChanges2 |> Just
+    ( { model3
+        | lastReportEmailToAdmin =
+            if sendReportVandalismEmail then
+                Just time
 
             else
-                Nonempty.toList serverChanges
-                    |> List.filterMap (Maybe.map Change.ServerChange)
-                    |> Nonempty.fromList
-                    |> Maybe.map ChangeBroadcast
-        )
-        model3
+                model3.lastReportEmailToAdmin
+      }
+    , Command.batch
+        [ broadcast
+            (\_ clientId_ ->
+                if clientId == clientId_ then
+                    ChangeBroadcast originalChanges2 |> Just
+
+                else
+                    Nonempty.toList serverChanges
+                        |> List.filterMap (Maybe.map Change.ServerChange)
+                        |> Nonempty.fromList
+                        |> Maybe.map ChangeBroadcast
+            )
+            model3
+        , case ( sendReportVandalismEmail, getAdminUser model3 ) of
+            ( True, Just adminUser ) ->
+                sendEmail
+                    isProduction
+                    (SentReportVandalismAdminEmail time adminUser.emailAddress)
+                    (NonemptyString 'V' "andalism reported")
+                    "Vandalism reported"
+                    (Email.Html.text "Vandalism reported")
+                    adminUser.emailAddress
+
+            _ ->
+                Command.none
+        ]
     )
 
 
@@ -617,7 +678,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
             asUser
                 sessionId
                 model
-                (broadcastLocalChange currentTime clientId changes)
+                (broadcastLocalChange isProduction currentTime clientId changes)
 
         ChangeViewBounds bounds ->
             case
