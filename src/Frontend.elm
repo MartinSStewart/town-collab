@@ -847,6 +847,9 @@ update audioData msg model =
                                     TextTool Nothing ->
                                         Cursor.TextTool Nothing
 
+                                    ReportTool ->
+                                        Cursor.ReportTool
+
                             newTool : Cursor.OtherUsersTool
                             newTool =
                                 currentTool newModel |> toolToCursorTool
@@ -1019,6 +1022,9 @@ updateLoaded audioData msg model =
                                             , Command.none
                                             )
 
+                                        ReportTool ->
+                                            ( model2, Command.none )
+
                                 UiHover id data ->
                                     uiUpdate
                                         id
@@ -1171,6 +1177,9 @@ updateLoaded audioData msg model =
                             model2
 
                         TextTool _ ->
+                            model2
+
+                        ReportTool ->
                             model2
             in
             { model
@@ -1707,6 +1716,9 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
               }
             , Command.none
             )
+
+        ReportTool ->
+            ( model, Command.none )
     )
         |> Tuple.mapFirst (setTextInputModel newTextInput)
         |> Tuple.mapFirst
@@ -1736,6 +1748,9 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
                                         m.currentTool
 
                                     TextTool record ->
+                                        m.currentTool
+
+                                    ReportTool ->
                                         m.currentTool
                         }
 
@@ -1795,6 +1810,13 @@ hoverAt model mousePosition =
                                     else
                                         Nothing
 
+                                ReportTool ->
+                                    if ctrlOrMeta model then
+                                        TileHover tile |> Just
+
+                                    else
+                                        Nothing
+
                         Nothing ->
                             Nothing
 
@@ -1824,6 +1846,9 @@ hoverAt model mousePosition =
                                 |> Quantity.minimumBy Tuple.second
 
                         TextTool _ ->
+                            Nothing
+
+                        ReportTool ->
                             Nothing
 
                 localGrid : LocalGrid_
@@ -1857,6 +1882,9 @@ hoverAt model mousePosition =
                                 |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
 
                         TextTool _ ->
+                            Nothing
+
+                        ReportTool ->
                             Nothing
             in
             case trainHovers of
@@ -1935,6 +1963,9 @@ keyMsgCanvasUpdate key model =
                         setCurrentTool TextToolButton model
 
                     TextTool Nothing ->
+                        setCurrentTool HandToolButton model
+
+                    ReportTool ->
                         setCurrentTool HandToolButton model
                 , Command.none
                 )
@@ -2147,6 +2178,9 @@ setCurrentTool tool model =
 
                 TextToolButton ->
                     getTileColor BigTextGroup model
+
+                ReportToolButton ->
+                    { primaryColor = Color.white, secondaryColor = Color.black }
     in
     setCurrentToolWithColors tool colors model
 
@@ -2171,6 +2205,9 @@ setCurrentToolWithColors tool colors model =
 
                 TextToolButton ->
                     TextTool Nothing
+
+                ReportToolButton ->
+                    ReportTool
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
         , tileColors =
@@ -2186,6 +2223,9 @@ setCurrentToolWithColors tool colors model =
 
                 TextToolButton ->
                     AssocList.insert BigTextGroup colors model.tileColors
+
+                ReportToolButton ->
+                    model.tileColors
     }
 
 
@@ -2391,6 +2431,14 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 TextTool _ ->
                                     model.viewPoint
 
+                                ReportTool ->
+                                    Toolbar.offsetViewPoint
+                                        model
+                                        previousMouseState.hover
+                                        previousMouseState.start
+                                        mousePosition
+                                        |> NormalViewPoint
+
                         _ ->
                             model.viewPoint
             }
@@ -2448,6 +2496,14 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                                     TextTool _ ->
                                         ( model2, Command.none )
+
+                                    ReportTool ->
+                                        ( updateLocalModel
+                                            (Change.ReportChange { position = data.position, reportedUser = data.userId })
+                                            model2
+                                            |> handleOutMsg False
+                                        , Command.none
+                                        )
 
                             Nothing ->
                                 ( model2, Command.none )
@@ -3054,6 +3110,9 @@ setFocus newFocus model =
                                 model.primaryColorTextInput
                                     |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).primaryColor)
 
+                            ReportTool ->
+                                model.primaryColorTextInput
+
                     else if not (isPrimaryColorInput model.focus) && isPrimaryColorInput newFocus then
                         TextInput.selectAll model.primaryColorTextInput
 
@@ -3082,6 +3141,9 @@ setFocus newFocus model =
                             TextTool _ ->
                                 model.secondaryColorTextInput
                                     |> TextInput.withText (Color.toHexCode (getTileColor BigTextGroup model).secondaryColor)
+
+                            ReportTool ->
+                                model.secondaryColorTextInput
 
                     else if not (isSecondaryColorInput model.focus) && isSecondaryColorInput newFocus then
                         TextInput.selectAll model.secondaryColorTextInput
@@ -3337,13 +3399,18 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                     removedTiles =
                         case outMsg of
                             LocalGrid.TilesRemoved tiles ->
-                                List.map
+                                List.filterMap
                                     (\removedTile ->
-                                        { tile = removedTile.tile
-                                        , time = model.time
-                                        , position = removedTile.position
-                                        , colors = removedTile.colors
-                                        }
+                                        if removedTile.tile == EmptyTile then
+                                            Nothing
+
+                                        else
+                                            Just
+                                                { tile = removedTile.tile
+                                                , time = model.time
+                                                , position = removedTile.position
+                                                , colors = removedTile.colors
+                                                }
                                     )
                                     tiles
 
@@ -3422,7 +3489,7 @@ createDebrisMesh appStartTime removedTiles =
                         y + height
                     )
     in
-    List.map
+    List.concatMap
         (\{ position, tile, time, colors } ->
             let
                 data =
@@ -3464,7 +3531,6 @@ createDebrisMesh appStartTime removedTiles =
                    )
         )
         list
-        |> List.concat
         |> Sprite.toMesh
 
 
@@ -3621,6 +3687,9 @@ updateMeshes newModel =
                 TextTool _ ->
                     Nothing
 
+                ReportTool ->
+                    Nothing
+
         oldCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
         oldCurrentTile =
             currentTile oldModel
@@ -3645,6 +3714,7 @@ updateMeshes newModel =
             in
             { foreground =
                 Grid.foregroundMesh2
+                    newShowEmptyTiles
                     (case ( newCurrentTile, newMaybeUserId ) of
                         ( Just newCurrentTile_, Just userId ) ->
                             if
@@ -3679,6 +3749,12 @@ updateMeshes newModel =
                     Nothing ->
                         Grid.backgroundMesh coord
             }
+
+        newShowEmptyTiles =
+            newModel.currentTool == ReportTool
+
+        oldShowEmptyTiles =
+            newModel.previousUpdateMeshData.currentTool == ReportTool
     in
     { newModel
         | meshes =
@@ -3686,7 +3762,7 @@ updateMeshes newModel =
                 (\coord newCell ->
                     case Dict.get coord oldCells of
                         Just oldCell ->
-                            if oldCell == newCell then
+                            if oldCell == newCell && (newShowEmptyTiles == oldShowEmptyTiles) then
                                 if
                                     ((Maybe.map .cellPosition newCurrentTile
                                         |> Maybe.withDefault Set.empty
@@ -4511,6 +4587,26 @@ cursorSprite hover model =
 
                                                 UiHover _ _ ->
                                                     PointerCursor
+
+                                        ReportTool ->
+                                            case hover of
+                                                UiBackgroundHover ->
+                                                    DefaultCursor
+
+                                                TileHover _ ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                TrainHover _ ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                MapHover ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                CowHover _ ->
+                                                    CursorSprite GavelSpriteCursor
+
+                                                UiHover _ _ ->
+                                                    PointerCursor
                             , scale = 1
                             }
             in
@@ -4573,6 +4669,13 @@ isDraggingView hover model =
 
                 TextTool _ ->
                     Nothing
+
+                ReportTool ->
+                    if Toolbar.canDragView hover then
+                        Just a
+
+                    else
+                        Nothing
 
         _ ->
             Nothing
@@ -5193,6 +5296,9 @@ drawOtherCursors texture viewMatrix model shaderTime2 =
 
                                             Cursor.TextTool Nothing ->
                                                 DefaultSpriteCursor
+
+                                            Cursor.ReportTool ->
+                                                GavelSpriteCursor
                                 )
                                 mesh
                             )

@@ -93,6 +93,7 @@ type TileGroup
 allTileGroupsExceptText : List TileGroup
 allTileGroupsExceptText =
     [ EmptyTileGroup
+    , CornerHouseGroup
     , HouseGroup
     , LogCabinGroup
     , ApartmentGroup
@@ -132,7 +133,6 @@ allTileGroupsExceptText =
     , ParkingLotGroup
     , ParkingRoadGroup
     , ParkingRoundaboutGroup
-    , CornerHouseGroup
     ]
 
 

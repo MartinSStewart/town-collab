@@ -92,6 +92,9 @@ view model =
 
                                 TextTool _ ->
                                     TextToolButton
+
+                                ReportTool ->
+                                    ReportToolButton
                             )
 
                     NotLoggedIn ->
@@ -908,6 +911,9 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
 
                 TextToolButton ->
                     "Text"
+
+                ReportToolButton ->
+                    "Report vandalism"
             )
         , Ui.row
             { spacing = 10, padding = Ui.noPadding }
@@ -970,6 +976,9 @@ selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileCol
 
                             Nothing ->
                                 Ui.none
+
+                    ReportToolButton ->
+                        Cursor.gavelCursor2
                 )
             ]
         ]
@@ -1036,6 +1045,9 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                         Nothing ->
                             Tile.getTileGroupData BigTextGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
 
+                ReportToolButton ->
+                    Tile.defaultToPrimaryAndSecondary ZeroDefaultColors
+
         hotkeyText : Maybe String
         hotkeyText =
             case tool of
@@ -1055,6 +1067,9 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                 TextToolButton ->
                     Nothing
 
+                ReportToolButton ->
+                    Nothing
+
         label : Ui.Element UiHover
         label =
             case tool of
@@ -1069,6 +1084,9 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
 
                 TextToolButton ->
                     tileMesh tileColors (getTileGroupTile BigTextGroup 77)
+
+                ReportToolButton ->
+                    Cursor.gavelCursor2
     in
     Ui.customButton
         { id = ToolButtonHover tool
@@ -1112,9 +1130,10 @@ buttonTiles : List ToolButton
 buttonTiles =
     [ HandToolButton
     , TilePickerToolButton
+    , ReportToolButton
+    , TextToolButton
     ]
         ++ List.map TilePlacerToolButton Tile.allTileGroupsExceptText
-        ++ [ TextToolButton ]
 
 
 toolbarRowCount : number
@@ -1255,6 +1274,9 @@ showColorTextInputs handColor tileColors tool =
                     { showPrimaryColorTextInput = Just colors.primaryColor
                     , showSecondaryColorTextInput = Just colors.secondaryColor
                     }
+
+        ReportToolButton ->
+            { showPrimaryColorTextInput = Nothing, showSecondaryColorTextInput = Nothing }
 
 
 getTileGroupTile : TileGroup -> Int -> Tile
@@ -1424,6 +1446,9 @@ actualViewPoint model =
 
                 TextTool _ ->
                     actualViewPointHelper model
+
+                ReportTool ->
+                    offsetViewPoint model hover start current
 
         _ ->
             actualViewPointHelper model

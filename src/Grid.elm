@@ -474,130 +474,134 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
 
 
 foregroundMesh2 :
-    Maybe { a | tile : Tile, position : Coord WorldUnit }
+    Bool
+    -> Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
     -> Maybe (Id UserId)
     -> IdDict UserId FrontendUser
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> WebGL.Mesh Vertex
-foregroundMesh2 maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
-    List.map
+foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
+    List.concatMap
         (\{ position, userId, value, colors } ->
-            let
-                position2 : Coord WorldUnit
-                position2 =
-                    cellAndLocalCoordToWorld ( cellPosition, position )
+            if showEmptyTiles || value /= EmptyTile then
+                let
+                    position2 : Coord WorldUnit
+                    position2 =
+                        cellAndLocalCoordToWorld ( cellPosition, position )
 
-                data : TileData unit
-                data =
-                    Tile.getData value
+                    data : TileData unit
+                    data =
+                        Tile.getData value
 
-                opacity : Float
-                opacity =
-                    case maybeCurrentTile of
-                        Just currentTile ->
-                            if Tile.hasCollision currentTile.position currentTile.tile position2 value then
-                                0.5
+                    opacity : Float
+                    opacity =
+                        case maybeCurrentTile of
+                            Just currentTile ->
+                                if Tile.hasCollision currentTile.position currentTile.tile position2 value then
+                                    0.5
 
-                            else
+                                else
+                                    1
+
+                            Nothing ->
                                 1
 
-                        Nothing ->
-                            1
+                    opacityAndUserId =
+                        Shaders.opacityAndUserId opacity userId
+                in
+                (case data.railPath of
+                    RailSplitPath pathData ->
+                        if AssocSet.member position railSplitToggled then
+                            tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
 
-                opacityAndUserId =
-                    Shaders.opacityAndUserId opacity userId
-            in
-            (case data.railPath of
-                RailSplitPath pathData ->
-                    if AssocSet.member position railSplitToggled then
-                        tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
+                        else
+                            case data.texturePosition of
+                                Just texturePosition ->
+                                    tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
 
-                    else
+                                Nothing ->
+                                    []
+
+                    _ ->
                         case data.texturePosition of
                             Just texturePosition ->
-                                tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
+                                tileMeshHelper2
+                                    opacityAndUserId
+                                    colors
+                                    False
+                                    0
+                                    (Coord.multiply Units.tileSize position2)
+                                    (case value of
+                                        BigText _ ->
+                                            2
+
+                                        _ ->
+                                            1
+                                    )
+                                    texturePosition
+                                    data.size
 
                             Nothing ->
                                 []
+                )
+                    ++ (case data.texturePositionTopLayer of
+                            Just topLayer ->
+                                if value == PostOffice && Just userId /= maybeCurrentUserId then
+                                    let
+                                        text =
+                                            Sprite.textWithZAndOpacityAndUserId
+                                                opacityAndUserId
+                                                colors.secondaryColor
+                                                1
+                                                (case IdDict.get userId users of
+                                                    Just user ->
+                                                        let
+                                                            name =
+                                                                DisplayName.toString user.name
+                                                        in
+                                                        String.left 5 name ++ "\n" ++ String.dropLeft 5 name
 
-                _ ->
-                    case data.texturePosition of
-                        Just texturePosition ->
-                            tileMeshHelper2
-                                opacityAndUserId
-                                colors
-                                False
-                                0
-                                (Coord.multiply Units.tileSize position2)
-                                (case value of
-                                    BigText _ ->
-                                        2
-
-                                    _ ->
-                                        1
-                                )
-                                texturePosition
-                                data.size
-
-                        Nothing ->
-                            []
-            )
-                ++ (case data.texturePositionTopLayer of
-                        Just topLayer ->
-                            if value == PostOffice && Just userId /= maybeCurrentUserId then
-                                let
-                                    text =
-                                        Sprite.textWithZAndOpacityAndUserId
+                                                    Nothing ->
+                                                        ""
+                                                )
+                                                -5
+                                                (Coord.multiply position2 Units.tileSize
+                                                    |> Coord.plus (Coord.xy 15 19)
+                                                )
+                                                (tileZ True (toFloat (Coord.yRaw position2)) 6)
+                                    in
+                                    text
+                                        ++ tileMeshHelper2
                                             opacityAndUserId
-                                            colors.secondaryColor
+                                            colors
+                                            True
+                                            topLayer.yOffset
+                                            (Coord.multiply Units.tileSize position2)
                                             1
-                                            (case IdDict.get userId users of
-                                                Just user ->
-                                                    let
-                                                        name =
-                                                            DisplayName.toString user.name
-                                                    in
-                                                    String.left 5 name ++ "\n" ++ String.dropLeft 5 name
+                                            (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
+                                            data.size
 
-                                                Nothing ->
-                                                    ""
-                                            )
-                                            -5
-                                            (Coord.multiply position2 Units.tileSize
-                                                |> Coord.plus (Coord.xy 15 19)
-                                            )
-                                            (tileZ True (toFloat (Coord.yRaw position2)) 6)
-                                in
-                                text
-                                    ++ tileMeshHelper2
+                                else
+                                    tileMeshHelper2
                                         opacityAndUserId
                                         colors
                                         True
                                         topLayer.yOffset
                                         (Coord.multiply Units.tileSize position2)
                                         1
-                                        (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
+                                        topLayer.texturePosition
                                         data.size
 
-                            else
-                                tileMeshHelper2
-                                    opacityAndUserId
-                                    colors
-                                    True
-                                    topLayer.yOffset
-                                    (Coord.multiply Units.tileSize position2)
-                                    1
-                                    topLayer.texturePosition
-                                    data.size
+                            Nothing ->
+                                []
+                       )
 
-                        Nothing ->
-                            []
-                   )
+            else
+                []
         )
         tiles
-        |> List.concat
         |> Sprite.toMesh
 
 

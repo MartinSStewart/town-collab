@@ -16,6 +16,7 @@ module Cursor exposing
     , eraserCursorMesh
     , eyeDropperCursor2
     , eyeDropperCursorMesh
+    , gavelCursor2
     , gavelCursorMesh
     , getSpriteMesh
     , htmlAttribute
@@ -62,6 +63,7 @@ type OtherUsersTool
     | TilePickerTool
     | EraserTool
     | TextTool (Maybe { cursorPosition : Coord WorldUnit })
+    | ReportTool
 
 
 type alias CursorMeshes =
@@ -129,6 +131,7 @@ type CursorSprite
     | EyeDropperSpriteCursor
     | EraserSpriteCursor
     | TextSpriteCursor
+    | GavelSpriteCursor
 
 
 getSpriteMesh : CursorSprite -> CursorMeshes -> WebGL.Mesh Vertex
@@ -154,6 +157,9 @@ getSpriteMesh cursorSprite cursorMeshes =
 
         TextSpriteCursor ->
             cursorMeshes.textSprite
+
+        GavelSpriteCursor ->
+            cursorMeshes.gavelSprite
 
 
 htmlAttribute : CursorType -> Html.Attribute msg
@@ -295,10 +301,23 @@ pointerCursorMesh colors =
         handPointerSize
 
 
+gavelSize =
+    Coord.xy 21 21
+
+
 gavelCursorMesh : List Vertex
 gavelCursorMesh =
     Sprite.sprite
         (Coord.xy 0 0)
-        (Coord.xy 21 21)
+        gavelSize
         (Coord.xy 504 82)
-        (Coord.xy 21 21)
+        gavelSize
+
+
+gavelCursor2 : Ui.Element id
+gavelCursor2 =
+    Ui.sprite
+        { size = Coord.scalar 2 gavelSize
+        , texturePosition = Coord.xy 504 82
+        , textureSize = gavelSize
+        }

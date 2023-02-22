@@ -133,6 +133,7 @@ type ToolButton
     | TilePlacerToolButton TileGroup
     | TilePickerToolButton
     | TextToolButton
+    | ReportToolButton
 
 
 type Tool
@@ -140,6 +141,7 @@ type Tool
     | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
     | TilePickerTool
     | TextTool (Maybe { cursorPosition : Coord WorldUnit, startColumn : Quantity Int WorldUnit })
+    | ReportTool
 
 
 type alias FrontendLoaded =
