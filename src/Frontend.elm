@@ -358,6 +358,18 @@ audioLoaded audioData model =
         )
         model.railToggles
         |> Audio.group
+    , case model.lastReportTilePlaced of
+        Just time ->
+            playSound PopSound time |> Audio.scaleVolume 0.4
+
+        Nothing ->
+            Audio.silence
+    , case model.lastReportTileRemoved of
+        Just time ->
+            playSound EraseSound time |> Audio.scaleVolume 0.4
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
         |> Audio.scaleVolumeAt [ ( model.startTime, 0 ), ( Duration.addTo model.startTime Duration.second, 1 ) ]
@@ -607,6 +619,8 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , contextMenu = Nothing
             , previousUpdateMeshData = previousUpdateMeshData
             , reportsMesh = getReports loadedLocalModel.localModel |> createReportsMesh
+            , lastReportTilePlaced = Nothing
+            , lastReportTileRemoved = Nothing
             }
                 |> setCurrentTool HandToolButton
     in
@@ -2540,17 +2554,20 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                             position =
                                                 mouseWorldPosition model2 |> Coord.floorPoint
                                         in
-                                        ( updateLocalModel
-                                            (if List.any (\report -> report.position == position) (getReports model2.localModel) then
-                                                Change.RemoveReport position
+                                        ( (if List.any (\report -> report.position == position) (getReports model2.localModel) then
+                                            updateLocalModel
+                                                (Change.RemoveReport position)
+                                                { model2 | lastReportTileRemoved = Just model2.time }
 
-                                             else
-                                                Change.ReportVandalism
+                                           else
+                                            updateLocalModel
+                                                (Change.ReportVandalism
                                                     { position = position
                                                     , reportedUser = data.userId
                                                     }
-                                            )
-                                            model2
+                                                )
+                                                { model2 | lastReportTilePlaced = Just model2.time }
+                                          )
                                             |> handleOutMsg False
                                         , Command.none
                                         )
@@ -2586,7 +2603,10 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         mouseWorldPosition model2 |> Coord.floorPoint
                                 in
                                 ( if List.any (\report -> report.position == position) (getReports model2.localModel) then
-                                    updateLocalModel (Change.RemoveReport position) model2 |> handleOutMsg False
+                                    updateLocalModel
+                                        (Change.RemoveReport position)
+                                        { model2 | lastReportTileRemoved = Just model2.time }
+                                        |> handleOutMsg False
 
                                   else
                                     model2

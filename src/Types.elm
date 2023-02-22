@@ -215,6 +215,8 @@ type alias FrontendLoaded =
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
     , reportsMesh : WebGL.Mesh Vertex
+    , lastReportTilePlaced : Maybe Effect.Time.Posix
+    , lastReportTileRemoved : Maybe Effect.Time.Posix
     }
 
 
