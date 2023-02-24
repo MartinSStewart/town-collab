@@ -3243,10 +3243,10 @@ zOrderBackToFront =
     , BusStopRight
     , BusStopUp
     , Statue
-    , CornerHouseDownRight
-    , CornerHouseDownLeft
     , CornerHouseUpLeft
     , CornerHouseUpRight
+    , CornerHouseDownRight
+    , CornerHouseDownLeft
     , PineTree1
     , PineTree2
     , Flowers1

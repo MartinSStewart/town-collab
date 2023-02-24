@@ -781,10 +781,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            --let
-                            --    _ =
-                            --        Debug.log "loginUrl" loginEmailUrl
-                            --in
+                            let
+                                _ =
+                                    Debug.log "loginUrl" loginEmailUrl
+                            in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
