@@ -4,6 +4,7 @@ import AssocList
 import Benchmark.Reporting exposing (Report)
 import Bounds exposing (Bounds)
 import Change exposing (AdminChange(..), AdminData, ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import CollisionLookup exposing (CollisionLookup)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -31,6 +32,7 @@ import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
+import Point2d
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
 import Route exposing (InviteToken, LoginOrInviteToken(..), LoginToken(..), Route(..))
@@ -71,7 +73,7 @@ subscriptions model =
                 Duration.minute
 
              else
-                Duration.second
+                Duration.seconds 0.1
             )
             WorldUpdateTimeElapsed
         , Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
@@ -300,6 +302,47 @@ handleWorldUpdate isProduction oldTime time model =
                 Nothing ->
                     model.trains
 
+        lookup : CollisionLookup WorldUnit ( Id TrainId, Train )
+        lookup =
+            List.foldl
+                (\( trainId, train ) lookup2 ->
+                    case Train.isStuckOrDerailed time train of
+                        Train.IsDerailed _ ->
+                            lookup2
+
+                        _ ->
+                            CollisionLookup.addItem (Train.trainPosition time train) ( trainId, train ) lookup2
+                )
+                (CollisionLookup.init (Units.tileUnit 3))
+                (IdDict.toList newTrains)
+
+        newTrains2 : IdDict TrainId Train
+        newTrains2 =
+            IdDict.map
+                (\trainId train ->
+                    let
+                        hasCollided =
+                            CollisionLookup.collisionCandidates (Train.trainPosition time train) lookup
+                                |> List.any
+                                    (\( trainId2, train2 ) ->
+                                        if trainId == trainId2 then
+                                            False
+
+                                        else
+                                            Point2d.distanceFrom
+                                                (Train.trainPosition time train)
+                                                (Train.trainPosition time train2)
+                                                |> Quantity.lessThan (Units.tileUnit 1)
+                                    )
+                    in
+                    if hasCollided then
+                        Train.derail time train
+
+                    else
+                        train
+                )
+                newTrains
+
         mergeTrains :
             { mail : IdDict MailId BackendMail
             , mailChanges : List ( Id MailId, BackendMail )
@@ -383,7 +426,7 @@ handleWorldUpdate isProduction oldTime time model =
                     { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
                 )
                 model.lastWorldUpdateTrains
-                newTrains
+                newTrains2
                 { mailChanges = [], mail = model.mail, diff = IdDict.empty }
 
         emailNotifications =
@@ -401,8 +444,9 @@ handleWorldUpdate isProduction oldTime time model =
                                             ( loginToken, model2 ) =
                                                 generateSecretId time state.model
 
-                                            --_ =
-                                            --    Debug.log "notification" loginEmailUrl
+                                            _ =
+                                                Debug.log "notification" loginEmailUrl
+
                                             loginEmailUrl : String
                                             loginEmailUrl =
                                                 Env.domain
@@ -495,7 +539,7 @@ handleWorldUpdate isProduction oldTime time model =
     in
     ( { model3
         | lastWorldUpdate = Just time
-        , trains = newTrains
+        , trains = newTrains2
         , lastWorldUpdateTrains = model3.trains
         , mail = mergeTrains.mail
       }
@@ -781,10 +825,10 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     in
                     case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
                         Just ( userId, _ ) ->
-                            --let
-                            --    _ =
-                            --        Debug.log "loginUrl" loginEmailUrl
-                            --in
+                            let
+                                _ =
+                                    Debug.log "loginUrl" loginEmailUrl
+                            in
                             ( { model2
                                 | pendingLoginTokens =
                                     AssocList.insert
@@ -846,8 +890,9 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
 
                             else
                                 let
-                                    --_ =
-                                    --    Debug.log "inviteUrl" inviteUrl
+                                    _ =
+                                        Debug.log "inviteUrl" inviteUrl
+
                                     ( inviteToken, model3 ) =
                                         generateSecretId currentTime model2
 

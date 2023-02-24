@@ -141,18 +141,23 @@ audioLoaded audioData model =
                         trainSpeed =
                             Train.speed model.time train
                     in
-                    if Quantity.abs trainSpeed |> Quantity.lessThan Train.stoppedSpeed then
-                        Nothing
+                    case
+                        ( Quantity.abs trainSpeed |> Quantity.lessThan Train.stoppedSpeed
+                        , Train.isStuckOrDerailed model.time train
+                        )
+                    of
+                        ( False, Train.IsNotStuckOrDerailed ) ->
+                            let
+                                position =
+                                    Train.trainPosition model.time train
+                            in
+                            Just
+                                { playbackRate = 0.9 * (abs (Quantity.unwrap trainSpeed) / Train.defaultMaxSpeed) + 0.1
+                                , volume = volume model position * Quantity.unwrap trainSpeed / Train.defaultMaxSpeed |> abs
+                                }
 
-                    else
-                        let
-                            position =
-                                Train.trainPosition model.time train
-                        in
-                        Just
-                            { playbackRate = 0.9 * (abs (Quantity.unwrap trainSpeed) / Train.defaultMaxSpeed) + 0.1
-                            , volume = volume model position * Quantity.unwrap trainSpeed / Train.defaultMaxSpeed |> abs
-                            }
+                        _ ->
+                            Nothing
                 )
                 (IdDict.toList model.trains)
 
@@ -2641,15 +2646,18 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 ( model2, Command.none )
 
                             _ ->
-                                case Train.isStuck model2.time train of
-                                    Just stuckTime ->
+                                case Train.isStuckOrDerailed model2.time train of
+                                    Train.IsStuck stuckTime ->
                                         if Duration.from stuckTime model2.time |> Quantity.lessThan stuckMessageDelay then
                                             ( setTrainViewPoint trainId model2, Command.none )
 
                                         else
                                             ( clickTeleportHomeTrain trainId model2, Command.none )
 
-                                    Nothing ->
+                                    Train.IsDerailed _ ->
+                                        ( clickTeleportHomeTrain trainId model2, Command.none )
+
+                                    Train.IsNotStuckOrDerailed ->
                                         ( setTrainViewPoint trainId model2, Command.none )
 
                     MapHover ->
@@ -5804,11 +5812,11 @@ getSpeechBubbles model =
     IdDict.toList model.trains
         |> List.concatMap
             (\( _, train ) ->
-                case ( Train.status model.time train, Train.isStuck model.time train ) of
+                case ( Train.status model.time train, Train.isStuckOrDerailed model.time train ) of
                     ( TeleportingHome _, _ ) ->
                         []
 
-                    ( _, Just time ) ->
+                    ( _, Train.IsStuck time ) ->
                         if Duration.from time model.time |> Quantity.lessThan stuckMessageDelay then
                             []
 
@@ -5817,7 +5825,16 @@ getSpeechBubbles model =
                             , { position = Coord.toPoint2d (Train.home train), isRadio = True }
                             ]
 
-                    ( _, Nothing ) ->
+                    ( _, Train.IsDerailed time ) ->
+                        if Duration.from time model.time |> Quantity.lessThan derailedMessageDelay then
+                            []
+
+                        else
+                            [ { position = Train.trainPosition model.time train, isRadio = False }
+                            , { position = Coord.toPoint2d (Train.home train), isRadio = True }
+                            ]
+
+                    ( _, Train.IsNotStuckOrDerailed ) ->
                         []
             )
 
@@ -5825,6 +5842,11 @@ getSpeechBubbles model =
 stuckMessageDelay : Duration
 stuckMessageDelay =
     Duration.seconds 2
+
+
+derailedMessageDelay : Duration
+derailedMessageDelay =
+    Duration.seconds 0.5
 
 
 speechBubbleMesh : Array (Effect.WebGL.Mesh Vertex)

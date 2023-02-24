@@ -1,5 +1,6 @@
 module Train exposing
     ( FieldChanged(..)
+    , IsStuckOrDerailed(..)
     , PreviousPath
     , Status(..)
     , Train(..)
@@ -9,13 +10,14 @@ module Train exposing
     , carryingMail
     , coachPosition
     , defaultMaxSpeed
+    , derail
     , diff
     , draw
     , getCoach
     , handleAddingTrain
     , home
     , homePath
-    , isStuck
+    , isStuckOrDerailed
     , leaveHome
     , moveTrain
     , nextId
@@ -76,10 +78,16 @@ type Train
         , speed : Quantity Float (Rate TileLocalUnit Seconds)
         , home : Coord WorldUnit
         , homePath : RailPath
-        , isStuck : Maybe Effect.Time.Posix
+        , isStuckOrDerailed : IsStuckOrDerailed
         , status : Status
         , owner : Id UserId
         }
+
+
+type IsStuckOrDerailed
+    = IsStuck Effect.Time.Posix
+    | IsDerailed Effect.Time.Posix
+    | IsNotStuckOrDerailed
 
 
 type TrainDiff
@@ -93,7 +101,7 @@ type TrainDiff
                 , t : Float
                 , speed : Quantity Float (Rate TileLocalUnit Seconds)
                 }
-        , isStuck : FieldChanged (Maybe Effect.Time.Posix)
+        , isStuckOrDerailed : FieldChanged IsStuckOrDerailed
         , status : FieldChanged Status
         }
 
@@ -115,7 +123,7 @@ diff (Train trainOld) (Train trainNew) =
                 , t = trainNew.t
                 , speed = trainNew.speed
                 }
-        , isStuck = diffField trainOld.isStuck trainNew.isStuck
+        , isStuckOrDerailed = diffField trainOld.isStuckOrDerailed trainNew.isStuckOrDerailed
         , status = diffField trainOld.status trainNew.status
         }
 
@@ -144,7 +152,7 @@ applyDiff trainDiff maybeTrain =
                 , previousPaths = position.previousPaths
                 , t = position.t
                 , speed = position.speed
-                , isStuck = applyDiffField diff_.isStuck train.isStuck
+                , isStuckOrDerailed = applyDiffField diff_.isStuckOrDerailed train.isStuckOrDerailed
                 , status = applyDiffField diff_.status train.status
             }
                 |> Train
@@ -228,6 +236,11 @@ getCoach (Train train) =
     }
 
 
+derail : Effect.Time.Posix -> Train -> Train
+derail time (Train train) =
+    Train { train | isStuckOrDerailed = IsDerailed time }
+
+
 trainPosition : Effect.Time.Posix -> Train -> Point2d WorldUnit WorldUnit
 trainPosition time (Train train) =
     case status time (Train train) of
@@ -248,12 +261,36 @@ trainPosition time (Train train) =
             travellingPosition train
 
 
+travellingPosition :
+    { a
+        | path : RailPath
+        , position : Coord WorldUnit
+        , t : Float
+        , isStuckOrDerailed : IsStuckOrDerailed
+    }
+    -> Point2d WorldUnit WorldUnit
 travellingPosition train =
     let
+        railData : RailData
         railData =
             Tile.railPathData train.path
+
+        position =
+            Grid.localTilePointPlusWorld train.position (railData.path train.t)
     in
-    Grid.localTilePointPlusWorld train.position (railData.path train.t)
+    case train.isStuckOrDerailed of
+        IsDerailed _ ->
+            Point2d.translateIn
+                (Tile.pathDirection railData.path train.t
+                    |> Direction2d.perpendicularTo
+                    |> Direction2d.unwrap
+                    |> Direction2d.unsafe
+                )
+                (Units.tileUnit 1)
+                position
+
+        _ ->
+            position
 
 
 coachPosition : Coach -> Point2d WorldUnit WorldUnit
@@ -319,49 +356,54 @@ moveTrain :
     -> Train
     -> Train
 moveTrain trainId maxSpeed startTime endTime state (Train train) =
-    let
-        timeElapsed_ =
-            Duration.inSeconds (Duration.from startTime endTime) |> min 10
-
-        trainSpeed =
-            Quantity.unwrap train.speed
-
-        newSpeed =
-            (if trainSpeed > 0 then
-                trainSpeed + acceleration * timeElapsed_
-
-             else
-                trainSpeed - acceleration * timeElapsed_
-            )
-                |> clamp -maxSpeed maxSpeed
-
-        timeUntilMaxSpeed =
-            (maxSpeed - abs trainSpeed) / acceleration
-
-        distance =
-            (if timeUntilMaxSpeed > timeElapsed_ then
-                abs (trainSpeed * timeElapsed_)
-                    + (0.5 * acceleration * timeElapsed_ ^ 2)
-
-             else
-                abs (trainSpeed * timeUntilMaxSpeed)
-                    + (0.5 * acceleration * timeUntilMaxSpeed ^ 2)
-                    + ((timeElapsed_ - timeUntilMaxSpeed) * maxSpeed)
-            )
-                |> Quantity
-    in
-    case status startTime (Train train) of
-        WaitingAtHome ->
+    case train.isStuckOrDerailed of
+        IsDerailed _ ->
             Train train
 
-        TeleportingHome _ ->
-            moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
+        _ ->
+            let
+                timeElapsed_ =
+                    Duration.inSeconds (Duration.from startTime endTime) |> min 10
 
-        Travelling ->
-            moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
+                trainSpeed =
+                    Quantity.unwrap train.speed
 
-        StoppedAtPostOffice _ ->
-            moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
+                newSpeed =
+                    (if trainSpeed > 0 then
+                        trainSpeed + acceleration * timeElapsed_
+
+                     else
+                        trainSpeed - acceleration * timeElapsed_
+                    )
+                        |> clamp -maxSpeed maxSpeed
+
+                timeUntilMaxSpeed =
+                    (maxSpeed - abs trainSpeed) / acceleration
+
+                distance =
+                    (if timeUntilMaxSpeed > timeElapsed_ then
+                        abs (trainSpeed * timeElapsed_)
+                            + (0.5 * acceleration * timeElapsed_ ^ 2)
+
+                     else
+                        abs (trainSpeed * timeUntilMaxSpeed)
+                            + (0.5 * acceleration * timeUntilMaxSpeed ^ 2)
+                            + ((timeElapsed_ - timeUntilMaxSpeed) * maxSpeed)
+                    )
+                        |> Quantity
+            in
+            case status startTime (Train train) of
+                WaitingAtHome ->
+                    Train train
+
+                TeleportingHome _ ->
+                    moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
+
+                Travelling ->
+                    moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
+
+                StoppedAtPostOffice _ ->
+                    moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
 
 
 moveTrainHelper :
@@ -445,7 +487,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
                          , speed = newTrain.speed
                          , home = train.home
                          , homePath = train.homePath
-                         , isStuck = Nothing
+                         , isStuckOrDerailed = IsNotStuckOrDerailed
                          , status =
                             case newTrain.stoppedAtPostOffice of
                                 Just stoppedAtPostOffice ->
@@ -467,16 +509,16 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
                     Train
                         { train
                             | t = newTClamped
-                            , isStuck =
-                                case train.isStuck of
-                                    Just _ ->
-                                        train.isStuck
-
-                                    Nothing ->
+                            , isStuckOrDerailed =
+                                case train.isStuckOrDerailed of
+                                    IsNotStuckOrDerailed ->
                                         Duration.from startTime endTime
                                             |> Quantity.multiplyBy (1 - Quantity.ratio distanceLeft initialDistance)
                                             |> Duration.addTo startTime
-                                            |> Just
+                                            |> IsStuck
+
+                                    _ ->
+                                        train.isStuckOrDerailed
                             , speed =
                                 if Quantity.lessThanZero train.speed then
                                     Quantity.negate stoppedSpeed
@@ -501,7 +543,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
 
                                 else
                                     stoppedSpeed
-                            , isStuck = Nothing
+                            , isStuckOrDerailed = IsNotStuckOrDerailed
                         }
 
             else
@@ -512,7 +554,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
                 reachedTileEnd ()
 
             else
-                Train { train | t = newTClamped, isStuck = Nothing }
+                Train { train | t = newTClamped, isStuckOrDerailed = IsNotStuckOrDerailed }
 
 
 stoppedSpeed : Quantity Float units
@@ -535,20 +577,20 @@ owner (Train train) =
     train.owner
 
 
-isStuck : Effect.Time.Posix -> Train -> Maybe Effect.Time.Posix
-isStuck time (Train train) =
+isStuckOrDerailed : Effect.Time.Posix -> Train -> IsStuckOrDerailed
+isStuckOrDerailed time (Train train) =
     case status time (Train train) of
         Travelling ->
-            train.isStuck
+            train.isStuckOrDerailed
 
         WaitingAtHome ->
-            Nothing
+            IsNotStuckOrDerailed
 
         TeleportingHome _ ->
-            train.isStuck
+            train.isStuckOrDerailed
 
         StoppedAtPostOffice _ ->
-            train.isStuck
+            train.isStuckOrDerailed
 
 
 moveCoachHelper :
@@ -1075,7 +1117,7 @@ leaveHome time (Train train) =
                     , t = 0.5
                     , position = train.home
                     , path = train.homePath
-                    , isStuck = Nothing
+                    , isStuckOrDerailed = IsNotStuckOrDerailed
                     , speed = stoppedSpeed
                 }
 
@@ -1303,7 +1345,7 @@ handleAddingTrain trains owner_ tile position =
             , speed = stoppedSpeed
             , home = position
             , homePath = homePath_
-            , isStuck = Nothing
+            , isStuckOrDerailed = IsNotStuckOrDerailed
             , status = WaitingAtHome
             , owner = owner_
             }
