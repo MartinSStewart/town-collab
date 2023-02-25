@@ -1171,7 +1171,7 @@ carryingMail mail trainId =
 
 
 trainFrames =
-    32
+    48
 
 
 trainEngineMeshes : Array (Effect.WebGL.Mesh Vertex)
@@ -1197,7 +1197,7 @@ opacityAndUserId =
 
 
 defaultTrainColor =
-    Color.rgb255 200 100 100
+    Color.rgb255 200 255 100
 
 
 trainEngineMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
@@ -1262,7 +1262,7 @@ trainEngineMesh teleportAmount frame =
 
 
 trainTextureWidth =
-    1152
+    1728
 
 
 trainCoachMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
