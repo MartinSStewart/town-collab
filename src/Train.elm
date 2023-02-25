@@ -34,7 +34,7 @@ import Array exposing (Array)
 import AssocList
 import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
-import Color
+import Color exposing (Color)
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import Duration exposing (Duration, Seconds)
@@ -81,6 +81,7 @@ type Train
         , isStuckOrDerailed : IsStuckOrDerailed
         , status : Status
         , owner : Id UserId
+        , color : Color
         }
 
 
@@ -501,6 +502,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
                                         _ ->
                                             train.status
                          , owner = train.owner
+                         , color = train.color
                          }
                             |> Train
                         )
@@ -1357,6 +1359,7 @@ handleAddingTrain trains owner_ tile position =
             , isStuckOrDerailed = IsNotStuckOrDerailed
             , status = WaitingAtHome
             , owner = owner_
+            , color = defaultTrainColor
             }
         )
             |> Just
