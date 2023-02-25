@@ -1194,6 +1194,10 @@ opacityAndUserId =
     Shaders.opacityAndUserId 1 (Id.fromInt 0)
 
 
+defaultTrainColor =
+    Color.rgb255 200 100 100
+
+
 trainEngineMesh : Float -> Int -> Effect.WebGL.Mesh Vertex
 trainEngineMesh teleportAmount frame =
     let
@@ -1214,6 +1218,10 @@ trainEngineMesh teleportAmount frame =
 
         ( tileSizeW, tileSizeH ) =
             Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
+
+        primaryColor : Float
+        primaryColor =
+            Color.toInt defaultTrainColor |> toFloat
     in
     Shaders.triangleFan
         [ { x = -tileSizeW + offsetX
@@ -1221,7 +1229,7 @@ trainEngineMesh teleportAmount frame =
           , z = 0
           , texturePosition = trainTextureWidth * y
           , opacityAndUserId = opacityAndUserId
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         , { x = tileSizeW + offsetX
@@ -1229,7 +1237,7 @@ trainEngineMesh teleportAmount frame =
           , z = 0
           , texturePosition = w + trainTextureWidth * y
           , opacityAndUserId = opacityAndUserId
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         , { x = tileSizeW + offsetX
@@ -1237,7 +1245,7 @@ trainEngineMesh teleportAmount frame =
           , z = 0
           , texturePosition = w + trainTextureWidth * y2
           , opacityAndUserId = opacityAndUserId
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         , { x = -tileSizeW + offsetX
@@ -1245,7 +1253,7 @@ trainEngineMesh teleportAmount frame =
           , z = 0
           , texturePosition = trainTextureWidth * y2
           , opacityAndUserId = opacityAndUserId
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         ]
@@ -1275,6 +1283,10 @@ trainCoachMesh teleportAmount frame =
 
         ( tileSizeW, tileSizeH ) =
             Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
+
+        primaryColor : Float
+        primaryColor =
+            Color.toInt defaultTrainColor |> toFloat
     in
     Shaders.triangleFan
         [ { x = -tileSizeW + offsetX
@@ -1282,7 +1294,7 @@ trainCoachMesh teleportAmount frame =
           , z = 0
           , texturePosition = w + trainTextureWidth * y
           , opacityAndUserId = Shaders.opaque
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         , { x = tileSizeW + offsetX
@@ -1290,7 +1302,7 @@ trainCoachMesh teleportAmount frame =
           , z = 0
           , texturePosition = (w * 2) + trainTextureWidth * y
           , opacityAndUserId = Shaders.opaque
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         , { x = tileSizeW + offsetX
@@ -1298,7 +1310,7 @@ trainCoachMesh teleportAmount frame =
           , z = 0
           , texturePosition = (w * 2) + trainTextureWidth * y2
           , opacityAndUserId = Shaders.opaque
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         , { x = -tileSizeW + offsetX
@@ -1306,7 +1318,7 @@ trainCoachMesh teleportAmount frame =
           , z = 0
           , texturePosition = w + trainTextureWidth * y2
           , opacityAndUserId = Shaders.opaque
-          , primaryColor = 0
+          , primaryColor = primaryColor
           , secondaryColor = 0
           }
         ]
