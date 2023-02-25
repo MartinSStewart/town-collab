@@ -17,7 +17,6 @@ module Train exposing
     , handleAddingTrain
     , home
     , homePath
-    , isStuckOrDerailed
     , leaveHome
     , moveTrain
     , nextId
@@ -26,6 +25,7 @@ module Train exposing
     , startTeleportingHome
     , status
     , stoppedSpeed
+    , stuckOrDerailed
     , trainPosition
     )
 
@@ -577,8 +577,8 @@ owner (Train train) =
     train.owner
 
 
-isStuckOrDerailed : Effect.Time.Posix -> Train -> IsStuckOrDerailed
-isStuckOrDerailed time (Train train) =
+stuckOrDerailed : Effect.Time.Posix -> Train -> IsStuckOrDerailed
+stuckOrDerailed time (Train train) =
     case status time (Train train) of
         Travelling ->
             train.isStuckOrDerailed
@@ -1204,13 +1204,13 @@ trainEngineMesh teleportAmount frame =
             -5
 
         y =
-            toFloat frame * 36 |> round |> toFloat
+            toFloat frame * h |> round |> toFloat
 
         y2 =
-            y + toFloat h - (teleportAmount * toFloat h) |> round |> toFloat
+            y + h - (teleportAmount * h) |> round |> toFloat
 
         ( w, h ) =
-            Coord.toTuple trainSize
+            Coord.toTuple trainSize |> Tuple.mapBoth toFloat toFloat
 
         ( tileSizeW, tileSizeH ) =
             Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat
@@ -1227,21 +1227,21 @@ trainEngineMesh teleportAmount frame =
         , { x = tileSizeW + offsetX
           , y = -tileSizeH + offsetY
           , z = 0
-          , texturePosition = toFloat w + trainTextureWidth * y
+          , texturePosition = w + trainTextureWidth * y
           , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { x = tileSizeW + offsetX
-          , y = tileSizeH + offsetY - (teleportAmount * toFloat h)
+          , y = tileSizeH + offsetY - (teleportAmount * h)
           , z = 0
-          , texturePosition = toFloat w + trainTextureWidth * y2
+          , texturePosition = w + trainTextureWidth * y2
           , opacityAndUserId = opacityAndUserId
           , primaryColor = 0
           , secondaryColor = 0
           }
         , { x = -tileSizeW + offsetX
-          , y = tileSizeH + offsetY - (teleportAmount * toFloat h)
+          , y = tileSizeH + offsetY - (teleportAmount * h)
           , z = 0
           , texturePosition = trainTextureWidth * y2
           , opacityAndUserId = opacityAndUserId
@@ -1265,16 +1265,13 @@ trainCoachMesh teleportAmount frame =
             -5
 
         y =
-            toFloat frame * 36
+            toFloat frame * h
 
         y2 =
             y + h - (teleportAmount * h)
 
-        w =
-            36
-
-        h =
-            36
+        ( w, h ) =
+            Coord.toTuple trainSize |> Tuple.mapBoth toFloat toFloat
 
         ( tileSizeW, tileSizeH ) =
             Coord.toTuple Units.tileSize |> Tuple.mapBoth toFloat toFloat

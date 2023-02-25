@@ -143,7 +143,7 @@ audioLoaded audioData model =
                     in
                     case
                         ( Quantity.abs trainSpeed |> Quantity.lessThan Train.stoppedSpeed
-                        , Train.isStuckOrDerailed model.time train
+                        , Train.stuckOrDerailed model.time train
                         )
                     of
                         ( False, Train.IsNotStuckOrDerailed ) ->
@@ -2646,7 +2646,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                 ( model2, Command.none )
 
                             _ ->
-                                case Train.isStuckOrDerailed model2.time train of
+                                case Train.stuckOrDerailed model2.time train of
                                     Train.IsStuck stuckTime ->
                                         if Duration.from stuckTime model2.time |> Quantity.lessThan stuckMessageDelay then
                                             ( setTrainViewPoint trainId model2, Command.none )
@@ -5812,7 +5812,7 @@ getSpeechBubbles model =
     IdDict.toList model.trains
         |> List.concatMap
             (\( _, train ) ->
-                case ( Train.status model.time train, Train.isStuckOrDerailed model.time train ) of
+                case ( Train.status model.time train, Train.stuckOrDerailed model.time train ) of
                     ( TeleportingHome _, _ ) ->
                         []
 

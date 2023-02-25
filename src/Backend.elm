@@ -306,7 +306,7 @@ handleWorldUpdate isProduction oldTime time model =
         lookup =
             List.foldl
                 (\( trainId, train ) lookup2 ->
-                    case Train.isStuckOrDerailed time train of
+                    case Train.stuckOrDerailed time train of
                         Train.IsDerailed _ ->
                             lookup2
 
