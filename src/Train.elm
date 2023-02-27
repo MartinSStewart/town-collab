@@ -55,7 +55,7 @@ import Math.Vector4 as Vec4
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
-import Shaders exposing (Vertex)
+import Shaders exposing (InstancedVertex, Vertex)
 import Sprite
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
@@ -966,17 +966,19 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
 
                             else
                                 [ trainEntity
-                                    isSelected
+                                    maybeSelectedUserId
                                     trainTexture
-                                    (trainEngineMesh t trainFrame)
+                                    t
+                                    trainFrame
                                     viewMatrix
                                     x
                                     y
                                     shaderTime
                                 , trainEntity
-                                    isSelected
+                                    maybeSelectedUserId
                                     trainTexture
-                                    (trainEngineMesh (1 - t) trainFrame2)
+                                    (1 - t)
+                                    trainFrame2
                                     viewMatrix
                                     homePosition.x
                                     homePosition.y
@@ -984,12 +986,7 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
                                 ]
 
                         _ ->
-                            case Array.get trainFrame trainEngineMeshes of
-                                Just mesh ->
-                                    [ trainEntity isSelected trainTexture mesh viewMatrix x y shaderTime ]
-
-                                Nothing ->
-                                    []
+                            [ trainEntity maybeSelectedUserId trainTexture 0 trainFrame viewMatrix x y shaderTime ]
             in
             (if BoundingBox2d.contains trainPosition2 trainViewBounds then
                 trainMesh
@@ -1048,9 +1045,10 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
 
                                         else
                                             [ trainEntity
-                                                isSelected
+                                                maybeSelectedUserId
                                                 trainTexture
-                                                (trainCoachMesh t coachFrame)
+                                                t
+                                                coachFrame
                                                 viewMatrix
                                                 coachPosition_.x
                                                 coachPosition_.y
@@ -1058,20 +1056,16 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
                                             ]
 
                                     _ ->
-                                        case Array.get coachFrame trainCoachMeshes of
-                                            Just trainMesh_ ->
-                                                [ trainEntity
-                                                    isSelected
-                                                    trainTexture
-                                                    trainMesh_
-                                                    viewMatrix
-                                                    coachPosition_.x
-                                                    coachPosition_.y
-                                                    shaderTime
-                                                ]
-
-                                            Nothing ->
-                                                []
+                                        [ trainEntity
+                                            maybeSelectedUserId
+                                            trainTexture
+                                            1
+                                            trainFrame
+                                            viewMatrix
+                                            coachPosition_.x
+                                            coachPosition_.y
+                                            shaderTime
+                                        ]
 
                             else
                                 []
@@ -1127,29 +1121,69 @@ leaveHome time (Train train) =
             Train train
 
 
-trainEntity : Bool -> WebGL.Texture.Texture -> Effect.WebGL.Mesh Vertex -> Mat4 -> Float -> Float -> Float -> Effect.WebGL.Entity
-trainEntity isSelected trainTexture trainMesh viewMatrix x y shaderTime =
+type alias TrainEntity =
+    { x : Float
+    , y : Float
+    , rotationFrame : Int
+    , teleportAmount : Float
+    , color : Color
+    , trainType : Int
+    }
+
+
+trainEntity :
+    Maybe (Id UserId)
+    -> WebGL.Texture.Texture
+    -> Float
+    -> Int
+    -> Mat4
+    -> Float
+    -> Float
+    -> Float
+    -> Effect.WebGL.Entity
+trainEntity maybeUserId trainTexture teleportAmount trainFrame viewMatrix x y shaderTime =
+    let
+        ( tileW, tileH ) =
+            Coord.toTuple Units.tileSize
+
+        ( trainW, trainH ) =
+            Coord.toTuple trainSize
+
+        ( textureWidth, textureHeight ) =
+            WebGL.Texture.size trainTexture
+
+        offsetX =
+            sin (100 * teleportAmount) * min 1 (teleportAmount * 3)
+
+        y2 =
+            toFloat trainH - (teleportAmount * toFloat trainH) |> round |> toFloat
+    in
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.DepthTest.default, Shaders.blend ]
-        Shaders.vertexShader
+        Shaders.instancedVertexShader
         Shaders.fragmentShader
-        trainMesh
-        { view =
-            Mat4.makeTranslate3
-                (x * toFloat Units.tileWidth |> round |> toFloat)
-                (y * toFloat Units.tileHeight |> round |> toFloat)
-                (Grid.tileZ True y 0)
-                |> Mat4.mul viewMatrix
+        instancedMesh
+        { view = viewMatrix
         , texture = trainTexture
-        , textureSize = WebGL.Texture.size trainTexture |> Coord.tuple |> Coord.toVec2
+        , textureSize = Vec2.vec2 (toFloat textureWidth) (toFloat textureHeight)
         , color = Vec4.vec4 1 1 1 1
         , userId =
-            if isSelected then
-                0
+            case maybeUserId of
+                Just userId ->
+                    Id.toInt userId |> toFloat
 
-            else
-                -1
+                Nothing ->
+                    -3
         , time = shaderTime
+        , opacityAndUserId0 = Shaders.opaque
+        , position0 =
+            Vec3.vec3
+                (toFloat tileW * x - (toFloat trainW / 2) + offsetX)
+                (toFloat tileH * y - (toFloat trainH / 2) - 5)
+                (Grid.tileZ True y 0)
+        , size0 = Vec2.vec2 (toFloat trainW) y2
+        , texturePosition0 = 0 + toFloat (trainFrame * trainH * textureWidth)
+        , primaryColor0 = Color.rgb255 255 100 100 |> Color.toInt |> toFloat
         }
 
 
@@ -1409,3 +1443,17 @@ canRemoveTiles time removed trains =
 
     else
         Err trainsToRemove
+
+
+instancedMesh : Effect.WebGL.Mesh InstancedVertex
+instancedMesh =
+    List.concatMap
+        (\index ->
+            [ { localPosition = Vec2.vec2 0 0, index = toFloat index }
+            , { localPosition = Vec2.vec2 1 0, index = toFloat index }
+            , { localPosition = Vec2.vec2 1 1, index = toFloat index }
+            , { localPosition = Vec2.vec2 0 1, index = toFloat index }
+            ]
+        )
+        (List.range 0 0)
+        |> Sprite.toMesh
