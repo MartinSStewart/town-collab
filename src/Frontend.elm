@@ -133,6 +133,10 @@ audioLoaded audioData model =
         playWithConfig config sound time =
             Sound.playWithConfig audioData model config sound (Duration.subtractFrom time timeOffset)
 
+        allTrains : List ( Id TrainId, Train )
+        allTrains =
+            IdDict.toList model.trains
+
         movingTrains : List { playbackRate : Float, volume : Float }
         movingTrains =
             List.filterMap
@@ -159,7 +163,7 @@ audioLoaded audioData model =
                         _ ->
                             Nothing
                 )
-                (IdDict.toList model.trains)
+                allTrains
 
         mailEditorVolumeScale : Float
         mailEditorVolumeScale =
@@ -215,6 +219,18 @@ audioLoaded audioData model =
         _ ->
             Audio.silence
     , trainSounds
+    , List.map
+        (\( _, train ) ->
+            case Train.stuckOrDerailed model.time train of
+                Train.IsDerailed derailTime ->
+                    playSound TrainCrash derailTime
+
+                _ ->
+                    Audio.silence
+        )
+        allTrains
+        |> Audio.group
+        |> Audio.scaleVolume 0.4
     , List.map
         (\( _, train ) ->
             case Train.status model.time train of

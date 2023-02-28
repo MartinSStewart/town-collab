@@ -46,6 +46,7 @@ type Sound
     | Moo6
     | RailToggleSound
     | Meow
+    | TrainCrash
 
 
 allSounds =
@@ -76,6 +77,7 @@ allSounds =
     , Moo6
     , RailToggleSound
     , Meow
+    , TrainCrash
     ]
 
 
@@ -226,6 +228,9 @@ load onLoad =
 
                         Meow ->
                             "meow.mp3"
+
+                        TrainCrash ->
+                            "train-crash.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)
