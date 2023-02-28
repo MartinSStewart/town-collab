@@ -29,7 +29,7 @@ module Train exposing
     , trainPosition
     )
 
-import Angle
+import Angle exposing (Angle)
 import Array exposing (Array)
 import AssocList
 import AssocSet
@@ -127,6 +127,11 @@ diff (Train trainOld) (Train trainNew) =
         , isStuckOrDerailed = diffField trainOld.isStuckOrDerailed trainNew.isStuckOrDerailed
         , status = diffField trainOld.status trainNew.status
         }
+
+
+trainColor : Train -> Color
+trainColor (Train train) =
+    train.color
 
 
 applyDiff : TrainDiff -> Maybe Train -> Maybe Train
@@ -246,7 +251,7 @@ trainPosition : Effect.Time.Posix -> Train -> Point2d WorldUnit WorldUnit
 trainPosition time (Train train) =
     case status time (Train train) of
         Travelling ->
-            travellingPosition train
+            travellingPosition time (Train train)
 
         WaitingAtHome ->
             let
@@ -256,21 +261,17 @@ trainPosition time (Train train) =
             Grid.localTilePointPlusWorld train.home (railPath.path 0.5)
 
         TeleportingHome _ ->
-            travellingPosition train
+            travellingPosition time (Train train)
 
         StoppedAtPostOffice _ ->
-            travellingPosition train
+            travellingPosition time (Train train)
 
 
 travellingPosition :
-    { a
-        | path : RailPath
-        , position : Coord WorldUnit
-        , t : Float
-        , isStuckOrDerailed : IsStuckOrDerailed
-    }
+    Effect.Time.Posix
+    -> Train
     -> Point2d WorldUnit WorldUnit
-travellingPosition train =
+travellingPosition time (Train train) =
     let
         railData : RailData
         railData =
@@ -282,10 +283,11 @@ travellingPosition train =
     case train.isStuckOrDerailed of
         IsDerailed _ ->
             Point2d.translateIn
-                (Tile.pathDirection railData.path train.t
-                    |> Direction2d.perpendicularTo
+                (trainDirection time (Train train)
                     |> Direction2d.unwrap
                     |> Direction2d.unsafe
+                    |> Direction2d.perpendicularTo
+                    |> Direction2d.reverse
                 )
                 (Units.tileUnit 1)
                 position
@@ -880,6 +882,22 @@ trainT time (Train train) =
             train.t
 
 
+trainDirection : Effect.Time.Posix -> Train -> Direction2d TileLocalUnit
+trainDirection time train =
+    let
+        railData : RailData
+        railData =
+            Tile.railPathData (path time train)
+    in
+    Tile.pathDirection railData.path (trainT time train)
+        |> (if Quantity.lessThanZero (speed time train) then
+                Direction2d.reverse
+
+            else
+                identity
+           )
+
+
 draw :
     Maybe (Id UserId)
     -> Effect.Time.Posix
@@ -898,37 +916,33 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
     List.concatMap
         (\( trainId, train ) ->
             let
-                isSelected =
-                    maybeSelectedUserId == Just (owner train)
-
-                railData : RailData
-                railData =
-                    Tile.railPathData (path time train)
-
                 trainPosition2 =
                     trainPosition time train
 
                 { x, y } =
                     Point2d.unwrap trainPosition2
 
+                isDerailed =
+                    case stuckOrDerailed time train of
+                        IsDerailed time2 ->
+                            Just time2
+
+                        IsStuck _ ->
+                            Nothing
+
+                        IsNotStuckOrDerailed ->
+                            Nothing
+
                 trainFrame : Int
                 trainFrame =
-                    Direction2d.angleFrom
-                        Direction2d.x
-                        (Tile.pathDirection railData.path (trainT time train)
-                            |> (if Quantity.lessThanZero (speed time train) then
-                                    Direction2d.reverse
-
-                                else
-                                    identity
-                               )
-                        )
+                    trainDirection time train
+                        |> Direction2d.angleFrom Direction2d.x
                         |> Angle.inTurns
                         |> (*) trainFrames
                         |> round
                         |> modBy trainFrames
 
-                trainMesh : List Effect.WebGL.Entity
+                trainMesh : List TrainEntity
                 trainMesh =
                     case status time train of
                         TeleportingHome teleportTime ->
@@ -965,28 +979,37 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
                                 []
 
                             else
-                                [ trainEntity
-                                    maybeSelectedUserId
-                                    trainTexture
-                                    t
-                                    trainFrame
-                                    viewMatrix
-                                    x
-                                    y
-                                    shaderTime
-                                , trainEntity
-                                    maybeSelectedUserId
-                                    trainTexture
-                                    (1 - t)
-                                    trainFrame2
-                                    viewMatrix
-                                    homePosition.x
-                                    homePosition.y
-                                    shaderTime
+                                [ { x = x
+                                  , y = y
+                                  , rotationFrame = trainFrame
+                                  , teleportAmount = t
+                                  , userId = owner train
+                                  , trainType = 0
+                                  , color = trainColor train
+                                  , isDerailed = isDerailed
+                                  }
+                                , { x = homePosition.x
+                                  , y = homePosition.y
+                                  , rotationFrame = trainFrame2
+                                  , teleportAmount = 1 - t
+                                  , userId = owner train
+                                  , trainType = 0
+                                  , color = trainColor train
+                                  , isDerailed = isDerailed
+                                  }
                                 ]
 
                         _ ->
-                            [ trainEntity maybeSelectedUserId trainTexture 0 trainFrame viewMatrix x y shaderTime ]
+                            [ { x = x
+                              , y = y
+                              , rotationFrame = trainFrame
+                              , teleportAmount = 0
+                              , userId = owner train
+                              , trainType = 0
+                              , color = trainColor train
+                              , isDerailed = isDerailed
+                              }
+                            ]
             in
             (if BoundingBox2d.contains trainPosition2 trainViewBounds then
                 trainMesh
@@ -1044,27 +1067,27 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
                                             []
 
                                         else
-                                            [ trainEntity
-                                                maybeSelectedUserId
-                                                trainTexture
-                                                t
-                                                coachFrame
-                                                viewMatrix
-                                                coachPosition_.x
-                                                coachPosition_.y
-                                                shaderTime
+                                            [ { x = coachPosition_.x
+                                              , y = coachPosition_.y
+                                              , rotationFrame = coachFrame
+                                              , teleportAmount = t
+                                              , userId = owner train
+                                              , trainType = 1
+                                              , color = trainColor train
+                                              , isDerailed = isDerailed
+                                              }
                                             ]
 
                                     _ ->
-                                        [ trainEntity
-                                            maybeSelectedUserId
-                                            trainTexture
-                                            1
-                                            trainFrame
-                                            viewMatrix
-                                            coachPosition_.x
-                                            coachPosition_.y
-                                            shaderTime
+                                        [ { x = coachPosition_.x
+                                          , y = coachPosition_.y
+                                          , rotationFrame = coachFrame
+                                          , teleportAmount = 0
+                                          , userId = owner train
+                                          , trainType = 1
+                                          , color = trainColor train
+                                          , isDerailed = isDerailed
+                                          }
                                         ]
 
                             else
@@ -1075,6 +1098,7 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
                    )
         )
         (IdDict.toList trains)
+        |> List.map (trainEntity maybeSelectedUserId trainTexture viewMatrix shaderTime)
 
 
 startTeleportingHome : Effect.Time.Posix -> Train -> Train
@@ -1128,20 +1152,19 @@ type alias TrainEntity =
     , teleportAmount : Float
     , color : Color
     , trainType : Int
+    , userId : Id UserId
+    , isDerailed : Maybe Effect.Time.Posix
     }
 
 
 trainEntity :
     Maybe (Id UserId)
     -> WebGL.Texture.Texture
-    -> Float
-    -> Int
     -> Mat4
     -> Float
-    -> Float
-    -> Float
+    -> TrainEntity
     -> Effect.WebGL.Entity
-trainEntity maybeUserId trainTexture teleportAmount trainFrame viewMatrix x y shaderTime =
+trainEntity maybeUserId trainTexture viewMatrix shaderTime trainData =
     let
         ( tileW, tileH ) =
             Coord.toTuple Units.tileSize
@@ -1153,10 +1176,22 @@ trainEntity maybeUserId trainTexture teleportAmount trainFrame viewMatrix x y sh
             WebGL.Texture.size trainTexture
 
         offsetX =
-            sin (100 * teleportAmount) * min 1 (teleportAmount * 3)
+            sin (100 * trainData.teleportAmount) * min 1 (trainData.teleportAmount * 3)
 
         y2 =
-            toFloat trainH - (teleportAmount * toFloat trainH) |> round |> toFloat
+            toFloat trainH - (trainData.teleportAmount * toFloat trainH) |> round |> toFloat
+
+        textureX =
+            (trainData.trainType
+                + (case trainData.isDerailed of
+                    Just _ ->
+                        2
+
+                    Nothing ->
+                        0
+                  )
+            )
+                * trainW
     in
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.DepthTest.default, Shaders.blend ]
@@ -1175,14 +1210,14 @@ trainEntity maybeUserId trainTexture teleportAmount trainFrame viewMatrix x y sh
                 Nothing ->
                     -3
         , time = shaderTime
-        , opacityAndUserId0 = Shaders.opaque
+        , opacityAndUserId0 = Shaders.opacityAndUserId 1 trainData.userId
         , position0 =
             Vec3.vec3
-                (toFloat tileW * x - (toFloat trainW / 2) + offsetX)
-                (toFloat tileH * y - (toFloat trainH / 2) - 5)
-                (Grid.tileZ True y 0)
+                (toFloat tileW * trainData.x - (toFloat trainW / 2) + offsetX)
+                (toFloat tileH * trainData.y - (toFloat trainH / 2) - 5)
+                (Grid.tileZ True trainData.y 0)
         , size0 = Vec2.vec2 (toFloat trainW) y2
-        , texturePosition0 = 0 + toFloat (trainFrame * trainH * textureWidth)
+        , texturePosition0 = textureX + (trainData.rotationFrame * trainH * textureWidth) |> toFloat
         , primaryColor0 = Color.rgb255 255 100 100 |> Color.toInt |> toFloat
         }
 
