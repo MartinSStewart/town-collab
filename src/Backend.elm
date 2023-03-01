@@ -3,7 +3,8 @@ module Backend exposing (app, app_)
 import AssocList
 import Benchmark.Reporting exposing (Report)
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import CollisionLookup exposing (CollisionLookup)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -31,6 +32,7 @@ import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
+import Point2d
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
 import Route exposing (InviteToken, LoginOrInviteToken(..), LoginToken(..), Route(..))
@@ -98,6 +100,7 @@ init =
             , lastCacheRegeneration = Nothing
             , reported = IdDict.empty
             , isGridReadOnly = False
+            , trainsDisabled = TrainsEnabled
             , lastReportEmailToAdmin = Nothing
             }
     in
@@ -289,16 +292,12 @@ handleWorldUpdate isProduction oldTime time model =
     let
         newTrains : IdDict TrainId Train
         newTrains =
-            case model.lastWorldUpdate of
-                Just lastWorldUpdate ->
-                    IdDict.map
-                        (\trainId train ->
-                            Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
-                        )
-                        model.trains
-
-                Nothing ->
+            case model.trainsDisabled of
+                TrainsDisabled ->
                     model.trains
+
+                TrainsEnabled ->
+                    Train.moveTrains time oldTime model.trains model
 
         mergeTrains :
             { mail : IdDict MailId BackendMail
@@ -1370,6 +1369,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                         , ServerGridReadOnly isGridReadOnly |> BroadcastToEveryoneElse
                         )
 
+                    AdminSetTrainsDisabled areTrainsDisabled ->
+                        ( { model | trainsDisabled = areTrainsDisabled }
+                        , originalChange
+                        , ServerSetTrainsDisabled areTrainsDisabled |> BroadcastToEveryoneElse
+                        )
+
             else
                 ( model, invalidChange, BroadcastToNoOne )
 
@@ -1690,6 +1695,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                 invitesToInviteTree adminId model3.users
                     |> Maybe.withDefault (InviteTree { userId = adminId, invited = [] })
             , isGridReadOnly = model.isGridReadOnly
+            , trainsDisabled = model.trainsDisabled
             }
 
         frontendUser =

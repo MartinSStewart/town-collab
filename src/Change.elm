@@ -1,6 +1,7 @@
 module Change exposing
     ( AdminChange(..)
     , AdminData
+    , AreTrainsDisabled(..)
     , BackendReport
     , Change(..)
     , ClientChange(..)
@@ -65,6 +66,12 @@ type LocalChange
 type AdminChange
     = AdminResetSessions
     | AdminSetGridReadOnly Bool
+    | AdminSetTrainsDisabled AreTrainsDisabled
+
+
+type AreTrainsDisabled
+    = TrainsDisabled
+    | TrainsEnabled
 
 
 type ClientChange
@@ -104,6 +111,7 @@ type ServerChange
     | ServerGridReadOnly Bool
     | ServerVandalismReportedToAdmin (Id UserId) BackendReport
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
+    | ServerSetTrainsDisabled AreTrainsDisabled
 
 
 type alias Cow =

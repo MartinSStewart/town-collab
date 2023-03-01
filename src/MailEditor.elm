@@ -60,7 +60,7 @@ import Shaders exposing (Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import TextInput
-import Tile exposing (DefaultColor(..), Tile, TileData, TileGroup(..))
+import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Time exposing (Month(..))
 import Ui exposing (BorderAndFill(..), UiEvent)
 import Units exposing (MailPixelUnit, WorldUnit)
@@ -288,6 +288,18 @@ mailMousePosition elementPosition maybeImageData windowSize mousePosition =
         |> Coord.scalar 2
 
 
+onPress event updateFunc model =
+    case event of
+        Ui.MousePressed data ->
+            updateFunc ()
+
+        Ui.KeyDown Keyboard.Enter ->
+            updateFunc ()
+
+        _ ->
+            ( Just model, NoOutMsg )
+
+
 uiUpdate :
     { a | windowSize : Coord Pixels, time : Effect.Time.Posix }
     -> Coord Pixels
@@ -298,12 +310,22 @@ uiUpdate :
 uiUpdate config mousePosition id event model =
     case id of
         ImageButton index ->
-            ( updateCurrentImageMesh { model | currentTool = ImagePlacer { imageIndex = index, rotationIndex = 0 } } |> Just
-            , NoOutMsg
-            )
+            onPress
+                event
+                (\() ->
+                    ( updateCurrentImageMesh { model | currentTool = ImagePlacer { imageIndex = index, rotationIndex = 0 } } |> Just
+                    , NoOutMsg
+                    )
+                )
+                model
 
         BackgroundHover ->
-            ( Nothing, NoOutMsg )
+            case event of
+                Ui.MousePressed _ ->
+                    ( Nothing, NoOutMsg )
+
+                _ ->
+                    ( Just model, NoOutMsg )
 
         MailButton ->
             case event of
@@ -429,36 +451,52 @@ uiUpdate config mousePosition id event model =
                     ( Just model, NoOutMsg )
 
         EraserButton ->
-            ( { model | currentTool = EraserTool } |> updateCurrentImageMesh |> Just, NoOutMsg )
+            onPress
+                event
+                (\() -> ( { model | currentTool = EraserTool } |> updateCurrentImageMesh |> Just, NoOutMsg ))
+                model
 
         SendLetterButton ->
-            case model.to of
-                Just ( userId, _ ) ->
-                    ( Just { model | submitStatus = Submitted }
-                    , SubmitMail { content = model.current.content, to = userId }
-                    )
+            onPress
+                event
+                (\() ->
+                    case model.to of
+                        Just ( userId, _ ) ->
+                            ( Just { model | submitStatus = Submitted }
+                            , SubmitMail { content = model.current.content, to = userId }
+                            )
 
-                Nothing ->
-                    ( Just model, NoOutMsg )
+                        Nothing ->
+                            ( Just model, NoOutMsg )
+                )
+                model
 
         CloseSendLetterInstructionsButton ->
-            ( Nothing, NoOutMsg )
+            onPress event (\() -> ( Nothing, NoOutMsg )) model
 
         InboxRowButton mailId ->
-            ( Just
-                { model
-                    | inboxMailViewed =
-                        if model.inboxMailViewed == Just mailId then
-                            Nothing
+            onPress
+                event
+                (\() ->
+                    ( Just
+                        { model
+                            | inboxMailViewed =
+                                if model.inboxMailViewed == Just mailId then
+                                    Nothing
 
-                        else
-                            Just mailId
-                }
-            , ViewedMail mailId
-            )
+                                else
+                                    Just mailId
+                        }
+                    , ViewedMail mailId
+                    )
+                )
+                model
 
         TextToolButton ->
-            ( { model | currentTool = TextTool Coord.origin } |> updateCurrentImageMesh |> Just, NoOutMsg )
+            onPress
+                event
+                (\() -> ( { model | currentTool = TextTool Coord.origin } |> updateCurrentImageMesh |> Just, NoOutMsg ))
+                model
 
 
 addContent : Content -> Model -> Model
@@ -1356,7 +1394,7 @@ yourPostOffice =
                     (Coord.scalar 2 grassSize)
                     (Coord.xy 220 216)
                     grassSize
-                ++ Grid.tileMesh
+                ++ tileMesh
                     Tile.PostOffice
                     Coord.origin
                     2
@@ -1367,6 +1405,51 @@ yourPostOffice =
                     Flag.sendingMailFlagColor
                     1
         }
+
+
+tileMesh : Tile -> Coord Pixels -> Int -> Colors -> List Vertex
+tileMesh tile position scale colors =
+    let
+        data : TileData unit
+        data =
+            Tile.getData tile
+    in
+    (case data.texturePosition of
+        Just texturePosition ->
+            Grid.tileMeshHelper2
+                Shaders.opaque
+                colors
+                False
+                0
+                position
+                (case tile of
+                    BigText _ ->
+                        2 * scale
+
+                    _ ->
+                        scale
+                )
+                texturePosition
+                (Coord.scalar scale data.size)
+
+        Nothing ->
+            []
+    )
+        ++ (case data.texturePositionTopLayer of
+                Just topLayer ->
+                    Grid.tileMeshHelper2
+                        Shaders.opaque
+                        colors
+                        True
+                        topLayer.yOffset
+                        position
+                        scale
+                        topLayer.texturePosition
+                        (Coord.scalar scale data.size)
+
+                Nothing ->
+                    []
+           )
 
 
 mailView : Int -> List Content -> Maybe Tool -> Ui.Element id

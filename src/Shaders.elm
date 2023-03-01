@@ -1,10 +1,12 @@
 module Shaders exposing
     ( DebrisVertex
+    , InstancedVertex
     , Vertex
     , blend
     , debrisVertexShader
     , fragmentShader
     , indexedTriangles
+    , instancedVertexShader
     , noUserIdSelected
     , opacityAndUserId
     , opaque
@@ -37,6 +39,12 @@ type alias Vertex =
       opacityAndUserId : Float
     , primaryColor : Float
     , secondaryColor : Float
+    }
+
+
+type alias InstancedVertex =
+    { localPosition : Vec2
+    , index : Float
     }
 
 
@@ -199,6 +207,133 @@ void main () {
     primaryColor2 = floatColorToVec3(primaryColor);
     secondaryColor2 = floatColorToVec3(secondaryColor);
     position2 = vec2(x, y);
+}|]
+
+
+instancedVertexShader :
+    Shader
+        InstancedVertex
+        { u
+            | view : Mat4
+            , textureSize : Vec2
+            , userId : Float
+            , position0 : Vec3
+            , size0 : Vec2
+            , texturePosition0 : Float
+            , opacityAndUserId0 : Float
+            , primaryColor0 : Float
+        }
+        { vcoord : Vec2
+        , opacity : Float
+        , primaryColor2 : Vec3
+        , secondaryColor2 : Vec3
+        , isSelected : Float
+        , position2 : Vec2
+        }
+instancedVertexShader =
+    [glsl|
+attribute vec2 localPosition;
+attribute float index;
+uniform mat4 view;
+uniform vec2 textureSize;
+uniform float userId;
+uniform vec3 position0;
+uniform vec2 size0;
+uniform float texturePosition0;
+uniform float opacityAndUserId0;
+uniform float primaryColor0;
+varying vec2 vcoord;
+varying float opacity;
+varying vec3 primaryColor2;
+varying vec3 secondaryColor2;
+varying float isSelected;
+varying vec2 position2;
+
+int OR(int n1, int n2){
+
+    float v1 = float(n1);
+    float v2 = float(n2);
+
+    int byteVal = 1;
+    int result = 0;
+
+    for(int i = 0; i < 32; i++){
+        bool keepGoing = v1>0.0 || v2 > 0.0;
+        if(keepGoing){
+
+            bool addOn = mod(v1, 2.0) > 0.0 || mod(v2, 2.0) > 0.0;
+
+            if(addOn){
+                result += byteVal;
+            }
+
+            v1 = floor(v1 / 2.0);
+            v2 = floor(v2 / 2.0);
+
+            byteVal *= 2;
+        } else {
+            return result;
+        }
+    }
+    return result;
+}
+
+int AND(int n1, int n2){
+
+    float v1 = float(n1);
+    float v2 = float(n2);
+
+    int byteVal = 1;
+    int result = 0;
+
+    for(int i = 0; i < 32; i++){
+        bool keepGoing = v1>0.0 || v2 > 0.0;
+        if(keepGoing){
+
+            bool addOn = mod(v1, 2.0) > 0.0 && mod(v2, 2.0) > 0.0;
+
+            if(addOn){
+                result += byteVal;
+            }
+
+            v1 = floor(v1 / 2.0);
+            v2 = floor(v2 / 2.0);
+            byteVal *= 2;
+        } else {
+            return result;
+        }
+    }
+    return result;
+}
+
+int RShift(int num, float shifts){
+    return int(floor(float(num) / pow(2.0, shifts)));
+}
+
+vec3 floatColorToVec3(float color) {
+    int colorInt = int(color);
+    float blue = float(AND(colorInt, 0xFF)) / 255.0;
+    float green = float(AND(RShift(colorInt, 8.0), 0xFF)) / 255.0;
+    float red = float(AND(RShift(colorInt, 16.0), 0xFF)) / 255.0;
+    return vec3(red, green, blue);
+}
+
+void main () {
+    vec2 localPosition2 = localPosition * size0;
+
+    gl_Position = view * vec4(position0 + vec3(localPosition2.xy, 0.0), 1.0);
+
+
+
+    float y2 = floor(texturePosition0 / textureSize.x);
+    vcoord = (vec2(texturePosition0 - y2 * textureSize.x, y2) + localPosition2) / textureSize;
+    opacity = float(AND(int(opacityAndUserId0), 0xF)) / 15.0;
+    isSelected = userId == float(RShift(int(opacityAndUserId0), 4.0)) ? 1.0 : 0.0;
+
+
+    primaryColor2 = floatColorToVec3(primaryColor0);
+    secondaryColor2 = vec3(0.0, 0.0, 0.0);
+    position2 = position0.xy + localPosition2;
 }|]
 
 

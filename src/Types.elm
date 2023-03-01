@@ -37,7 +37,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (BackendReport, Change, Cow, ServerChange, UserStatus)
+import Change exposing (AreTrainsDisabled, BackendReport, Change, Cow, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -308,6 +308,7 @@ type UiHover
     | CopyPositionUrlButton
     | ReportUserButton
     | ToggleIsGridReadOnlyButton
+    | ToggleTrainsDisabledButton
 
 
 type alias BackendModel =
@@ -337,6 +338,7 @@ type alias BackendModel =
     , lastCacheRegeneration : Maybe Effect.Time.Posix
     , reported : IdDict UserId (Nonempty BackendReport)
     , isGridReadOnly : Bool
+    , trainsDisabled : AreTrainsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     }
 
@@ -466,4 +468,5 @@ type alias LoadingData_ =
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree
     , isGridReadOnly : Bool
+    , trainsDisabled : AreTrainsDisabled
     }
