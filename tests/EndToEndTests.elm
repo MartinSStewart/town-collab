@@ -20,7 +20,7 @@ import Json.Decode
 import Json.Encode
 import LocalGrid
 import Postmark
-import Route exposing (LoginToken, Route(..))
+import Route exposing (LoginOrInviteToken(..), LoginToken, Route(..))
 import Test exposing (Test)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, LoadingLocalModel(..), ToBackend(..), ToFrontend)
 import Unsafe
@@ -95,7 +95,7 @@ url =
 
 email : EmailAddress
 email =
-    Unsafe.emailAddress Env.adminEmail_
+    Unsafe.emailAddress Env.adminEmail2
 
 
 decodePostmark : Json.Decode.Decoder ( String, EmailAddress, List Html.Parser.Node )
@@ -136,15 +136,15 @@ isLoginEmail httpRequest =
                 case Json.Decode.decodeValue decodePostmark value of
                     Ok ( subject, to, body ) ->
                         case ( subject, getRoutesFromHtml body ) of
-                            ( "Login Email", [ InternalRoute { loginToken } ] ) ->
-                                case loginToken of
-                                    Just loginToken2 ->
+                            ( "Login Email", [ InternalRoute { loginOrInviteToken } ] ) ->
+                                case loginOrInviteToken of
+                                    Just (LoginToken2 loginToken2) ->
                                         { emailAddress = to
                                         , loginToken = loginToken2
                                         }
                                             |> Just
 
-                                    Nothing ->
+                                    _ ->
                                         Nothing
 
                             _ ->
@@ -242,7 +242,13 @@ endToEndTests =
                                         |> Effect.Test.connectFrontend
                                             sessionId1
                                             (Url.toString url
-                                                ++ Route.encode (Route.InternalRoute { viewPoint = Coord.origin, loginToken = Just loginEmail.loginToken })
+                                                ++ Route.encode
+                                                    (Route.InternalRoute
+                                                        { viewPoint = Coord.origin
+                                                        , loginOrInviteToken = Just (LoginToken2 loginEmail.loginToken)
+                                                        , showInbox = False
+                                                        }
+                                                    )
                                                 |> Unsafe.url
                                             )
                                             { width = 1920, height = 1080 }
