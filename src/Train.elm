@@ -18,6 +18,7 @@ module Train exposing
     , homePath
     , leaveHome
     , moveTrain
+    , moveTrains
     , nextId
     , owner
     , speed
@@ -33,6 +34,7 @@ import Array exposing (Array)
 import AssocList
 import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
+import CollisionLookup exposing (CollisionLookup)
 import Color exposing (Color)
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
@@ -86,7 +88,7 @@ type Train
 
 type IsStuckOrDerailed
     = IsStuck Effect.Time.Posix
-    | IsDerailed Effect.Time.Posix
+    | IsDerailed Effect.Time.Posix (Id TrainId)
     | IsNotStuckOrDerailed
 
 
@@ -253,7 +255,7 @@ getCoach time (Train train) =
     in
     { position =
         case train.isStuckOrDerailed of
-            IsDerailed derailTime ->
+            IsDerailed derailTime _ ->
                 derailOffset derailTime time direction position
 
             IsStuck _ ->
@@ -265,14 +267,14 @@ getCoach time (Train train) =
     }
 
 
-derail : Effect.Time.Posix -> Train -> Train
-derail time (Train train) =
+derail : Effect.Time.Posix -> Id TrainId -> Train -> Train
+derail time otherTrainId (Train train) =
     (case train.isStuckOrDerailed of
-        IsDerailed _ ->
+        IsDerailed _ _ ->
             train
 
         _ ->
-            { train | isStuckOrDerailed = IsDerailed time }
+            { train | isStuckOrDerailed = IsDerailed time otherTrainId }
     )
         |> Train
 
@@ -311,7 +313,7 @@ travellingPosition time (Train train) =
             Grid.localTilePointPlusWorld train.position (railData.path train.t)
     in
     case train.isStuckOrDerailed of
-        IsDerailed derailTime ->
+        IsDerailed derailTime _ ->
             derailOffset
                 derailTime
                 time
@@ -390,6 +392,87 @@ defaultMaxSpeed =
     5
 
 
+moveTrains :
+    Effect.Time.Posix
+    -> Effect.Time.Posix
+    -> IdDict TrainId Train
+    ->
+        { a
+            | grid : Grid
+            , mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId }
+        }
+    -> IdDict TrainId Train
+moveTrains targetTime time trains model =
+    if Duration.from time targetTime |> Quantity.lessThanOrEqualToZero then
+        trains
+
+    else
+        let
+            nextTime =
+                if Duration.from time targetTime |> Quantity.lessThan (Duration.milliseconds 50) then
+                    targetTime
+
+                else
+                    Duration.addTo time (Duration.milliseconds 50)
+
+            newTrains : IdDict TrainId Train
+            newTrains =
+                IdDict.map
+                    (\trainId train ->
+                        moveTrain trainId defaultMaxSpeed time nextTime model train
+                    )
+                    trains
+
+            lookup : CollisionLookup WorldUnit ( Id TrainId, Train )
+            lookup =
+                List.foldl
+                    (\( trainId, train ) lookup2 ->
+                        case stuckOrDerailed nextTime train of
+                            IsDerailed _ _ ->
+                                lookup2
+
+                            _ ->
+                                CollisionLookup.addItem (trainPosition nextTime train) ( trainId, train ) lookup2
+                    )
+                    (CollisionLookup.init (Units.tileUnit 3))
+                    (IdDict.toList newTrains)
+
+            newTrains2 : IdDict TrainId Train
+            newTrains2 =
+                IdDict.map
+                    (\trainId train ->
+                        let
+                            collisions =
+                                CollisionLookup.collisionCandidates (trainPosition nextTime train) lookup
+                                    |> List.filterMap
+                                        (\( trainId2, train2 ) ->
+                                            if trainId == trainId2 then
+                                                Nothing
+
+                                            else if
+                                                Point2d.distanceFrom
+                                                    (trainPosition nextTime train)
+                                                    (trainPosition nextTime train2)
+                                                    |> Quantity.lessThan (Units.tileUnit 1)
+                                            then
+                                                Just trainId2
+
+                                            else
+                                                Nothing
+                                        )
+                        in
+                        case collisions of
+                            first :: _ ->
+                                derail nextTime first train
+
+                            [] ->
+                                train
+                    )
+                    newTrains
+        in
+        moveTrains targetTime nextTime newTrains2 model
+
+
 moveTrain :
     Id TrainId
     -> Float
@@ -400,7 +483,7 @@ moveTrain :
     -> Train
 moveTrain trainId maxSpeed startTime endTime state (Train train) =
     case train.isStuckOrDerailed of
-        IsDerailed _ ->
+        IsDerailed _ _ ->
             Train train
 
         _ ->
@@ -964,7 +1047,7 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
 
                 isDerailed =
                     case stuckOrDerailed time train of
-                        IsDerailed time2 ->
+                        IsDerailed time2 _ ->
                             Just time2
 
                         IsStuck _ ->

@@ -13,7 +13,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (BackendReport, Change(..), Cow, Report, UserStatus(..))
+import Change exposing (AreTrainsDisabled(..), BackendReport, Change(..), Cow, Report, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cow
@@ -189,21 +189,26 @@ audioLoaded audioData model =
 
         trainSounds : Audio
         trainSounds =
-            List.map
-                (\train ->
-                    playWithConfig
-                        (\duration ->
-                            { loop = Just { loopStart = Quantity.zero, loopEnd = duration }
-                            , playbackRate = train.playbackRate
-                            , startAt = Quantity.zero
-                            }
+            case localModel.trainsDisabled of
+                TrainsDisabled ->
+                    Audio.silence
+
+                TrainsEnabled ->
+                    List.map
+                        (\train ->
+                            playWithConfig
+                                (\duration ->
+                                    { loop = Just { loopStart = Quantity.zero, loopEnd = duration }
+                                    , playbackRate = train.playbackRate
+                                    , startAt = Quantity.zero
+                                    }
+                                )
+                                ChugaChuga
+                                (Effect.Time.millisToPosix 0)
+                                |> Audio.scaleVolume (train.volume * volumeOffset)
                         )
-                        ChugaChuga
-                        (Effect.Time.millisToPosix 0)
-                        |> Audio.scaleVolume (train.volume * volumeOffset)
-                )
-                movingTrains
-                |> Audio.group
+                        movingTrains
+                        |> Audio.group
     in
     [ case model.lastTilePlaced of
         Just { time, overwroteTiles, tile } ->
@@ -222,7 +227,11 @@ audioLoaded audioData model =
     , List.map
         (\( _, train ) ->
             case Train.stuckOrDerailed model.time train of
-                Train.IsDerailed derailTime ->
+                Train.IsDerailed derailTime _ ->
+                    --let
+                    --    _ =
+                    --        Debug.log "time" (Duration.from derailTime model.time)
+                    --in
                     playSound TrainCrash derailTime
 
                 _ ->
@@ -1530,6 +1539,9 @@ updateLoaded audioData msg model =
                                         ToggleIsGridReadOnlyButton ->
                                             True
 
+                                        ToggleTrainsDisabledButton ->
+                                            True
+
                                 Nothing ->
                                     True
 
@@ -1539,17 +1551,16 @@ updateLoaded audioData msg model =
                         , localTime = localTime
                         , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                         , trains =
-                            IdDict.map
-                                (\trainId train ->
-                                    Train.moveTrain
-                                        trainId
-                                        Train.defaultMaxSpeed
-                                        model.time
+                            case localGrid.trainsDisabled of
+                                TrainsDisabled ->
+                                    model.trains
+
+                                TrainsEnabled ->
+                                    Train.moveTrains
                                         time
+                                        model.time
+                                        model.trains
                                         { grid = localGrid.grid, mail = IdDict.empty }
-                                        train
-                                )
-                                model.trains
                         , removedTileParticles =
                             List.filter
                                 (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
@@ -2670,7 +2681,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
                                         else
                                             ( clickTeleportHomeTrain trainId model2, Command.none )
 
-                                    Train.IsDerailed _ ->
+                                    Train.IsDerailed _ _ ->
                                         ( clickTeleportHomeTrain trainId model2, Command.none )
 
                                     Train.IsNotStuckOrDerailed ->
@@ -3137,6 +3148,28 @@ uiUpdate id event model =
 
                         NotLoggedIn ->
                             model
+                    , Command.none
+                    )
+                )
+                model
+
+        ToggleTrainsDisabledButton ->
+            onPress
+                event
+                (\() ->
+                    ( updateLocalModel
+                        (Change.AdminSetTrainsDisabled
+                            (case LocalGrid.localModel model.localModel |> .trainsDisabled of
+                                TrainsDisabled ->
+                                    TrainsEnabled
+
+                                TrainsEnabled ->
+                                    TrainsDisabled
+                            )
+                            |> Change.AdminChange
+                        )
+                        model
+                        |> handleOutMsg False
                     , Command.none
                     )
                 )
@@ -5827,7 +5860,7 @@ getSpeechBubbles : FrontendLoaded -> List { position : Point2d WorldUnit WorldUn
 getSpeechBubbles model =
     IdDict.toList model.trains
         |> List.concatMap
-            (\( _, train ) ->
+            (\( trainId, train ) ->
                 case ( Train.status model.time train, Train.stuckOrDerailed model.time train ) of
                     ( TeleportingHome _, _ ) ->
                         []
@@ -5841,14 +5874,32 @@ getSpeechBubbles model =
                             , { position = Coord.toPoint2d (Train.home train), isRadio = True }
                             ]
 
-                    ( _, Train.IsDerailed time ) ->
+                    ( _, Train.IsDerailed time otherTrainId ) ->
                         if Duration.from time model.time |> Quantity.lessThan derailedMessageDelay then
                             []
 
                         else
-                            [ { position = Train.trainPosition model.time train, isRadio = False }
-                            , { position = Coord.toPoint2d (Train.home train), isRadio = True }
-                            ]
+                            case IdDict.get otherTrainId model.trains of
+                                Just otherTrain ->
+                                    let
+                                        position =
+                                            Train.trainPosition model.time train
+
+                                        otherPosition =
+                                            Train.trainPosition model.time otherTrain
+                                    in
+                                    if Point2d.yCoordinate position |> Quantity.lessThan (Point2d.yCoordinate otherPosition) then
+                                        [ { position = position, isRadio = False }
+                                        , { position = Coord.toPoint2d (Train.home train), isRadio = True }
+                                        ]
+
+                                    else
+                                        [ { position = Coord.toPoint2d (Train.home train), isRadio = True } ]
+
+                                Nothing ->
+                                    [ { position = Train.trainPosition model.time train, isRadio = False }
+                                    , { position = Coord.toPoint2d (Train.home train), isRadio = True }
+                                    ]
 
                     ( _, Train.IsNotStuckOrDerailed ) ->
                         []
@@ -5862,7 +5913,7 @@ stuckMessageDelay =
 
 derailedMessageDelay : Duration
 derailedMessageDelay =
-    Duration.seconds 0.5
+    Duration.seconds 1
 
 
 speechBubbleMesh : Array (Effect.WebGL.Mesh Vertex)

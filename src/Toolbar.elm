@@ -13,7 +13,7 @@ module Toolbar exposing
     )
 
 import AssocList
-import Change exposing (AdminData, LoggedIn_, UserStatus(..))
+import Change exposing (AdminData, AreTrainsDisabled(..), LoggedIn_, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
@@ -48,6 +48,7 @@ import Vector2d exposing (Vector2d)
 view : FrontendLoaded -> Ui.Element UiHover
 view model =
     let
+        localModel : LocalGrid.LocalGrid_
         localModel =
             LocalGrid.localModel model.localModel
 
@@ -141,13 +142,24 @@ view model =
                                 { spacing = 5, padding = Ui.noPadding }
                                 [ case localModel.userStatus of
                                     LoggedIn loggedIn ->
-                                        if loggedIn.isGridReadOnly then
-                                            Ui.el
-                                                { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                (Ui.colorText Color.white "Placing tiles currently disabled")
+                                        case ( loggedIn.isGridReadOnly, localModel.trainsDisabled ) of
+                                            ( True, TrainsEnabled ) ->
+                                                Ui.el
+                                                    { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                    (Ui.colorText Color.white "Placing tiles currently disabled")
 
-                                        else
-                                            Ui.none
+                                            ( True, TrainsDisabled ) ->
+                                                Ui.el
+                                                    { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                    (Ui.colorText Color.white "Trains and placing tiles disabled")
+
+                                            ( False, TrainsDisabled ) ->
+                                                Ui.el
+                                                    { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                    (Ui.colorText Color.white "Trains currently disabled")
+
+                                            ( False, TrainsEnabled ) ->
+                                                Ui.none
 
                                     NotLoggedIn ->
                                         Ui.none
@@ -173,6 +185,7 @@ view model =
                                             model.musicVolume
                                             model.soundEffectVolume
                                             nameTextInput
+                                            localModel
                                             loggedIn
 
                                     NotLoggedIn ->
@@ -438,8 +451,8 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
-settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
+settingsView : Int -> Int -> TextInput.Model -> LocalGrid.LocalGrid_ -> LoggedIn_ -> Ui.Element UiHover
+settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
     let
         musicVolumeInput =
             volumeControl
@@ -502,6 +515,7 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                             [ adminView
                                 (Ui.size allowEmailNotifications |> Coord.xRaw)
                                 loggedIn.isGridReadOnly
+                                localModel.trainsDisabled
                                 adminData
                             ]
 
@@ -512,8 +526,8 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
         )
 
 
-adminView : Int -> Bool -> AdminData -> Ui.Element UiHover
-adminView parentWidth isGridReadOnly adminData =
+adminView : Int -> Bool -> AreTrainsDisabled -> AdminData -> Ui.Element UiHover
+adminView parentWidth isGridReadOnly trainsDisabled adminData =
     Ui.column
         { spacing = 8, padding = Ui.noPadding }
         [ Ui.el
@@ -534,6 +548,7 @@ adminView parentWidth isGridReadOnly adminData =
                 Ui.text "(dev)"
             ]
         , checkbox ToggleIsGridReadOnlyButton isGridReadOnly "Read only grid"
+        , checkbox ToggleTrainsDisabledButton (trainsDisabled == TrainsDisabled) "Disable trains"
         , Ui.text
             ("Last cache regen: "
                 ++ (case adminData.lastCacheRegeneration of

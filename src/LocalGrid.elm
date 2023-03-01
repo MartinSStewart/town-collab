@@ -14,7 +14,7 @@ module LocalGrid exposing
     )
 
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), BackendReport, Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -52,6 +52,7 @@ type alias LocalGrid_ =
     , inviteTree : InviteTree
     , mail : IdDict MailId FrontendMail
     , trains : IdDict TrainId Train
+    , trainsDisabled : AreTrainsDisabled
     }
 
 
@@ -71,9 +72,10 @@ init :
         , inviteTree : InviteTree
         , mail : IdDict MailId FrontendMail
         , trains : IdDict TrainId Train
+        , trainsDisabled : AreTrainsDisabled
     }
     -> LocalModel Change LocalGrid
-init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, trains } =
+init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, trains, trainsDisabled } =
     LocalGrid
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
@@ -84,6 +86,7 @@ init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, tra
         , inviteTree = inviteTree
         , mail = mail
         , trains = trains
+        , trainsDisabled = trainsDisabled
         }
         |> LocalModel.init
 
@@ -458,6 +461,9 @@ updateLocalChange localChange model =
                         NotLoggedIn ->
                             ( model, NoOutMsg )
 
+                AdminSetTrainsDisabled trainsDisabled ->
+                    ( { model | trainsDisabled = trainsDisabled }, NoOutMsg )
+
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
@@ -727,6 +733,9 @@ updateServerChange serverChange model =
 
                 NotLoggedIn ->
                     ( model, NoOutMsg )
+
+        ServerSetTrainsDisabled areTrainsDisabled ->
+            ( { model | trainsDisabled = areTrainsDisabled }, NoOutMsg )
 
 
 addReported :

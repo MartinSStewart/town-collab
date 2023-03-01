@@ -3,7 +3,7 @@ module Backend exposing (app, app_)
 import AssocList
 import Benchmark.Reporting exposing (Report)
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
 import CollisionLookup exposing (CollisionLookup)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
@@ -73,7 +73,7 @@ subscriptions model =
                 Duration.minute
 
              else
-                Duration.seconds 0.1
+                Duration.second
             )
             WorldUpdateTimeElapsed
         , Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
@@ -100,6 +100,7 @@ init =
             , lastCacheRegeneration = Nothing
             , reported = IdDict.empty
             , isGridReadOnly = False
+            , trainsDisabled = TrainsEnabled
             , lastReportEmailToAdmin = Nothing
             }
     in
@@ -291,57 +292,12 @@ handleWorldUpdate isProduction oldTime time model =
     let
         newTrains : IdDict TrainId Train
         newTrains =
-            case model.lastWorldUpdate of
-                Just lastWorldUpdate ->
-                    IdDict.map
-                        (\trainId train ->
-                            Train.moveTrain trainId Train.defaultMaxSpeed lastWorldUpdate time model train
-                        )
-                        model.trains
-
-                Nothing ->
+            case model.trainsDisabled of
+                TrainsDisabled ->
                     model.trains
 
-        lookup : CollisionLookup WorldUnit ( Id TrainId, Train )
-        lookup =
-            List.foldl
-                (\( trainId, train ) lookup2 ->
-                    case Train.stuckOrDerailed time train of
-                        Train.IsDerailed _ ->
-                            lookup2
-
-                        _ ->
-                            CollisionLookup.addItem (Train.trainPosition time train) ( trainId, train ) lookup2
-                )
-                (CollisionLookup.init (Units.tileUnit 3))
-                (IdDict.toList newTrains)
-
-        newTrains2 : IdDict TrainId Train
-        newTrains2 =
-            IdDict.map
-                (\trainId train ->
-                    let
-                        hasCollided =
-                            CollisionLookup.collisionCandidates (Train.trainPosition time train) lookup
-                                |> List.any
-                                    (\( trainId2, train2 ) ->
-                                        if trainId == trainId2 then
-                                            False
-
-                                        else
-                                            Point2d.distanceFrom
-                                                (Train.trainPosition time train)
-                                                (Train.trainPosition time train2)
-                                                |> Quantity.lessThan (Units.tileUnit 1)
-                                    )
-                    in
-                    if hasCollided then
-                        Train.derail time train
-
-                    else
-                        train
-                )
-                newTrains
+                TrainsEnabled ->
+                    Train.moveTrains time oldTime model.trains model
 
         mergeTrains :
             { mail : IdDict MailId BackendMail
@@ -426,7 +382,7 @@ handleWorldUpdate isProduction oldTime time model =
                     { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
                 )
                 model.lastWorldUpdateTrains
-                newTrains2
+                newTrains
                 { mailChanges = [], mail = model.mail, diff = IdDict.empty }
 
         emailNotifications =
@@ -539,7 +495,7 @@ handleWorldUpdate isProduction oldTime time model =
     in
     ( { model3
         | lastWorldUpdate = Just time
-        , trains = newTrains2
+        , trains = newTrains
         , lastWorldUpdateTrains = model3.trains
         , mail = mergeTrains.mail
       }
@@ -1415,6 +1371,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                         , ServerGridReadOnly isGridReadOnly |> BroadcastToEveryoneElse
                         )
 
+                    AdminSetTrainsDisabled areTrainsDisabled ->
+                        ( { model | trainsDisabled = areTrainsDisabled }
+                        , originalChange
+                        , ServerSetTrainsDisabled areTrainsDisabled |> BroadcastToEveryoneElse
+                        )
+
             else
                 ( model, invalidChange, BroadcastToNoOne )
 
@@ -1735,6 +1697,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                 invitesToInviteTree adminId model3.users
                     |> Maybe.withDefault (InviteTree { userId = adminId, invited = [] })
             , isGridReadOnly = model.isGridReadOnly
+            , trainsDisabled = model.trainsDisabled
             }
 
         frontendUser =
