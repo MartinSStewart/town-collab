@@ -29,6 +29,7 @@ module Grid exposing
     , region
     , removeUser
     , tileMesh
+    , tileMeshHelper2
     , tileZ
     , toggleRailSplit
     , worldToCellAndLocalCoord
