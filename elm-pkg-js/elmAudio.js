@@ -1,6 +1,230 @@
 exports.init = async function init(app)
 {
-    function startAudio(e){if(window.AudioContext=window.AudioContext||window.webkitAudioContext||!1,window.AudioContext){let s=[],d=new AudioContext,l={},p=0;function o(o,t){let n=new XMLHttpRequest;n.open("GET",o,!0),n.responseType="arraybuffer",n.onerror=function(){e.ports.audioPortFromJS.send({type:0,requestId:t,error:"NetworkError"})},n.onload=function(){d.decodeAudioData(n.response,function(n){let a=s.length,r=o.endsWith(".mp3");s.push({isMp3:r,buffer:n}),e.ports.audioPortFromJS.send({type:1,requestId:t,bufferId:a,durationInSeconds:(n.length-(r?p:0))/n.sampleRate})},function(o){e.ports.audioPortFromJS.send({type:0,requestId:t,error:o.message})})},n.send()}function t(e,o){return(e-o)/1e3+d.currentTime}function n(e,o,t){o?(e.loopStart=t+o.loopStart/1e3,e.loopEnd=t+o.loopEnd/1e3,e.loop=!0):e.loop=!1}function a(e,o,t,n,a){let r=(a-e)/(t-e);return Number.isFinite(r)?r*(n-o)+o:o}function r(e,o){return e.map(e=>{let n=d.createGain();n.gain.setValueAtTime(e[0].volume,0),n.gain.linearRampToValueAtTime(e[0].volume,0);let r=t(o,o);for(let u=1;u<e.length;u++){let i=e[u-1],s=t(i.time,o),d=e[u],l=t(d.time,o);if(l>r&&r>=s){let e=a(s,i.volume,l,d.volume,r);n.gain.setValueAtTime(e,0),n.gain.linearRampToValueAtTime(d.volume,l)}else l>r?n.gain.linearRampToValueAtTime(d.volume,l):n.gain.setValueAtTime(d.volume,0)}return n})}function u(e){for(let o=1;o<e.length;o++)e[o-1].connect(e[o])}function i(e,o,a,i,s,l,m,c){let f=e.buffer,b=e.isMp3?p/d.sampleRate:0,g=d.createBufferSource();g.buffer=f,g.playbackRate.value=c,n(g,m,b);let A=r(a,l),T=d.createGain();if(T.gain.setValueAtTime(o,0),u([g,T,...A,d.destination]),i>=l)g.start(t(i,l),b+s/1e3);else{let e=(l-i)/1e3;g.start(0,e+b+s/1e3)}return{sourceNode:g,gainNode:T,volumeAtGainNodes:A}}e.ports.audioPortFromJS.send({type:2,samplesPerSecond:d.sampleRate}),e.ports.audioPortToJS.subscribe(e=>{let t=(new Date).getTime();for(let o=0;o<e.audio.length;o++){let a=e.audio[o];switch(a.action){case"stopSound":{let e=l[a.nodeGroupId];l[a.nodeGroupId]=null,e.nodes.sourceNode.stop(),e.nodes.sourceNode.disconnect(),e.nodes.gainNode.disconnect(),e.nodes.volumeAtGainNodes.map(e=>e.disconnect());break}case"setVolume":l[a.nodeGroupId].nodes.gainNode.gain.setValueAtTime(a.volume,0);break;case"setVolumeAt":{let e=l[a.nodeGroupId];e.nodes.volumeAtGainNodes.map(e=>e.disconnect()),e.nodes.gainNode.disconnect();let o=r(a.volumeAt,t);u([e.nodes.gainNode,...o,d.destination]),e.nodes.volumeAtGainNodes=o;break}case"setLoopConfig":{let e=l[a.nodeGroupId],o=s[e.bufferId].isMp3?p/d.sampleRate:0;n(e.nodes.sourceNode,e.loop,o);break}case"setPlaybackRate":l[a.nodeGroupId].nodes.sourceNode.playbackRate.setValueAtTime(a.playbackRate,0);break;case"startSound":{let e=i(s[a.bufferId],a.volume,a.volumeTimelines,a.startTime,a.startAt,t,a.loop,a.playbackRate);l[a.nodeGroupId]={bufferId:a.bufferId,nodes:e};break}}}for(let t=0;t<e.audioCmds.length;t++)o(e.audioCmds[t].audioUrl,e.audioCmds[t].requestId)})}else console.log("Web audio is not supported in your browser.")}
+    function startAudio(app)
+    {
+        window.AudioContext = window.AudioContext || window.webkitAudioContext || false;
+        if (window.AudioContext) {
+            let audioBuffers = []
+            let context = new AudioContext();
+            let audioPlaying = {};
+            /* https://lame.sourceforge.io/tech-FAQ.txt
+             * "All *decoders* I have tested introduce a delay of 528 samples. That
+             * is, after decoding an mp3 file, the output will have 528 samples of
+             * 0's appended to the front."
+             *
+             * Edit: Actually it seems like browsers already account for this lets set this to 0 instead.
+             */
+            let mp3MarginInSamples = 0;
 
+            app.ports.audioPortFromJS.send({ type: 2, samplesPerSecond: context.sampleRate });
+
+            function loadAudio(audioUrl, requestId) {
+                let request = new XMLHttpRequest();
+                request.open('GET', audioUrl, true);
+
+                request.responseType = 'arraybuffer';
+
+                request.onerror = function() {
+                    app.ports.audioPortFromJS.send({ type: 0, requestId: requestId, error: "NetworkError" });
+                }
+
+                // Decode asynchronously
+                request.onload = function() {
+                    context.decodeAudioData(request.response, function(buffer) {
+                        let bufferId = audioBuffers.length;
+
+                        let isMp3 = audioUrl.endsWith(".mp3");
+                        // TODO: Read the header of the ArrayBuffer before decoding to an AudioBuffer https://www.mp3-tech.org/programmer/frame_header.html
+                        // need to use DataViews to read from the ArrayBuffer
+                        audioBuffers.push({ isMp3: isMp3, buffer: buffer });
+
+                        app.ports.audioPortFromJS.send({
+                            type: 1,
+                            requestId: requestId,
+                            bufferId: bufferId,
+                            durationInSeconds: (buffer.length - (isMp3 ? mp3MarginInSamples : 0)) / buffer.sampleRate
+                        });
+                    }, function(error) {
+                        app.ports.audioPortFromJS.send({ type: 0, requestId: requestId, error: error.message });
+                    });
+                }
+                request.send();
+            }
+
+            function posixToContextTime(posix, currentTimePosix) {
+                return (posix - currentTimePosix) / 1000 + context.currentTime;
+            }
+
+            function setLoop(sourceNode, loop, mp3MarginInSeconds) {
+                if (loop) {
+                    sourceNode.loopStart = mp3MarginInSeconds + loop.loopStart / 1000;
+                    sourceNode.loopEnd = mp3MarginInSeconds + loop.loopEnd / 1000;
+                    sourceNode.loop = true;
+                }
+                else {
+                    sourceNode.loop = false;
+                }
+            }
+
+            function interpolate(startAt, startValue, endAt, endValue, time) {
+                let t = (time - startAt) / (endAt - startAt);
+                if (Number.isFinite(t)) {
+                    return t * (endValue - startValue) + startValue;
+                }
+                else {
+                    return startValue;
+                }
+            }
+
+            function createVolumeTimelineGainNodes(volumeAt, currentTime) {
+                return volumeAt.map(volumeTimeline => {
+                    let gainNode = context.createGain();
+
+                    gainNode.gain.setValueAtTime(volumeTimeline[0].volume, 0);
+                    gainNode.gain.linearRampToValueAtTime(volumeTimeline[0].volume, 0);
+                    let currentTime_ = posixToContextTime(currentTime, currentTime);
+
+                    for (let j = 1; j < volumeTimeline.length; j++) {
+                        let previous = volumeTimeline[j-1];
+                        let previousTime = posixToContextTime(previous.time, currentTime);
+                        let next = volumeTimeline[j];
+                        let nextTime = posixToContextTime(next.time, currentTime);
+
+                        if (nextTime > currentTime_ && currentTime_ >= previousTime) {
+                            let currentVolume = interpolate(previousTime, previous.volume, nextTime, next.volume, currentTime_);
+                            gainNode.gain.setValueAtTime(currentVolume, 0);
+                            gainNode.gain.linearRampToValueAtTime(next.volume, nextTime);
+
+                        }
+                        else if (nextTime > currentTime_) {
+                            gainNode.gain.linearRampToValueAtTime(next.volume, nextTime);
+                        }
+                        else {
+                            gainNode.gain.setValueAtTime(next.volume, 0);
+                        }
+                    }
+
+
+                    return gainNode;
+                });
+            }
+
+            function connectNodes(nodes) {
+                for (let j = 1; j < nodes.length; j++) {
+                    nodes[j-1].connect(nodes[j]);
+                }
+            }
+
+            function playSound(audioBuffer, volume, volumeTimelines, startTime, startAt, currentTime, loop, playbackRate) {
+                let buffer = audioBuffer.buffer;
+                let mp3MarginInSeconds = audioBuffer.isMp3
+                    ? mp3MarginInSamples / context.sampleRate
+                    : 0;
+                let source = context.createBufferSource();
+                source.buffer = buffer;
+                source.playbackRate.value = playbackRate;
+                setLoop(source, loop, mp3MarginInSeconds);
+
+                let timelineGainNodes = createVolumeTimelineGainNodes(volumeTimelines, currentTime);
+
+                let gainNode = context.createGain();
+                gainNode.gain.setValueAtTime(volume, 0);
+
+                connectNodes([source, gainNode, ...timelineGainNodes, context.destination]);
+
+                if (startTime >= currentTime) {
+                    source.start(posixToContextTime(startTime, currentTime), mp3MarginInSeconds + startAt / 1000);
+                }
+                else {
+                    // TODO: offset should account for looping
+                    let offset = (currentTime - startTime) / 1000;
+                    /* We limit the offset to 40,000 seconds (roughly 12 hours).
+                       Values larger than this cause the sound to ignore the offset and play from the start on Firefox.
+                    */
+                    console.log(offset);
+                    let offset2 = Math.min(offset + mp3MarginInSeconds + startAt / 1000, 40000);
+                    source.start(0, offset2);
+                }
+
+                return { sourceNode: source, gainNode: gainNode, volumeAtGainNodes: timelineGainNodes };
+            }
+
+            app.ports.audioPortToJS.subscribe( ( message ) => {
+                let currentTime = new Date().getTime();
+                for (let i = 0; i < message.audio.length; i++) {
+                    let audio = message.audio[i];
+                    switch (audio.action)
+                    {
+                        case "stopSound":
+                        {
+                            let value = audioPlaying[audio.nodeGroupId];
+                            audioPlaying[audio.nodeGroupId] = null;
+                            value.nodes.sourceNode.stop();
+                            value.nodes.sourceNode.disconnect();
+                            value.nodes.gainNode.disconnect();
+                            value.nodes.volumeAtGainNodes.map(node => node.disconnect());
+                            break;
+                        }
+                        case "setVolume":
+                        {
+                            let value = audioPlaying[audio.nodeGroupId];
+                            value.nodes.gainNode.gain.setValueAtTime(audio.volume, 0);
+                            break;
+                        }
+                        case "setVolumeAt":
+                        {
+                            let value = audioPlaying[audio.nodeGroupId];
+                            value.nodes.volumeAtGainNodes.map(node => node.disconnect());
+                            value.nodes.gainNode.disconnect();
+
+                            let newGainNodes = createVolumeTimelineGainNodes(audio.volumeAt, currentTime);
+
+                            connectNodes([value.nodes.gainNode, ...newGainNodes, context.destination]);
+
+                            value.nodes.volumeAtGainNodes = newGainNodes;
+                            break;
+                        }
+                        case "setLoopConfig":
+                        {
+                            let value = audioPlaying[audio.nodeGroupId];
+                            let audioBuffer = audioBuffers[value.bufferId];
+                            let mp3MarginInSeconds = audioBuffer.isMp3
+                                ? mp3MarginInSamples / context.sampleRate
+                                : 0;
+                            setLoop(value.nodes.sourceNode, value.loop, mp3MarginInSeconds);
+                            break;
+                        }
+                        case "setPlaybackRate":
+                        {
+                            let value = audioPlaying[audio.nodeGroupId];
+                            value.nodes.sourceNode.playbackRate.setValueAtTime(audio.playbackRate, 0);
+                            break;
+                        }
+                        case "startSound":
+                        {
+                            let nodes = playSound(
+                                audioBuffers[audio.bufferId],
+                                audio.volume,
+                                audio.volumeTimelines,
+                                audio.startTime,
+                                audio.startAt,
+                                currentTime,
+                                audio.loop,
+                                audio.playbackRate);
+                            audioPlaying[audio.nodeGroupId] = { bufferId: audio.bufferId, nodes: nodes };
+                            break;
+                        }
+                    }
+                }
+
+                for (let i = 0; i < message.audioCmds.length; i++) {
+                    loadAudio(message.audioCmds[i].audioUrl, message.audioCmds[i].requestId);
+                }
+            });
+        }
+        else {
+            console.log("Web audio is not supported in your browser.");
+        }
+    }
     startAudio(app);
 }

@@ -297,7 +297,11 @@ handleWorldUpdate isProduction oldTime time model =
                     model.trains
 
                 TrainsEnabled ->
-                    Train.moveTrains time oldTime model.trains model
+                    Train.moveTrains
+                        time
+                        (Duration.from oldTime time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
+                        model.trains
+                        model
 
         mergeTrains :
             { mail : IdDict MailId BackendMail

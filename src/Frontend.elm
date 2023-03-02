@@ -1558,7 +1558,7 @@ updateLoaded audioData msg model =
                                 TrainsEnabled ->
                                     Train.moveTrains
                                         time
-                                        model.time
+                                        (Duration.from model.time time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
                                         model.trains
                                         { grid = localGrid.grid, mail = IdDict.empty }
                         , removedTileParticles =
