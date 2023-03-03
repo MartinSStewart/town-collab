@@ -141,7 +141,6 @@ exports.init = async function init(app)
                     /* We limit the offset to 40,000 seconds (roughly 12 hours).
                        Values larger than this cause the sound to ignore the offset and play from the start on Firefox.
                     */
-                    console.log(offset);
                     let offset2 = Math.min(offset + mp3MarginInSeconds + startAt / 1000, 40000);
                     source.start(0, offset2);
                 }

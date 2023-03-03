@@ -233,13 +233,13 @@ audioLoaded audioData model =
                     --        Debug.log "time" (Duration.from derailTime model.time)
                     --in
                     playSound TrainCrash derailTime
+                        |> Audio.scaleVolume (volume model (Train.trainPosition model.time train) * 0.5)
 
                 _ ->
                     Audio.silence
         )
         allTrains
         |> Audio.group
-        |> Audio.scaleVolume 0.4
     , List.map
         (\( _, train ) ->
             case Train.status model.time train of
@@ -410,14 +410,17 @@ volume model position =
     let
         boundingBox =
             viewBoundingBox model
+
+        boundingBox2 =
+            BoundingBox2d.offsetBy (Units.tileUnit -4) boundingBox |> Maybe.withDefault boundingBox
     in
-    if BoundingBox2d.contains position boundingBox then
+    if BoundingBox2d.contains position boundingBox2 then
         1
 
     else
         let
             extrema =
-                BoundingBox2d.extrema boundingBox
+                BoundingBox2d.extrema boundingBox2
 
             (Quantity minX) =
                 extrema.minX
