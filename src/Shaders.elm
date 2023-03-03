@@ -222,6 +222,7 @@ instancedVertexShader :
             , texturePosition0 : Float
             , opacityAndUserId0 : Float
             , primaryColor0 : Float
+            , secondaryColor0 : Float
         }
         { vcoord : Vec2
         , opacity : Float
@@ -242,6 +243,7 @@ uniform vec2 size0;
 uniform float texturePosition0;
 uniform float opacityAndUserId0;
 uniform float primaryColor0;
+uniform float secondaryColor0;
 varying vec2 vcoord;
 varying float opacity;
 varying vec3 primaryColor2;
@@ -332,7 +334,7 @@ void main () {
 
 
     primaryColor2 = floatColorToVec3(primaryColor0);
-    secondaryColor2 = vec3(0.0, 0.0, 0.0);
+    secondaryColor2 = floatColorToVec3(secondaryColor0);
     position2 = position0.xy + localPosition2;
 }|]
 

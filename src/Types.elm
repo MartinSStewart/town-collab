@@ -33,11 +33,12 @@ module Types exposing
     , ViewPoint(..)
     )
 
+import Animal exposing (Animal)
 import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsDisabled, BackendReport, Change, Cow, ServerChange, UserStatus)
+import Change exposing (AreTrainsDisabled, BackendReport, Change, ServerChange, UserStatus)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -53,7 +54,7 @@ import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (CowId, EventId, Id, MailId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
@@ -277,7 +278,7 @@ type Hover
     = TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
-    | CowHover { cowId : Id CowId, cow : Cow }
+    | CowHover { cowId : Id AnimalId, cow : Animal }
     | UiBackgroundHover
     | UiHover UiHover { position : Coord Pixels }
 
@@ -323,7 +324,7 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Effect.Time.Posix, BackendError )
     , trains : IdDict TrainId Train
-    , cows : IdDict CowId Cow
+    , cows : IdDict AnimalId Animal
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : IdDict MailId BackendMail
@@ -463,7 +464,7 @@ type alias LoadingData_ =
     , viewBounds : Bounds CellUnit
     , trains : IdDict TrainId Train
     , mail : IdDict MailId FrontendMail
-    , cows : IdDict CowId Cow
+    , cows : IdDict AnimalId Animal
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree

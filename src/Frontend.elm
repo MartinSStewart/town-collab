@@ -7,16 +7,16 @@ module Frontend exposing
     , view
     )
 
+import Animal exposing (Animal)
 import Array exposing (Array)
 import AssocList
 import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsDisabled(..), BackendReport, Change(..), Cow, Report, UserStatus(..))
+import Change exposing (AreTrainsDisabled(..), BackendReport, Change(..), Report, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
-import Cow
 import Cursor exposing (Cursor, CursorMeshes, CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import DisplayName
@@ -43,7 +43,7 @@ import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
-import Id exposing (CowId, Id, TrainId, UserId)
+import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Image
 import Json.Decode
@@ -58,6 +58,7 @@ import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
+import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
@@ -1978,8 +1979,8 @@ hoverAt model mousePosition =
                 localGrid =
                     LocalGrid.localModel model.localModel
 
-                cowHovers : Maybe ( Id CowId, Cow )
-                cowHovers =
+                animalHovers : Maybe ( Id AnimalId, Animal )
+                animalHovers =
                     case model.currentTool of
                         TilePlacerTool _ ->
                             Nothing
@@ -1988,16 +1989,16 @@ hoverAt model mousePosition =
                             Nothing
 
                         HandTool ->
-                            IdDict.toList localGrid.cows
+                            IdDict.toList localGrid.animals
                                 |> List.filter
-                                    (\( cowId, _ ) ->
-                                        case cowActualPosition cowId model of
+                                    (\( animalId, animal ) ->
+                                        case animalActualPosition animalId model of
                                             Just a ->
                                                 if a.isHeld then
                                                     False
 
                                                 else
-                                                    Cow.insideCow mouseWorldPosition_ a.position
+                                                    Animal.inside mouseWorldPosition_ { animal | position = a.position }
 
                                             Nothing ->
                                                 False
@@ -2015,7 +2016,7 @@ hoverAt model mousePosition =
                     TrainHover train
 
                 Nothing ->
-                    case cowHovers of
+                    case animalHovers of
                         Just ( cowId, cow ) ->
                             CowHover { cowId = cowId, cow = cow }
 
@@ -2373,7 +2374,7 @@ setCurrentToolWithColors tool colors model =
     }
 
 
-isHoldingCow : FrontendLoaded -> Maybe { cowId : Id CowId, pickupTime : Effect.Time.Posix }
+isHoldingCow : FrontendLoaded -> Maybe { cowId : Id AnimalId, pickupTime : Effect.Time.Posix }
 isHoldingCow model =
     let
         localGrid =
@@ -5060,7 +5061,7 @@ canvasView audioData model =
                                 trainTexture
                                 viewBounds_
                                 shaderTime2
-                            ++ drawCows texture viewMatrix model shaderTime2
+                            ++ drawAnimals texture viewMatrix model shaderTime2
                             ++ drawFlags texture viewMatrix model shaderTime2
                             ++ [ Effect.WebGL.entityWith
                                     [ Shaders.blend ]
@@ -5150,8 +5151,8 @@ drawReports texture viewMatrix reportsMesh =
         }
 
 
-drawCows : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawCows texture viewMatrix model shaderTime2 =
+drawAnimals : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawAnimals texture viewMatrix model shaderTime2 =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -5160,32 +5161,50 @@ drawCows texture viewMatrix model shaderTime2 =
         viewBounds_ : BoundingBox2d WorldUnit WorldUnit
         viewBounds_ =
             viewBoundingBox model
+
+        ( textureW, textureH ) =
+            WebGL.Texture.size texture
     in
     List.filterMap
-        (\( cowId, _ ) ->
-            case cowActualPosition cowId model of
+        (\( cowId, animal ) ->
+            case animalActualPosition cowId model of
                 Just { position } ->
                     if BoundingBox2d.contains position viewBounds_ then
                         let
                             point =
                                 Point2d.unwrap position
+
+                            ( sizeW, sizeH ) =
+                                Coord.toTuple animalData.size
+
+                            animalData =
+                                Animal.getData animal.animalType
                         in
                         Effect.WebGL.entityWith
                             [ Shaders.blend ]
-                            Shaders.vertexShader
+                            Shaders.instancedVertexShader
                             Shaders.fragmentShader
-                            Cow.cowMesh
-                            { view =
-                                Mat4.makeTranslate3
-                                    (point.x * toFloat Units.tileWidth |> round |> toFloat)
-                                    (point.y * toFloat Units.tileHeight |> round |> toFloat)
-                                    (Grid.tileZ True point.y (Coord.yRaw Cow.textureSize))
-                                    |> Mat4.mul viewMatrix
+                            Train.instancedMesh
+                            { view = viewMatrix
                             , texture = texture
-                            , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                            , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime2
+                            , opacityAndUserId0 = Shaders.opaque
+                            , position0 =
+                                Vec3.vec3
+                                    (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2))
+                                    (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2))
+                                    (Grid.tileZ True point.y (Coord.yRaw animalData.size))
+                            , primaryColor0 = Color.toInt Color.white |> toFloat
+                            , secondaryColor0 = Color.toInt Color.black |> toFloat
+                            , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
+                            , texturePosition0 =
+                                Coord.xRaw animalData.texturePosition
+                                    + textureW
+                                    * Coord.yRaw animalData.texturePosition
+                                    |> toFloat
                             }
                             |> Just
 
@@ -5195,7 +5214,7 @@ drawCows texture viewMatrix model shaderTime2 =
                 Nothing ->
                     Nothing
         )
-        (IdDict.toList localGrid.cows)
+        (IdDict.toList localGrid.animals)
 
 
 drawFlags : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
@@ -5972,15 +5991,15 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
         |> Sprite.toMesh
 
 
-cowActualPosition : Id CowId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
-cowActualPosition cowId model =
+animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
+animalActualPosition animalId model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
     in
     case
         IdDict.toList localGrid.cursors
-            |> List.find (\( _, cursor ) -> Just cowId == Maybe.map .cowId cursor.holdingCow)
+            |> List.find (\( _, cursor ) -> Just animalId == Maybe.map .cowId cursor.holdingCow)
     of
         Just ( userId, cursor ) ->
             { position =
@@ -5991,9 +6010,9 @@ cowActualPosition cowId model =
                 |> Just
 
         Nothing ->
-            case IdDict.get cowId localGrid.cows of
-                Just cow ->
-                    Just { position = cow.position, isHeld = False }
+            case IdDict.get animalId localGrid.animals of
+                Just animal ->
+                    Just { position = animal.position, isHeld = False }
 
                 Nothing ->
                     Nothing

@@ -1,5 +1,5 @@
 module Id exposing
-    ( CowId
+    ( AnimalId
     , EventId
     , Id(..)
     , MailId
@@ -38,7 +38,7 @@ type EventId
     = EventId Never
 
 
-type CowId
+type AnimalId
     = CowId Never
 
 

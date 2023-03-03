@@ -20,14 +20,10 @@ module Sprite exposing
     , toMesh
     )
 
-import Bitwise
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
-import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty(..))
-import Math.Vector2
-import Math.Vector3 as Vec3
 import Quantity exposing (Quantity(..))
 import Random
 import Shaders exposing (Vertex)

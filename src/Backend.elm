@@ -1,10 +1,9 @@
 module Backend exposing (app, app_)
 
+import Animal exposing (Animal)
 import AssocList
-import Benchmark.Reporting exposing (Report)
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
-import CollisionLookup exposing (CollisionLookup)
+import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -25,14 +24,13 @@ import Env
 import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
-import Id exposing (CowId, EventId, Id, MailId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
-import Point2d
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity exposing (Quantity(..))
 import Route exposing (InviteToken, LoginOrInviteToken(..), LoginToken(..), Route(..))
@@ -1035,7 +1033,7 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                     nextCowId =
                         IdDict.nextId model.cows |> Id.toInt
 
-                    newCows : List ( Id CowId, Cow )
+                    newCows : List ( Id AnimalId, Animal )
                     newCows =
                         List.concatMap LocalGrid.getCowsForCell newCells
                             |> List.indexedMap (\index cow -> ( Id.fromInt (nextCowId + index), cow ))
@@ -1387,7 +1385,7 @@ generateVisibleRegion :
     Maybe (Bounds CellUnit)
     -> Bounds CellUnit
     -> BackendModel
-    -> ( Grid, List ( Coord CellUnit, GridCell.CellData ), List ( Id d, Cow ) )
+    -> ( Grid, List ( Coord CellUnit, GridCell.CellData ), List ( Id d, Animal ) )
 generateVisibleRegion maybeOldBounds bounds model =
     let
         nextCowId =
@@ -1404,7 +1402,7 @@ generateVisibleRegion maybeOldBounds bounds model =
                             data =
                                 Grid.getCell2 coord state.grid
 
-                            newCows : List Cow
+                            newCows : List Animal
                             newCows =
                                 if data.isNew then
                                     LocalGrid.getCowsForCell coord

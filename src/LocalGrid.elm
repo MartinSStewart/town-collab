@@ -2,7 +2,7 @@ module LocalGrid exposing
     ( LocalGrid
     , LocalGrid_
     , OutMsg(..)
-    , addCows
+    , addAnimals
     , addReported
     , getCowsForCell
     , incrementUndoCurrent
@@ -13,8 +13,9 @@ module LocalGrid exposing
     , updateFromBackend
     )
 
+import Animal exposing (Animal, AnimalType(..))
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), Cow, LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -22,7 +23,7 @@ import Dict exposing (Dict)
 import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell
-import Id exposing (CowId, Id, MailId, TrainId, UserId)
+import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
@@ -46,7 +47,7 @@ type alias LocalGrid_ =
     { grid : Grid
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
-    , cows : IdDict CowId Cow
+    , animals : IdDict AnimalId Animal
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree
@@ -66,7 +67,7 @@ init :
         | userStatus : UserStatus
         , grid : GridData
         , viewBounds : Bounds CellUnit
-        , cows : IdDict CowId Cow
+        , cows : IdDict AnimalId Animal
         , cursors : IdDict UserId Cursor
         , users : IdDict UserId FrontendUser
         , inviteTree : InviteTree
@@ -80,7 +81,7 @@ init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, tra
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
         , viewBounds = viewBounds
-        , cows = cows
+        , animals = cows
         , cursors = cursors
         , users = users
         , inviteTree = inviteTree
@@ -162,7 +163,7 @@ updateLocalChange localChange model =
                             else
                                 model.grid
                       }
-                        |> addCows change.newCells
+                        |> addAnimals change.newCells
                     , TilesRemoved change.removed
                     )
 
@@ -471,7 +472,7 @@ updateServerChange serverChange model =
         ServerGridChange { gridChange, newCells, newCows } ->
             let
                 model2 =
-                    { model | cows = IdDict.fromList newCows |> IdDict.union model.cows }
+                    { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
             in
             ( if
                 Bounds.contains
@@ -518,7 +519,7 @@ updateServerChange serverChange model =
         ServerUserConnected { userId, user, cowsSpawnedFromVisibleRegion } ->
             ( { model
                 | users = IdDict.insert userId user model.users
-                , cows = IdDict.fromList cowsSpawnedFromVisibleRegion |> IdDict.union model.cows
+                , animals = IdDict.fromList cowsSpawnedFromVisibleRegion |> IdDict.union model.animals
               }
             , HandColorOrNameChanged userId
             )
@@ -660,7 +661,7 @@ updateServerChange serverChange model =
             )
 
         ServerNewCows newCows ->
-            ( { model | cows = List.Nonempty.toList newCows |> IdDict.fromList |> IdDict.union model.cows }
+            ( { model | animals = List.Nonempty.toList newCows |> IdDict.fromList |> IdDict.union model.animals }
             , NoOutMsg
             )
 
@@ -775,7 +776,7 @@ removeReported userId position reported =
         reported
 
 
-pickupCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+pickupCow : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 pickupCow userId cowId position time model =
     ( { model
         | cursors =
@@ -796,7 +797,7 @@ pickupCow userId cowId position time model =
     )
 
 
-dropCow : Id UserId -> Id CowId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+dropCow : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 dropCow userId cowId position model =
     ( { model
         | cursors =
@@ -811,7 +812,7 @@ dropCow userId cowId position model =
                             Cursor.defaultCursor position Nothing |> Just
                 )
                 model.cursors
-        , cows = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position })) model.cows
+        , animals = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position })) model.animals
       }
     , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
     )
@@ -861,7 +862,7 @@ update_ msg model =
                         |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
                         |> Dict.union newCells2
                         |> Grid.from
-                , cows = IdDict.fromList newCows |> IdDict.union model.cows
+                , animals = IdDict.fromList newCows |> IdDict.union model.animals
                 , viewBounds = bounds
               }
             , NoOutMsg
@@ -885,50 +886,59 @@ config =
     }
 
 
-randomCows : Coord CellUnit -> Random.Generator (List Cow)
-randomCows coord =
+randomAnimals : Coord CellUnit -> Random.Generator (List Animal)
+randomAnimals coord =
     let
         worldCoord =
             Grid.cellAndLocalCoordToWorld ( coord, Coord.origin )
     in
     Random.weighted
-        ( 0.98, 0 )
-        [ ( 0.01, 1 )
-        , ( 0.005, 2 )
-        , ( 0.005, 3 )
+        ( 0.97, [] )
+        [ ( 0.01, [ Cow ] )
+        , ( 0.005, [ Cow, Cow ] )
+        , ( 0.005, [ Cow, Cow, Cow ] )
+        , ( 0.01, [ Hamster ] )
         ]
-        |> Random.andThen
-            (\amount ->
-                Random.list amount (randomCow worldCoord)
-            )
+        |> Random.andThen (randomAnimalsHelper worldCoord [])
 
 
-randomCow : Coord WorldUnit -> Random.Generator Cow
-randomCow ( Quantity xOffset, Quantity yOffset ) =
+randomAnimalsHelper : Coord WorldUnit -> List Animal -> List AnimalType -> Random.Generator (List Animal)
+randomAnimalsHelper worldCoord output list =
+    case list of
+        head :: rest ->
+            randomAnimal head worldCoord
+                |> Random.andThen (\animal -> randomAnimalsHelper worldCoord (animal :: output) rest)
+
+        [] ->
+            Random.constant output
+
+
+randomAnimal : AnimalType -> Coord WorldUnit -> Random.Generator Animal
+randomAnimal animalType ( Quantity xOffset, Quantity yOffset ) =
     Random.map2
-        (\x y -> { position = Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y } })
+        (\x y -> { position = Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y }, animalType = animalType })
         (Random.float 0 Units.cellSize)
         (Random.float 0 Units.cellSize)
 
 
-addCows : List (Coord CellUnit) -> { a | cows : IdDict CowId Cow } -> { a | cows : IdDict CowId Cow }
-addCows newCells model =
+addAnimals : List (Coord CellUnit) -> { a | animals : IdDict AnimalId Animal } -> { a | animals : IdDict AnimalId Animal }
+addAnimals newCells model =
     { model
-        | cows =
+        | animals =
             List.foldl
                 (\newCell dict ->
                     getCowsForCell newCell
                         |> List.foldl (\cow dict2 -> IdDict.insert (IdDict.nextId dict2) cow dict2) dict
                 )
-                model.cows
+                model.animals
                 newCells
     }
 
 
-getCowsForCell : Coord CellUnit -> List Cow
+getCowsForCell : Coord CellUnit -> List Animal
 getCowsForCell newCell =
     Random.step
-        (randomCows newCell)
+        (randomAnimals newCell)
         (Random.initialSeed
             (Coord.xRaw newCell * 10000 + Coord.yRaw newCell)
         )

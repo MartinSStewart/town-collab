@@ -32,7 +32,7 @@ import DisplayName exposing (DisplayName)
 import Effect.Time
 import Html
 import Html.Attributes
-import Id exposing (CowId, Id, UserId)
+import Id exposing (AnimalId, Id, UserId)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Shaders exposing (Vertex)
@@ -44,12 +44,12 @@ import WebGL
 
 type alias Cursor =
     { position : Point2d WorldUnit WorldUnit
-    , holdingCow : Maybe { cowId : Id CowId, pickupTime : Effect.Time.Posix }
+    , holdingCow : Maybe { cowId : Id AnimalId, pickupTime : Effect.Time.Posix }
     , currentTool : OtherUsersTool
     }
 
 
-defaultCursor : Point2d WorldUnit WorldUnit -> Maybe { cowId : Id CowId, pickupTime : Effect.Time.Posix } -> Cursor
+defaultCursor : Point2d WorldUnit WorldUnit -> Maybe { cowId : Id AnimalId, pickupTime : Effect.Time.Posix } -> Cursor
 defaultCursor position holdingCow =
     { position = position
     , holdingCow = holdingCow

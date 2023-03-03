@@ -16,6 +16,7 @@ module Train exposing
     , handleAddingTrain
     , home
     , homePath
+    , instancedMesh
     , leaveHome
     , moveTrain
     , moveTrains
@@ -1325,6 +1326,7 @@ trainEntity maybeUserId trainTexture viewMatrix shaderTime trainData =
         , size0 = Vec2.vec2 (toFloat trainW) y2
         , texturePosition0 = textureX + (trainData.rotationFrame * trainH * textureWidth) |> toFloat
         , primaryColor0 = Color.toInt trainData.color |> toFloat
+        , secondaryColor0 = 0
         }
 
 

@@ -29,13 +29,13 @@ module MailEditor exposing
     , undo
     )
 
+import Animal exposing (AnimalData, AnimalType(..))
 import Array exposing (Array)
 import AssocList
 import Audio exposing (AudioData)
 import Bounds
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
-import Cow
 import Cursor exposing (CursorType(..))
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
@@ -195,7 +195,6 @@ type Image
     | SunglassesEmoji Colors
     | NormalEmoji Colors
     | SadEmoji Colors
-    | Cow Colors
     | Man Colors
     | TileImage TileGroup Int Colors
     | Grass
@@ -203,6 +202,7 @@ type Image
     | DragCursor Colors
     | PinchCursor Colors
     | Line Int Color
+    | Animal AnimalType Colors
 
 
 scroll :
@@ -266,7 +266,7 @@ type OutMsg
     | ViewedMail (Id MailId)
 
 
-mailMousePosition : Coord unit -> Maybe (ImageData unit) -> Coord Pixels -> Coord unit -> Coord unit
+mailMousePosition : Coord Pixels -> Maybe ImageData -> Coord Pixels -> Coord Pixels -> Coord Pixels
 mailMousePosition elementPosition maybeImageData windowSize mousePosition =
     let
         mailScale =
@@ -335,7 +335,7 @@ uiUpdate config mousePosition id event model =
                             case model.currentTool of
                                 ImagePlacer imagePlacer ->
                                     let
-                                        imageData : ImageData units
+                                        imageData : ImageData
                                         imageData =
                                             getImageData (currentImage imagePlacer)
 
@@ -374,7 +374,7 @@ uiUpdate config mousePosition id event model =
                                                     case content.item of
                                                         ImageType image ->
                                                             let
-                                                                imageData : ImageData units
+                                                                imageData : ImageData
                                                                 imageData =
                                                                     getImageData image
 
@@ -546,7 +546,6 @@ images =
     , SunglassesEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
     , NormalEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
     , SadEmoji { primaryColor = Color.rgb255 255 255 0, secondaryColor = Color.black }
-    , Cow Cow.defaultColors
     , Man { primaryColor = Color.rgb255 188 155 102, secondaryColor = Color.rgb255 63 63 93 }
     , Grass
     , DefaultCursor Cursor.defaultColors
@@ -554,6 +553,7 @@ images =
     , PinchCursor Cursor.defaultColors
     , Line 0 Color.black
     ]
+        ++ List.map (\animal -> Animal animal Animal.defaultColors) Animal.all
         ++ List.map
             (\group ->
                 let
@@ -620,7 +620,7 @@ updateCurrentImageMesh model =
                 image =
                     currentImage imagePlacer
 
-                imageData : ImageData units
+                imageData : ImageData
                 imageData =
                     getImageData image
             in
@@ -641,11 +641,11 @@ updateCurrentImageMesh model =
             model
 
 
-type alias ImageData units =
-    { textureSize : Coord units, texturePosition : List (Coord units), colors : Colors }
+type alias ImageData =
+    { textureSize : Coord Pixels, texturePosition : List (Coord Pixels), colors : Colors }
 
 
-getImageData : Image -> ImageData units
+getImageData : Image -> ImageData
 getImageData image =
     case image of
         Stamp colors ->
@@ -712,12 +712,6 @@ getImageData image =
             , colors = colors
             }
 
-        Cow colors ->
-            { textureSize = Cow.textureSize
-            , texturePosition = [ Cow.texturePosition ]
-            , colors = colors
-            }
-
         Man colors ->
             { textureSize = Coord.xy 10 17
             , texturePosition = [ Coord.xy 494 0 ]
@@ -745,6 +739,17 @@ getImageData image =
             { textureSize = textureSize
             , texturePosition = [ texturePosition ]
             , colors = { primaryColor = color, secondaryColor = Color.black }
+            }
+
+        Animal animalType colors ->
+            let
+                data : AnimalData
+                data =
+                    Animal.getData animalType
+            in
+            { textureSize = data.size
+            , texturePosition = [ data.texturePosition ]
+            , colors = colors
             }
 
 
@@ -1889,7 +1894,7 @@ imageButtonScale size =
 imageButton : (Hover -> uiHover) -> Maybe Int -> Int -> Image -> Ui.Element uiHover
 imageButton idMap selectedIndex index image =
     let
-        imageData : ImageData units
+        imageData : ImageData
         imageData =
             getImageData image
 
@@ -1911,7 +1916,7 @@ type UiPixelUnit
     = UiPixelUnit Never
 
 
-imageMesh : Coord units -> Int -> Image -> List Vertex
+imageMesh : Coord Pixels -> Int -> Image -> List Vertex
 imageMesh position scale image =
     let
         imageData =

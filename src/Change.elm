@@ -5,7 +5,6 @@ module Change exposing
     , BackendReport
     , Change(..)
     , ClientChange(..)
-    , Cow
     , LocalChange(..)
     , LoggedIn_
     , Report
@@ -13,6 +12,7 @@ module Change exposing
     , UserStatus(..)
     )
 
+import Animal exposing (Animal)
 import Bounds exposing (Bounds)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord, RawCellCoord)
@@ -23,7 +23,7 @@ import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
-import Id exposing (CowId, EventId, Id, MailId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (MailStatus)
@@ -44,8 +44,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | PickupCow (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | DropCow (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | PickupCow (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | DropCow (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors
@@ -75,20 +75,20 @@ type AreTrainsDisabled
 
 
 type ClientChange
-    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData )) (List ( Id CowId, Cow ))
+    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData )) (List ( Id AnimalId, Animal ))
 
 
 type ServerChange
-    = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit), newCows : List ( Id CowId, Cow ) }
+    = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit), newCows : List ( Id AnimalId, Animal ) }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerPickupCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | ServerDropCow (Id UserId) (Id CowId) (Point2d WorldUnit WorldUnit)
+    | ServerPickupCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | ServerDropCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected
         { userId : Id UserId
         , user : FrontendUser
-        , cowsSpawnedFromVisibleRegion : List ( Id CowId, Cow )
+        , cowsSpawnedFromVisibleRegion : List ( Id AnimalId, Animal )
         }
     | ServerYouLoggedIn LoggedIn_ FrontendUser
     | ServerChangeHandColor (Id UserId) Colors
@@ -106,17 +106,12 @@ type ServerChange
         , deliveryTime : Effect.Time.Posix
         }
     | ServerViewedMail (Id MailId) (Id UserId)
-    | ServerNewCows (Nonempty ( Id CowId, Cow ))
+    | ServerNewCows (Nonempty ( Id AnimalId, Animal ))
     | ServerChangeTool (Id UserId) Cursor.OtherUsersTool
     | ServerGridReadOnly Bool
     | ServerVandalismReportedToAdmin (Id UserId) BackendReport
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
     | ServerSetTrainsDisabled AreTrainsDisabled
-
-
-type alias Cow =
-    { position : Point2d WorldUnit WorldUnit
-    }
 
 
 type UserStatus
