@@ -118,12 +118,20 @@ migrateBackendModel old =
     , invites = migrateAssocList migrateSecretId migrateInvite old.invites
     , lastCacheRegeneration = old.lastCacheRegeneration
     , isGridReadOnly = old.isGridReadOnly
-    , trainsDisabled =
-        -- TODO
-        Evergreen.V74.Change.TrainsEnabled
+    , trainsDisabled = migrateAreTrainsDisabled old.trainsDisabled
     , reported = migrateIdDict (List.Nonempty.map migrateBackendReported) old.reported
     , lastReportEmailToAdmin = old.lastReportEmailToAdmin
     }
+
+
+migrateAreTrainsDisabled : Evergreen.V72.Change.AreTrainsDisabled -> Evergreen.V74.Change.AreTrainsDisabled
+migrateAreTrainsDisabled old =
+    case old of
+        Evergreen.V72.Change.TrainsDisabled ->
+            Evergreen.V74.Change.TrainsDisabled
+
+        Evergreen.V72.Change.TrainsEnabled ->
+            Evergreen.V74.Change.TrainsEnabled
 
 
 migrateBackendReported : Evergreen.V72.Change.BackendReport -> Evergreen.V74.Change.BackendReport
@@ -697,7 +705,15 @@ migrateTrain old =
 
 migrateIsStuckOrDerailed : Evergreen.V72.Train.IsStuckOrDerailed -> Evergreen.V74.Train.IsStuckOrDerailed
 migrateIsStuckOrDerailed old =
-    Debug.todo ""
+    case old of
+        Evergreen.V72.Train.IsStuck a ->
+            Evergreen.V74.Train.IsStuck (migratePosix a)
+
+        Evergreen.V72.Train.IsDerailed a b ->
+            Evergreen.V74.Train.IsDerailed (migratePosix a) (migrateId b)
+
+        Evergreen.V72.Train.IsNotStuckOrDerailed ->
+            Evergreen.V74.Train.IsNotStuckOrDerailed
 
 
 rgb255 : Int -> Int -> Int -> Evergreen.V74.Color.Color
