@@ -7,6 +7,7 @@ import Evergreen.V74.Units
 type AnimalType
     = Cow
     | Hamster
+    | Sheep
 
 
 type alias Animal =

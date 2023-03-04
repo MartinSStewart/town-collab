@@ -30,3 +30,8 @@ type Sound
     | RailToggleSound
     | Meow
     | TrainCrash
+    | Sheep0
+    | Sheep1
+    | Hamster0
+    | Hamster1
+    | Hamster2
