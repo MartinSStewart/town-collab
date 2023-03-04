@@ -28,6 +28,7 @@ type alias Animal =
 type AnimalType
     = Cow
     | Hamster
+    | Sheep
 
 
 type alias AnimalData =
@@ -39,7 +40,7 @@ type alias AnimalData =
 
 all : List AnimalType
 all =
-    [ Cow, Hamster ]
+    [ Cow, Hamster, Sheep ]
 
 
 getData : AnimalType -> AnimalData
@@ -63,7 +64,13 @@ getData animal =
         Hamster ->
             { size = Coord.xy 12 14
             , texturePosition = Coord.xy 141 594
-            , sounds = Nonempty ( 1, Moo0 ) []
+            , sounds = Nonempty ( 1 / 3, Hamster0 ) [ ( 1 / 3, Hamster1 ), ( 1 / 3, Hamster2 ) ]
+            }
+
+        Sheep ->
+            { size = Coord.xy 16 12
+            , texturePosition = Coord.xy 99 608
+            , sounds = Nonempty ( 0.5, Sheep0 ) [ ( 0.5, Sheep1 ) ]
             }
 
 

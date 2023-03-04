@@ -47,6 +47,11 @@ type Sound
     | RailToggleSound
     | Meow
     | TrainCrash
+    | Sheep0
+    | Sheep1
+    | Hamster0
+    | Hamster1
+    | Hamster2
 
 
 allSounds =
@@ -78,6 +83,11 @@ allSounds =
     , RailToggleSound
     , Meow
     , TrainCrash
+    , Sheep0
+    , Sheep1
+    , Hamster0
+    , Hamster1
+    , Hamster2
     ]
 
 
@@ -231,6 +241,21 @@ load onLoad =
 
                         TrainCrash ->
                             "train-crash.mp3"
+
+                        Sheep0 ->
+                            "sheep0.mp3"
+
+                        Sheep1 ->
+                            "sheep1.mp3"
+
+                        Hamster0 ->
+                            "hamster0.mp3"
+
+                        Hamster1 ->
+                            "hamster1.mp3"
+
+                        Hamster2 ->
+                            "hamster2.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)

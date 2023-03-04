@@ -345,24 +345,25 @@ audioLoaded audioData model =
             case IdDict.get userId localModel.cursors of
                 Just cursor ->
                     case cursor.holdingCow of
-                        Just { pickupTime } ->
-                            playSound
-                                (Random.step
-                                    (Random.weighted
-                                        ( 1 / 6, Moo0 )
-                                        [ ( 1 / 6, Moo1 )
-                                        , ( 1 / 12, Moo2 )
-                                        , ( 1 / 12, Moo3 )
-                                        , ( 1 / 6, Moo4 )
-                                        , ( 1 / 6, Moo5 )
-                                        , ( 1 / 6, Moo6 )
-                                        ]
-                                    )
-                                    (Random.initialSeed (Effect.Time.posixToMillis pickupTime))
-                                    |> Tuple.first
-                                )
-                                pickupTime
-                                |> Audio.scaleVolume 0.5
+                        Just { cowId, pickupTime } ->
+                            case IdDict.get cowId localModel.animals of
+                                Just animal ->
+                                    let
+                                        sounds : Nonempty ( Float, Sound )
+                                        sounds =
+                                            Animal.getData animal.animalType |> .sounds
+                                    in
+                                    playSound
+                                        (Random.step
+                                            (Random.weighted (List.Nonempty.head sounds) (List.Nonempty.tail sounds))
+                                            (Random.initialSeed (Effect.Time.posixToMillis pickupTime))
+                                            |> Tuple.first
+                                        )
+                                        pickupTime
+                                        |> Audio.scaleVolume 0.5
+
+                                Nothing ->
+                                    Audio.silence
 
                         Nothing ->
                             Audio.silence

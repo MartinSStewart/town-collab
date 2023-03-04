@@ -893,11 +893,11 @@ randomAnimals coord =
             Grid.cellAndLocalCoordToWorld ( coord, Coord.origin )
     in
     Random.weighted
-        ( 0.97, [] )
-        [ ( 0.01, [ Cow ] )
-        , ( 0.005, [ Cow, Cow ] )
+        ( 0.98, [] )
+        [ ( 0.005, [ Cow, Cow ] )
         , ( 0.005, [ Cow, Cow, Cow ] )
-        , ( 0.01, [ Hamster ] )
+        , ( 0.005, [ Hamster ] )
+        , ( 0.005, [ Sheep, Sheep ] )
         ]
         |> Random.andThen (randomAnimalsHelper worldCoord [])
 
