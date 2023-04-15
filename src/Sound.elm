@@ -36,6 +36,7 @@ type Sound
     | TeleportSound
     | Music0
     | Music1
+    | Music2
     | Ambience0
     | Moo0
     | Moo1
@@ -72,6 +73,7 @@ allSounds =
     , TeleportSound
     , Music0
     , Music1
+    , Music2
     , Ambience0
     , Moo0
     , Moo1
@@ -92,7 +94,7 @@ allSounds =
 
 
 songs =
-    Nonempty Music0 [ Music1 ]
+    Nonempty Music0 [ Music1, Music2 ]
 
 
 isMusic : Sound -> Bool
@@ -208,6 +210,9 @@ load onLoad =
 
                         Music1 ->
                             "dawn.mp3"
+
+                        Music2 ->
+                            "now-arriving-at.mp3"
 
                         Ambience0 ->
                             "windy-grasslands-ambience.mp3"
