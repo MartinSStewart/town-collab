@@ -1,4 +1,4 @@
-port module Ports exposing (audioPortFromJS, audioPortToJS, copyToClipboard, getLocalStorage, gotLocalStorage, martinsstewart_elm_device_pixel_ratio_from_js, martinsstewart_elm_device_pixel_ratio_to_js, mouse_leave, readFromClipboardRequest, readFromClipboardResponse, setLocalStorage, user_agent_from_js, user_agent_to_js)
+port module Ports exposing (audioPortFromJS, audioPortToJS, copyToClipboard, getLocalStorage, gotLocalStorage, gotWebGlFix, martinsstewart_elm_device_pixel_ratio_from_js, martinsstewart_elm_device_pixel_ratio_to_js, mouse_leave, readFromClipboardRequest, readFromClipboardResponse, setLocalStorage, user_agent_from_js, user_agent_to_js, webGlFix)
 
 import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.Subscription as Subscription exposing (Subscription)
@@ -40,6 +40,28 @@ port got_local_storage : (Json.Decode.Value -> msg) -> Sub msg
 
 
 port set_local_storage : Json.Encode.Value -> Cmd msg
+
+
+port webgl_fix_to_js : Json.Encode.Value -> Cmd msg
+
+
+port webgl_fix_from_js : (Json.Decode.Value -> msg) -> Sub msg
+
+
+webGlFix : Command FrontendOnly toMsg msg
+webGlFix =
+    Command.sendToJs
+        "webgl_fix_to_js"
+        webgl_fix_to_js
+        Json.Encode.null
+
+
+gotWebGlFix : msg -> Subscription FrontendOnly msg
+gotWebGlFix sub =
+    Subscription.fromJs
+        "webgl_fix_from_js"
+        webgl_fix_from_js
+        (\_ -> sub)
 
 
 getLocalStorage : Command FrontendOnly toMsg msg

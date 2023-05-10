@@ -766,16 +766,6 @@ init url key =
             Effect.Browser.Dom.getViewport
         , Effect.Task.perform (\time -> Duration.addTo time (PingData.pingOffset { pingData = Nothing }) |> ShortIntervalElapsed) Effect.Time.now
         , cmd
-        , Effect.WebGL.Texture.loadWith
-            { magnify = Effect.WebGL.Texture.nearest
-            , minify = Effect.WebGL.Texture.nearest
-            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-            , verticalWrap = Effect.WebGL.Texture.clampToEdge
-            , flipY = False
-            }
-            "/texture.png"
-            |> Effect.Task.attempt TextureLoaded
-        , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
         , Ports.getLocalStorage
         ]
     , Sound.load SoundLoaded
@@ -874,7 +864,7 @@ update audioData msg model =
 
                 GotUserAgentPlatform userAgentPlatform ->
                     ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgentPlatform) }
-                    , Command.none
+                    , Ports.webGlFix
                     )
 
                 LoadedUserSettings userSettings ->
@@ -884,6 +874,22 @@ update audioData msg model =
                             , soundEffectVolume = userSettings.soundEffectVolume
                         }
                     , Command.none
+                    )
+
+                GotWebGlFix ->
+                    ( model
+                    , Command.batch
+                        [ Effect.WebGL.Texture.loadWith
+                            { magnify = Effect.WebGL.Texture.nearest
+                            , minify = Effect.WebGL.Texture.nearest
+                            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+                            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+                            , flipY = False
+                            }
+                            "/texture.png"
+                            |> Effect.Task.attempt TextureLoaded
+                        , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
+                        ]
                     )
 
                 _ ->
@@ -1646,6 +1652,9 @@ updateLoaded audioData msg model =
             ( { model | musicVolume = userSettings.musicVolume, soundEffectVolume = userSettings.soundEffectVolume }
             , Command.none
             )
+
+        GotWebGlFix ->
+            ( model, Command.none )
 
 
 pasteTextTool text model =
@@ -5857,14 +5866,17 @@ subscriptions _ model =
         , Ports.readFromClipboardResponse PastedText
         , case model of
             Loading _ ->
-                Subscription.fromJs
-                    "user_agent_from_js"
-                    Ports.user_agent_from_js
-                    (\value ->
-                        Json.Decode.decodeValue Json.Decode.string value
-                            |> Result.withDefault ""
-                            |> GotUserAgentPlatform
-                    )
+                Subscription.batch
+                    [ Subscription.fromJs
+                        "user_agent_from_js"
+                        Ports.user_agent_from_js
+                        (\value ->
+                            Json.Decode.decodeValue Json.Decode.string value
+                                |> Result.withDefault ""
+                                |> GotUserAgentPlatform
+                        )
+                    , Ports.gotWebGlFix GotWebGlFix
+                    ]
 
             Loaded loaded ->
                 Subscription.batch

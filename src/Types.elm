@@ -415,6 +415,7 @@ type FrontendMsg_
     | PastedText String
     | GotUserAgentPlatform String
     | LoadedUserSettings UserSettings
+    | GotWebGlFix
 
 
 type ToBackend
