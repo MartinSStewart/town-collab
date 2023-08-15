@@ -1,15 +1,15 @@
 module Tests exposing (..)
 
 import Color
-import Coord exposing (Coord)
+import Coord
 import Effect.Time
 import Expect exposing (Expectation)
-import Grid exposing (Grid)
+import Grid
 import GridCell
 import Id
 import Quantity exposing (Quantity(..))
 import Test exposing (Test, describe, test)
-import Tile exposing (Direction(..), RailPath(..), Tile(..))
+import Tile exposing (Tile(..))
 import Train exposing (Train(..))
 
 

@@ -13,7 +13,6 @@ import Array exposing (Array)
 import Color exposing (Color)
 import Coord exposing (Coord)
 import Effect.WebGL
-import Math.Vector3 as Vec3
 import Pixels exposing (Pixels)
 import Shaders exposing (Vertex)
 import Tile

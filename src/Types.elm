@@ -38,8 +38,8 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsDisabled, BackendReport, Change, ServerChange, UserStatus)
-import Color exposing (Color, Colors)
+import Change exposing (AreTrainsDisabled, BackendReport, Change, UserStatus)
+import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
 import Dict exposing (Dict)
@@ -67,13 +67,13 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
 import Quantity exposing (Quantity)
-import Route exposing (ConfirmEmailKey, InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
+import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput
 import Tile exposing (Tile, TileGroup)
 import Time
-import Train exposing (Train, TrainDiff)
+import Train exposing (Train)
 import Ui
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)

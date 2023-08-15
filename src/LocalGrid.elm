@@ -16,7 +16,7 @@ module LocalGrid exposing
 import Animal exposing (Animal, AnimalType(..))
 import Bounds exposing (Bounds)
 import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
-import Color exposing (Color, Colors)
+import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)

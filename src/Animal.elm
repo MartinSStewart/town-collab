@@ -16,7 +16,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Sound exposing (Sound(..))
 import Units exposing (WorldUnit)
-import Vector2d exposing (Vector2d)
+import Vector2d
 
 
 type alias Animal =

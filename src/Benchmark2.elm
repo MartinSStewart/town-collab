@@ -1,22 +1,9 @@
 module Benchmark2 exposing (..)
 
-import Array
-import AssocSet
 import Benchmark
-import Benchmark.Reporting
 import Benchmark.Runner
-import Color exposing (Color(..))
-import Coord
-import Dict
-import Grid
-import GridCell
-import Id
-import IdDict
-import Quantity exposing (Quantity(..))
-import Tile exposing (TileGroup(..))
 import Toolbar
-import Types exposing (ToolButton(..), UiHover(..))
-import Ui exposing (BorderAndFill(..), Element(..))
+import Ui
 
 
 main =

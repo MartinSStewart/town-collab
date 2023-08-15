@@ -28,16 +28,6 @@ toString toStringFunc (Untrusted a) =
     toStringFunc a
 
 
-fromResult : Result e a -> Validation a
-fromResult result =
-    case result of
-        Ok ok ->
-            Valid ok
-
-        Err _ ->
-            Invalid
-
-
 fromMaybe : Maybe a -> Validation a
 fromMaybe maybe =
     case maybe of

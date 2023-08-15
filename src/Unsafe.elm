@@ -32,9 +32,4 @@ emailAddress text =
 -}
 unreachable : () -> a
 unreachable () =
-    let
-        -- Trigger an exception
-        _ =
-            (\_ -> 0) == (\_ -> 1)
-    in
     unreachable ()

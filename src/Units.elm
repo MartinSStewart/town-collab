@@ -19,7 +19,7 @@ import Coord exposing (Coord)
 import Frame2d exposing (Frame2d)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity(..), Rate)
+import Quantity exposing (Quantity)
 
 
 type WorldUnit

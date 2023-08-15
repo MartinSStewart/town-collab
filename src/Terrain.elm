@@ -2,7 +2,6 @@ module Terrain exposing (..)
 
 import Array2D exposing (Array2D)
 import Coord exposing (Coord)
-import List.Extra as List
 import Quantity exposing (Quantity(..))
 import Random
 import Simplex

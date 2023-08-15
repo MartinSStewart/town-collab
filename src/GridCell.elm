@@ -17,12 +17,10 @@ module GridCell exposing
     , updateCache
     )
 
-import AssocList
 import AssocSet
 import Bounds exposing (Bounds)
-import Color exposing (Color, Colors)
+import Color exposing (Colors)
 import Coord exposing (Coord)
-import Dict exposing (Dict)
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty(..))

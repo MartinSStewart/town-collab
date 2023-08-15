@@ -19,7 +19,7 @@ import Id exposing (SecretId)
 import Units exposing (WorldUnit)
 import Url exposing (Url)
 import Url.Builder
-import Url.Parser exposing ((</>), (<?>))
+import Url.Parser exposing ((<?>))
 import Url.Parser.Query
 
 
@@ -132,16 +132,6 @@ inviteToken =
 notifyMe : String
 notifyMe =
     "notify-me"
-
-
-notifyMeConfirmation : String
-notifyMeConfirmation =
-    "a"
-
-
-unsubscribe : String
-unsubscribe =
-    "b"
 
 
 type Route

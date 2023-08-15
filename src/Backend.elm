@@ -9,7 +9,7 @@ import Crypto.Hash
 import Cursor
 import Dict
 import DisplayName
-import Duration exposing (Duration)
+import Duration
 import Effect.Command as Command exposing (BackendOnly, Command)
 import Effect.Http
 import Effect.Lamdera exposing (ClientId, SessionId)
@@ -21,7 +21,6 @@ import Email.Html
 import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
 import Env
-import EverySet exposing (EverySet)
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (AnimalId, EventId, Id, MailId, SecretId, TrainId, UserId)
@@ -32,14 +31,14 @@ import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
-import Quantity exposing (Quantity(..))
-import Route exposing (InviteToken, LoginOrInviteToken(..), LoginToken(..), Route(..))
+import Quantity
+import Route exposing (LoginOrInviteToken(..), Route(..))
 import String.Nonempty exposing (NonemptyString(..))
-import Tile exposing (RailPathType(..), Tile(..))
+import Tile exposing (RailPathType(..))
 import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
 import Undo
-import Units exposing (CellUnit, WorldUnit)
+import Units exposing (CellUnit)
 import Untrusted exposing (Validation(..))
 import User exposing (FrontendUser, InviteTree(..))
 
@@ -508,11 +507,6 @@ handleWorldUpdate isProduction oldTime time model =
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
 addError time error model =
     { model | errors = ( time, error ) :: model.errors }
-
-
-backendUserId : Id UserId
-backendUserId =
-    Id.fromInt -1
 
 
 getUserFromSessionId : SessionId -> BackendModel -> Maybe ( Id UserId, BackendUserData )
@@ -1458,26 +1452,6 @@ removeTrain trainId model =
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
 updateUser userId updateUserFunc model =
     { model | users = IdDict.update userId (Maybe.map updateUserFunc) model.users }
-
-
-{-| Gets globally hidden users known to a specific user.
--}
-hiddenUsers :
-    Maybe (Id UserId)
-    -> { a | users : IdDict UserId { b | hiddenForAll : Bool } }
-    -> EverySet (Id UserId)
-hiddenUsers userId model =
-    model.users
-        |> IdDict.toList
-        |> List.filterMap
-            (\( userId_, { hiddenForAll } ) ->
-                if hiddenForAll && userId /= Just userId_ then
-                    Just userId_
-
-                else
-                    Nothing
-            )
-        |> EverySet.fromList
 
 
 getUserInbox : Id UserId -> BackendModel -> IdDict MailId MailEditor.ReceivedMail

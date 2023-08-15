@@ -40,26 +40,22 @@ module Grid exposing
 import Array2D exposing (Array2D)
 import AssocSet
 import Basics.Extra
-import Bitwise
 import Bounds exposing (Bounds)
-import Color exposing (Color, Colors)
+import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
-import Cursor
 import Dict exposing (Dict)
 import DisplayName
 import GridCell exposing (Cell, CellData)
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Extra as List
-import Math.Vector2 as Vec2 exposing (Vec2)
-import Math.Vector3 as Vec3 exposing (Vec3)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sprite
 import Terrain exposing (TerrainType(..), TerrainUnit, TerrainValue)
-import Tile exposing (CollisionMask(..), RailPathType(..), Tile(..), TileData)
+import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import User exposing (FrontendUser)
 import Vector2d

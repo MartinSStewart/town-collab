@@ -34,13 +34,12 @@ import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
-import Math.Vector2 exposing (Vec2)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
 import Sprite
-import Units exposing (CellLocalUnit, TileLocalUnit, WorldUnit)
+import Units exposing (CellLocalUnit, TileLocalUnit)
 import Vector2d
 
 

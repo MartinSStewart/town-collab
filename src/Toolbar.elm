@@ -23,7 +23,7 @@ import Duration
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Env
-import Id exposing (Id, MailId, UserId)
+import Id
 import IdDict exposing (IdDict)
 import List.Extra as List
 import List.Nonempty
@@ -41,7 +41,7 @@ import Train
 import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
-import User exposing (FrontendUser, InviteTree(..))
+import User
 import Vector2d exposing (Vector2d)
 
 

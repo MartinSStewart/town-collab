@@ -3,7 +3,6 @@ module EndToEndTests exposing (..)
 import AssocList
 import Audio
 import Backend
-import Bounds
 import Bytes exposing (Bytes)
 import Change exposing (UserStatus(..))
 import Coord

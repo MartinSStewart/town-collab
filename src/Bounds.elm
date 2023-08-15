@@ -22,7 +22,6 @@ module Bounds exposing
 
 import BoundingBox2d exposing (BoundingBox2d)
 import Coord exposing (Coord)
-import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import NonemptyExtra as Nonempty
 import Point2d exposing (Point2d)
@@ -87,13 +86,6 @@ fromCoords coords =
 fromCoordAndSize : Coord unit -> Coord unit -> Bounds unit
 fromCoordAndSize coord size =
     fromCoords (Nonempty coord [ Coord.plus coord size ])
-
-
-centerAndHalfSize : Coord unit -> Coord unit -> Bounds unit
-centerAndHalfSize centerPoint halfSize =
-    bounds
-        (centerPoint |> Coord.minus halfSize)
-        (centerPoint |> Coord.plus halfSize)
 
 
 translate : Coord unit -> Bounds unit -> Bounds unit

@@ -29,14 +29,14 @@ module MailEditor exposing
     , undo
     )
 
-import Animal exposing (AnimalData, AnimalType(..))
+import Animal exposing (AnimalData, AnimalType)
 import Array exposing (Array)
 import AssocList
 import Audio exposing (AudioData)
 import Bounds
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
-import Cursor exposing (CursorType(..))
+import Cursor exposing (CursorType)
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Time
@@ -50,8 +50,6 @@ import Keyboard exposing (Key(..))
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Matrix4 as Mat4
-import Math.Vector2 as Vec2 exposing (Vec2)
-import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -59,11 +57,10 @@ import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sound exposing (Sound(..))
 import Sprite
-import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Time exposing (Month(..))
 import Ui exposing (BorderAndFill(..), UiEvent)
-import Units exposing (MailPixelUnit, WorldUnit)
+import Units
 import User exposing (FrontendUser)
 import Vector2d
 import WebGL.Texture

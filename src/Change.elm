@@ -14,7 +14,7 @@ module Change exposing
 
 import Animal exposing (Animal)
 import Bounds exposing (Bounds)
-import Color exposing (Color, Colors)
+import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor
 import Dict exposing (Dict)
