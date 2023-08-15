@@ -659,6 +659,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
                     (getAdminReports loadedLocalModel.localModel)
             , lastReportTilePlaced = Nothing
             , lastReportTileRemoved = Nothing
+            , hideUi = False
             }
                 |> setCurrentTool HandToolButton
     in
@@ -1080,7 +1081,7 @@ updateLoaded audioData msg model =
                             )
 
                         Nothing ->
-                            case ( model.focus, key ) of
+                            case ( model.focus, Debug.log "key" key ) of
                                 ( _, Keyboard.Tab ) ->
                                     ( setFocus
                                         (if keyDown Keyboard.Shift model then
@@ -1093,8 +1094,14 @@ updateLoaded audioData msg model =
                                     , Command.none
                                     )
 
+                                ( _, Keyboard.F1 ) ->
+                                    ( { model | hideUi = not model.hideUi }, Command.none )
+
                                 ( Just id, _ ) ->
                                     uiUpdate id (Ui.KeyDown key) model
+
+                                ( Nothing, Keyboard.Character "m" ) ->
+                                    ( { model | showMap = not model.showMap }, Command.none )
 
                                 _ ->
                                     keyMsgCanvasUpdate key model

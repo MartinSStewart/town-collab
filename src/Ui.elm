@@ -115,24 +115,33 @@ type alias Padding =
     { topLeft : Coord Pixels, bottomRight : Coord Pixels }
 
 
+listsVisuallyEqual : List (Element id) -> List (Element id) -> Bool
+listsVisuallyEqual a b =
+    if List.length a == List.length b then
+        List.all identity (List.map2 visuallyEqual a b)
+
+    else
+        False
+
+
 visuallyEqual : Element id -> Element id -> Bool
 visuallyEqual a b =
     case ( a, b ) of
         ( Single aData aChild, Single bData bChild ) ->
             (aData.padding == bData.padding)
                 && (aData.borderAndFill == bData.borderAndFill)
-                && List.all identity (List.map2 visuallyEqual aData.inFront bData.inFront)
+                && listsVisuallyEqual aData.inFront bData.inFront
                 && visuallyEqual aChild bChild
 
         ( Row aRow aChildren, Row bRow bChildren ) ->
             (aRow.spacing == bRow.spacing)
                 && (aRow.padding == bRow.padding)
-                && List.all identity (List.map2 visuallyEqual aChildren bChildren)
+                && listsVisuallyEqual aChildren bChildren
 
         ( Column aColumn aChildren, Column bColumn bChildren ) ->
             (aColumn.spacing == bColumn.spacing)
                 && (aColumn.padding == bColumn.padding)
-                && List.all identity (List.map2 visuallyEqual aChildren bChildren)
+                && listsVisuallyEqual aChildren bChildren
 
         ( Text aText, Text bText ) ->
             (aText.text == bText.text)
@@ -150,8 +159,7 @@ visuallyEqual a b =
             (aButton.padding == bButton.padding)
                 && (aButton.borderAndFill == bButton.borderAndFill)
                 && (aButton.borderAndFillFocus == bButton.borderAndFillFocus)
-                && (List.length aButton.inFront == List.length bButton.inFront)
-                && List.all identity (List.map2 visuallyEqual aButton.inFront bButton.inFront)
+                && listsVisuallyEqual aButton.inFront bButton.inFront
                 && visuallyEqual aChild bChild
 
         ( Quads aQuad, Quads bQuad ) ->

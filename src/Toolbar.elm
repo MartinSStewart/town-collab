@@ -61,46 +61,50 @@ view model =
                     IdDict.size localModel.cursors
 
         toolbarElement =
-            Ui.el
-                { padding = Ui.noPadding
-                , inFront = []
-                , borderAndFill = borderAndFill
-                }
-                (case localModel.userStatus of
-                    LoggedIn loggedIn ->
-                        toolbarUi
-                            model.hasCmdKey
-                            (case IdDict.get loggedIn.userId localModel.users of
-                                Just user ->
-                                    user.handColor
+            if model.hideUi then
+                Ui.none
 
-                                Nothing ->
-                                    Cursor.defaultColors
-                            )
-                            model.primaryColorTextInput
-                            model.secondaryColorTextInput
-                            model.tileColors
-                            model.tileHotkeys
-                            (case model.currentTool of
-                                HandTool ->
-                                    HandToolButton
+            else
+                Ui.el
+                    { padding = Ui.noPadding
+                    , inFront = []
+                    , borderAndFill = borderAndFill
+                    }
+                    (case localModel.userStatus of
+                        LoggedIn loggedIn ->
+                            toolbarUi
+                                model.hasCmdKey
+                                (case IdDict.get loggedIn.userId localModel.users of
+                                    Just user ->
+                                        user.handColor
 
-                                TilePlacerTool { tileGroup } ->
-                                    TilePlacerToolButton tileGroup
+                                    Nothing ->
+                                        Cursor.defaultColors
+                                )
+                                model.primaryColorTextInput
+                                model.secondaryColorTextInput
+                                model.tileColors
+                                model.tileHotkeys
+                                (case model.currentTool of
+                                    HandTool ->
+                                        HandToolButton
 
-                                TilePickerTool ->
-                                    TilePickerToolButton
+                                    TilePlacerTool { tileGroup } ->
+                                        TilePlacerToolButton tileGroup
 
-                                TextTool _ ->
-                                    TextToolButton
+                                    TilePickerTool ->
+                                        TilePickerToolButton
 
-                                ReportTool ->
-                                    ReportToolButton
-                            )
+                                    TextTool _ ->
+                                        TextToolButton
 
-                    NotLoggedIn ->
-                        loginToolbarUi model.pressedSubmitEmail model.loginTextInput
-                )
+                                    ReportTool ->
+                                        ReportToolButton
+                                )
+
+                        NotLoggedIn ->
+                            loginToolbarUi model.pressedSubmitEmail model.loginTextInput
+                    )
     in
     case ( localModel.userStatus, model.mailEditor ) of
         ( LoggedIn loggedIn, Just mailEditor ) ->
@@ -116,169 +120,176 @@ view model =
             Ui.bottomCenter
                 { size = model.windowSize
                 , inFront =
-                    [ case model.contextMenu of
-                        Just contextMenu ->
-                            contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
+                    (if model.hideUi then
+                        []
 
-                        Nothing ->
+                     else
+                        [ case model.contextMenu of
+                            Just contextMenu ->
+                                contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
+
+                            Nothing ->
+                                Ui.none
+                        , if model.showInviteTree then
+                            Ui.topRight
+                                { size = model.windowSize }
+                                (Ui.el
+                                    { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
+                                    (User.drawInviteTree localModel.users localModel.inviteTree)
+                                )
+
+                          else
                             Ui.none
-                    , if model.showInviteTree then
-                        Ui.topRight
-                            { size = model.windowSize }
-                            (Ui.el
-                                { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
-                                (User.drawInviteTree localModel.users localModel.inviteTree)
-                            )
+                        , if isDisconnected model then
+                            MailEditor.disconnectWarning model.windowSize
 
-                      else
-                        Ui.none
-                    , if isDisconnected model then
-                        MailEditor.disconnectWarning model.windowSize
+                          else
+                            Ui.topRight
+                                { size = model.windowSize }
+                                (Ui.row
+                                    { spacing = 5, padding = Ui.noPadding }
+                                    [ case localModel.userStatus of
+                                        LoggedIn loggedIn ->
+                                            case ( loggedIn.isGridReadOnly, localModel.trainsDisabled ) of
+                                                ( True, TrainsEnabled ) ->
+                                                    Ui.el
+                                                        { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                        (Ui.colorText Color.white "Placing tiles currently disabled")
 
-                      else
-                        Ui.topRight
-                            { size = model.windowSize }
-                            (Ui.row
-                                { spacing = 5, padding = Ui.noPadding }
-                                [ case localModel.userStatus of
-                                    LoggedIn loggedIn ->
-                                        case ( loggedIn.isGridReadOnly, localModel.trainsDisabled ) of
-                                            ( True, TrainsEnabled ) ->
-                                                Ui.el
-                                                    { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                    (Ui.colorText Color.white "Placing tiles currently disabled")
+                                                ( True, TrainsDisabled ) ->
+                                                    Ui.el
+                                                        { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                        (Ui.colorText Color.white "Trains and placing tiles disabled")
 
-                                            ( True, TrainsDisabled ) ->
-                                                Ui.el
-                                                    { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                    (Ui.colorText Color.white "Trains and placing tiles disabled")
+                                                ( False, TrainsDisabled ) ->
+                                                    Ui.el
+                                                        { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                        (Ui.colorText Color.white "Trains currently disabled")
 
-                                            ( False, TrainsDisabled ) ->
-                                                Ui.el
-                                                    { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                    (Ui.colorText Color.white "Trains currently disabled")
+                                                ( False, TrainsEnabled ) ->
+                                                    Ui.none
 
-                                            ( False, TrainsEnabled ) ->
-                                                Ui.none
+                                        NotLoggedIn ->
+                                            Ui.none
+                                    , Ui.button
+                                        { id = UsersOnlineButton
+                                        , padding = Ui.paddingXY 10 4
+                                        }
+                                        (if otherUsersOnline == 1 then
+                                            Ui.text "1 user online"
 
-                                    NotLoggedIn ->
-                                        Ui.none
-                                , Ui.button
-                                    { id = UsersOnlineButton
-                                    , padding = Ui.paddingXY 10 4
-                                    }
-                                    (if otherUsersOnline == 1 then
-                                        Ui.text "1 user online"
+                                         else
+                                            Ui.text (String.fromInt otherUsersOnline ++ " users online")
+                                        )
+                                    ]
+                                )
+                        , Ui.row
+                            { padding = Ui.noPadding, spacing = 4 }
+                            [ case model.topMenuOpened of
+                                Just (SettingsMenu nameTextInput) ->
+                                    case localModel.userStatus of
+                                        LoggedIn loggedIn ->
+                                            settingsView
+                                                model.musicVolume
+                                                model.soundEffectVolume
+                                                nameTextInput
+                                                localModel
+                                                loggedIn
+
+                                        NotLoggedIn ->
+                                            Ui.none
+
+                                Just LoggedOutSettingsMenu ->
+                                    loggedOutSettingsView model.musicVolume model.soundEffectVolume
+
+                                _ ->
+                                    Ui.button
+                                        { id = SettingsButton
+                                        , padding = Ui.paddingXY 10 4
+                                        }
+                                        (Ui.text "Settings")
+                            , case localModel.userStatus of
+                                LoggedIn loggedIn ->
+                                    inviteView
+                                        (model.topMenuOpened == Just InviteMenu)
+                                        loggedIn.emailAddress
+                                        model.inviteTextInput
+                                        model.inviteSubmitStatus
+
+                                NotLoggedIn ->
+                                    Ui.none
+                            , Ui.button
+                                { id = ShowMapButton
+                                , padding = Ui.paddingXY 10 4
+                                }
+                                (Ui.text
+                                    (if model.showMap then
+                                        "Hide map"
 
                                      else
-                                        Ui.text (String.fromInt otherUsersOnline ++ " users online")
+                                        "Show map"
                                     )
-                                ]
-                            )
-                    , Ui.row
-                        { padding = Ui.noPadding, spacing = 4 }
-                        [ case model.topMenuOpened of
-                            Just (SettingsMenu nameTextInput) ->
-                                case localModel.userStatus of
-                                    LoggedIn loggedIn ->
-                                        settingsView
-                                            model.musicVolume
-                                            model.soundEffectVolume
-                                            nameTextInput
-                                            localModel
-                                            loggedIn
-
-                                    NotLoggedIn ->
+                                )
+                            , case localModel.userStatus of
+                                LoggedIn loggedIn ->
+                                    let
+                                        unviewedMail =
+                                            IdDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
+                                    in
+                                    if IdDict.isEmpty unviewedMail then
                                         Ui.none
 
-                            Just LoggedOutSettingsMenu ->
-                                loggedOutSettingsView model.musicVolume model.soundEffectVolume
+                                    else
+                                        Ui.customButton
+                                            { id = YouGotMailButton
+                                            , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
+                                            , borderAndFill = Ui.defaultButtonBorderAndFill
+                                            , borderAndFillFocus = Ui.defaultButtonBorderAndFill
+                                            , inFront = []
+                                            }
+                                            (Ui.row
+                                                { spacing = 4, padding = Ui.noPadding }
+                                                [ Ui.text "You got mail"
+                                                , Ui.el
+                                                    { padding = Ui.paddingXY 8 0
+                                                    , inFront = []
+                                                    , borderAndFill = FillOnly (Color.rgb255 255 50 50)
+                                                    }
+                                                    (Ui.colorText Color.white (String.fromInt (IdDict.size unviewedMail)))
+                                                ]
+                                            )
 
-                            _ ->
-                                Ui.button
-                                    { id = SettingsButton
-                                    , padding = Ui.paddingXY 10 4
-                                    }
-                                    (Ui.text "Settings")
-                        , case localModel.userStatus of
-                            LoggedIn loggedIn ->
-                                inviteView
-                                    (model.topMenuOpened == Just InviteMenu)
-                                    loggedIn.emailAddress
-                                    model.inviteTextInput
-                                    model.inviteSubmitStatus
-
-                            NotLoggedIn ->
-                                Ui.none
-                        , Ui.button
-                            { id = ShowMapButton
-                            , padding = Ui.paddingXY 10 4
-                            }
-                            (Ui.text
-                                (if model.showMap then
-                                    "Hide map"
-
-                                 else
-                                    "Show map"
-                                )
-                            )
-                        , case localModel.userStatus of
-                            LoggedIn loggedIn ->
-                                let
-                                    unviewedMail =
-                                        IdDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
-                                in
-                                if IdDict.isEmpty unviewedMail then
+                                NotLoggedIn ->
                                     Ui.none
-
-                                else
-                                    Ui.customButton
-                                        { id = YouGotMailButton
-                                        , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
-                                        , borderAndFill = Ui.defaultButtonBorderAndFill
-                                        , borderAndFillFocus = Ui.defaultButtonBorderAndFill
-                                        , inFront = []
-                                        }
-                                        (Ui.row
-                                            { spacing = 4, padding = Ui.noPadding }
-                                            [ Ui.text "You got mail"
-                                            , Ui.el
-                                                { padding = Ui.paddingXY 8 0
-                                                , inFront = []
-                                                , borderAndFill = FillOnly (Color.rgb255 255 50 50)
-                                                }
-                                                (Ui.colorText Color.white (String.fromInt (IdDict.size unviewedMail)))
-                                            ]
-                                        )
-
-                            NotLoggedIn ->
-                                Ui.none
+                            ]
                         ]
-                    , if model.showMap then
-                        let
-                            mapSize2 =
-                                mapSize model.windowSize
-                        in
-                        Ui.el
-                            { padding =
-                                { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
-                                , bottomRight = Coord.origin
-                                }
-                            , borderAndFill =
-                                BorderAndFill
-                                    { borderWidth = 2
-                                    , borderColor = Color.outlineColor
-                                    , fillColor = Color.fillColor
+                    )
+                        ++ (if model.showMap then
+                                [ let
+                                    mapSize2 =
+                                        mapSize model.windowSize
+                                  in
+                                  Ui.el
+                                    { padding =
+                                        { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
+                                        , bottomRight = Coord.origin
+                                        }
+                                    , borderAndFill =
+                                        BorderAndFill
+                                            { borderWidth = 2
+                                            , borderColor = Color.outlineColor
+                                            , fillColor = Color.fillColor
+                                            }
+                                    , inFront = []
                                     }
-                            , inFront = []
-                            }
-                            Ui.none
-                            |> Ui.ignoreInputs
-                            |> Ui.center { size = model.windowSize }
+                                    Ui.none
+                                    |> Ui.ignoreInputs
+                                    |> Ui.center { size = model.windowSize }
+                                ]
 
-                      else
-                        Ui.none
-                    ]
+                            else
+                                []
+                           )
                 }
                 toolbarElement
 

@@ -218,6 +218,7 @@ type alias FrontendLoaded =
     , reportsMesh : WebGL.Mesh Vertex
     , lastReportTilePlaced : Maybe Effect.Time.Posix
     , lastReportTileRemoved : Maybe Effect.Time.Posix
+    , hideUi : Bool
     }
 
 
