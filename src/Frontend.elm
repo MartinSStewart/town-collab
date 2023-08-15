@@ -1100,14 +1100,6 @@ updateLoaded audioData msg model =
                                 ( Just id, _ ) ->
                                     uiUpdate id (Ui.KeyDown key) model
 
-                                ( Nothing, Keyboard.Character "m" ) ->
-                                    case model.currentTool of
-                                        TextTool _ ->
-                                            ( model, Command.none )
-
-                                        _ ->
-                                            ( { model | showMap = not model.showMap }, Command.none )
-
                                 _ ->
                                     keyMsgCanvasUpdate key model
 
@@ -2206,7 +2198,12 @@ keyMsgCanvasUpdate key model =
                     )
 
                 _ ->
-                    setTileFromHotkey string model
+                    case string of
+                        "m" ->
+                            ( { model | showMap = not model.showMap }, Command.none )
+
+                        _ ->
+                            setTileFromHotkey string model
 
         ( Keyboard.Enter, False ) ->
             ( case model.currentTool of
