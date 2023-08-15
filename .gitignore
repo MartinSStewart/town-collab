@@ -3,3 +3,5 @@ elm-stuff
 .idea
 *.blend1
 *.blend2
+node_modules
+yarn.lock
