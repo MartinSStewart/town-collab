@@ -1081,7 +1081,7 @@ updateLoaded audioData msg model =
                             )
 
                         Nothing ->
-                            case ( model.focus, Debug.log "key" key ) of
+                            case ( model.focus, key ) of
                                 ( _, Keyboard.Tab ) ->
                                     ( setFocus
                                         (if keyDown Keyboard.Shift model then
@@ -1101,7 +1101,12 @@ updateLoaded audioData msg model =
                                     uiUpdate id (Ui.KeyDown key) model
 
                                 ( Nothing, Keyboard.Character "m" ) ->
-                                    ( { model | showMap = not model.showMap }, Command.none )
+                                    case model.currentTool of
+                                        TextTool _ ->
+                                            ( model, Command.none )
+
+                                        _ ->
+                                            ( { model | showMap = not model.showMap }, Command.none )
 
                                 _ ->
                                     keyMsgCanvasUpdate key model
