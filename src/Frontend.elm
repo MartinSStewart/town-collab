@@ -3466,10 +3466,7 @@ windowResizedUpdate cssWindowSize model =
             findPixelPerfectSize2 { devicePixelRatio = model.devicePixelRatio, cssWindowSize = cssWindowSize }
     in
     ( { model | cssWindowSize = cssWindowSize, cssCanvasSize = cssCanvasSize, windowSize = windowSize }
-    , Command.sendToJs
-        "martinsstewart_elm_device_pixel_ratio_to_js"
-        Ports.martinsstewart_elm_device_pixel_ratio_to_js
-        Json.Encode.null
+    , Ports.getDevicePixelRatio
     )
 
 
@@ -5861,14 +5858,7 @@ shortDelayDuration =
 subscriptions : AudioData -> FrontendModel_ -> Subscription FrontendOnly FrontendMsg_
 subscriptions _ model =
     Subscription.batch
-        [ Subscription.fromJs
-            "martinsstewart_elm_device_pixel_ratio_from_js"
-            Ports.martinsstewart_elm_device_pixel_ratio_from_js
-            (\value ->
-                Json.Decode.decodeValue Json.Decode.float value
-                    |> Result.withDefault 1
-                    |> GotDevicePixelRatio
-            )
+        [ Ports.gotDevicePixelRatio GotDevicePixelRatio
         , Effect.Browser.Events.onResize (\width height -> WindowResized (Coord.xy width height))
         , Effect.Browser.Events.onAnimationFrame AnimationFrame
         , Keyboard.downs KeyDown

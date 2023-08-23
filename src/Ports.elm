@@ -1,4 +1,4 @@
-port module Ports exposing (audioPortFromJS, audioPortToJS, copyToClipboard, getLocalStorage, gotLocalStorage, gotWebGlFix, martinsstewart_elm_device_pixel_ratio_from_js, martinsstewart_elm_device_pixel_ratio_to_js, mouse_leave, readFromClipboardRequest, readFromClipboardResponse, setLocalStorage, user_agent_from_js, user_agent_to_js, webGlFix)
+port module Ports exposing (audioPortFromJS, audioPortToJS, copyToClipboard, getDevicePixelRatio, getLocalStorage, gotDevicePixelRatio, gotLocalStorage, gotWebGlFix, mouse_leave, readFromClipboardRequest, readFromClipboardResponse, setLocalStorage, user_agent_from_js, user_agent_to_js, webGlFix)
 
 import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.Subscription as Subscription exposing (Subscription)
@@ -46,6 +46,23 @@ port webgl_fix_to_js : Json.Encode.Value -> Cmd msg
 
 
 port webgl_fix_from_js : (Json.Decode.Value -> msg) -> Sub msg
+
+
+getDevicePixelRatio : Command FrontendOnly toMsg msg
+getDevicePixelRatio =
+    Command.sendToJs "martinsstewart_elm_device_pixel_ratio_to_js" martinsstewart_elm_device_pixel_ratio_to_js Json.Encode.null
+
+
+gotDevicePixelRatio : (Float -> msg) -> Subscription.Subscription FrontendOnly msg
+gotDevicePixelRatio msg =
+    Subscription.fromJs
+        "martinsstewart_elm_device_pixel_ratio_from_js"
+        martinsstewart_elm_device_pixel_ratio_from_js
+        (\value ->
+            Json.Decode.decodeValue Json.Decode.float value
+                |> Result.withDefault 1
+                |> msg
+        )
 
 
 webGlFix : Command FrontendOnly toMsg msg
