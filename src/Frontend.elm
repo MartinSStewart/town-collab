@@ -3454,16 +3454,16 @@ updateLocalModel msg model =
 
 
 windowResizedUpdate :
-    Coord CssPixel
-    -> { b | cssWindowSize : Coord CssPixel, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixel, devicePixelRatio : Float }
+    Coord CssPixels
+    -> { b | cssWindowSize : Coord CssPixels, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixels, devicePixelRatio : Float }
     ->
-        ( { b | cssWindowSize : Coord CssPixel, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixel, devicePixelRatio : Float }
+        ( { b | cssWindowSize : Coord CssPixels, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixels, devicePixelRatio : Float }
         , Command FrontendOnly ToBackend msg
         )
 windowResizedUpdate cssWindowSize model =
     let
         { cssCanvasSize, windowSize } =
-            findPixelPerfectSize2 { devicePixelRatio = model.devicePixelRatio, cssWindowSize = cssWindowSize }
+            findPixelPerfectSize { devicePixelRatio = model.devicePixelRatio, cssWindowSize = cssWindowSize }
     in
     ( { model | cssWindowSize = cssWindowSize, cssCanvasSize = cssCanvasSize, windowSize = windowSize }
     , Ports.getDevicePixelRatio
@@ -3473,7 +3473,7 @@ windowResizedUpdate cssWindowSize model =
 devicePixelRatioChanged devicePixelRatio model =
     let
         { cssCanvasSize, windowSize } =
-            findPixelPerfectSize2 { devicePixelRatio = devicePixelRatio, cssWindowSize = model.cssWindowSize }
+            findPixelPerfectSize { devicePixelRatio = devicePixelRatio, cssWindowSize = model.cssWindowSize }
     in
     ( { model | devicePixelRatio = devicePixelRatio, cssCanvasSize = cssCanvasSize, windowSize = windowSize }
     , Command.none
@@ -4463,12 +4463,12 @@ currentUserId model =
             Nothing
 
 
-findPixelPerfectSize2 :
-    { devicePixelRatio : Float, cssWindowSize : Coord CssPixel }
-    -> { cssCanvasSize : Coord CssPixel, windowSize : Coord Pixels }
-findPixelPerfectSize2 frontendModel =
+findPixelPerfectSize :
+    { devicePixelRatio : Float, cssWindowSize : Coord CssPixels }
+    -> { cssCanvasSize : Coord CssPixels, windowSize : Coord Pixels }
+findPixelPerfectSize frontendModel =
     let
-        findValue : Quantity Int CssPixel -> ( Int, Int )
+        findValue : Quantity Int CssPixels -> ( Int, Int )
         findValue value =
             List.range 0 9
                 |> List.map ((+) (Quantity.unwrap value))
