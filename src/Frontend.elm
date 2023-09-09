@@ -479,10 +479,8 @@ defaultTileHotkeys =
     Dict.fromList
         [ ( " ", EmptyTileGroup )
         , ( "1", HouseGroup )
-        , ( "q", LogCabinGroup )
         , ( "a", ApartmentGroup )
         , ( "2", HospitalGroup )
-        , ( "w", PostOfficeGroup )
         , ( "s", StatueGroup )
         , ( "3", RailStraightGroup )
         , ( "e", RailTurnGroup )
@@ -1098,10 +1096,10 @@ updateLoaded audioData msg model =
                                     ( { model | hideUi = not model.hideUi }, Command.none )
 
                                 ( Just id, _ ) ->
-                                    uiUpdate id (Ui.KeyDown key) model
+                                    uiUpdate audioData id (Ui.KeyDown key) model
 
                                 _ ->
-                                    keyMsgCanvasUpdate key model
+                                    keyMsgCanvasUpdate audioData key model
 
                 Nothing ->
                     ( model, Command.none )
@@ -1161,6 +1159,7 @@ updateLoaded audioData msg model =
 
                                 UiHover id data ->
                                     uiUpdate
+                                        audioData
                                         id
                                         (Ui.MouseDown { elementPosition = data.position })
                                         model2
@@ -1188,7 +1187,7 @@ updateLoaded audioData msg model =
         MouseUp button mousePosition ->
             case ( button, model.mouseLeft, model.mouseMiddle ) of
                 ( MainButton, MouseButtonDown previousMouseState, _ ) ->
-                    mainMouseButtonUp mousePosition previousMouseState model
+                    mainMouseButtonUp audioData mousePosition previousMouseState model
 
                 ( MiddleButton, _, MouseButtonDown mouseState ) ->
                     ( { model
@@ -1283,7 +1282,7 @@ updateLoaded audioData msg model =
         MouseLeave ->
             case model.mouseLeft of
                 MouseButtonDown mouseState ->
-                    mainMouseButtonUp (mouseScreenPosition model) mouseState model
+                    mainMouseButtonUp audioData (mouseScreenPosition model) mouseState model
 
                 MouseButtonUp _ ->
                     ( model, Command.none )
@@ -1350,7 +1349,7 @@ updateLoaded audioData msg model =
                                         ( placeTileHelper model2, Command.none )
 
                                     UiHover uiHover data ->
-                                        uiUpdate uiHover (Ui.MouseMove { elementPosition = data.position }) model2
+                                        uiUpdate audioData uiHover (Ui.MouseMove { elementPosition = data.position }) model2
 
                                     CowHover _ ->
                                         ( placeTileHelper model2, Command.none )
@@ -1431,9 +1430,6 @@ updateLoaded audioData msg model =
 
                 Nothing ->
                     ( model4, urlChange )
-
-        ZoomFactorPressed zoomFactor ->
-            ( model |> (\m -> { m | zoomFactor = zoomFactor }), Command.none )
 
         ToggleAdminEnabledPressed ->
             ( if currentUserId model == Env.adminUserId then
@@ -1557,6 +1553,18 @@ updateLoaded audioData msg model =
                                         ToggleTrainsDisabledButton ->
                                             True
 
+                                        ZoomInButton ->
+                                            True
+
+                                        ZoomOutButton ->
+                                            True
+
+                                        RotateLeftButton ->
+                                            True
+
+                                        RotateRightButton ->
+                                            True
+
                                 Nothing ->
                                     True
 
@@ -1644,7 +1652,7 @@ updateLoaded audioData msg model =
         PastedText text ->
             case model.focus of
                 Just id ->
-                    uiUpdate id (Ui.PastedText text) model
+                    uiUpdate audioData id (Ui.PastedText text) model
 
                 Nothing ->
                     pasteTextTool text model
@@ -2053,8 +2061,8 @@ ctrlOrMeta model =
     keyDown Keyboard.Control model || keyDown Keyboard.Meta model
 
 
-keyMsgCanvasUpdate : Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-keyMsgCanvasUpdate key model =
+keyMsgCanvasUpdate : AudioData -> Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+keyMsgCanvasUpdate audioData key model =
     case ( key, ctrlOrMeta model ) of
         ( Keyboard.Character "z", True ) ->
             ( case model.currentTool of
@@ -2196,6 +2204,20 @@ keyMsgCanvasUpdate key model =
                     ( String.foldl placeChar model string
                     , Command.none
                     )
+
+                TilePlacerTool currentTile ->
+                    case string of
+                        "q" ->
+                            ( tileRotationHelper audioData -1 currentTile model, Command.none )
+
+                        "w" ->
+                            ( tileRotationHelper audioData 1 currentTile model, Command.none )
+
+                        "m" ->
+                            ( { model | showMap = not model.showMap }, Command.none )
+
+                        _ ->
+                            setTileFromHotkey string model
 
                 _ ->
                     case string of
@@ -2539,11 +2561,12 @@ tileInteraction currentUserId2 { tile, userId, position } model =
 
 
 mainMouseButtonUp :
-    Point2d Pixels Pixels
+    AudioData
+    -> Point2d Pixels Pixels
     -> { a | start : Point2d Pixels Pixels, hover : Hover }
     -> FrontendLoaded
     -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-mainMouseButtonUp mousePosition previousMouseState model =
+mainMouseButtonUp audioData mousePosition previousMouseState model =
     let
         isSmallDistance2 =
             isSmallDistance previousMouseState mousePosition
@@ -2747,6 +2770,7 @@ mainMouseButtonUp mousePosition previousMouseState model =
 
                     UiHover id data ->
                         uiUpdate
+                            audioData
                             id
                             (Ui.MousePressed { elementPosition = data.position })
                             model2
@@ -2790,7 +2814,7 @@ sendInvite model =
             ( model, Command.none )
 
 
-onPress event updateFunc model =
+onPress audioData event updateFunc model =
     case event of
         Ui.MousePressed data ->
             updateFunc ()
@@ -2799,29 +2823,29 @@ onPress event updateFunc model =
             updateFunc ()
 
         Ui.KeyDown key ->
-            keyMsgCanvasUpdate key model
+            keyMsgCanvasUpdate audioData key model
 
         _ ->
             ( model, Command.none )
 
 
-uiUpdate : UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-uiUpdate id event model =
+uiUpdate : AudioData -> UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+uiUpdate audioData id event model =
     case id of
         CloseInviteUser ->
-            onPress event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+            onPress audioData event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
 
         ShowInviteUser ->
-            onPress event (\() -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
+            onPress audioData event (\() -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
 
         SubmitInviteUser ->
-            onPress event (\() -> sendInvite model) model
+            onPress audioData event (\() -> sendInvite model) model
 
         SendEmailButtonHover ->
-            onPress event (\() -> sendEmail model) model
+            onPress audioData event (\() -> sendEmail model) model
 
         ToolButtonHover tool ->
-            onPress event (\() -> ( setCurrentTool tool model, Command.none )) model
+            onPress audioData event (\() -> ( setCurrentTool tool model, Command.none )) model
 
         InviteEmailAddressTextInput ->
             textInputUpdate
@@ -2967,30 +2991,35 @@ uiUpdate id event model =
 
         LowerMusicVolume ->
             onPress
+                audioData
                 event
                 (\() -> { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings)
                 model
 
         RaiseMusicVolume ->
             onPress
+                audioData
                 event
                 (\() -> { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
                 model
 
         LowerSoundEffectVolume ->
             onPress
+                audioData
                 event
                 (\() -> { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings)
                 model
 
         RaiseSoundEffectVolume ->
             onPress
+                audioData
                 event
                 (\() -> { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
                 model
 
         SettingsButton ->
             onPress
+                audioData
                 event
                 (\() ->
                     let
@@ -3022,7 +3051,7 @@ uiUpdate id event model =
                 model
 
         CloseSettings ->
-            onPress event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+            onPress audioData event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
 
         DisplayNameTextInput ->
             case model.topMenuOpened of
@@ -3088,13 +3117,14 @@ uiUpdate id event model =
                     ( model, Command.none )
 
         YouGotMailButton ->
-            onPress event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
+            onPress audioData event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
 
         ShowMapButton ->
-            onPress event (\() -> ( { model | showMap = not model.showMap }, Command.none )) model
+            onPress audioData event (\() -> ( { model | showMap = not model.showMap }, Command.none )) model
 
         AllowEmailNotificationsCheckbox ->
             onPress
+                audioData
                 event
                 (\() ->
                     ( case LocalGrid.localModel model.localModel |> .userStatus of
@@ -3113,15 +3143,21 @@ uiUpdate id event model =
 
         ResetConnectionsButton ->
             onPress
+                audioData
                 event
                 (\() -> ( updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False, Command.none ))
                 model
 
         UsersOnlineButton ->
-            onPress event (\_ -> ( { model | showInviteTree = not model.showInviteTree }, Command.none )) model
+            onPress
+                audioData
+                event
+                (\_ -> ( { model | showInviteTree = not model.showInviteTree }, Command.none ))
+                model
 
         CopyPositionUrlButton ->
             onPress
+                audioData
                 event
                 (\() ->
                     case model.contextMenu of
@@ -3137,6 +3173,7 @@ uiUpdate id event model =
 
         ReportUserButton ->
             onPress
+                audioData
                 event
                 (\() ->
                     ( case model.contextMenu of
@@ -3160,6 +3197,7 @@ uiUpdate id event model =
 
         ToggleIsGridReadOnlyButton ->
             onPress
+                audioData
                 event
                 (\() ->
                     ( case LocalGrid.localModel model.localModel |> .userStatus of
@@ -3178,6 +3216,7 @@ uiUpdate id event model =
 
         ToggleTrainsDisabledButton ->
             onPress
+                audioData
                 event
                 (\() ->
                     ( updateLocalModel
@@ -3193,6 +3232,52 @@ uiUpdate id event model =
                         )
                         model
                         |> handleOutMsg False
+                    , Command.none
+                    )
+                )
+                model
+
+        ZoomInButton ->
+            onPress
+                audioData
+                event
+                (\() -> ( { model | zoomFactor = model.zoomFactor + 1 |> min 3 }, Command.none ))
+                model
+
+        ZoomOutButton ->
+            onPress
+                audioData
+                event
+                (\() -> ( { model | zoomFactor = model.zoomFactor - 1 |> max 1 }, Command.none ))
+                model
+
+        RotateLeftButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    ( case model.currentTool of
+                        TilePlacerTool currentTile ->
+                            tileRotationHelper audioData -1 currentTile model
+
+                        _ ->
+                            model
+                    , Command.none
+                    )
+                )
+                model
+
+        RotateRightButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    ( case model.currentTool of
+                        TilePlacerTool currentTile ->
+                            tileRotationHelper audioData 1 currentTile model
+
+                        _ ->
+                            model
                     , Command.none
                     )
                 )

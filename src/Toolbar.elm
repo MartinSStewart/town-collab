@@ -885,12 +885,63 @@ toolbarUi :
 toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentToolButton =
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
-        [ List.map (toolButtonUi hasCmdKey handColor tileColors hotkeys currentToolButton) buttonTiles
+        [ Ui.column
+            { spacing = 2, padding = { topLeft = Coord.origin, bottomRight = Coord.xy 2 0 } }
+            [ Ui.row
+                { spacing = 2, padding = Ui.noPadding }
+                [ Ui.button { id = ZoomInButton, padding = smallToolButtonPadding } zoomInSprite
+                , Ui.button { id = ZoomOutButton, padding = smallToolButtonPadding } zoomOutSprite
+                ]
+            , Ui.row
+                { spacing = 2, padding = Ui.noPadding }
+                [ Ui.customButton
+                    { id = RotateLeftButton
+                    , padding = smallToolButtonPadding
+                    , inFront = hotkeyTextOverlay (Coord.xy 56 56) "q"
+                    , borderAndFill = Ui.defaultButtonBorderAndFill
+                    , borderAndFillFocus = Ui.defaultButtonBorderAndFillFocus
+                    }
+                    rotateLeftSprite
+                , Ui.customButton
+                    { id = RotateRightButton
+                    , padding = smallToolButtonPadding
+                    , inFront = hotkeyTextOverlay (Coord.xy 56 56) "w"
+                    , borderAndFill = Ui.defaultButtonBorderAndFill
+                    , borderAndFillFocus = Ui.defaultButtonBorderAndFillFocus
+                    }
+                    rotateRightSprite
+                ]
+            ]
+        , List.map (toolButtonUi hasCmdKey handColor tileColors hotkeys currentToolButton) buttonTiles
             |> List.greedyGroupsOf toolbarRowCount
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
         , selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentToolButton
         ]
+
+
+smallToolButtonPadding =
+    Ui.paddingXY 8 8
+
+
+zoomInSprite : Ui.Element id
+zoomInSprite =
+    Ui.sprite { size = Coord.xy 42 42, texturePosition = Coord.xy 504 103, textureSize = Coord.xy 21 21 }
+
+
+zoomOutSprite : Ui.Element id
+zoomOutSprite =
+    Ui.sprite { size = Coord.xy 42 42, texturePosition = Coord.xy 504 124, textureSize = Coord.xy 21 21 }
+
+
+rotateLeftSprite : Ui.Element id
+rotateLeftSprite =
+    Ui.sprite { size = Coord.xy 42 42, texturePosition = Coord.xy 525 103, textureSize = Coord.xy 21 21 }
+
+
+rotateRightSprite : Ui.Element id
+rotateRightSprite =
+    Ui.sprite { size = Coord.xy 42 42, texturePosition = Coord.xy 525 124, textureSize = Coord.xy 21 21 }
 
 
 selectedToolView :
@@ -1021,6 +1072,18 @@ colorTextInput id textInput color =
         ]
 
 
+hotkeyTextOverlay : Coord Pixels -> String -> List (Ui.Element id)
+hotkeyTextOverlay buttonSize2 hotkey =
+    [ Ui.outlinedText { outline = Color.outlineColor, color = Color.white, text = hotkey }
+        |> Ui.el
+            { padding = { topLeft = Coord.xy 2 0, bottomRight = Coord.xy 0 0 }
+            , inFront = []
+            , borderAndFill = NoBorderOrFill
+            }
+        |> Ui.bottomLeft { size = buttonSize2 }
+    ]
+
+
 toolButtonUi :
     Bool
     -> Colors
@@ -1104,14 +1167,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
         , inFront =
             case hotkeyText of
                 Just hotkey ->
-                    [ Ui.outlinedText { outline = Color.outlineColor, color = Color.white, text = hotkey }
-                        |> Ui.el
-                            { padding = { topLeft = Coord.xy 2 0, bottomRight = Coord.xy 0 0 }
-                            , inFront = []
-                            , borderAndFill = NoBorderOrFill
-                            }
-                        |> Ui.bottomLeft { size = buttonSize }
-                    ]
+                    hotkeyTextOverlay buttonSize hotkey
 
                 Nothing ->
                     []
@@ -1129,8 +1185,13 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
         , borderAndFillFocus =
             BorderAndFill
                 { borderWidth = 2
-                , borderColor = Color.outlineColor
-                , fillColor = Color.highlightColor
+                , borderColor = Color.focusedUiColor
+                , fillColor =
+                    if currentTool == tool then
+                        Color.highlightColor
+
+                    else
+                        Color.fillColor2
                 }
         }
         (Ui.center { size = buttonSize } label)

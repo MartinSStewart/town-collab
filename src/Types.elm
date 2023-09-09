@@ -311,6 +311,10 @@ type UiHover
     | ReportUserButton
     | ToggleIsGridReadOnlyButton
     | ToggleTrainsDisabledButton
+    | ZoomInButton
+    | ZoomOutButton
+    | RotateLeftButton
+    | RotateRightButton
 
 
 type alias BackendModel =
@@ -408,7 +412,6 @@ type FrontendMsg_
     | MouseWheel Html.Events.Extra.Wheel.Event
     | MouseLeave
     | ShortIntervalElapsed Effect.Time.Posix
-    | ZoomFactorPressed Int
     | ToggleAdminEnabledPressed
     | AnimationFrame Effect.Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)

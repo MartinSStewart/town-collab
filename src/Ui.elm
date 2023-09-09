@@ -14,6 +14,7 @@ module Ui exposing
     , column
     , customButton
     , defaultButtonBorderAndFill
+    , defaultButtonBorderAndFillFocus
     , el
     , findElement
     , hover
@@ -342,12 +343,7 @@ button data child =
         , padding = data.padding
         , inFront = []
         , borderAndFill = defaultButtonBorderAndFill
-        , borderAndFillFocus =
-            BorderAndFill
-                { borderWidth = 2
-                , borderColor = Color.outlineColor
-                , fillColor = Color.highlightColor
-                }
+        , borderAndFillFocus = defaultButtonBorderAndFillFocus
         , cachedSize =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
@@ -361,6 +357,15 @@ defaultButtonBorderAndFill =
     BorderAndFill
         { borderWidth = 2
         , borderColor = Color.outlineColor
+        , fillColor = Color.fillColor2
+        }
+
+
+defaultButtonBorderAndFillFocus : BorderAndFill
+defaultButtonBorderAndFillFocus =
+    BorderAndFill
+        { borderWidth = 2
+        , borderColor = Color.focusedUiColor
         , fillColor = Color.fillColor2
         }
 

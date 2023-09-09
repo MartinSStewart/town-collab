@@ -7,6 +7,7 @@ module Color exposing
     , fillColor
     , fillColor2
     , fillColor3
+    , focusedUiColor
     , fromHexCode
     , getBlue
     , getGreen
@@ -95,6 +96,11 @@ fillColor =
 fillColor2 : Color
 fillColor2 =
     rgb255 199 185 175
+
+
+focusedUiColor : Color
+focusedUiColor =
+    rgb255 70 120 255
 
 
 fillColor3 : Color
