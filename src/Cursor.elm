@@ -25,12 +25,14 @@ module Cursor exposing
     , pinchCursorTexturePosition
     , pinchCursorTextureSize
     , pointerCursorMesh
+    , textCursorMesh2
     )
 
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import DisplayName exposing (DisplayName)
 import Effect.Time
+import Effect.WebGL
 import Html
 import Html.Attributes
 import Id exposing (AnimalId, Id, UserId)
@@ -125,6 +127,12 @@ meshes showName colors =
     , textSprite = nameTag2 Coord.origin ++ textCursorMesh |> Sprite.toMesh
     , gavelSprite = nameTag2 Coord.origin ++ gavelCursorMesh |> Sprite.toMesh
     }
+
+
+textCursorMesh2 : Effect.WebGL.Mesh Vertex
+textCursorMesh2 =
+    Sprite.rectangle Color.white Coord.origin (Coord.multiply Units.tileSize (Coord.xy 1 2))
+        |> Sprite.toMesh
 
 
 nameTag : Coord Pixels -> ( Id UserId, DisplayName ) -> List Vertex

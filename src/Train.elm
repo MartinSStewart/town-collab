@@ -12,6 +12,7 @@ module Train exposing
     , derail
     , diff
     , draw
+    , drawSpeechBubble
     , getCoach
     , handleAddingTrain
     , home
@@ -26,11 +27,13 @@ module Train exposing
     , startTeleportingHome
     , status
     , stoppedSpeed
+    , stuckMessageDelay
     , stuckOrDerailed
     , trainPosition
     )
 
 import Angle
+import Array exposing (Array)
 import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
 import CollisionLookup exposing (CollisionLookup)
@@ -47,14 +50,14 @@ import Id exposing (Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Extra as List
 import MailEditor exposing (FrontendMail, MailStatus(..))
-import Math.Matrix4 exposing (Mat4)
+import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
-import Shaders exposing (InstancedVertex)
+import Shaders exposing (InstancedVertex, Vertex)
 import Sprite
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
@@ -1464,3 +1467,180 @@ instancedMesh =
         )
         (List.range 0 0)
         |> Sprite.toMesh
+
+
+stuckMessageDelay : Duration
+stuckMessageDelay =
+    Duration.seconds 2
+
+
+derailedMessageDelay : Duration
+derailedMessageDelay =
+    Duration.seconds 1
+
+
+getSpeechBubbles : Effect.Time.Posix -> IdDict TrainId Train -> List { position : Point2d WorldUnit WorldUnit, isRadio : Bool }
+getSpeechBubbles currentTime trains =
+    IdDict.toList trains
+        |> List.concatMap
+            (\( _, train ) ->
+                case ( status currentTime train, stuckOrDerailed currentTime train ) of
+                    ( TeleportingHome _, _ ) ->
+                        []
+
+                    ( _, IsStuck time ) ->
+                        if Duration.from time currentTime |> Quantity.lessThan stuckMessageDelay then
+                            []
+
+                        else
+                            [ { position = trainPosition currentTime train, isRadio = False }
+                            , { position = Coord.toPoint2d (home train), isRadio = True }
+                            ]
+
+                    ( _, IsDerailed time otherTrainId ) ->
+                        if Duration.from time currentTime |> Quantity.lessThan derailedMessageDelay then
+                            []
+
+                        else
+                            case IdDict.get otherTrainId trains of
+                                Just otherTrain ->
+                                    let
+                                        position =
+                                            trainPosition currentTime train
+
+                                        otherPosition =
+                                            trainPosition currentTime otherTrain
+                                    in
+                                    if Point2d.yCoordinate position |> Quantity.lessThan (Point2d.yCoordinate otherPosition) then
+                                        [ { position = position, isRadio = False }
+                                        , { position = Coord.toPoint2d (home train), isRadio = True }
+                                        ]
+
+                                    else
+                                        [ { position = Coord.toPoint2d (home train), isRadio = True } ]
+
+                                Nothing ->
+                                    [ { position = trainPosition currentTime train, isRadio = False }
+                                    , { position = Coord.toPoint2d (home train), isRadio = True }
+                                    ]
+
+                    ( _, IsNotStuckOrDerailed ) ->
+                        []
+            )
+
+
+speechBubbleMesh : Array (Effect.WebGL.Mesh Vertex)
+speechBubbleMesh =
+    List.range 0 (speechBubbleFrames - 1)
+        |> List.map (\frame -> speechBubbleMeshHelper frame (Coord.xy 517 29) (Coord.xy 8 12))
+        |> Array.fromList
+
+
+speechBubbleRadioMesh : Array (Effect.WebGL.Mesh Vertex)
+speechBubbleRadioMesh =
+    List.range 0 (speechBubbleFrames - 1)
+        |> List.map (\frame -> speechBubbleMeshHelper frame (Coord.xy 525 29) (Coord.xy 8 13))
+        |> Array.fromList
+
+
+speechBubbleFrames =
+    3
+
+
+speechBubbleMeshHelper : Int -> Coord a -> Coord a -> Effect.WebGL.Mesh Vertex
+speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
+    let
+        text =
+            "Help!"
+
+        padding =
+            Coord.xy 6 5
+
+        colors =
+            { primaryColor = Color.white
+            , secondaryColor = Color.black
+            }
+    in
+    Sprite.nineSlice
+        { topLeft = Coord.xy 504 29
+        , top = Coord.xy 510 29
+        , topRight = Coord.xy 511 29
+        , left = Coord.xy 504 35
+        , center = Coord.xy 510 35
+        , right = Coord.xy 511 35
+        , bottomLeft = Coord.xy 504 36
+        , bottom = Coord.xy 510 36
+        , bottomRight = Coord.xy 511 36
+        , cornerSize = Coord.xy 6 6
+        , position = Coord.xy 0 0
+        , size = Sprite.textSize 1 text |> Coord.plus (Coord.multiplyTuple ( 2, 2 ) padding)
+        , scale = 1
+        }
+        colors
+        ++ Sprite.shiverText frame 1 "Help!" padding
+        ++ Sprite.spriteWithTwoColors colors (Coord.xy 7 27) (Coord.xy 8 12) bubbleTailTexturePosition bubbleTailTextureSize
+        |> Sprite.toMesh
+
+
+drawSpeechBubble :
+    WebGL.Texture.Texture
+    -> Mat4
+    -> Effect.Time.Posix
+    -> IdDict TrainId Train
+    -> Float
+    -> List Effect.WebGL.Entity
+drawSpeechBubble texture viewMatrix time trains shaderTime2 =
+    List.filterMap
+        (\{ position, isRadio } ->
+            let
+                point =
+                    Point2d.unwrap position
+
+                ( xOffset, yOffset ) =
+                    if isRadio then
+                        ( 6, -8 )
+
+                    else
+                        ( -8, -48 )
+
+                meshArray =
+                    if isRadio then
+                        speechBubbleRadioMesh
+
+                    else
+                        speechBubbleMesh
+            in
+            case
+                Array.get
+                    (Effect.Time.posixToMillis time
+                        |> toFloat
+                        |> (*) 0.01
+                        |> round
+                        |> modBy speechBubbleFrames
+                    )
+                    meshArray
+            of
+                Just mesh ->
+                    Effect.WebGL.entityWith
+                        [ Shaders.blend ]
+                        Shaders.vertexShader
+                        Shaders.fragmentShader
+                        mesh
+                        { view =
+                            Mat4.makeTranslate3
+                                (round (point.x * toFloat Units.tileWidth) + xOffset |> toFloat)
+                                (round (point.y * toFloat Units.tileHeight) + yOffset |> toFloat)
+                                0
+                                |> Mat4.mul viewMatrix
+                        , texture = texture
+                        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                        , color = Vec4.vec4 1 1 1 1
+                        , userId = Shaders.noUserIdSelected
+                        , time = shaderTime2
+                        }
+                        |> Just
+
+                Nothing ->
+                    Nothing
+        )
+        (getSpeechBubbles time trains)

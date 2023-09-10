@@ -4,9 +4,13 @@ module LocalGrid exposing
     , OutMsg(..)
     , addAnimals
     , addReported
+    , ctrlOrMeta
+    , currentTool
+    , currentUserId
     , getCowsForCell
     , incrementUndoCurrent
     , init
+    , keyDown
     , localModel
     , removeReported
     , update
@@ -25,6 +29,7 @@ import Grid exposing (Grid, GridData)
 import GridCell
 import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
+import Keyboard
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..))
@@ -33,6 +38,7 @@ import Quantity exposing (Quantity(..))
 import Random
 import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile)
+import Tool exposing (Tool(..))
 import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
@@ -55,6 +61,42 @@ type alias LocalGrid_ =
     , trains : IdDict TrainId Train
     , trainsDisabled : AreTrainsDisabled
     }
+
+
+currentUserId : { a | localModel : LocalModel Change LocalGrid } -> Maybe (Id UserId)
+currentUserId model =
+    case localModel model.localModel |> .userStatus of
+        LoggedIn loggedIn ->
+            Just loggedIn.userId
+
+        NotLoggedIn ->
+            Nothing
+
+
+currentTool :
+    { a | localModel : LocalModel Change LocalGrid, pressedKeys : List Keyboard.Key, currentTool : Tool }
+    -> Tool
+currentTool model =
+    case currentUserId model of
+        Just _ ->
+            if ctrlOrMeta model then
+                TilePickerTool
+
+            else
+                model.currentTool
+
+        Nothing ->
+            HandTool
+
+
+ctrlOrMeta : { a | pressedKeys : List Keyboard.Key } -> Bool
+ctrlOrMeta model =
+    keyDown Keyboard.Control model || keyDown Keyboard.Meta model
+
+
+keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
+keyDown key { pressedKeys } =
+    List.any ((==) key) pressedKeys
 
 
 localModel : LocalModel a LocalGrid -> LocalGrid_

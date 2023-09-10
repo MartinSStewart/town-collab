@@ -4,9 +4,11 @@ module Shaders exposing
     , Vertex
     , blend
     , debrisVertexShader
+    , drawBackground
     , fragmentShader
     , indexedTriangles
     , instancedVertexShader
+    , mapSquare
     , noUserIdSelected
     , opacityAndUserId
     , opaque
@@ -18,14 +20,17 @@ module Shaders exposing
     )
 
 import Bitwise
+import Coord
+import Dict exposing (Dict)
 import Effect.WebGL exposing (Shader)
 import Effect.WebGL.Settings exposing (Setting)
 import Effect.WebGL.Settings.Blend as Blend
+import Effect.WebGL.Settings.DepthTest
 import Id exposing (Id, UserId)
 import Math.Matrix4 exposing (Mat4)
-import Math.Vector2 exposing (Vec2)
+import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
-import Math.Vector4 exposing (Vec4)
+import Math.Vector4 as Vec4 exposing (Vec4)
 import WebGL.Texture
 
 
@@ -94,6 +99,56 @@ triangleFan vertices =
 blend : Setting
 blend =
     Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha
+
+
+mapSquare : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
+mapSquare =
+    let
+        size =
+            11
+    in
+    Effect.WebGL.triangleFan
+        [ { position = Vec2.vec2 0 0
+          , vcoord2 = Vec2.vec2 -size -size
+          }
+        , { position = Vec2.vec2 1 0
+          , vcoord2 = Vec2.vec2 size -size
+          }
+        , { position = Vec2.vec2 1 1
+          , vcoord2 = Vec2.vec2 size size
+          }
+        , { position = Vec2.vec2 0 1
+          , vcoord2 = Vec2.vec2 -size size
+          }
+        ]
+
+
+drawBackground :
+    Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
+    -> Mat4
+    -> WebGL.Texture.Texture
+    -> Float
+    -> List Effect.WebGL.Entity
+drawBackground meshes viewMatrix texture time =
+    Dict.toList meshes
+        |> List.map
+            (\( _, mesh ) ->
+                Effect.WebGL.entityWith
+                    [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
+                    , Effect.WebGL.Settings.DepthTest.default
+                    , blend
+                    ]
+                    vertexShader
+                    fragmentShader
+                    mesh.background
+                    { view = viewMatrix
+                    , texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , color = Vec4.vec4 1 1 1 1
+                    , userId = noUserIdSelected
+                    , time = time
+                    }
+            )
 
 
 vertexShader :
