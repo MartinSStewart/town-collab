@@ -1,6 +1,6 @@
 module MailEditor exposing
     ( BackendMail
-    , Content
+    , Content(..)
     , FrontendMail
     , Hover(..)
     , Image(..)
