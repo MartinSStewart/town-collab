@@ -9,6 +9,7 @@ module Tile exposing
     , TileData
     , TileGroup(..)
     , allTileGroupsExceptText
+    , codec
     , defaultPineTreeColor
     , defaultPostOfficeColor
     , defaultRockColor
@@ -29,6 +30,7 @@ module Tile exposing
 
 import Angle
 import Axis2d
+import Codec exposing (Codec)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Direction2d exposing (Direction2d)
@@ -87,6 +89,56 @@ type TileGroup
     | ParkingRoadGroup
     | ParkingRoundaboutGroup
     | CornerHouseGroup
+
+
+codec : Codec TileGroup
+codec =
+    Codec.enum
+        Codec.string
+        [ ( "EmptyTile", EmptyTileGroup )
+        , ( "House", HouseGroup )
+        , ( "RailStraight", RailStraightGroup )
+        , ( "RailTurn", RailTurnGroup )
+        , ( "RailTurnLarge", RailTurnLargeGroup )
+        , ( "RailStrafe", RailStrafeGroup )
+        , ( "RailStrafeSmall", RailStrafeSmallGroup )
+        , ( "RailCrossing", RailCrossingGroup )
+        , ( "TrainHouse", TrainHouseGroup )
+        , ( "Sidewalk", SidewalkGroup )
+        , ( "SidewalkRail", SidewalkRailGroup )
+        , ( "RailTurnSplit", RailTurnSplitGroup )
+        , ( "RailTurnSplitMirror", RailTurnSplitMirrorGroup )
+        , ( "PostOffice", PostOfficeGroup )
+        , ( "PineTree", PineTreeGroup )
+        , ( "BigPineTree", BigPineTreeGroup )
+        , ( "LogCabin", LogCabinGroup )
+        , ( "RoadStraight", RoadStraightGroup )
+        , ( "RoadTurn", RoadTurnGroup )
+        , ( "Road4Way", Road4WayGroup )
+        , ( "RoadSidewalkCrossing", RoadSidewalkCrossingGroup )
+        , ( "Road3Way", Road3WayGroup )
+        , ( "RoadRailCrossing", RoadRailCrossingGroup )
+        , ( "RoadDeadend", RoadDeadendGroup )
+        , ( "FenceStraight", FenceStraightGroup )
+        , ( "BusStop", BusStopGroup )
+        , ( "Hospital", HospitalGroup )
+        , ( "Statue", StatueGroup )
+        , ( "HedgeRow", HedgeRowGroup )
+        , ( "HedgeCorner", HedgeCornerGroup )
+        , ( "HedgePillar", HedgePillarGroup )
+        , ( "Apartment", ApartmentGroup )
+        , ( "Rock", RockGroup )
+        , ( "Flowers", FlowersGroup )
+        , ( "ElmTree", ElmTreeGroup )
+        , ( "DirtPath", DirtPathGroup )
+        , ( "BigText", BigTextGroup )
+        , ( "Hyperlink", HyperlinkGroup )
+        , ( "Bench", BenchGroup )
+        , ( "ParkingLot", ParkingLotGroup )
+        , ( "ParkingRoad", ParkingRoadGroup )
+        , ( "ParkingRoundabout", ParkingRoundaboutGroup )
+        , ( "CornerHouse", CornerHouseGroup )
+        ]
 
 
 allTileGroupsExceptText : List TileGroup

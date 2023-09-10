@@ -45,6 +45,7 @@ import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Browser.Navigation
+import Effect.File exposing (File)
 import Effect.Http
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Time
@@ -411,6 +412,8 @@ type FrontendMsg_
     | GotUserAgentPlatform String
     | LoadedUserSettings UserSettings
     | GotWebGlFix
+    | ImportedMail File
+    | ImportedMail2 (Result () (List MailEditor.Content))
 
 
 type ToBackend

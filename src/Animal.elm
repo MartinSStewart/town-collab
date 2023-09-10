@@ -3,12 +3,14 @@ module Animal exposing
     , AnimalData
     , AnimalType(..)
     , all
+    , animalTypeCodec
     , defaultColors
     , getData
     , inside
     )
 
 import BoundingBox2d
+import Codec exposing (Codec)
 import Color exposing (Colors)
 import Coord exposing (Coord)
 import List.Nonempty exposing (Nonempty(..))
@@ -36,6 +38,16 @@ type alias AnimalData =
     , texturePosition : Coord Pixels
     , sounds : Nonempty ( Float, Sound )
     }
+
+
+animalTypeCodec : Codec AnimalType
+animalTypeCodec =
+    Codec.enum
+        Codec.string
+        [ ( "Cow", Cow )
+        , ( "Hamster", Hamster )
+        , ( "Sheep", Sheep )
+        ]
 
 
 all : List AnimalType

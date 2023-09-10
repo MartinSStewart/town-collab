@@ -38,6 +38,7 @@ module Ui exposing
     , topRight
     , view
     , visuallyEqual
+    , wrappedColorText
     , wrappedText
     )
 
@@ -305,6 +306,11 @@ addLineBreaks charWidth maxWidth list text2 =
 
 wrappedText : Int -> String -> Element id
 wrappedText maxWidth text2 =
+    wrappedColorText maxWidth Color.black text2
+
+
+wrappedColorText : Int -> Color -> String -> Element id
+wrappedColorText maxWidth color text2 =
     let
         charWidth : Int
         charWidth =
@@ -319,7 +325,7 @@ wrappedText maxWidth text2 =
     in
     Text
         { outline = Nothing
-        , color = Color.black
+        , color = color
         , scale = defaultCharScale
         , text = text3
         , cachedSize = Sprite.textSize defaultCharScale text3

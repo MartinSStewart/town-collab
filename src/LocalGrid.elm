@@ -175,6 +175,8 @@ type OutMsg
     | TrainLeaveHome (Id TrainId)
     | TrainsUpdated (IdDict TrainId Train.TrainDiff)
     | ReceivedMail
+    | ExportMail (List MailEditor.Content)
+    | ImportMail
 
 
 updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )

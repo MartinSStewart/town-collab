@@ -4,7 +4,6 @@ module MailEditor exposing
     , FrontendMail
     , Hover(..)
     , Image(..)
-    , ImageOrText(..)
     , MailStatus(..)
     , Model
     , OutMsg(..)
@@ -12,6 +11,7 @@ module MailEditor exposing
     , Tool(..)
     , backendMailToFrontend
     , backgroundLayer
+    , contentCodec
     , cursorSprite
     , date
     , disconnectWarning
@@ -20,6 +20,7 @@ module MailEditor exposing
     , getMailFrom
     , getMailTo
     , handleKeyDown
+    , importMail
     , init
     , openAnimationLength
     , redo
@@ -34,6 +35,7 @@ import Array exposing (Array)
 import AssocList
 import Audio exposing (AudioData)
 import Bounds
+import Codec exposing (Codec)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor exposing (CursorType)
@@ -98,6 +100,8 @@ type Hover
     | CloseSendLetterInstructionsButton
     | InboxRowButton (Id MailId)
     | TextToolButton
+    | ExportButton
+    | ImportButton
 
 
 backendMailToFrontend : BackendMail -> FrontendMail
@@ -166,6 +170,7 @@ type alias Model =
     , to : Maybe ( Id UserId, DisplayName )
     , inboxMailViewed : Maybe (Id MailId)
     , lastTextInput : Maybe Effect.Time.Posix
+    , importFailed : Bool
     }
 
 
@@ -178,13 +183,9 @@ type alias EditorState =
     { content : List Content }
 
 
-type alias Content =
-    { position : Coord Pixels, item : ImageOrText }
-
-
-type ImageOrText
-    = ImageType Image
-    | TextType String
+type Content
+    = ImageType (Coord Pixels) Image
+    | TextType (Coord Pixels) String
 
 
 type Image
@@ -261,6 +262,8 @@ type OutMsg
     | SubmitMail { to : Id UserId, content : List Content }
     | UpdateDraft { to : Id UserId, content : List Content }
     | ViewedMail (Id MailId)
+    | ExportMail (List Content)
+    | ImportMail
 
 
 mailMousePosition : Coord Pixels -> Maybe ImageData -> Coord Pixels -> Coord Pixels -> Coord Pixels
@@ -336,16 +339,17 @@ uiUpdate config mousePosition id event model =
                                         imageData =
                                             getImageData (currentImage imagePlacer)
 
+                                        position : Coord Pixels
+                                        position =
+                                            mailMousePosition
+                                                elementPosition
+                                                (Just imageData)
+                                                config.windowSize
+                                                mousePosition
+
                                         model2 =
                                             addContent
-                                                { position =
-                                                    mailMousePosition
-                                                        elementPosition
-                                                        (Just imageData)
-                                                        config.windowSize
-                                                        mousePosition
-                                                , item = currentImage imagePlacer |> ImageType
-                                                }
+                                                (ImageType position (currentImage imagePlacer))
                                                 { model | lastPlacedImage = Just config.time }
                                     in
                                     ( Just model2, UpdateDraft (toData to model2) )
@@ -368,8 +372,8 @@ uiUpdate config mousePosition id event model =
                                         { newContent, erased } =
                                             List.foldr
                                                 (\content state ->
-                                                    case content.item of
-                                                        ImageType image ->
+                                                    case content of
+                                                        ImageType position image ->
                                                             let
                                                                 imageData : ImageData
                                                                 imageData =
@@ -379,7 +383,7 @@ uiUpdate config mousePosition id event model =
                                                                 isOverImage =
                                                                     Bounds.contains
                                                                         mailMousePosition2
-                                                                        (Bounds.fromCoordAndSize content.position imageData.textureSize)
+                                                                        (Bounds.fromCoordAndSize position imageData.textureSize)
                                                             in
                                                             if not state.erased && isOverImage then
                                                                 { newContent = state.newContent, erased = True }
@@ -389,14 +393,14 @@ uiUpdate config mousePosition id event model =
                                                                 , erased = state.erased
                                                                 }
 
-                                                        TextType text ->
+                                                        TextType position text ->
                                                             let
                                                                 isOverImage : Bool
                                                                 isOverImage =
                                                                     Bounds.contains
                                                                         mailMousePosition2
                                                                         (Bounds.fromCoordAndSize
-                                                                            content.position
+                                                                            position
                                                                             (Sprite.textSize 2 text)
                                                                         )
                                                             in
@@ -428,14 +432,15 @@ uiUpdate config mousePosition id event model =
 
                                 TextTool _ ->
                                     ( addContent
-                                        { position =
-                                            mailMousePosition
+                                        (TextType
+                                            (mailMousePosition
                                                 elementPosition
                                                 Nothing
                                                 config.windowSize
                                                 mousePosition
-                                        , item = TextType ""
-                                        }
+                                            )
+                                            ""
+                                        )
                                         { model | currentTool = TextTool Coord.origin }
                                         |> Just
                                     , NoOutMsg
@@ -495,6 +500,127 @@ uiUpdate config mousePosition id event model =
                 (\() -> ( { model | currentTool = TextTool Coord.origin } |> updateCurrentImageMesh |> Just, NoOutMsg ))
                 model
 
+        ExportButton ->
+            onPress event (\() -> ( Just { model | importFailed = False }, ExportMail model.current.content )) model
+
+        ImportButton ->
+            onPress event (\() -> ( Just { model | importFailed = False }, ImportMail )) model
+
+
+quantityCodec : Codec (Quantity Int units)
+quantityCodec =
+    Codec.map Quantity.unsafe Quantity.unwrap Codec.int
+
+
+contentCodec : Codec Content
+contentCodec =
+    Codec.custom
+        (\a b value ->
+            case value of
+                ImageType data0 data1 ->
+                    a data0 data1
+
+                TextType data0 data1 ->
+                    b data0 data1
+        )
+        |> Codec.variant2 "image" ImageType (Codec.tuple quantityCodec quantityCodec) imageCodec
+        |> Codec.variant2 "text" TextType (Codec.tuple quantityCodec quantityCodec) Codec.string
+        |> Codec.buildCustom
+
+
+imageCodec : Codec Image
+imageCodec =
+    Codec.custom
+        (\a b c d e f g h i j k l value ->
+            case value of
+                Stamp data0 ->
+                    a data0
+
+                SunglassesEmoji data0 ->
+                    b data0
+
+                NormalEmoji data0 ->
+                    c data0
+
+                SadEmoji data0 ->
+                    d data0
+
+                Man data0 ->
+                    e data0
+
+                TileImage data0 data1 data2 ->
+                    f data0 data1 data2
+
+                Grass ->
+                    g
+
+                DefaultCursor data0 ->
+                    h data0
+
+                DragCursor data0 ->
+                    i data0
+
+                PinchCursor data0 ->
+                    j data0
+
+                Line data0 data1 ->
+                    k data0 data1
+
+                Animal data0 data1 ->
+                    l data0 data1
+        )
+        |> Codec.variant1 "Stamp" Stamp colorsCodec
+        |> Codec.variant1 "SunglassesEmoji" SunglassesEmoji colorsCodec
+        |> Codec.variant1 "NormalEmoji" NormalEmoji colorsCodec
+        |> Codec.variant1 "SadEmoji" SadEmoji colorsCodec
+        |> Codec.variant1 "Man" Man colorsCodec
+        |> Codec.variant3 "TileImage" TileImage Tile.codec Codec.int colorsCodec
+        |> Codec.variant0 "Grass" Grass
+        |> Codec.variant1 "DefaultCursor" DefaultCursor colorsCodec
+        |> Codec.variant1 "DragCursor" DragCursor colorsCodec
+        |> Codec.variant1 "PinchCursor" PinchCursor colorsCodec
+        |> Codec.variant2 "Line" Line Codec.int colorCodec
+        |> Codec.variant2 "Animal" Animal Animal.animalTypeCodec colorsCodec
+        |> Codec.buildCustom
+
+
+colorsCodec : Codec Colors
+colorsCodec =
+    Codec.object Colors
+        |> Codec.field "primary" .primaryColor colorCodec
+        |> Codec.field "secondary" .secondaryColor colorCodec
+        |> Codec.buildObject
+
+
+colorCodec : Codec Color
+colorCodec =
+    Codec.andThen
+        (\text ->
+            case Color.fromHexCode text of
+                Just hex ->
+                    Codec.succeed hex
+
+                Nothing ->
+                    Codec.fail "Invalid hex color"
+        )
+        Color.toHexCode
+        Codec.string
+
+
+
+--= Stamp Colors
+--| SunglassesEmoji Colors
+--| NormalEmoji Colors
+--| SadEmoji Colors
+--| Man Colors
+--| TileImage TileGroup Int Colors
+--| Grass
+--| DefaultCursor Colors
+--| DragCursor Colors
+--| PinchCursor Colors
+--| Line Int Color
+--| Animal AnimalType Colors
+
 
 addContent : Content -> Model -> Model
 addContent newItem model =
@@ -504,8 +630,8 @@ addContent newItem model =
     in
     case List.unconsLast oldEditor.content of
         Just ( last, rest ) ->
-            case last.item of
-                TextType "" ->
+            case last of
+                TextType _ "" ->
                     replaceChange { oldEditor | content = rest ++ [ newItem ] } model
 
                 _ ->
@@ -604,6 +730,7 @@ init maybeUserIdAndName =
                 Nothing
     , inboxMailViewed = Nothing
     , lastTextInput = Nothing
+    , importFailed = False
     }
         |> updateCurrentImageMesh
 
@@ -793,8 +920,8 @@ handleKeyDown currentTime ctrlHeld key model =
             in
             case ( List.unconsLast oldEditor.content, model.currentTool ) of
                 ( Just ( last, rest ), TextTool cursorPosition ) ->
-                    case last.item of
-                        TextType text ->
+                    case last of
+                        TextType position text ->
                             let
                                 index =
                                     cursorPositionToIndex cursorPosition text
@@ -817,11 +944,11 @@ handleKeyDown currentTime ctrlHeld key model =
                                 Nothing ->
                                     addChange
                             )
-                                { oldEditor | content = rest ++ [ { last | item = TextType newText } ] }
+                                { oldEditor | content = rest ++ [ TextType position newText ] }
                                 { model | currentTool = TextTool newCursorPosition }
                                 |> Just
 
-                        ImageType _ ->
+                        ImageType _ _ ->
                             Just model
 
                 _ ->
@@ -1008,11 +1135,11 @@ moveCursor : (Coord TextUnit -> List String -> Coord TextUnit) -> Model -> Model
 moveCursor moveFunc model =
     case ( model.currentTool, List.last model.current.content ) of
         ( TextTool position, Just last ) ->
-            case last.item of
-                TextType text ->
+            case last of
+                TextType _ text ->
                     { model | currentTool = moveFunc position (String.lines text) |> TextTool }
 
-                ImageType _ ->
+                ImageType _ _ ->
                     model
 
         _ ->
@@ -1052,8 +1179,8 @@ typeCharacter currentTime newText model =
     in
     case ( List.unconsLast oldEditor.content, model.currentTool ) of
         ( Just ( last, rest ), TextTool cursorPosition ) ->
-            case last.item of
-                TextType text ->
+            case last of
+                TextType position text ->
                     let
                         index : Int
                         index =
@@ -1073,14 +1200,12 @@ typeCharacter currentTime newText model =
                         { oldEditor
                             | content =
                                 rest
-                                    ++ [ { last
-                                            | item =
-                                                TextType
-                                                    (String.left index text
-                                                        ++ String.fromChar newText
-                                                        ++ String.right (String.length text - index) text
-                                                    )
-                                         }
+                                    ++ [ TextType
+                                            position
+                                            (String.left index text
+                                                ++ String.fromChar newText
+                                                ++ String.right (String.length text - index) text
+                                            )
                                        ]
                         }
                         { model
@@ -1096,7 +1221,7 @@ typeCharacter currentTime newText model =
                                     |> TextTool
                         }
 
-                ImageType _ ->
+                ImageType _ _ ->
                     model
 
         _ ->
@@ -1131,8 +1256,8 @@ undo model =
                 , currentTool =
                     case List.last head.content of
                         Just last ->
-                            case last.item of
-                                TextType text ->
+                            case last of
+                                TextType _ text ->
                                     let
                                         lines =
                                             String.lines text
@@ -1144,7 +1269,7 @@ undo model =
                                         Nothing ->
                                             model.currentTool
 
-                                ImageType _ ->
+                                ImageType _ _ ->
                                     model.currentTool
 
                         Nothing ->
@@ -1496,26 +1621,22 @@ mailView mailScale mailContent maybeTool =
                     ++ line (120 + 18 * 6)
                     ++ List.concatMap
                         (\content ->
-                            let
-                                position2 =
-                                    Coord.scalar mailScale content.position
-                            in
-                            case content.item of
-                                ImageType image ->
-                                    imageMesh position2 mailScale image
+                            case content of
+                                ImageType position image ->
+                                    imageMesh (Coord.scalar mailScale position) mailScale image
 
-                                TextType text ->
-                                    Sprite.text Color.black (2 * mailScale) text position2
+                                TextType position text ->
+                                    Sprite.text Color.black (2 * mailScale) text (Coord.scalar mailScale position)
                         )
                         mailContent
                     ++ (case ( List.last mailContent, maybeTool ) of
                             ( Just lastContent, Just (TextTool cursorPosition) ) ->
-                                case lastContent.item of
-                                    TextType _ ->
+                                case lastContent of
+                                    TextType position _ ->
                                         Sprite.rectangleWithOpacity
                                             0.5
                                             Color.black
-                                            (Coord.scalar mailScale lastContent.position
+                                            (Coord.scalar mailScale position
                                                 |> Coord.plus
                                                     (Coord.multiply (Coord.scalar (2 * mailScale) Sprite.charSize) cursorPosition
                                                         |> Coord.toTuple
@@ -1524,7 +1645,7 @@ mailView mailScale mailContent maybeTool =
                                             )
                                             (Coord.scalar (2 * mailScale) Sprite.charSize)
 
-                                    ImageType _ ->
+                                    ImageType _ _ ->
                                         []
 
                             _ ->
@@ -1532,6 +1653,21 @@ mailView mailScale mailContent maybeTool =
                        )
             }
         )
+
+
+importMail : Result () (List Content) -> Model -> Model
+importMail result model =
+    case result of
+        Ok contents ->
+            let
+                editorState : EditorState
+                editorState =
+                    model.current
+            in
+            addChange { editorState | content = contents } model
+
+        Err () ->
+            { model | importFailed = True }
 
 
 cursorSprite : Coord Pixels -> Hover -> Model -> { cursorType : CursorType, scale : Int }
@@ -1615,6 +1751,13 @@ editorView idMap userIdAndName windowSize model =
                             )
                             (idMap TextToolButton)
                             (Ui.text " Text ")
+                        , Ui.button { id = idMap ExportButton, padding = Ui.paddingXY 6 6 } (Ui.text "Export")
+                        , Ui.button { id = idMap ImportButton, padding = Ui.paddingXY 6 6 } (Ui.text "Import")
+                        , if model.importFailed then
+                            Ui.colorText Color.errorColor "Import\nfailed"
+
+                          else
+                            Ui.none
                         ]
                     , imageButtons
                         idMap

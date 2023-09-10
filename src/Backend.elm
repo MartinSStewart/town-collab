@@ -43,6 +43,12 @@ import Untrusted exposing (Validation(..))
 import User exposing (FrontendUser, InviteTree(..))
 
 
+app :
+    { init : ( BackendModel, Cmd BackendMsg )
+    , update : BackendMsg -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+    , updateFromFrontend : String -> String -> ToBackend -> BackendModel -> ( BackendModel, Cmd BackendMsg )
+    , subscriptions : BackendModel -> Sub BackendMsg
+    }
 app =
     Effect.Lamdera.backend
         Lamdera.broadcast
@@ -50,6 +56,14 @@ app =
         (app_ Env.isProduction)
 
 
+app_ :
+    Bool
+    ->
+        { init : ( BackendModel, Command restriction toMsg msg )
+        , update : BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+        , updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+        , subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
+        }
 app_ isProduction =
     { init = ( init, Command.none )
     , update = update isProduction

@@ -8,6 +8,7 @@ import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
 import Change exposing (AreTrainsDisabled(..), Change(..), UserStatus(..))
+import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor exposing (Cursor, CursorSprite(..), CursorType(..))
@@ -18,6 +19,9 @@ import Effect.Browser.Dom
 import Effect.Browser.Events
 import Effect.Browser.Navigation
 import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.File
+import Effect.File.Download
+import Effect.File.Select
 import Effect.Lamdera
 import Effect.Subscription as Subscription exposing (Subscription)
 import Effect.Task
@@ -79,25 +83,39 @@ import Vector2d
 import WebGL.Texture
 
 
+app :
+    { init : Url -> Lamdera.Key -> ( Audio.Model FrontendMsg_ FrontendModel_, Cmd (Audio.Msg FrontendMsg_) )
+    , view : Audio.Model FrontendMsg_ FrontendModel_ -> Browser.Document (Audio.Msg FrontendMsg_)
+    , update :
+        Audio.Msg FrontendMsg_
+        -> Audio.Model FrontendMsg_ FrontendModel_
+        -> ( Audio.Model FrontendMsg_ FrontendModel_, Cmd (Audio.Msg FrontendMsg_) )
+    , updateFromBackend :
+        ToFrontend
+        -> Audio.Model FrontendMsg_ FrontendModel_
+        -> ( Audio.Model FrontendMsg_ FrontendModel_, Cmd (Audio.Msg FrontendMsg_) )
+    , subscriptions : Audio.Model FrontendMsg_ FrontendModel_ -> Sub (Audio.Msg FrontendMsg_)
+    , onUrlRequest : Browser.UrlRequest -> Audio.Msg FrontendMsg_
+    , onUrlChange : Url -> Audio.Msg FrontendMsg_
+    }
 app =
-    Effect.Lamdera.frontend Lamdera.sendToBackend app_
-
-
-app_ =
-    Audio.lamderaFrontendWithAudio
-        { init = init
-        , onUrlRequest = UrlClicked
-        , onUrlChange = UrlChanged
-        , update = \audioData msg model -> update audioData msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
-        , updateFromBackend = \_ msg model -> updateFromBackend msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
-        , subscriptions = subscriptions
-        , view = view
-        , audio = audio
-        , audioPort =
-            { toJS = Command.sendToJs "audioPortToJS" Ports.audioPortToJS
-            , fromJS = Subscription.fromJs "audioPortFromJS" Ports.audioPortFromJS
+    Effect.Lamdera.frontend
+        Lamdera.sendToBackend
+        (Audio.lamderaFrontendWithAudio
+            { init = init
+            , onUrlRequest = UrlClicked
+            , onUrlChange = UrlChanged
+            , update = \audioData msg model -> update audioData msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
+            , updateFromBackend = \_ msg model -> updateFromBackend msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
+            , subscriptions = subscriptions
+            , view = view
+            , audio = audio
+            , audioPort =
+                { toJS = Command.sendToJs "audioPortToJS" Ports.audioPortToJS
+                , fromJS = Subscription.fromJs "audioPortFromJS" Ports.audioPortFromJS
+                }
             }
-        }
+        )
 
 
 audio : AudioData -> FrontendModel_ -> Audio
@@ -446,6 +464,7 @@ volume model position =
             ((maxVolumeDistance - distance) / maxVolumeDistance) ^ 2
 
 
+maxVolumeDistance : number
 maxVolumeDistance =
     10
 
@@ -638,7 +657,7 @@ updateLoaded audioData msg model =
                 Just key ->
                     case model.mailEditor of
                         Just mailEditor ->
-                            ( case MailEditor.handleKeyDown model.time (LocalGrid.ctrlOrMeta model) key mailEditor of
+                            case MailEditor.handleKeyDown model.time (LocalGrid.ctrlOrMeta model) key mailEditor of
                                 Just ( newMailEditor, outMsg ) ->
                                     { model
                                         | mailEditor = Just newMailEditor
@@ -647,12 +666,12 @@ updateLoaded audioData msg model =
                                         |> handleMailEditorOutMsg outMsg
 
                                 Nothing ->
-                                    { model
+                                    ( { model
                                         | mailEditor = Nothing
                                         , lastMailEditorToggle = Just model.time
-                                    }
-                            , Command.none
-                            )
+                                      }
+                                    , Command.none
+                                    )
 
                         Nothing ->
                             case ( model.focus, key ) of
@@ -1244,7 +1263,36 @@ updateLoaded audioData msg model =
         GotWebGlFix ->
             ( model, Command.none )
 
+        ImportedMail file ->
+            ( model
+            , Effect.File.toString file
+                |> Effect.Task.andThen
+                    (\text ->
+                        case Codec.decodeString (Codec.list MailEditor.contentCodec) text of
+                            Ok ok ->
+                                Effect.Task.succeed ok
 
+                            Err _ ->
+                                Effect.Task.fail ()
+                    )
+                |> Effect.Task.attempt ImportedMail2
+            )
+
+        ImportedMail2 result ->
+            ( { model
+                | mailEditor =
+                    case model.mailEditor of
+                        Just mailEditor ->
+                            MailEditor.importMail result mailEditor |> Just
+
+                        Nothing ->
+                            Nothing
+              }
+            , Command.none
+            )
+
+
+pasteTextTool : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
 pasteTextTool text model =
     ( case model.currentTool of
         TextTool (Just _) ->
@@ -1402,12 +1450,10 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
         HandTool ->
             case maybeNewColor of
                 Just color ->
-                    ( updateLocalModel
+                    updateLocalModel
                         (updateColor color (LoadingPage.getHandColor userId model) |> Change.ChangeHandColor)
                         model
                         |> handleOutMsg False
-                    , Command.none
-                    )
 
                 Nothing ->
                     ( model, Command.none )
@@ -1636,34 +1682,28 @@ keyMsgCanvasUpdate : AudioData -> Keyboard.Key -> FrontendLoaded -> ( FrontendLo
 keyMsgCanvasUpdate audioData key model =
     case ( key, LocalGrid.ctrlOrMeta model ) of
         ( Keyboard.Character "z", True ) ->
-            ( case model.currentTool of
+            case model.currentTool of
                 ReportTool ->
-                    model
+                    ( model, Command.none )
 
                 _ ->
                     updateLocalModel Change.LocalUndo model |> handleOutMsg False
-            , Command.none
-            )
 
         ( Keyboard.Character "Z", True ) ->
-            ( case model.currentTool of
+            case model.currentTool of
                 ReportTool ->
-                    model
+                    ( model, Command.none )
 
                 _ ->
                     updateLocalModel Change.LocalRedo model |> handleOutMsg False
-            , Command.none
-            )
 
         ( Keyboard.Character "y", True ) ->
-            ( case model.currentTool of
+            case model.currentTool of
                 ReportTool ->
-                    model
+                    ( model, Command.none )
 
                 _ ->
                     updateLocalModel Change.LocalRedo model |> handleOutMsg False
-            , Command.none
-            )
 
         ( Keyboard.Escape, _ ) ->
             if model.contextMenu /= Nothing then
@@ -1937,7 +1977,7 @@ tileInteraction :
     -> Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
 tileInteraction currentUserId2 { tile, userId, position } model =
     let
-        handleTrainHouse : Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend frontendMsg ))
+        handleTrainHouse : Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
         handleTrainHouse =
             case
                 IdDict.toList model.trains
@@ -1946,19 +1986,16 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                 Just ( trainId, train ) ->
                     case Train.status model.time train of
                         WaitingAtHome ->
-                            Just (\() -> ( clickLeaveHomeTrain trainId model, Command.none ))
+                            Just (\() -> clickLeaveHomeTrain trainId model)
 
                         _ ->
-                            Just (\() -> ( clickTeleportHomeTrain trainId model, Command.none ))
+                            Just (\() -> clickTeleportHomeTrain trainId model)
 
                 Nothing ->
                     Nothing
 
         handleRailSplit =
-            Just
-                (\() ->
-                    ( updateLocalModel (Change.ToggleRailSplit position) model |> handleOutMsg False, Command.none )
-                )
+            Just (\() -> updateLocalModel (Change.ToggleRailSplit position) model |> handleOutMsg False)
     in
     case tile of
         PostOffice ->
@@ -2192,12 +2229,12 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                             position =
                                                 LoadingPage.mouseWorldPosition model2 |> Coord.floorPoint
                                         in
-                                        ( (if List.any (\report -> report.position == position) (LoadingPage.getReports model2.localModel) then
+                                        (if List.any (\report -> report.position == position) (LoadingPage.getReports model2.localModel) then
                                             updateLocalModel
                                                 (Change.RemoveReport position)
                                                 { model2 | lastReportTileRemoved = Just model2.time }
 
-                                           else
+                                         else
                                             updateLocalModel
                                                 (Change.ReportVandalism
                                                     { position = position
@@ -2205,10 +2242,8 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                                     }
                                                 )
                                                 { model2 | lastReportTilePlaced = Just model2.time }
-                                          )
-                                            |> handleOutMsg False
-                                        , Command.none
                                         )
+                                            |> handleOutMsg False
 
                             Nothing ->
                                 ( model2, Command.none )
@@ -2216,7 +2251,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     TrainHover { trainId, train } ->
                         case Train.status model.time train of
                             WaitingAtHome ->
-                                ( clickLeaveHomeTrain trainId model2, Command.none )
+                                clickLeaveHomeTrain trainId model2
 
                             TeleportingHome _ ->
                                 ( model2, Command.none )
@@ -2231,10 +2266,10 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                             ( setTrainViewPoint trainId model2, Command.none )
 
                                         else
-                                            ( clickTeleportHomeTrain trainId model2, Command.none )
+                                            clickTeleportHomeTrain trainId model2
 
                                     Train.IsDerailed _ _ ->
-                                        ( clickTeleportHomeTrain trainId model2, Command.none )
+                                        clickTeleportHomeTrain trainId model2
 
                                     Train.IsNotStuckOrDerailed ->
                                         ( setTrainViewPoint trainId model2, Command.none )
@@ -2246,16 +2281,14 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                     position =
                                         LoadingPage.mouseWorldPosition model2 |> Coord.floorPoint
                                 in
-                                ( if List.any (\report -> report.position == position) (LoadingPage.getReports model2.localModel) then
+                                if List.any (\report -> report.position == position) (LoadingPage.getReports model2.localModel) then
                                     updateLocalModel
                                         (Change.RemoveReport position)
                                         { model2 | lastReportTileRemoved = Just model2.time }
                                         |> handleOutMsg False
 
-                                  else
-                                    model2
-                                , Command.none
-                                )
+                                else
+                                    ( model2, Command.none )
 
                             _ ->
                                 ( case previousMouseState.hover of
@@ -2285,7 +2318,10 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
         ( model2, Command.none )
 
 
-handleMailEditorOutMsg : MailEditor.OutMsg -> FrontendLoaded -> FrontendLoaded
+handleMailEditorOutMsg :
+    MailEditor.OutMsg
+    -> FrontendLoaded
+    -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
 handleMailEditorOutMsg outMsg model =
     (case outMsg of
         MailEditor.NoOutMsg ->
@@ -2299,6 +2335,12 @@ handleMailEditorOutMsg outMsg model =
 
         MailEditor.ViewedMail mailId ->
             updateLocalModel (Change.ViewedMail mailId) model
+
+        MailEditor.ExportMail content ->
+            ( model, LocalGrid.ExportMail content )
+
+        MailEditor.ImportMail ->
+            ( model, LocalGrid.ImportMail )
     )
         |> handleOutMsg False
 
@@ -2581,9 +2623,9 @@ uiUpdate audioData id event model =
                                         _ ->
                                             ( model3, LocalGrid.NoOutMsg )
                             in
-                            handleOutMsg False ( model2, outMsg2 )
+                            handleOutMsg False ( model2, outMsg2 ) |> Tuple.first
                         )
-                        (\_ -> ( model, Command.none ))
+                        (\() -> ( model, Command.none ))
                         nameTextInput
                         (\a -> { model | topMenuOpened = Just (SettingsMenu a) })
                         event
@@ -2615,9 +2657,7 @@ uiUpdate audioData id event model =
                                         model.lastMailEditorToggle
                             }
                     in
-                    ( handleMailEditorOutMsg outMsg model2
-                    , Command.none
-                    )
+                    handleMailEditorOutMsg outMsg model2
 
                 Nothing ->
                     ( model, Command.none )
@@ -2633,7 +2673,7 @@ uiUpdate audioData id event model =
                 audioData
                 event
                 (\() ->
-                    ( case LocalGrid.localModel model.localModel |> .userStatus of
+                    case LocalGrid.localModel model.localModel |> .userStatus of
                         LoggedIn loggedIn ->
                             updateLocalModel
                                 (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
@@ -2641,9 +2681,7 @@ uiUpdate audioData id event model =
                                 |> handleOutMsg False
 
                         NotLoggedIn ->
-                            model
-                    , Command.none
-                    )
+                            ( model, Command.none )
                 )
                 model
 
@@ -2651,7 +2689,7 @@ uiUpdate audioData id event model =
             onPress
                 audioData
                 event
-                (\() -> ( updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False, Command.none ))
+                (\() -> updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False)
                 model
 
         UsersOnlineButton ->
@@ -2682,7 +2720,7 @@ uiUpdate audioData id event model =
                 audioData
                 event
                 (\() ->
-                    ( case model.contextMenu of
+                    case model.contextMenu of
                         Just contextMenu ->
                             case contextMenu.userId of
                                 Just userId ->
@@ -2692,12 +2730,10 @@ uiUpdate audioData id event model =
                                         |> handleOutMsg False
 
                                 Nothing ->
-                                    model
+                                    ( model, Command.none )
 
                         Nothing ->
-                            model
-                    , Command.none
-                    )
+                            ( model, Command.none )
                 )
                 model
 
@@ -2706,7 +2742,7 @@ uiUpdate audioData id event model =
                 audioData
                 event
                 (\() ->
-                    ( case LocalGrid.localModel model.localModel |> .userStatus of
+                    case LocalGrid.localModel model.localModel |> .userStatus of
                         LoggedIn { isGridReadOnly } ->
                             updateLocalModel
                                 (Change.AdminSetGridReadOnly (not isGridReadOnly) |> Change.AdminChange)
@@ -2714,9 +2750,7 @@ uiUpdate audioData id event model =
                                 |> handleOutMsg False
 
                         NotLoggedIn ->
-                            model
-                    , Command.none
-                    )
+                            ( model, Command.none )
                 )
                 model
 
@@ -2725,7 +2759,7 @@ uiUpdate audioData id event model =
                 audioData
                 event
                 (\() ->
-                    ( updateLocalModel
+                    updateLocalModel
                         (Change.AdminSetTrainsDisabled
                             (case LocalGrid.localModel model.localModel |> .trainsDisabled of
                                 TrainsDisabled ->
@@ -2738,8 +2772,6 @@ uiUpdate audioData id event model =
                         )
                         model
                         |> handleOutMsg False
-                    , Command.none
-                    )
                 )
                 model
 
@@ -2990,13 +3022,13 @@ setFocus newFocus model =
     }
 
 
-clickLeaveHomeTrain : Id TrainId -> FrontendLoaded -> FrontendLoaded
+clickLeaveHomeTrain : Id TrainId -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
 clickLeaveHomeTrain trainId model =
     updateLocalModel (Change.LeaveHomeTrainRequest trainId model.time) model
         |> handleOutMsg False
 
 
-clickTeleportHomeTrain : Id TrainId -> FrontendLoaded -> FrontendLoaded
+clickTeleportHomeTrain : Id TrainId -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
 clickTeleportHomeTrain trainId model =
     updateLocalModel (Change.TeleportHomeTrainRequest trainId model.time) model
         |> handleOutMsg False
@@ -3431,17 +3463,20 @@ updateFromBackend msg model =
             ( model, Command.none )
 
 
-handleOutMsg : Bool -> ( FrontendLoaded, LocalGrid.OutMsg ) -> FrontendLoaded
+handleOutMsg :
+    Bool
+    -> ( FrontendLoaded, LocalGrid.OutMsg )
+    -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
 handleOutMsg isFromBackend ( model, outMsg ) =
     case outMsg of
         LocalGrid.NoOutMsg ->
-            model
+            ( model, Command.none )
 
         LocalGrid.TilesRemoved _ ->
-            model
+            ( model, Command.none )
 
         LocalGrid.OtherUserCursorMoved { userId, previousPosition } ->
-            { model
+            ( { model
                 | previousCursorPositions =
                     case previousPosition of
                         Just previousPosition2 ->
@@ -3452,10 +3487,12 @@ handleOutMsg isFromBackend ( model, outMsg ) =
 
                         Nothing ->
                             IdDict.remove userId model.previousCursorPositions
-            }
+              }
+            , Command.none
+            )
 
         LocalGrid.HandColorOrNameChanged userId ->
-            case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
+            ( case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
                 Just user ->
                     { model
                         | handMeshes =
@@ -3475,25 +3512,33 @@ handleOutMsg isFromBackend ( model, outMsg ) =
 
                 Nothing ->
                     model
+            , Command.none
+            )
 
         LocalGrid.RailToggledByAnother position ->
-            handleRailToggleSound position model
+            ( handleRailToggleSound position model, Command.none )
 
         LocalGrid.RailToggledBySelf position ->
-            if isFromBackend then
+            ( if isFromBackend then
                 model
 
-            else
+              else
                 handleRailToggleSound position model
+            , Command.none
+            )
 
         LocalGrid.TeleportTrainHome trainId ->
-            { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome model.time)) model.trains }
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome model.time)) model.trains }
+            , Command.none
+            )
 
         LocalGrid.TrainLeaveHome trainId ->
-            { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome model.time)) model.trains }
+            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome model.time)) model.trains }
+            , Command.none
+            )
 
         LocalGrid.TrainsUpdated diff ->
-            { model
+            ( { model
                 | trains =
                     IdDict.toList diff
                         |> List.filterMap
@@ -3506,12 +3551,26 @@ handleOutMsg isFromBackend ( model, outMsg ) =
                                         Nothing
                             )
                         |> IdDict.fromList
-            }
+              }
+            , Command.none
+            )
 
         LocalGrid.ReceivedMail ->
-            { model | lastReceivedMail = Just model.time }
+            ( { model | lastReceivedMail = Just model.time }, Command.none )
+
+        LocalGrid.ExportMail content ->
+            ( model
+            , Effect.File.Download.string
+                "letter.json"
+                "application/json"
+                (Codec.encodeToString 2 (Codec.list MailEditor.contentCodec) content)
+            )
+
+        LocalGrid.ImportMail ->
+            ( model, Effect.File.Select.file [ "application/json" ] ImportedMail )
 
 
+handleRailToggleSound : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
 handleRailToggleSound position model =
     { model
         | railToggles =
@@ -3543,12 +3602,16 @@ updateLoadedFromBackend msg model =
                 ( newLocalModel, outMsgs ) =
                     LocalGrid.updateFromBackend changes model.localModel
             in
-            ( List.foldl
-                (\outMsg state -> handleOutMsg True ( state, outMsg ))
-                { model | localModel = newLocalModel }
+            List.foldl
+                (\outMsg ( state, cmd ) ->
+                    let
+                        ( model2, cmd2 ) =
+                            handleOutMsg True ( state, outMsg )
+                    in
+                    ( model2, Command.batch [ cmd, cmd2 ] )
+                )
+                ( { model | localModel = newLocalModel }, Command.none )
                 outMsgs
-            , Command.none
-            )
 
         UnsubscribeEmailConfirmed ->
             ( model, Command.none )
