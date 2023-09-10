@@ -135,11 +135,16 @@ allTileGroupsExceptText =
     ]
 
 
-tileToTileGroup : Tile -> Maybe TileGroup
+tileToTileGroup : Tile -> Maybe { tileGroup : TileGroup, index : Int }
 tileToTileGroup tile =
-    List.find
+    List.findMap
         (\tileGroup ->
-            getTileGroupData tileGroup |> .tiles |> List.Nonempty.any ((==) tile)
+            case getTileGroupData tileGroup |> .tiles |> List.Nonempty.toList |> List.findIndex ((==) tile) of
+                Just index ->
+                    Just { tileGroup = tileGroup, index = index }
+
+                Nothing ->
+                    Nothing
         )
         allTileGroupsExceptText
 

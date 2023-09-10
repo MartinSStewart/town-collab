@@ -37,8 +37,9 @@ import Sound
 import Sprite
 import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
+import Tool exposing (Tool(..))
 import Train
-import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), SubmitStatus(..), Tool(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
 import User
@@ -73,7 +74,6 @@ view model =
                     (case localModel.userStatus of
                         LoggedIn loggedIn ->
                             toolbarUi
-                                model.hasCmdKey
                                 (case IdDict.get loggedIn.userId localModel.users of
                                     Just user ->
                                         user.handColor
@@ -81,10 +81,7 @@ view model =
                                     Nothing ->
                                         Cursor.defaultColors
                                 )
-                                model.primaryColorTextInput
-                                model.secondaryColorTextInput
-                                model.tileColors
-                                model.tileHotkeys
+                                model
                                 (case model.currentTool of
                                     HandTool ->
                                         HandToolButton
@@ -218,18 +215,6 @@ view model =
 
                                 NotLoggedIn ->
                                     Ui.none
-                            , Ui.button
-                                { id = ShowMapButton
-                                , padding = Ui.paddingXY 10 4
-                                }
-                                (Ui.text
-                                    (if model.showMap then
-                                        "Hide map"
-
-                                     else
-                                        "Show map"
-                                    )
-                                )
                             , case localModel.userStatus of
                                 LoggedIn loggedIn ->
                                     let
@@ -873,16 +858,8 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
             loginUi
 
 
-toolbarUi :
-    Bool
-    -> Colors
-    -> TextInput.Model
-    -> TextInput.Model
-    -> AssocList.Dict TileGroup Colors
-    -> Dict String TileGroup
-    -> ToolButton
-    -> Ui.Element UiHover
-toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tileColors hotkeys currentToolButton =
+toolbarUi : Colors -> FrontendLoaded -> ToolButton -> Ui.Element UiHover
+toolbarUi handColor model currentToolButton =
     Ui.row
         { spacing = 0, padding = Ui.noPadding }
         [ Ui.column
@@ -911,12 +888,43 @@ toolbarUi hasCmdKey handColor primaryColorTextInput secondaryColorTextInput tile
                     }
                     rotateRightSprite
                 ]
+            , Ui.row
+                { spacing = 2, padding = Ui.noPadding }
+                [ Ui.customButton
+                    { id = ShowMapButton
+                    , padding = smallToolButtonPadding
+                    , inFront = hotkeyTextOverlay (Coord.xy 56 56) "m"
+                    , borderAndFill =
+                        BorderAndFill
+                            { borderWidth = 2
+                            , borderColor = Color.outlineColor
+                            , fillColor =
+                                if model.showMap then
+                                    Color.highlightColor
+
+                                else
+                                    Color.fillColor2
+                            }
+                    , borderAndFillFocus =
+                        BorderAndFill
+                            { borderWidth = 2
+                            , borderColor = Color.focusedUiColor
+                            , fillColor =
+                                if model.showMap then
+                                    Color.highlightColor
+
+                                else
+                                    Color.fillColor2
+                            }
+                    }
+                    mapSprite
+                ]
             ]
-        , List.map (toolButtonUi hasCmdKey handColor tileColors hotkeys currentToolButton) buttonTiles
+        , List.map (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton) buttonTiles
             |> List.greedyGroupsOf toolbarRowCount
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
-        , selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentToolButton
+        , selectedToolView handColor model.primaryColorTextInput model.secondaryColorTextInput model.tileColors currentToolButton
         ]
 
 
@@ -932,6 +940,11 @@ zoomInSprite =
 zoomOutSprite : Ui.Element id
 zoomOutSprite =
     Ui.sprite { size = Coord.xy 42 42, texturePosition = Coord.xy 504 124, textureSize = Coord.xy 21 21 }
+
+
+mapSprite : Ui.Element id
+mapSprite =
+    Ui.sprite { size = Coord.xy 42 42, texturePosition = Coord.xy 504 145, textureSize = Coord.xy 21 21 }
 
 
 rotateLeftSprite : Ui.Element id

@@ -24,7 +24,6 @@ module Types exposing
     , SubmitStatus(..)
     , ToBackend(..)
     , ToFrontend(..)
-    , Tool(..)
     , ToolButton(..)
     , TopMenu(..)
     , UiHover(..)
@@ -73,6 +72,7 @@ import Sound exposing (Sound)
 import TextInput
 import Tile exposing (Tile, TileGroup)
 import Time
+import Tool exposing (Tool)
 import Train exposing (Train)
 import Ui
 import Units exposing (CellUnit, WorldUnit)
@@ -135,14 +135,6 @@ type ToolButton
     | TilePickerToolButton
     | TextToolButton
     | ReportToolButton
-
-
-type Tool
-    = HandTool
-    | TilePlacerTool { tileGroup : TileGroup, index : Int, mesh : WebGL.Mesh Vertex }
-    | TilePickerTool
-    | TextTool (Maybe { cursorPosition : Coord WorldUnit, startColumn : Quantity Int WorldUnit })
-    | ReportTool
 
 
 type alias FrontendLoaded =

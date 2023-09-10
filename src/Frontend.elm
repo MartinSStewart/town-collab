@@ -75,6 +75,7 @@ import Terrain
 import TextInput exposing (OutMsg(..))
 import Tile exposing (Tile(..), TileGroup(..))
 import Time
+import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Status(..), Train)
 import Types exposing (..)
@@ -909,35 +910,11 @@ update audioData msg model =
                    )
                 |> (\( newModel, cmd ) ->
                         let
-                            toolToCursorTool tool =
-                                case tool of
-                                    HandTool ->
-                                        Cursor.HandTool
-
-                                    TilePlacerTool { tileGroup } ->
-                                        if tileGroup == EmptyTileGroup then
-                                            Cursor.EraserTool
-
-                                        else
-                                            Cursor.TilePlacerTool
-
-                                    TilePickerTool ->
-                                        Cursor.TilePickerTool
-
-                                    TextTool (Just textTool) ->
-                                        Cursor.TextTool (Just { cursorPosition = textTool.cursorPosition })
-
-                                    TextTool Nothing ->
-                                        Cursor.TextTool Nothing
-
-                                    ReportTool ->
-                                        Cursor.ReportTool
-
                             newTool : Cursor.OtherUsersTool
                             newTool =
-                                currentTool newModel |> toolToCursorTool
+                                currentTool newModel |> Tool.toCursor
                         in
-                        ( if toolToCursorTool (currentTool frontendLoaded) == newTool then
+                        ( if Tool.toCursor (currentTool frontendLoaded) == newTool then
                             newModel
 
                           else
@@ -2344,10 +2321,10 @@ getTileColor tileGroup model =
 
 
 setCurrentTool : ToolButton -> FrontendLoaded -> FrontendLoaded
-setCurrentTool tool model =
+setCurrentTool toolButton model =
     let
         colors =
-            case tool of
+            case toolButton of
                 TilePlacerToolButton tileGroup ->
                     getTileColor tileGroup model
 
@@ -2367,15 +2344,9 @@ setCurrentTool tool model =
 
                 ReportToolButton ->
                     { primaryColor = Color.white, secondaryColor = Color.black }
-    in
-    setCurrentToolWithColors tool colors model
 
-
-setCurrentToolWithColors : ToolButton -> Colors -> FrontendLoaded -> FrontendLoaded
-setCurrentToolWithColors tool colors model =
-    { model
-        | currentTool =
-            case tool of
+        tool =
+            case toolButton of
                 TilePlacerToolButton tileGroup ->
                     TilePlacerTool
                         { tileGroup = tileGroup
@@ -2394,23 +2365,31 @@ setCurrentToolWithColors tool colors model =
 
                 ReportToolButton ->
                     ReportTool
+    in
+    setCurrentToolWithColors tool colors model
+
+
+setCurrentToolWithColors : Tool -> Colors -> FrontendLoaded -> FrontendLoaded
+setCurrentToolWithColors tool colors model =
+    { model
+        | currentTool = tool
         , primaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.primaryColor)
         , secondaryColorTextInput = TextInput.init |> TextInput.withText (Color.toHexCode colors.secondaryColor)
         , tileColors =
             case tool of
-                TilePlacerToolButton tileGroup ->
+                TilePlacerTool { tileGroup } ->
                     AssocList.insert tileGroup colors model.tileColors
 
-                HandToolButton ->
+                HandTool ->
                     model.tileColors
 
-                TilePickerToolButton ->
+                TilePickerTool ->
                     model.tileColors
 
-                TextToolButton ->
+                TextTool _ ->
                     AssocList.insert BigTextGroup colors model.tileColors
 
-                ReportToolButton ->
+                ReportTool ->
                     model.tileColors
     }
 
@@ -2667,8 +2646,22 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                         ( case hoverAt2 of
                                             TileHover { tile, colors } ->
                                                 case Tile.tileToTileGroup tile of
-                                                    Just tileGroup ->
-                                                        setCurrentToolWithColors (TilePlacerToolButton tileGroup) colors model2
+                                                    Just { tileGroup, index } ->
+                                                        setCurrentToolWithColors
+                                                            (TilePlacerTool
+                                                                { tileGroup = tileGroup
+                                                                , index = index
+                                                                , mesh =
+                                                                    Grid.tileMesh
+                                                                        (Toolbar.getTileGroupTile tileGroup index)
+                                                                        Coord.origin
+                                                                        1
+                                                                        colors
+                                                                        |> Sprite.toMesh
+                                                                }
+                                                            )
+                                                            colors
+                                                            model2
 
                                                     Nothing ->
                                                         model2
@@ -5651,27 +5644,7 @@ drawOtherCursors texture viewMatrix model shaderTime2 =
                                         PinchSpriteCursor
 
                                     Nothing ->
-                                        case cursor.currentTool of
-                                            Cursor.HandTool ->
-                                                DefaultSpriteCursor
-
-                                            Cursor.EraserTool ->
-                                                EraserSpriteCursor
-
-                                            Cursor.TilePlacerTool ->
-                                                DefaultSpriteCursor
-
-                                            Cursor.TilePickerTool ->
-                                                EyeDropperSpriteCursor
-
-                                            Cursor.TextTool (Just _) ->
-                                                TextSpriteCursor
-
-                                            Cursor.TextTool Nothing ->
-                                                DefaultSpriteCursor
-
-                                            Cursor.ReportTool ->
-                                                GavelSpriteCursor
+                                        Cursor.fromOtherUsersTool cursor.currentTool
                                 )
                                 mesh
                             )

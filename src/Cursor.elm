@@ -16,6 +16,7 @@ module Cursor exposing
     , eraserCursorMesh
     , eyeDropperCursor2
     , eyeDropperCursorMesh
+    , fromOtherUsersTool
     , gavelCursor2
     , gavelCursorMesh
     , getSpriteMesh
@@ -76,6 +77,31 @@ type alias CursorMeshes =
     , textSprite : WebGL.Mesh Vertex
     , gavelSprite : WebGL.Mesh Vertex
     }
+
+
+fromOtherUsersTool : OtherUsersTool -> CursorSprite
+fromOtherUsersTool tool =
+    case tool of
+        HandTool ->
+            DefaultSpriteCursor
+
+        EraserTool ->
+            EraserSpriteCursor
+
+        TilePlacerTool ->
+            DefaultSpriteCursor
+
+        TilePickerTool ->
+            EyeDropperSpriteCursor
+
+        TextTool (Just _) ->
+            TextSpriteCursor
+
+        TextTool Nothing ->
+            DefaultSpriteCursor
+
+        ReportTool ->
+            GavelSpriteCursor
 
 
 meshes : Maybe ( Id UserId, DisplayName ) -> Colors -> CursorMeshes
