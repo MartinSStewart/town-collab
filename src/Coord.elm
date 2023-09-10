@@ -25,7 +25,6 @@ module Coord exposing
     , toTuple
     , toVec2
     , toVector2d
-    , toggleSet
     , translateMat4
     , tuple
     , x
@@ -37,7 +36,6 @@ module Coord exposing
     , yRaw
     )
 
-import EverySet exposing (EverySet)
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
@@ -219,15 +217,6 @@ yRaw ( _, Quantity y_ ) =
 
 type alias Coord units =
     ( Quantity Int units, Quantity Int units )
-
-
-toggleSet : a -> EverySet a -> EverySet a
-toggleSet value set =
-    if EverySet.member value set then
-        EverySet.remove value set
-
-    else
-        EverySet.insert value set
 
 
 xOnly : Coord a -> Coord a

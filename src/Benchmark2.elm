@@ -1,8 +1,7 @@
-module Benchmark2 exposing (..)
+module Benchmark2 exposing (main)
 
 import Benchmark
 import Benchmark.Runner
-import Toolbar
 import Ui
 
 
@@ -18,11 +17,3 @@ main =
             a == b
         )
         |> Benchmark.Runner.program
-
-
-uiA =
-    Toolbar.view
-
-
-uiB =
-    Toolbar.view

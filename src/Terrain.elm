@@ -1,4 +1,4 @@
-module Terrain exposing (..)
+module Terrain exposing (TerrainType(..), TerrainUnit(..), TerrainValue, createTerrainLookup, getTerrainValue, localCoordToTerrain, permutationTable, randomScenery, terrainCoord, terrainDivisionsPerCell, terrainSize, terrainToLocalCoord)
 
 import Array2D exposing (Array2D)
 import Coord exposing (Coord)
@@ -175,20 +175,6 @@ getTerrainValue ( Quantity x, Quantity y ) ( Quantity cellX, Quantity cellY ) =
     }
 
 
-fractalConfig : Simplex.FractalConfig
-fractalConfig =
-    { steps = 2
-    , stepSize = 14
-    , persistence = 2
-    , scale = 5
-    }
-
-
 permutationTable : Simplex.PermutationTable
 permutationTable =
     Simplex.permutationTableFromInt 123
-
-
-getTerrainLookupValue : Coord TerrainUnit -> Array2D Bool -> Bool
-getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
-    Array2D.get (x + 1) (y + 1) lookup |> Maybe.withDefault True

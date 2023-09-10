@@ -1,4 +1,4 @@
-module Backend exposing (app, app_)
+module Backend exposing (app)
 
 import Animal exposing (Animal)
 import AssocList
@@ -390,7 +390,7 @@ handleWorldUpdate isProduction oldTime time model =
             List.foldl
                 (\( _, mail ) state ->
                     case ( IdDict.get mail.to model.users, mail.status ) of
-                        ( Just user, MailReceived { deliveryTime } ) ->
+                        ( Just user, MailReceived _ ) ->
                             case user.cursor of
                                 Just _ ->
                                     state
@@ -1023,7 +1023,7 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                         else
                             Nothing
 
-                    { grid, removed, newCells } =
+                    { removed, newCells } =
                         Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
 
                     nextCowId =

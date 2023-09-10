@@ -1,4 +1,4 @@
-module Env exposing (..)
+module Env exposing (adminEmail, adminUserId, domain, isProduction, postmarkApiKey, secretKey)
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
@@ -16,11 +16,6 @@ adminUserId_ =
 adminUserId : Maybe (Id UserId)
 adminUserId =
     String.toInt adminUserId_ |> Maybe.map Id.fromInt
-
-
-isProduction2 : String
-isProduction2 =
-    "False"
 
 
 isProduction_ : String

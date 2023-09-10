@@ -1,8 +1,10 @@
 module Ui exposing
     ( BorderAndFill(..)
+    , ButtonData
     , Element(..)
     , HoverType(..)
     , Padding
+    , RowColumn
     , UiEvent(..)
     , bottomCenter
     , bottomLeft

@@ -1,7 +1,7 @@
 module Tool exposing (Tool(..), toCursor)
 
 import Coord exposing (Coord)
-import Cursor exposing (CursorSprite(..))
+import Cursor
 import Effect.WebGL as WebGL
 import Quantity exposing (Quantity)
 import Shaders exposing (Vertex)

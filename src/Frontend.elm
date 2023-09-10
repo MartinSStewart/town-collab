@@ -1,20 +1,13 @@
-module Frontend exposing
-    ( app
-    , app_
-    , init
-    , update
-    , updateFromBackend
-    , view
-    )
+module Frontend exposing (app)
 
 import Animal exposing (Animal)
-import Array exposing (Array)
+import Array
 import AssocList
 import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
-import Bounds exposing (Bounds)
+import Bounds
 import Browser
-import Change exposing (AreTrainsDisabled(..), BackendReport, Change(..), Report, UserStatus(..))
+import Change exposing (AreTrainsDisabled(..), Change(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor exposing (Cursor, CursorSprite(..), CursorType(..))
@@ -32,7 +25,7 @@ import Effect.Time
 import Effect.WebGL
 import Effect.WebGL.Settings
 import Effect.WebGL.Settings.DepthTest
-import Effect.WebGL.Texture exposing (Texture)
+import Effect.WebGL.Texture
 import EmailAddress
 import Env
 import Flag
@@ -53,8 +46,8 @@ import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LoadingPage
-import LocalGrid exposing (LocalGrid, LocalGrid_)
-import LocalModel exposing (LocalModel)
+import LocalGrid exposing (LocalGrid_)
+import LocalModel
 import MailEditor exposing (MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -78,7 +71,7 @@ import Toolbar
 import Train exposing (Status(..), Train)
 import Types exposing (..)
 import Ui exposing (UiEvent)
-import Units exposing (CellUnit, WorldUnit)
+import Units exposing (WorldUnit)
 import Untrusted
 import Url exposing (Url)
 import Url.Parser
@@ -1480,7 +1473,7 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
                                     TilePickerTool ->
                                         m.currentTool
 
-                                    TextTool record ->
+                                    TextTool _ ->
                                         m.currentTool
 
                                     ReportTool ->
@@ -2266,7 +2259,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
                             _ ->
                                 ( case previousMouseState.hover of
-                                    TrainHover { trainId, train } ->
+                                    TrainHover { trainId } ->
                                         setTrainViewPoint trainId model2
 
                                     _ ->
@@ -2329,7 +2322,7 @@ sendInvite model =
 
 onPress audioData event updateFunc model =
     case event of
-        Ui.MousePressed data ->
+        Ui.MousePressed _ ->
             updateFunc ()
 
         Ui.KeyDown Keyboard.Enter ->

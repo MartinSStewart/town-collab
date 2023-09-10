@@ -6,10 +6,8 @@ module Toolbar exposing
     , mapSize
     , offsetViewPoint
     , screenToWorld
-    , showColorTextInputs
     , validateInviteEmailAddress
     , view
-    , worldToScreen
     )
 
 import AssocList

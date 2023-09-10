@@ -2,7 +2,6 @@ module LocalGrid exposing
     ( LocalGrid
     , LocalGrid_
     , OutMsg(..)
-    , addAnimals
     , addReported
     , ctrlOrMeta
     , currentTool
@@ -273,7 +272,7 @@ updateLocalChange localChange model =
                 NotLoggedIn ->
                     ( model, NoOutMsg )
 
-        DropCow cowId position time ->
+        DropCow cowId position _ ->
             case model.userStatus of
                 LoggedIn loggedIn ->
                     dropCow loggedIn.userId cowId position model
@@ -511,7 +510,7 @@ updateLocalChange localChange model =
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
-        ServerGridChange { gridChange, newCells, newCows } ->
+        ServerGridChange { gridChange, newCows } ->
             let
                 model2 =
                     { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }

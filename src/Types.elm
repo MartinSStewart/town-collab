@@ -65,7 +65,6 @@ import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
-import Quantity exposing (Quantity)
 import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
@@ -379,12 +378,12 @@ type alias BackendUserData =
     }
 
 
-type alias FrontendMsg =
-    Audio.Msg FrontendMsg_
-
-
 type CssPixels
     = CssPixel Never
+
+
+type alias FrontendMsg =
+    Audio.Msg FrontendMsg_
 
 
 type FrontendMsg_

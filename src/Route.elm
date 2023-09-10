@@ -5,11 +5,9 @@ module Route exposing
     , LoginToken
     , Route(..)
     , UnsubscribeEmailKey(..)
-    , coordQueryParser
     , decode
     , encode
     , internalRoute
-    , notifyMe
     , startPointAt
     , urlParser
     )
@@ -127,11 +125,6 @@ showInbox =
 
 inviteToken =
     "invite-token"
-
-
-notifyMe : String
-notifyMe =
-    "notify-me"
 
 
 type Route

@@ -6,25 +6,19 @@ module Cursor exposing
     , OtherUsersTool(..)
     , defaultColors
     , defaultCursor
-    , defaultCursorMesh
     , defaultCursorMesh2
     , defaultCursorTexturePosition
     , defaultCursorTextureSize
     , dragCursorTexturePosition
     , dragCursorTextureSize
-    , dragScreenCursorMesh
-    , eraserCursorMesh
     , eyeDropperCursor2
-    , eyeDropperCursorMesh
     , fromOtherUsersTool
     , gavelCursor2
-    , gavelCursorMesh
     , getSpriteMesh
     , htmlAttribute
     , meshes
     , pinchCursorTexturePosition
     , pinchCursorTextureSize
-    , pointerCursorMesh
     , textCursorMesh2
     )
 

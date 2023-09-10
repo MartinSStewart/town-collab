@@ -3,7 +3,6 @@ module Flag exposing
     , postOfficeReceivedMailFlagOffset
     , postOfficeSendingMailFlagOffset
     , postOfficeSendingMailFlagOffset2
-    , receivingMailFlagColor
     , receivingMailFlagMeshes
     , sendingMailFlagColor
     , sendingMailFlagMeshes

@@ -1,6 +1,5 @@
-module TextInput exposing (Model, OutMsg(..), State, bounds, charScale, init, keyMsg, mouseDown, mouseDownMove, padding, paste, pushState, replaceState, selectAll, size, view, withText)
+module TextInput exposing (Model, OutMsg(..), State, charScale, init, keyMsg, mouseDown, mouseDownMove, padding, paste, replaceState, selectAll, size, view, withText)
 
-import Bounds
 import Color
 import Coord exposing (Coord)
 import Keyboard
@@ -79,11 +78,6 @@ redo model =
 
         [] ->
             model
-
-
-bounds : Coord units -> Quantity Int units -> Bounds.Bounds units
-bounds position width =
-    Bounds.fromCoordAndSize position (size width)
 
 
 selectionMin : State -> Int
