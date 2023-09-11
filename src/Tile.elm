@@ -2608,7 +2608,7 @@ roadDeadendDown =
 
 
 busStopDown =
-    { texturePosition = Nothing
+    { texturePosition = Just (Coord.xy 160 684)
     , texturePositionTopLayer = Just { yOffset = yOffset BusStopDown, texturePosition = Coord.xy 12 44 |> Coord.multiply Units.tileSize }
     , size = Coord.xy 2 2
     , collisionMask =
@@ -2622,7 +2622,7 @@ busStopDown =
 
 
 busStopLeft =
-    { texturePosition = Nothing
+    { texturePosition = Just (Coord.xy 280 774)
     , texturePositionTopLayer = Just { yOffset = yOffset BusStopLeft, texturePosition = Coord.xy 16 42 |> Coord.multiply Units.tileSize }
     , size = Coord.xy 1 3
     , collisionMask =
@@ -2636,7 +2636,7 @@ busStopLeft =
 
 
 busStopRight =
-    { texturePosition = Nothing
+    { texturePosition = Just (Coord.xy 280 774)
     , texturePositionTopLayer = Just { yOffset = yOffset BusStopRight, texturePosition = Coord.xy 15 42 |> Coord.multiply Units.tileSize }
     , size = Coord.xy 1 3
     , collisionMask =
@@ -2650,7 +2650,7 @@ busStopRight =
 
 
 busStopUp =
-    { texturePosition = Nothing
+    { texturePosition = Just (Coord.xy 160 684)
     , texturePositionTopLayer = Just { yOffset = yOffset BusStopUp, texturePosition = Coord.xy 12 46 |> Coord.multiply Units.tileSize }
     , size = Coord.xy 2 2
     , collisionMask =
