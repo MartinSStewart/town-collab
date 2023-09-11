@@ -1,11 +1,11 @@
 module Id exposing
-    ( AnimalId
-    , EventId
+    ( AnimalId(..)
+    , EventId(..)
     , Id(..)
-    , MailId
+    , MailId(..)
     , SecretId(..)
-    , TrainId
-    , UserId
+    , TrainId(..)
+    , UserId(..)
     , fromInt
     , increment
     , secretFromString

@@ -1,10 +1,10 @@
 module Units exposing
-    ( CellLocalUnit
-    , CellUnit
-    , MailPixelUnit
-    , TerrainUnit
-    , TileLocalUnit
-    , WorldUnit
+    ( CellLocalUnit(..)
+    , CellUnit(..)
+    , MailPixelUnit(..)
+    , TerrainUnit(..)
+    , TileLocalUnit(..)
+    , WorldUnit(..)
     , cellSize
     , cellToTile
     , cellUnit

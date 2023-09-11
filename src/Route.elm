@@ -1,8 +1,8 @@
 module Route exposing
     ( ConfirmEmailKey(..)
-    , InviteToken
+    , InviteToken(..)
     , LoginOrInviteToken(..)
-    , LoginToken
+    , LoginToken(..)
     , Route(..)
     , UnsubscribeEmailKey(..)
     , decode
