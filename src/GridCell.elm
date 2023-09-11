@@ -11,6 +11,7 @@ module GridCell exposing
     , getPostOffices
     , getToggledRailSplit
     , hasChangesBy
+    , mapPixelData
     , moveUndoPoint
     , removeUser
     , toggleRailSplit
@@ -18,6 +19,7 @@ module GridCell exposing
     )
 
 import AssocSet
+import Bitwise
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
 import Coord exposing (Coord)
@@ -26,10 +28,10 @@ import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty(..))
 import Quantity exposing (Quantity(..))
 import Random
-import Shaders
+import Shaders exposing (MapOverlayVertex)
 import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile(..))
-import Units exposing (CellLocalUnit, CellUnit)
+import Units exposing (CellLocalUnit, CellUnit, TerrainUnit)
 
 
 type CellData
@@ -47,9 +49,34 @@ dataToCell cellPosition (CellData cellData) =
     , undoPoint = cellData.undoPoint
     , cache = cellData.cache
     , railSplitToggled = cellData.railSplitToggled
+    , mapCache = updateMapPixelData cellData.cache
     }
         |> Cell
         |> updateCache cellPosition
+
+
+updateMapPixelData : List Value -> Int
+updateMapPixelData cache =
+    List.foldl
+        (\{ position } mapCache ->
+            let
+                terrainPos : Coord TerrainUnit
+                terrainPos =
+                    Terrain.localCoordToTerrain position
+
+                index : Int
+                index =
+                    Coord.xRaw terrainPos + Coord.yRaw terrainPos * Terrain.terrainDivisionsPerCell
+            in
+            Bitwise.shiftLeftBy index 1 |> Bitwise.or mapCache
+        )
+        0
+        cache
+
+
+mapPixelData : Cell -> Int
+mapPixelData (Cell cell) =
+    cell.mapCache
 
 
 cellToData : Cell -> CellData
@@ -68,6 +95,7 @@ type Cell
         , undoPoint : IdDict UserId Int
         , cache : List Value
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
+        , mapCache : Int
         }
 
 
@@ -123,6 +151,7 @@ addValue value (Cell cell) =
             , undoPoint = IdDict.insert value.userId (userUndoPoint + 1) cell.undoPoint
             , cache = remaining
             , railSplitToggled = cell.railSplitToggled
+            , mapCache = updateMapPixelData remaining
             }
     , removed = removed
     }
@@ -138,15 +167,19 @@ cellBounds =
 
 updateCache : Coord CellUnit -> Cell -> Cell
 updateCache cellPosition (Cell cell) =
+    let
+        cache =
+            List.foldr
+                stepCache
+                { list = addTrees cellPosition, undoPoint = cell.undoPoint }
+                cell.history
+                |> .list
+    in
     { history = cell.history
     , undoPoint = cell.undoPoint
-    , cache =
-        List.foldr
-            stepCache
-            { list = addTrees cellPosition, undoPoint = cell.undoPoint }
-            cell.history
-            |> .list
+    , cache = cache
     , railSplitToggled = cell.railSplitToggled
+    , mapCache = updateMapPixelData cache
     }
         |> Cell
 
@@ -216,6 +249,7 @@ removeUser userId cellPosition (Cell cell) =
         , undoPoint = IdDict.remove userId cell.undoPoint
         , cache = cell.cache
         , railSplitToggled = cell.railSplitToggled
+        , mapCache = cell.mapCache
         }
         |> updateCache cellPosition
 
@@ -232,6 +266,7 @@ moveUndoPoint userId moveAmount cellPosition (Cell cell) =
         , undoPoint = IdDict.update userId (Maybe.map ((+) moveAmount)) cell.undoPoint
         , cache = cell.cache
         , railSplitToggled = cell.railSplitToggled
+        , mapCache = cell.mapCache
         }
         |> updateCache cellPosition
 
@@ -248,7 +283,13 @@ flatten (Cell cell) =
 
 empty : Coord CellUnit -> Cell
 empty cellPosition =
-    Cell { history = [], undoPoint = IdDict.empty, cache = addTrees cellPosition, railSplitToggled = AssocSet.empty }
+    Cell
+        { history = []
+        , undoPoint = IdDict.empty
+        , cache = addTrees cellPosition
+        , railSplitToggled = AssocSet.empty
+        , mapCache = 0
+        }
 
 
 toggleRailSplit : Coord CellLocalUnit -> Cell -> Cell
@@ -263,6 +304,7 @@ toggleRailSplit coord (Cell cell) =
 
             else
                 AssocSet.insert coord cell.railSplitToggled
+        , mapCache = cell.mapCache
         }
 
 

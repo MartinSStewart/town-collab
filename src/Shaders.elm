@@ -1,6 +1,7 @@
 module Shaders exposing
     ( DebrisVertex
     , InstancedVertex
+    , MapOverlayVertex
     , Vertex
     , blend
     , debrisVertexShader
@@ -8,6 +9,7 @@ module Shaders exposing
     , fragmentShader
     , indexedTriangles
     , instancedVertexShader
+    , mapSize
     , mapSquare
     , noUserIdSelected
     , opacityAndUserId
@@ -16,6 +18,8 @@ module Shaders exposing
     , vertexShader
     , worldGenUserId
     , worldMapFragmentShader
+    , worldMapOverlayFragmentShader
+    , worldMapOverlayVertexShader
     , worldMapVertexShader
     )
 
@@ -31,6 +35,8 @@ import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Math.Vector4 as Vec4 exposing (Vec4)
+import Quantity exposing (Quantity)
+import Units exposing (TerrainUnit)
 import WebGL.Texture
 
 
@@ -101,11 +107,21 @@ blend =
     Blend.add Blend.srcAlpha Blend.oneMinusSrcAlpha
 
 
+halfMapSize : Quantity number TerrainUnit
+halfMapSize =
+    Quantity.unsafe 11
+
+
+mapSize : Quantity number TerrainUnit
+mapSize =
+    Quantity.multiplyBy 2 halfMapSize
+
+
 mapSquare : Effect.WebGL.Mesh { position : Vec2, vcoord2 : Vec2 }
 mapSquare =
     let
         size =
-            11
+            Quantity.unwrap halfMapSize
     in
     Effect.WebGL.triangleFan
         [ { position = Vec2.vec2 0 0
@@ -714,4 +730,139 @@ void main () {
                 : (value2 > 0.45 && value2 < 0.47)
                     ? vec4( 0.6, 0.5, 0.2, 1.0)
                     : vec4( 0.525, 0.796, 0.384, 1.0) * (1.0 - mix) + treeColor * mix;
+}|]
+
+
+type alias MapOverlayVertex =
+    { position : Vec2, offset : Vec2 }
+
+
+worldMapOverlayVertexShader :
+    Shader
+        MapOverlayVertex
+        { u
+            | view : Mat4
+            , pixelData_0_0 : Float
+            , pixelData_1_0 : Float
+            , pixelData_2_0 : Float
+            , pixelData_3_0 : Float
+            , pixelData_0_1 : Float
+            , pixelData_1_1 : Float
+            , pixelData_2_1 : Float
+            , pixelData_3_1 : Float
+            , pixelData_0_2 : Float
+            , pixelData_1_2 : Float
+            , pixelData_2_2 : Float
+            , pixelData_3_2 : Float
+            , pixelData_0_3 : Float
+            , pixelData_1_3 : Float
+            , pixelData_2_3 : Float
+            , pixelData_3_3 : Float
+        }
+        { vCoord : Vec2, vPixelData : Float }
+worldMapOverlayVertexShader =
+    [glsl|
+attribute vec2 position;
+attribute vec2 offset;
+uniform float pixelData_0_0;
+uniform float pixelData_1_0;
+uniform float pixelData_2_0;
+uniform float pixelData_3_0;
+uniform float pixelData_0_1;
+uniform float pixelData_1_1;
+uniform float pixelData_2_1;
+uniform float pixelData_3_1;
+uniform float pixelData_0_2;
+uniform float pixelData_1_2;
+uniform float pixelData_2_2;
+uniform float pixelData_3_2;
+uniform float pixelData_0_3;
+uniform float pixelData_1_3;
+uniform float pixelData_2_3;
+uniform float pixelData_3_3;
+uniform mat4 view;
+varying vec2 vCoord;
+varying float vPixelData;
+
+void main () {
+    gl_Position = view * vec4(position + offset, 0.0, 1.0);
+    vCoord = position * 4.0;
+    vPixelData =
+        offset.x < 2.0
+            ? offset.x < 1.0
+                ? offset.y < 2.0
+                    ? offset.y < 1.0
+                        ? pixelData_0_0
+                        : pixelData_0_1
+                    : offset.y < 3.0
+                        ? pixelData_0_2
+                        : pixelData_0_3
+                : offset.y < 2.0
+                    ? offset.y < 1.0
+                        ? pixelData_1_0
+                        : pixelData_1_1
+                    : offset.y < 3.0
+                        ? pixelData_1_2
+                        : pixelData_1_3
+            : offset.x < 3.0
+                ? offset.y < 2.0
+                    ? offset.y < 1.0
+                        ? pixelData_2_0
+                        : pixelData_2_1
+                    : offset.y < 3.0
+                        ? pixelData_2_2
+                        : pixelData_2_3
+                : offset.y < 2.0
+                    ? offset.y < 1.0
+                        ? pixelData_3_0
+                        : pixelData_3_1
+                    : offset.y < 3.0
+                        ? pixelData_3_2
+                        : pixelData_3_3;
+}|]
+
+
+worldMapOverlayFragmentShader : Shader {} u { vCoord : Vec2, vPixelData : Float }
+worldMapOverlayFragmentShader =
+    [glsl|
+precision mediump float;
+varying vec2 vCoord;
+varying float vPixelData;
+
+int AND(int n1, int n2){
+
+    float v1 = float(n1);
+    float v2 = float(n2);
+
+    int byteVal = 1;
+    int result = 0;
+
+    for(int i = 0; i < 32; i++){
+        bool keepGoing = v1>0.0 || v2 > 0.0;
+        if(keepGoing){
+
+            bool addOn = mod(v1, 2.0) > 0.0 && mod(v2, 2.0) > 0.0;
+
+            if(addOn){
+                result += byteVal;
+            }
+
+            v1 = floor(v1 / 2.0);
+            v2 = floor(v2 / 2.0);
+            byteVal *= 2;
+        } else {
+            return result;
+        }
+    }
+    return result;
+}
+
+int RShift(int num, float shifts){
+    return int(floor(float(num) / pow(2.0, shifts)));
+}
+
+void main () {
+    int index = int(vCoord.x) + int(vCoord.y) * 4;
+    int value = AND(1, RShift(int(vPixelData), float(index)));
+    gl_FragColor = vec4(0.0, 0.0, 0.0, value == 1 ? 1.0 : 0.0);
 }|]

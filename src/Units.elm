@@ -2,6 +2,7 @@ module Units exposing
     ( CellLocalUnit
     , CellUnit
     , MailPixelUnit
+    , TerrainUnit
     , TileLocalUnit
     , WorldUnit
     , cellSize
@@ -40,6 +41,10 @@ type TileLocalUnit
 
 type MailPixelUnit
     = MailUnit Never
+
+
+type TerrainUnit
+    = TerrainUnit Never
 
 
 tileUnit : number -> Quantity number WorldUnit

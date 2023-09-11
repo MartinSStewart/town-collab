@@ -54,9 +54,9 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Shaders exposing (Vertex)
 import Sprite
-import Terrain exposing (TerrainType(..), TerrainUnit, TerrainValue)
+import Terrain exposing (TerrainType(..), TerrainValue)
 import Tile exposing (RailPathType(..), Tile(..), TileData)
-import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
+import Units exposing (CellLocalUnit, CellUnit, TerrainUnit, TileLocalUnit, WorldUnit)
 import User exposing (FrontendUser)
 import Vector2d
 import WebGL

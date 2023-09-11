@@ -1,4 +1,16 @@
-module Terrain exposing (TerrainType(..), TerrainUnit(..), TerrainValue, createTerrainLookup, getTerrainValue, localCoordToTerrain, permutationTable, randomScenery, terrainCoord, terrainDivisionsPerCell, terrainSize, terrainToLocalCoord)
+module Terrain exposing
+    ( TerrainType(..)
+    , TerrainValue
+    , createTerrainLookup
+    , getTerrainValue
+    , localCoordToTerrain
+    , permutationTable
+    , randomScenery
+    , terrainCoord
+    , terrainDivisionsPerCell
+    , terrainSize
+    , terrainToLocalCoord
+    )
 
 import Array2D exposing (Array2D)
 import Coord exposing (Coord)
@@ -6,7 +18,7 @@ import Quantity exposing (Quantity(..))
 import Random
 import Simplex
 import Tile exposing (Tile(..))
-import Units exposing (CellLocalUnit, CellUnit)
+import Units exposing (CellLocalUnit, CellUnit, TerrainUnit)
 
 
 terrainCoord : Int -> Int -> Coord TerrainUnit
@@ -109,10 +121,6 @@ createTerrainLookup cellPosition =
                     |> List.map (\y2 -> getTerrainValue (Coord.xy x2 y2) cellPosition)
             )
         |> Array2D.fromList
-
-
-type TerrainUnit
-    = TerrainUnit Never
 
 
 type alias TerrainValue =

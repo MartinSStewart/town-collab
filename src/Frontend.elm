@@ -26,7 +26,7 @@ import Effect.Lamdera
 import Effect.Subscription as Subscription exposing (Subscription)
 import Effect.Task
 import Effect.Time
-import Effect.WebGL
+import Effect.WebGL exposing (Mesh)
 import Effect.WebGL.Settings
 import Effect.WebGL.Settings.DepthTest
 import Effect.WebGL.Texture
@@ -64,7 +64,7 @@ import Ports
 import Quantity exposing (Quantity(..))
 import Random
 import Route
-import Shaders exposing (DebrisVertex, Vertex)
+import Shaders exposing (DebrisVertex, MapOverlayVertex, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import TextInput exposing (OutMsg(..))
@@ -4061,6 +4061,7 @@ canvasView audioData model =
                 (case Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture of
                     Just trainTexture ->
                         let
+                            textureSize : Vec2
                             textureSize =
                                 WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
 
@@ -4068,6 +4069,7 @@ canvasView audioData model =
                             gridViewBounds =
                                 LoadingPage.viewLoadingBoundingBox model
 
+                            meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
                             meshes =
                                 Dict.filter
                                     (\key _ ->
@@ -4441,19 +4443,42 @@ drawMap model =
     case ( model.showMap, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
         ( True, Just simplexNoiseLookup ) ->
             let
+                grid : Grid
+                grid =
+                    LocalGrid.localModel model.localModel |> .grid
+
+                viewPoint =
+                    Toolbar.actualViewPoint model |> Point2d.unwrap
+
+                mapSize : Int
                 mapSize =
-                    Toolbar.mapSize model.windowSize |> toFloat
+                    Toolbar.mapSize model.windowSize
 
                 ( windowWidth, windowHeight ) =
-                    Coord.toTuple model.windowSize
+                    Coord.toTuple model.windowSize |> Tuple.mapBoth toFloat toFloat
+
+                settings =
+                    [ Effect.WebGL.Settings.scissor
+                        ((windowWidth - toFloat mapSize) / 2 |> floor)
+                        ((windowHeight - toFloat mapSize) / 2 |> floor)
+                        mapSize
+                        mapSize
+                    , Shaders.blend
+                    ]
+
+                mapTerrainSize =
+                    Quantity.unwrap Shaders.mapSize
+
+                mapTerrainSizeChunks =
+                    mapTerrainSize // 4 + 1
             in
-            [ Effect.WebGL.entityWith
+            Effect.WebGL.entityWith
                 []
                 Shaders.worldMapVertexShader
                 Shaders.worldMapFragmentShader
                 Shaders.mapSquare
                 { view =
-                    Mat4.makeScale3 (mapSize * 2 / toFloat windowWidth) (mapSize * -2 / toFloat windowHeight) 1
+                    Mat4.makeScale3 (toFloat mapSize * 2 / windowWidth) (toFloat mapSize * -2 / windowHeight) 1
                         |> Mat4.translate3 -0.5 -0.5 -0.5
                 , texture = simplexNoiseLookup
                 , cellPosition =
@@ -4462,10 +4487,91 @@ drawMap model =
                         |> Point2d.unwrap
                         |> Vec2.fromRecord
                 }
-            ]
+                :: List.map
+                    (\index ->
+                        let
+                            x =
+                                4 * modBy mapTerrainSizeChunks index + floor (viewPoint.x / 16) - 2 * mapTerrainSizeChunks
+
+                            y =
+                                4 * (index // mapTerrainSizeChunks) + floor (viewPoint.y / 16) - 2 * mapTerrainSizeChunks
+
+                            getMapPixelData : Int -> Int -> Float
+                            getMapPixelData x2 y2 =
+                                case Grid.getCell (Coord.xy (x2 + x) (y2 + y)) grid of
+                                    Just cell ->
+                                        GridCell.mapPixelData cell |> toFloat
+
+                                    Nothing ->
+                                        0
+                        in
+                        Effect.WebGL.entityWith
+                            settings
+                            Shaders.worldMapOverlayVertexShader
+                            Shaders.worldMapOverlayFragmentShader
+                            mapOverlayMesh
+                            { view =
+                                Mat4.makeScale3
+                                    (toFloat mapSize * 2 / (mapTerrainSize * windowWidth))
+                                    (toFloat mapSize * -2 / (mapTerrainSize * windowHeight))
+                                    1
+                                    |> Mat4.translate3
+                                        (-viewPoint.x / 16 + toFloat x)
+                                        (-viewPoint.y / 16 + toFloat y)
+                                        0
+                            , pixelData_0_0 = getMapPixelData 0 0
+                            , pixelData_1_0 = getMapPixelData 1 0
+                            , pixelData_2_0 = getMapPixelData 2 0
+                            , pixelData_3_0 = getMapPixelData 3 0
+                            , pixelData_0_1 = getMapPixelData 0 1
+                            , pixelData_1_1 = getMapPixelData 1 1
+                            , pixelData_2_1 = getMapPixelData 2 1
+                            , pixelData_3_1 = getMapPixelData 3 1
+                            , pixelData_0_2 = getMapPixelData 0 2
+                            , pixelData_1_2 = getMapPixelData 1 2
+                            , pixelData_2_2 = getMapPixelData 2 2
+                            , pixelData_3_2 = getMapPixelData 3 2
+                            , pixelData_0_3 = getMapPixelData 0 3
+                            , pixelData_1_3 = getMapPixelData 1 3
+                            , pixelData_2_3 = getMapPixelData 2 3
+                            , pixelData_3_3 = getMapPixelData 3 3
+                            }
+                    )
+                    (List.range 0 (mapTerrainSizeChunks * mapTerrainSizeChunks - 1))
 
         _ ->
             []
+
+
+mapOverlayMesh : Effect.WebGL.Mesh MapOverlayVertex
+mapOverlayMesh =
+    let
+        size =
+            4
+    in
+    List.range 0 (size * size - 1)
+        |> List.concatMap
+            (\index ->
+                let
+                    offset : Vec2
+                    offset =
+                        Vec2.vec2 (toFloat (modBy size index)) (toFloat (index // size))
+                in
+                [ { position = Vec2.vec2 0 0
+                  , offset = offset
+                  }
+                , { position = Vec2.vec2 1 0
+                  , offset = offset
+                  }
+                , { position = Vec2.vec2 1 1
+                  , offset = offset
+                  }
+                , { position = Vec2.vec2 0 1
+                  , offset = offset
+                  }
+                ]
+            )
+        |> Sprite.toMesh
 
 
 lastPlacementOffset : AudioData -> FrontendLoaded -> Float
