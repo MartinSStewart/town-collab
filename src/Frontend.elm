@@ -105,7 +105,7 @@ app =
             { init = init
             , onUrlRequest = UrlClicked
             , onUrlChange = UrlChanged
-            , update = \audioData msg model -> update audioData msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
+            , update = \audioData msg model -> update audioData msg model
             , updateFromBackend = \_ msg model -> updateFromBackend msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
             , subscriptions = subscriptions
             , view = view
@@ -532,11 +532,11 @@ init url key =
         , cmd
         , Ports.getLocalStorage
         ]
-    , Sound.load SoundLoaded
+    , Audio.cmdNone
     )
 
 
-update : AudioData -> FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
+update : AudioData -> FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
 update audioData msg model =
     case model of
         Loading loadingModel ->
@@ -571,7 +571,7 @@ update audioData msg model =
                    )
                 |> LoadingPage.viewBoundsUpdate
                 |> Tuple.mapFirst (reportsMeshUpdate frontendLoaded)
-                |> Tuple.mapFirst Loaded
+                |> (\( a, b ) -> ( Loaded a, b, Audio.cmdNone ))
 
 
 reportsMeshUpdate : FrontendLoaded -> FrontendLoaded -> FrontendLoaded

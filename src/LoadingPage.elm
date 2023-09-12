@@ -23,6 +23,7 @@ module LoadingPage exposing
 
 import Array
 import AssocList
+import Audio exposing (AudioCmd)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Change exposing (BackendReport, Change(..), Report, UserStatus(..))
@@ -74,37 +75,43 @@ import Units exposing (CellUnit, WorldUnit)
 import WebGL.Texture
 
 
-update : FrontendMsg_ -> FrontendLoading -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
+update :
+    FrontendMsg_
+    -> FrontendLoading
+    -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
 update msg loadingModel =
     case msg of
         WindowResized windowSize ->
-            windowResizedUpdate windowSize loadingModel |> Tuple.mapFirst Loading
+            windowResizedUpdate windowSize loadingModel |> (\( a, b ) -> ( Loading a, b, Audio.cmdNone ))
 
         GotDevicePixelRatio devicePixelRatio ->
             devicePixelRatioChanged devicePixelRatio loadingModel
-                |> Tuple.mapFirst Loading
+                |> (\( a, b ) -> ( Loading a, b, Audio.cmdNone ))
 
         SoundLoaded sound result ->
-            ( Loading { loadingModel | sounds = AssocList.insert sound result loadingModel.sounds }, Command.none )
+            ( Loading { loadingModel | sounds = AssocList.insert sound result loadingModel.sounds }
+            , Command.none
+            , Audio.cmdNone
+            )
 
         TextureLoaded result ->
             case result of
                 Ok texture ->
-                    ( Loading { loadingModel | texture = Just texture }, Command.none )
+                    ( Loading { loadingModel | texture = Just texture }, Command.none, Sound.load SoundLoaded )
 
                 Err _ ->
-                    ( Loading loadingModel, Command.none )
+                    ( Loading loadingModel, Command.none, Audio.cmdNone )
 
         SimplexLookupTextureLoaded result ->
             case result of
                 Ok texture ->
-                    ( Loading { loadingModel | simplexNoiseLookup = Just texture }, Command.none )
+                    ( Loading { loadingModel | simplexNoiseLookup = Just texture }, Command.none, Audio.cmdNone )
 
                 Err _ ->
-                    ( Loading loadingModel, Command.none )
+                    ( Loading loadingModel, Command.none, Audio.cmdNone )
 
         MouseMove mousePosition ->
-            ( Loading { loadingModel | mousePosition = mousePosition }, Command.none )
+            ( Loading { loadingModel | mousePosition = mousePosition }, Command.none, Audio.cmdNone )
 
         MouseUp MainButton mousePosition ->
             if insideStartButton mousePosition loadingModel then
@@ -113,10 +120,10 @@ update msg loadingModel =
                         a ()
 
                     Nothing ->
-                        ( Loading loadingModel, Command.none )
+                        ( Loading loadingModel, Command.none, Audio.cmdNone )
 
             else
-                ( Loading loadingModel, Command.none )
+                ( Loading loadingModel, Command.none, Audio.cmdNone )
 
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
@@ -126,17 +133,18 @@ update msg loadingModel =
                             a ()
 
                         Nothing ->
-                            ( Loading loadingModel, Command.none )
+                            ( Loading loadingModel, Command.none, Audio.cmdNone )
 
                 _ ->
-                    ( Loading loadingModel, Command.none )
+                    ( Loading loadingModel, Command.none, Audio.cmdNone )
 
         AnimationFrame time ->
-            ( Loading { loadingModel | time = Just time }, Command.none )
+            ( Loading { loadingModel | time = Just time }, Command.none, Audio.cmdNone )
 
         GotUserAgentPlatform userAgentPlatform ->
             ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgentPlatform) }
             , Ports.webGlFix
+            , Audio.cmdNone
             )
 
         LoadedUserSettings userSettings ->
@@ -146,6 +154,7 @@ update msg loadingModel =
                     , soundEffectVolume = userSettings.soundEffectVolume
                 }
             , Command.none
+            , Audio.cmdNone
             )
 
         GotWebGlFix ->
@@ -162,13 +171,24 @@ update msg loadingModel =
                     |> Effect.Task.attempt TextureLoaded
                 , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
                 ]
+            , Audio.cmdNone
             )
 
         _ ->
-            ( Loading loadingModel, Command.none )
+            ( Loading loadingModel, Command.none, Audio.cmdNone )
 
 
-tryLoading : FrontendLoading -> Maybe (() -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ ))
+tryLoading :
+    FrontendLoading
+    ->
+        Maybe
+            (()
+             ->
+                ( FrontendModel_
+                , Command FrontendOnly ToBackend FrontendMsg_
+                , AudioCmd FrontendMsg_
+                )
+            )
 tryLoading frontendLoading =
     case frontendLoading.localModel of
         LoadingLocalModel _ ->
@@ -190,7 +210,7 @@ loadedInit :
     -> Texture
     -> Texture
     -> LoadedLocalModel_
-    -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
+    -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
 loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
     let
         currentTool2 =
@@ -349,7 +369,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
         ]
     )
         |> viewBoundsUpdate
-        |> Tuple.mapFirst Loaded
+        |> (\( a, b ) -> ( Loaded a, b, Audio.cmdNone ))
 
 
 canPlaceTile : Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid -> Bool
