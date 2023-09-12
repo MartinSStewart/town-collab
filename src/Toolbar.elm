@@ -659,6 +659,7 @@ loggedOutSettingsView musicVolume soundEffectVolume =
                     RaiseSoundEffectVolume
                     soundEffectVolume
                 ]
+            , Ui.text "Press F1 to toggle UI"
             ]
         )
 

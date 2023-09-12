@@ -221,21 +221,18 @@ updateMapPixelData cache =
                 newLowBit : Int
                 newLowBit =
                     Bitwise.and 1 newValue
-
-                --_ =
-                --    if newHighBit > 1 || newLowBit > 1 || currentValue > 2 || newValue > 2 then
-                --        Debug.todo ""
-                --
-                --    else
-                --        ()
             in
-            { lowBit = Bitwise.shiftLeftBy index newLowBit |> Bitwise.or lowBit
-            , highBit = Bitwise.shiftLeftBy index newHighBit |> Bitwise.or highBit
+            { lowBit = Bitwise.shiftLeftBy index newLowBit |> Bitwise.or (zeroOutBit index lowBit)
+            , highBit = Bitwise.shiftLeftBy index newHighBit |> Bitwise.or (zeroOutBit index highBit)
             }
         )
         { lowBit = 0, highBit = 0 }
         cache
         |> (\{ lowBit, highBit } -> Vec2.vec2 (toFloat lowBit) (toFloat highBit))
+
+
+zeroOutBit index value =
+    Bitwise.shiftLeftBy index 1 |> Bitwise.complement |> Bitwise.and value
 
 
 mapPixelData : Cell -> Vec2
