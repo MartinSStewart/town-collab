@@ -10,6 +10,7 @@ module Ui exposing
     , bottomLeft
     , button
     , center
+    , centerRight
     , colorScaledText
     , colorSprite
     , colorText
@@ -480,6 +481,30 @@ topRight data element2 =
         { padding =
             { topLeft = Coord.xy (sizeX - childSizeX) 0
             , bottomRight = Coord.xy 0 (sizeY - childSizeY)
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , cachedSize = data.size
+        }
+        element2
+
+
+centerRight : { size : Coord Pixels } -> Element id -> Element id
+centerRight data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+
+        top =
+            (sizeY - childSizeY) // 2
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy (sizeX - childSizeX) top
+            , bottomRight = Coord.xy 0 (sizeY - childSizeY - top)
             }
         , inFront = []
         , borderAndFill = NoBorderOrFill

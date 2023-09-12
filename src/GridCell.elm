@@ -208,17 +208,26 @@ updateMapPixelData cache =
                 currentValue : Int
                 currentValue =
                     Bitwise.and 1 (Bitwise.shiftRightZfBy index lowBit)
-                        + Bitwise.and 1 (Bitwise.shiftRightZfBy index highBit)
-                        * 2
+                        + (Bitwise.and 1 (Bitwise.shiftRightZfBy index highBit) * 2)
 
+                newValue : Int
                 newValue =
                     max currentValue (tileMapValue value)
 
+                newHighBit : Int
                 newHighBit =
                     Bitwise.shiftRightBy 1 newValue |> Bitwise.and 1
 
+                newLowBit : Int
                 newLowBit =
                     Bitwise.and 1 newValue
+
+                --_ =
+                --    if newHighBit > 1 || newLowBit > 1 || currentValue > 2 || newValue > 2 then
+                --        Debug.todo ""
+                --
+                --    else
+                --        ()
             in
             { lowBit = Bitwise.shiftLeftBy index newLowBit |> Bitwise.or lowBit
             , highBit = Bitwise.shiftLeftBy index newHighBit |> Bitwise.or highBit

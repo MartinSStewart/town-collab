@@ -102,6 +102,7 @@ type Hover
     | TextToolButton
     | ExportButton
     | ImportButton
+    | CloseMailViewButton
 
 
 backendMailToFrontend : BackendMail -> FrontendMail
@@ -505,6 +506,9 @@ uiUpdate config mousePosition id event model =
 
         ImportButton ->
             onPress event (\() -> ( Just { model | importFailed = False }, ImportMail )) model
+
+        CloseMailViewButton ->
+            onPress event (\() -> ( Just { model | inboxMailViewed = Nothing }, NoOutMsg )) model
 
 
 quantityCodec : Codec (Quantity Int units)
@@ -1879,37 +1883,81 @@ inboxView idMap users inbox model =
         fromText =
             String.padRight 15 ' ' "From"
     in
-    Ui.column
-        { spacing = 16, padding = Ui.noPadding }
-        [ Ui.el
-            { padding = Ui.paddingXY 16 8
-            , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
-            , inFront = []
-            }
-            (Ui.column
-                { spacing = 16, padding = Ui.noPadding }
-                [ Ui.scaledText 3 "Inbox"
-                , if IdDict.isEmpty inbox then
-                    Ui.wrappedText 500 "Here you can view all the mail you've received.\n\nCurrently you don't have any mail but you can send letters to other people by clicking on their post office."
+    case model.inboxMailViewed of
+        Just mailId ->
+            let
+                padding =
+                    6
 
-                  else
+                button =
+                    Ui.button
+                        { id = idMap CloseMailViewButton, padding = Ui.paddingXY 12 6 }
+                        (Ui.text "Back to inbox")
+            in
+            case IdDict.get mailId inbox of
+                Just mail ->
                     Ui.column
-                        { spacing = 0, padding = Ui.noPadding }
-                        (Ui.text ("      " ++ fromText ++ "Delivered at(UTC)") :: rows)
+                        { spacing = 16, padding = Ui.noPadding }
+                        [ Ui.el
+                            { padding = Ui.paddingXY padding padding
+                            , inFront = []
+                            , borderAndFill =
+                                BorderAndFill
+                                    { borderWidth = 2
+                                    , borderColor = Color.outlineColor
+                                    , fillColor = Color.fillColor
+                                    }
+                            }
+                            (Ui.row
+                                { spacing = 0, padding = Ui.noPadding }
+                                [ button
+                                , "From:"
+                                    ++ (case IdDict.get mail.from users of
+                                            Just user ->
+                                                DisplayName.nameAndId user.name mail.from
+
+                                            Nothing ->
+                                                "Not found"
+                                       )
+                                    ++ " "
+                                    |> Ui.text
+                                    |> Ui.centerRight
+                                        { size =
+                                            Coord.xy (mailWidth * 2) (Ui.size button |> Coord.yRaw)
+                                                |> Coord.minus (Coord.xOnly (Ui.size button))
+                                                |> Coord.minus (Coord.xy (2 * padding) 0)
+                                        }
+                                ]
+                            )
+                        , mailView 2 mail.content Nothing
+                        ]
+
+                Nothing ->
+                    Ui.row
+                        { spacing = 16, padding = Ui.noPadding }
+                        [ button, Ui.text "Mail not found" ]
+
+        Nothing ->
+            Ui.column
+                { spacing = 16, padding = Ui.noPadding }
+                [ Ui.el
+                    { padding = Ui.paddingXY 16 8
+                    , borderAndFill = BorderAndFill { borderWidth = 2, borderColor = Color.outlineColor, fillColor = Color.fillColor }
+                    , inFront = []
+                    }
+                    (Ui.column
+                        { spacing = 16, padding = Ui.noPadding }
+                        [ Ui.scaledText 3 "Inbox"
+                        , if IdDict.isEmpty inbox then
+                            Ui.wrappedText 500 "Here you can view all the mail you've received.\n\nCurrently you don't have any mail but you can send letters to other people by clicking on their post office."
+
+                          else
+                            Ui.column
+                                { spacing = 0, padding = Ui.noPadding }
+                                (Ui.text ("      " ++ fromText ++ "Delivered at(UTC)") :: rows)
+                        ]
+                    )
                 ]
-            )
-        , case model.inboxMailViewed of
-            Just mailId ->
-                case IdDict.get mailId inbox of
-                    Just mail ->
-                        mailView 2 mail.content Nothing
-
-                    Nothing ->
-                        Ui.text "Mail not found"
-
-            Nothing ->
-                Ui.none
-        ]
 
 
 ui :
