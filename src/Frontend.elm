@@ -4496,14 +4496,14 @@ drawMap model =
                             y =
                                 4 * (index // mapTerrainSizeChunks) + floor (viewPoint.y / 16) - 2 * mapTerrainSizeChunks
 
-                            getMapPixelData : Int -> Int -> Float
+                            getMapPixelData : Int -> Int -> Vec2
                             getMapPixelData x2 y2 =
                                 case Grid.getCell (Coord.xy (x2 + x) (y2 + y)) grid of
                                     Just cell ->
-                                        GridCell.mapPixelData cell |> toFloat
+                                        GridCell.mapPixelData cell
 
                                     Nothing ->
-                                        0
+                                        Vec2.vec2 0 0
                         in
                         Effect.WebGL.entityWith
                             settings
@@ -4547,7 +4547,7 @@ mapOverlayMesh : Effect.WebGL.Mesh MapOverlayVertex
 mapOverlayMesh =
     let
         size =
-            4
+            16
     in
     List.range 0 (size * size - 1)
         |> List.concatMap

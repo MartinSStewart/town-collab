@@ -723,13 +723,11 @@ void main () {
     float mix = floor(min(1.0, 8.0 * pow(max(0.0, value), 3.0)) * colorLevels) / colorLevels;
 
     gl_FragColor =
-        vcoord.x > -0.1 && vcoord.y > -0.1 && vcoord.x < 0.1 && vcoord.y < 0.1
-            ? vec4(1.0, 1.0, 1.0, 1.0)
-            : value <= 0.0
-                ? vec4( 0.6, 0.8, 1.0, 1.0)
-                : (value2 > 0.45 && value2 < 0.47)
-                    ? vec4( 0.6, 0.5, 0.2, 1.0)
-                    : vec4( 0.525, 0.796, 0.384, 1.0) * (1.0 - mix) + treeColor * mix;
+        value <= 0.0
+            ? vec4( 0.6, 0.8, 1.0, 1.0)
+            : (value2 > 0.45 && value2 < 0.47)
+                ? vec4( 0.6, 0.5, 0.2, 1.0)
+                : vec4( 0.525, 0.796, 0.384, 1.0); //* (1.0 - mix) + treeColor * mix;
 }|]
 
 
@@ -742,92 +740,46 @@ worldMapOverlayVertexShader :
         MapOverlayVertex
         { u
             | view : Mat4
-            , pixelData_0_0 : Float
-            , pixelData_1_0 : Float
-            , pixelData_2_0 : Float
-            , pixelData_3_0 : Float
-            , pixelData_0_1 : Float
-            , pixelData_1_1 : Float
-            , pixelData_2_1 : Float
-            , pixelData_3_1 : Float
-            , pixelData_0_2 : Float
-            , pixelData_1_2 : Float
-            , pixelData_2_2 : Float
-            , pixelData_3_2 : Float
-            , pixelData_0_3 : Float
-            , pixelData_1_3 : Float
-            , pixelData_2_3 : Float
-            , pixelData_3_3 : Float
+            , pixelData_0_0 : Vec2
+            , pixelData_1_0 : Vec2
+            , pixelData_2_0 : Vec2
+            , pixelData_3_0 : Vec2
+            , pixelData_0_1 : Vec2
+            , pixelData_1_1 : Vec2
+            , pixelData_2_1 : Vec2
+            , pixelData_3_1 : Vec2
+            , pixelData_0_2 : Vec2
+            , pixelData_1_2 : Vec2
+            , pixelData_2_2 : Vec2
+            , pixelData_3_2 : Vec2
+            , pixelData_0_3 : Vec2
+            , pixelData_1_3 : Vec2
+            , pixelData_2_3 : Vec2
+            , pixelData_3_3 : Vec2
         }
-        { vCoord : Vec2, vPixelData : Float }
+        { vColor : Vec4 }
 worldMapOverlayVertexShader =
     [glsl|
 attribute vec2 position;
 attribute vec2 offset;
-uniform float pixelData_0_0;
-uniform float pixelData_1_0;
-uniform float pixelData_2_0;
-uniform float pixelData_3_0;
-uniform float pixelData_0_1;
-uniform float pixelData_1_1;
-uniform float pixelData_2_1;
-uniform float pixelData_3_1;
-uniform float pixelData_0_2;
-uniform float pixelData_1_2;
-uniform float pixelData_2_2;
-uniform float pixelData_3_2;
-uniform float pixelData_0_3;
-uniform float pixelData_1_3;
-uniform float pixelData_2_3;
-uniform float pixelData_3_3;
+uniform vec2 pixelData_0_0;
+uniform vec2 pixelData_1_0;
+uniform vec2 pixelData_2_0;
+uniform vec2 pixelData_3_0;
+uniform vec2 pixelData_0_1;
+uniform vec2 pixelData_1_1;
+uniform vec2 pixelData_2_1;
+uniform vec2 pixelData_3_1;
+uniform vec2 pixelData_0_2;
+uniform vec2 pixelData_1_2;
+uniform vec2 pixelData_2_2;
+uniform vec2 pixelData_3_2;
+uniform vec2 pixelData_0_3;
+uniform vec2 pixelData_1_3;
+uniform vec2 pixelData_2_3;
+uniform vec2 pixelData_3_3;
 uniform mat4 view;
-varying vec2 vCoord;
-varying float vPixelData;
-
-void main () {
-    gl_Position = view * vec4(position + offset, 0.0, 1.0);
-    vCoord = position * 4.0;
-    vPixelData =
-        offset.x < 2.0
-            ? offset.x < 1.0
-                ? offset.y < 2.0
-                    ? offset.y < 1.0
-                        ? pixelData_0_0
-                        : pixelData_0_1
-                    : offset.y < 3.0
-                        ? pixelData_0_2
-                        : pixelData_0_3
-                : offset.y < 2.0
-                    ? offset.y < 1.0
-                        ? pixelData_1_0
-                        : pixelData_1_1
-                    : offset.y < 3.0
-                        ? pixelData_1_2
-                        : pixelData_1_3
-            : offset.x < 3.0
-                ? offset.y < 2.0
-                    ? offset.y < 1.0
-                        ? pixelData_2_0
-                        : pixelData_2_1
-                    : offset.y < 3.0
-                        ? pixelData_2_2
-                        : pixelData_2_3
-                : offset.y < 2.0
-                    ? offset.y < 1.0
-                        ? pixelData_3_0
-                        : pixelData_3_1
-                    : offset.y < 3.0
-                        ? pixelData_3_2
-                        : pixelData_3_3;
-}|]
-
-
-worldMapOverlayFragmentShader : Shader {} u { vCoord : Vec2, vPixelData : Float }
-worldMapOverlayFragmentShader =
-    [glsl|
-precision mediump float;
-varying vec2 vCoord;
-varying float vPixelData;
+varying vec4 vColor;
 
 int AND(int n1, int n2){
 
@@ -862,7 +814,92 @@ int RShift(int num, float shifts){
 }
 
 void main () {
-    int index = int(vCoord.x) + int(vCoord.y) * 4;
-    int value = AND(1, RShift(int(vPixelData), float(index)));
-    gl_FragColor = vec4(0.0, 0.0, 0.0, value == 1 ? 1.0 : 0.0);
+    gl_Position = view * vec4((position + offset) * 0.25, 0.0, 1.0);
+    vec2 vCoord = offset;
+    float dataX =
+        offset.x < 2.0 * 4.0
+            ? offset.x < 1.0 * 4.0
+                ? offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_0_0.x
+                        : pixelData_0_1.x
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_0_2.x
+                        : pixelData_0_3.x
+                : offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_1_0.x
+                        : pixelData_1_1.x
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_1_2.x
+                        : pixelData_1_3.x
+            : offset.x < 3.0 * 4.0
+                ? offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_2_0.x
+                        : pixelData_2_1.x
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_2_2.x
+                        : pixelData_2_3.x
+                : offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_3_0.x
+                        : pixelData_3_1.x
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_3_2.x
+                        : pixelData_3_3.x;
+
+    float dataY =
+        offset.x < 2.0 * 4.0
+            ? offset.x < 1.0 * 4.0
+                ? offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_0_0.y
+                        : pixelData_0_1.y
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_0_2.y
+                        : pixelData_0_3.y
+                : offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_1_0.y
+                        : pixelData_1_1.y
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_1_2.y
+                        : pixelData_1_3.y
+            : offset.x < 3.0 * 4.0
+                ? offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_2_0.y
+                        : pixelData_2_1.y
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_2_2.y
+                        : pixelData_2_3.y
+                : offset.y < 2.0 * 4.0
+                    ? offset.y < 1.0 * 4.0
+                        ? pixelData_3_0.y
+                        : pixelData_3_1.y
+                    : offset.y < 3.0 * 4.0
+                        ? pixelData_3_2.y
+                        : pixelData_3_3.y;
+    int index = AND(3, int(vCoord.x)) + AND(3, int(vCoord.y)) * 4;
+    int value = AND(1, RShift(int(dataX), float(index))) + AND(1, RShift(int(dataY), float(index))) * 2;
+    vColor =
+        value == 0
+            ? vec4(0.0, 0.0, 0.0, 0.0)
+            : value == 1
+                ? vec4(0.2, 0.5, 0.2, 1.0)
+                : value == 2
+                    ? vec4(0.1, 0.1, 0.1, 1.0)
+                    : vec4(0.7, 0.2, 0.1, 1.0);
+}|]
+
+
+worldMapOverlayFragmentShader : Shader {} u { vColor : Vec4 }
+worldMapOverlayFragmentShader =
+    [glsl|
+precision mediump float;
+varying vec4 vColor;
+
+void main () {
+    gl_FragColor = vColor;
 }|]

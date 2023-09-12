@@ -26,6 +26,7 @@ import Coord exposing (Coord)
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty(..))
+import Math.Vector2 as Vec2 exposing (Vec2)
 import Quantity exposing (Quantity(..))
 import Random
 import Shaders exposing (MapOverlayVertex)
@@ -55,10 +56,146 @@ dataToCell cellPosition (CellData cellData) =
         |> updateCache cellPosition
 
 
-updateMapPixelData : List Value -> Int
+tileMapValue : Tile -> number
+tileMapValue value =
+    case value of
+        BigPineTree ->
+            1
+
+        PineTree1 ->
+            1
+
+        PineTree2 ->
+            1
+
+        RockDown ->
+            1
+
+        RockLeft ->
+            1
+
+        RockRight ->
+            1
+
+        RockUp ->
+            1
+
+        ElmTree ->
+            1
+
+        EmptyTile ->
+            0
+
+        RailHorizontal ->
+            3
+
+        RailVertical ->
+            3
+
+        RailBottomToRight ->
+            3
+
+        RailBottomToLeft ->
+            3
+
+        RailTopToRight ->
+            3
+
+        RailTopToLeft ->
+            3
+
+        RailBottomToRightLarge ->
+            3
+
+        RailBottomToLeftLarge ->
+            3
+
+        RailTopToRightLarge ->
+            3
+
+        RailTopToLeftLarge ->
+            3
+
+        RailCrossing ->
+            3
+
+        RailStrafeDown ->
+            3
+
+        RailStrafeUp ->
+            3
+
+        RailStrafeLeft ->
+            3
+
+        RailStrafeRight ->
+            3
+
+        TrainHouseRight ->
+            3
+
+        TrainHouseLeft ->
+            3
+
+        RailStrafeDownSmall ->
+            3
+
+        RailStrafeUpSmall ->
+            3
+
+        RailStrafeLeftSmall ->
+            3
+
+        RailStrafeRightSmall ->
+            3
+
+        RailBottomToRight_SplitLeft ->
+            3
+
+        RailBottomToLeft_SplitUp ->
+            3
+
+        RailTopToRight_SplitDown ->
+            3
+
+        RailTopToLeft_SplitRight ->
+            3
+
+        RailBottomToRight_SplitUp ->
+            3
+
+        RailBottomToLeft_SplitRight ->
+            3
+
+        RailTopToRight_SplitLeft ->
+            3
+
+        RailTopToLeft_SplitDown ->
+            3
+
+        PostOffice ->
+            3
+
+        RoadRailCrossingHorizontal ->
+            3
+
+        RoadRailCrossingVertical ->
+            3
+
+        SidewalkHorizontalRailCrossing ->
+            3
+
+        SidewalkVerticalRailCrossing ->
+            3
+
+        _ ->
+            2
+
+
+updateMapPixelData : List Value -> Vec2
 updateMapPixelData cache =
     List.foldl
-        (\{ position } mapCache ->
+        (\{ value, position } { lowBit, highBit } ->
             let
                 terrainPos : Coord TerrainUnit
                 terrainPos =
@@ -67,14 +204,32 @@ updateMapPixelData cache =
                 index : Int
                 index =
                     Coord.xRaw terrainPos + Coord.yRaw terrainPos * Terrain.terrainDivisionsPerCell
+
+                currentValue : Int
+                currentValue =
+                    Bitwise.and 1 (Bitwise.shiftRightZfBy index lowBit)
+                        + Bitwise.and 1 (Bitwise.shiftRightZfBy index highBit)
+                        * 2
+
+                newValue =
+                    max currentValue (tileMapValue value)
+
+                newHighBit =
+                    Bitwise.shiftRightBy 1 newValue |> Bitwise.and 1
+
+                newLowBit =
+                    Bitwise.and 1 newValue
             in
-            Bitwise.shiftLeftBy index 1 |> Bitwise.or mapCache
+            { lowBit = Bitwise.shiftLeftBy index newLowBit |> Bitwise.or lowBit
+            , highBit = Bitwise.shiftLeftBy index newHighBit |> Bitwise.or highBit
+            }
         )
-        0
+        { lowBit = 0, highBit = 0 }
         cache
+        |> (\{ lowBit, highBit } -> Vec2.vec2 (toFloat lowBit) (toFloat highBit))
 
 
-mapPixelData : Cell -> Int
+mapPixelData : Cell -> Vec2
 mapPixelData (Cell cell) =
     cell.mapCache
 
@@ -95,7 +250,7 @@ type Cell
         , undoPoint : IdDict UserId Int
         , cache : List Value
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
-        , mapCache : Int
+        , mapCache : Vec2
         }
 
 
@@ -288,7 +443,7 @@ empty cellPosition =
         , undoPoint = IdDict.empty
         , cache = addTrees cellPosition
         , railSplitToggled = AssocSet.empty
-        , mapCache = 0
+        , mapCache = Vec2.vec2 0 0
         }
 
 
