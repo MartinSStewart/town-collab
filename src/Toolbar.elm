@@ -11,7 +11,7 @@ module Toolbar exposing
     )
 
 import AssocList
-import Change exposing (AdminData, AreTrainsDisabled(..), LoggedIn_, UserStatus(..))
+import Change exposing (AdminData, AreTrainsDisabled(..), LoggedIn_, TimeOfDay(..), UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
@@ -56,7 +56,7 @@ view model =
                 LoggedIn { userId } ->
                     IdDict.remove userId localModel.cursors |> IdDict.size
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     IdDict.size localModel.cursors
 
         toolbarElement =
@@ -97,7 +97,7 @@ view model =
                                         ReportToolButton
                                 )
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             loginToolbarUi model.pressedSubmitEmail model.loginTextInput
                     )
     in
@@ -164,7 +164,7 @@ view model =
                                                 ( False, TrainsEnabled ) ->
                                                     Ui.none
 
-                                        NotLoggedIn ->
+                                        NotLoggedIn _ ->
                                             Ui.none
                                     , Ui.button
                                         { id = UsersOnlineButton
@@ -191,11 +191,16 @@ view model =
                                                 localModel
                                                 loggedIn
 
-                                        NotLoggedIn ->
+                                        NotLoggedIn _ ->
                                             Ui.none
 
                                 Just LoggedOutSettingsMenu ->
-                                    loggedOutSettingsView model.musicVolume model.soundEffectVolume
+                                    case localModel.userStatus of
+                                        LoggedIn loggedIn ->
+                                            Ui.none
+
+                                        NotLoggedIn notLoggedIn ->
+                                            loggedOutSettingsView notLoggedIn.timeOfDay model.musicVolume model.soundEffectVolume
 
                                 _ ->
                                     Ui.button
@@ -211,7 +216,7 @@ view model =
                                         model.inviteTextInput
                                         model.inviteSubmitStatus
 
-                                NotLoggedIn ->
+                                NotLoggedIn _ ->
                                     Ui.none
                             , case localModel.userStatus of
                                 LoggedIn loggedIn ->
@@ -242,7 +247,7 @@ view model =
                                                 ]
                                             )
 
-                                NotLoggedIn ->
+                                NotLoggedIn _ ->
                                     Ui.none
                             ]
                         ]
@@ -327,7 +332,7 @@ contextMenuView toolbarHeight contextMenu model =
                                                     LoggedIn loggedIn ->
                                                         loggedIn.userId == userId
 
-                                                    NotLoggedIn ->
+                                                    NotLoggedIn _ ->
                                                         False
                                         in
                                         "Last changed by "
@@ -470,9 +475,7 @@ settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
             { spacing = 16
             , padding = Ui.noPadding
             }
-            ([ Ui.button
-                { id = CloseSettings, padding = Ui.paddingXY 10 4 }
-                (Ui.text "Close")
+            ([ Ui.button { id = CloseSettings, padding = Ui.paddingXY 10 4 } (Ui.text "Close")
              , Ui.column
                 { spacing = 6
                 , padding = Ui.noPadding
@@ -483,24 +486,25 @@ settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
                     LowerSoundEffectVolume
                     RaiseSoundEffectVolume
                     soundEffectVolume
-                , Ui.column
-                    { spacing = 4
-                    , padding = Ui.noPadding
-                    }
-                    [ Ui.text "Display name"
-                    , Ui.textInput
-                        { id = DisplayNameTextInput
-                        , width = Ui.size musicVolumeInput |> Coord.xRaw
-                        , isValid =
-                            case DisplayName.fromString nameTextInput.current.text of
-                                Ok _ ->
-                                    True
+                ]
+             , timeOfDayRadio loggedIn.timeOfDay
+             , Ui.column
+                { spacing = 4
+                , padding = Ui.noPadding
+                }
+                [ Ui.text "Display name"
+                , Ui.textInput
+                    { id = DisplayNameTextInput
+                    , width = Ui.size musicVolumeInput |> Coord.xRaw
+                    , isValid =
+                        case DisplayName.fromString nameTextInput.current.text of
+                            Ok _ ->
+                                True
 
-                                Err _ ->
-                                    False
-                        , state = nameTextInput.current
-                        }
-                    ]
+                            Err _ ->
+                                False
+                    , state = nameTextInput.current
+                    }
                 ]
              , allowEmailNotifications
              ]
@@ -584,10 +588,10 @@ checkbox : id -> Bool -> String -> Ui.Element id
 checkbox id isChecked text =
     Ui.customButton
         { id = id
-        , padding = Ui.noPadding
+        , padding = Ui.paddingXY 2 2
         , inFront = []
         , borderAndFill = NoBorderOrFill
-        , borderAndFillFocus = NoBorderOrFill
+        , borderAndFillFocus = FillOnly Color.fillColor2
         }
         (Ui.row
             { spacing = 8, padding = Ui.noPadding }
@@ -630,8 +634,8 @@ volumeControl name lowerId raiseId volume =
         ]
 
 
-loggedOutSettingsView : Int -> Int -> Ui.Element UiHover
-loggedOutSettingsView musicVolume soundEffectVolume =
+loggedOutSettingsView : TimeOfDay -> Int -> Int -> Ui.Element UiHover
+loggedOutSettingsView timeOfDay musicVolume soundEffectVolume =
     Ui.el
         { padding = Ui.paddingXY 8 8
         , inFront = []
@@ -660,6 +664,45 @@ loggedOutSettingsView musicVolume soundEffectVolume =
                     soundEffectVolume
                 ]
             , Ui.text "Press F1 to toggle UI"
+            , timeOfDayRadio timeOfDay
+            ]
+        )
+
+
+timeOfDayRadio : TimeOfDay -> Ui.Element UiHover
+timeOfDayRadio timeOfDay =
+    Ui.column
+        { spacing = 4, padding = Ui.noPadding }
+        [ Ui.text "Time of day"
+        , radioButton AutomaticTimeOfDayButton (timeOfDay == Automatic) "Automatic"
+        , radioButton AlwaysDayTimeOfDayButton (timeOfDay == AlwaysDay) "Always day"
+        , radioButton AlwaysNightTimeOfDayButton (timeOfDay == AlwaysNight) "Always night"
+        ]
+
+
+radioButton : id -> Bool -> String -> Ui.Element id
+radioButton id isSelected text =
+    Ui.customButton
+        { id = id
+        , padding = Ui.paddingXY 2 2
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , borderAndFillFocus = FillOnly Color.fillColor2
+        }
+        (Ui.row
+            { spacing = 8, padding = Ui.noPadding }
+            [ Ui.colorSprite
+                { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
+                , size = Coord.xy 36 36
+                , texturePosition =
+                    if isSelected then
+                        Coord.xy 627 108
+
+                    else
+                        Coord.xy 591 108
+                , textureSize = Coord.xy 36 36
+                }
+            , Ui.text text
             ]
         )
 

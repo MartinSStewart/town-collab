@@ -37,7 +37,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsDisabled, BackendReport, Change, UserStatus)
+import Change exposing (AreTrainsDisabled, BackendReport, Change, TimeOfDay, UserStatus)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -310,6 +310,9 @@ type UiHover
     | ZoomOutButton
     | RotateLeftButton
     | RotateRightButton
+    | AutomaticTimeOfDayButton
+    | AlwaysDayTimeOfDayButton
+    | AlwaysNightTimeOfDayButton
 
 
 type alias BackendModel =
@@ -379,6 +382,7 @@ type alias BackendUserData =
     , acceptedInvites : IdDict UserId ()
     , name : DisplayName
     , allowEmailNotifications : Bool
+    , timeOfDay : TimeOfDay
     }
 
 

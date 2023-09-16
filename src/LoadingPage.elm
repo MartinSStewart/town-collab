@@ -790,7 +790,7 @@ getReports localModel =
         LoggedIn loggedIn ->
             loggedIn.reports
 
-        NotLoggedIn ->
+        NotLoggedIn _ ->
             []
 
 
@@ -805,7 +805,7 @@ getAdminReports localModel =
                 Nothing ->
                     IdDict.empty
 
-        NotLoggedIn ->
+        NotLoggedIn _ ->
             IdDict.empty
 
 

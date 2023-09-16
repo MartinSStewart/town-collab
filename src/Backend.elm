@@ -3,7 +3,7 @@ module Backend exposing (app)
 import Animal exposing (Animal)
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), LocalChange(..), ServerChange(..), TimeOfDay(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -1390,6 +1390,12 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             else
                 ( model, invalidChange, BroadcastToNoOne )
 
+        SetTimeOfDay timeOfDay ->
+            ( { model | users = IdDict.insert userId { user | timeOfDay = timeOfDay } model.users }
+            , originalChange
+            , BroadcastToNoOne
+            )
+
 
 generateVisibleRegion :
     Maybe (Bounds CellUnit)
@@ -1563,10 +1569,11 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , adminData = getAdminData userId model
                         , reports = getUserReports userId model
                         , isGridReadOnly = model.isGridReadOnly
+                        , timeOfDay = user.timeOfDay
                         }
 
                 Nothing ->
-                    NotLoggedIn
+                    NotLoggedIn { timeOfDay = Automatic }
             , model
             , Nothing
             )
@@ -1591,6 +1598,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , adminData = getAdminData data.userId model
                                             , reports = getUserReports data.userId model
                                             , isGridReadOnly = model.isGridReadOnly
+                                            , timeOfDay = user.timeOfDay
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , case data.requestedBy of
@@ -1602,7 +1610,10 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                         )
 
                                     Nothing ->
-                                        ( NotLoggedIn, addError currentTime (UserNotFoundWhenLoggingIn data.userId) model, Nothing )
+                                        ( NotLoggedIn { timeOfDay = Automatic }
+                                        , addError currentTime (UserNotFoundWhenLoggingIn data.userId) model
+                                        , Nothing
+                                        )
 
                             else
                                 checkLogin ()
@@ -1633,6 +1644,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , adminData = getAdminData userId model
                                 , reports = getUserReports userId model
                                 , isGridReadOnly = model.isGridReadOnly
+                                , timeOfDay = Automatic
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites
@@ -1703,7 +1715,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                             , cursor = Nothing
                             }
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     { handColor = Cursor.defaultColors
                     , name = DisplayName.default
                     , cursor = Nothing
@@ -1785,7 +1797,7 @@ addSession sessionId clientId viewBounds userStatus model =
                                     LoggedIn loggedIn ->
                                         Just loggedIn.userId
 
-                                    NotLoggedIn ->
+                                    NotLoggedIn _ ->
                                         Nothing
                             }
 
@@ -1796,7 +1808,7 @@ addSession sessionId clientId viewBounds userStatus model =
                                     LoggedIn loggedIn ->
                                         Just loggedIn.userId
 
-                                    NotLoggedIn ->
+                                    NotLoggedIn _ ->
                                         Nothing
                             }
                     )
@@ -1821,6 +1833,7 @@ createUser userId emailAddress model =
             , acceptedInvites = IdDict.empty
             , name = DisplayName.default
             , allowEmailNotifications = True
+            , timeOfDay = Automatic
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

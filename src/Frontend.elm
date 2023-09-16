@@ -7,7 +7,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
-import Change exposing (AreTrainsDisabled(..), Change(..), UserStatus(..))
+import Change exposing (AreTrainsDisabled(..), Change(..), TimeOfDay(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
@@ -1162,6 +1162,15 @@ updateLoaded audioData msg model =
                                             True
 
                                         RotateRightButton ->
+                                            True
+
+                                        AutomaticTimeOfDayButton ->
+                                            True
+
+                                        AlwaysDayTimeOfDayButton ->
+                                            True
+
+                                        AlwaysNightTimeOfDayButton ->
                                             True
 
                                 Nothing ->
@@ -2602,7 +2611,7 @@ uiUpdate audioData id event model =
                                         |> SettingsMenu
                                         |> Just
 
-                                NotLoggedIn ->
+                                NotLoggedIn _ ->
                                     Just LoggedOutSettingsMenu
                       }
                     , Command.none
@@ -2692,7 +2701,7 @@ uiUpdate audioData id event model =
                                 model
                                 |> handleOutMsg False
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             ( model, Command.none )
                 )
                 model
@@ -2761,7 +2770,7 @@ uiUpdate audioData id event model =
                                 model
                                 |> handleOutMsg False
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             ( model, Command.none )
                 )
                 model
@@ -2831,6 +2840,27 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
                 )
+                model
+
+        AutomaticTimeOfDayButton ->
+            onPress
+                audioData
+                event
+                (\() -> updateLocalModel (Change.SetTimeOfDay Automatic) model |> handleOutMsg False)
+                model
+
+        AlwaysDayTimeOfDayButton ->
+            onPress
+                audioData
+                event
+                (\() -> updateLocalModel (Change.SetTimeOfDay AlwaysDay) model |> handleOutMsg False)
+                model
+
+        AlwaysNightTimeOfDayButton ->
+            onPress
+                audioData
+                event
+                (\() -> updateLocalModel (Change.SetTimeOfDay AlwaysNight) model |> handleOutMsg False)
                 model
 
 
@@ -3070,12 +3100,12 @@ canOpenMailEditor model =
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
 updateLocalModel msg model =
+    let
+        ( newLocalModel, outMsg ) =
+            LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
+    in
     case LocalGrid.localModel model.localModel |> .userStatus of
         LoggedIn _ ->
-            let
-                ( newLocalModel, outMsg ) =
-                    LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
-            in
             ( { model
                 | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
                 , localModel = newLocalModel
@@ -3084,8 +3114,15 @@ updateLocalModel msg model =
             , outMsg
             )
 
-        NotLoggedIn ->
-            ( model, LocalGrid.NoOutMsg )
+        NotLoggedIn _ ->
+            ( { model
+                | localModel =
+                    -- If we are not logged in then we don't send any msgs to the server and therefore don't want to keep all of the msgs in the localMsgs list
+                    LocalModel.unwrap newLocalModel
+                        |> (\a -> LocalModel.unsafe { a | localMsgs = [], model = a.localModel })
+              }
+            , LocalGrid.NoOutMsg
+            )
 
 
 placeTile : Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
@@ -4048,10 +4085,47 @@ canvasView audioData model =
                 shaderTime2 =
                     shaderTime model
 
+                timeOfDay : TimeOfDay
+                timeOfDay =
+                    case localGrid.userStatus of
+                        LoggedIn loggedIn ->
+                            loggedIn.timeOfDay
+
+                        NotLoggedIn notLoggedIn ->
+                            notLoggedIn.timeOfDay
+
                 renderData =
                     { lights = lightsTexture
                     , texture = texture
-                    , nightFactor = 1
+                    , nightFactor =
+                        case timeOfDay of
+                            Automatic ->
+                                let
+                                    hour =
+                                        toFloat (Time.toHour Time.utc model.time)
+                                            + (toFloat (Time.toMinute Time.utc model.time) * 60)
+                                            + (toFloat (Time.toSecond Time.utc model.time) * 60 * 60)
+                                in
+                                if hour < 5 then
+                                    0
+
+                                else if hour < 8 then
+                                    (hour - 5) / 3
+
+                                else if hour < 18 then
+                                    1
+
+                                else if hour < 21 then
+                                    (21 - hour) / 3
+
+                                else
+                                    0
+
+                            AlwaysDay ->
+                                0
+
+                            AlwaysNight ->
+                                1
                     , viewMatrix =
                         Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                             |> Mat4.translate3

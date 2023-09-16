@@ -9,6 +9,7 @@ module Change exposing
     , LoggedIn_
     , Report
     , ServerChange(..)
+    , TimeOfDay(..)
     , UserStatus(..)
     )
 
@@ -61,6 +62,7 @@ type LocalChange
     | AdminChange AdminChange
     | ReportVandalism Report
     | RemoveReport (Coord WorldUnit)
+    | SetTimeOfDay TimeOfDay
 
 
 type AdminChange
@@ -116,7 +118,11 @@ type ServerChange
 
 type UserStatus
     = LoggedIn LoggedIn_
-    | NotLoggedIn
+    | NotLoggedIn NotLoggedIn_
+
+
+type alias NotLoggedIn_ =
+    { timeOfDay : TimeOfDay }
 
 
 type alias LoggedIn_ =
@@ -131,7 +137,14 @@ type alias LoggedIn_ =
     , adminData : Maybe AdminData
     , reports : List Report
     , isGridReadOnly : Bool
+    , timeOfDay : TimeOfDay
     }
+
+
+type TimeOfDay
+    = Automatic
+    | AlwaysDay
+    | AlwaysNight
 
 
 type alias Report =
