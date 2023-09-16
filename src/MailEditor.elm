@@ -56,7 +56,7 @@ import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
-import Shaders exposing (Vertex)
+import Shaders exposing (RenderData, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
@@ -1349,8 +1349,8 @@ scaleForScreenToWorld windowSize =
     1 / toFloat (mailZoomFactor windowSize) |> Quantity
 
 
-backgroundLayer : WebGL.Texture.Texture -> Float -> Effect.WebGL.Entity
-backgroundLayer texture shaderTime =
+backgroundLayer : RenderData -> Float -> Effect.WebGL.Entity
+backgroundLayer { lights, nightFactor, texture } shaderTime =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -1359,16 +1359,18 @@ backgroundLayer texture shaderTime =
         { color = Vec4.vec4 0.2 0.2 0.2 0.75
         , view = Mat4.makeTranslate3 -1 -1 0 |> Mat4.scale3 2 2 1
         , texture = texture
+        , lights = lights
         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , userId = Shaders.noUserIdSelected
         , time = shaderTime
+        , night = nightFactor
         }
 
 
 drawMail :
-    Coord Pixels
+    RenderData
     -> Coord Pixels
-    -> WebGL.Texture.Texture
+    -> Coord Pixels
     -> Point2d Pixels Pixels
     -> Int
     -> Int
@@ -1376,7 +1378,7 @@ drawMail :
     -> Model
     -> Float
     -> List Effect.WebGL.Entity
-drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight config model shaderTime2 =
+drawMail { lights, nightFactor, texture } mailPosition mailSize2 mousePosition windowWidth windowHeight config model shaderTime2 =
     let
         zoomFactor : Float
         zoomFactor =
@@ -1418,6 +1420,7 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
             Shaders.fragmentShader
             model.currentImageMesh
             { texture = texture
+            , lights = lights
             , textureSize = textureSize
             , color =
                 case model.currentTool of
@@ -1443,6 +1446,7 @@ drawMail mailPosition mailSize2 texture mousePosition windowWidth windowHeight c
                         0
             , userId = Shaders.noUserIdSelected
             , time = shaderTime2
+            , night = nightFactor
             }
         ]
 

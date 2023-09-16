@@ -64,7 +64,7 @@ import Ports
 import Quantity exposing (Quantity(..))
 import Random
 import Route
-import Shaders exposing (DebrisVertex, MapOverlayVertex, Vertex)
+import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import TextInput exposing (OutMsg(..))
@@ -518,6 +518,7 @@ init url key =
         , musicVolume = 0
         , soundEffectVolume = 0
         , texture = Nothing
+        , lightsTexture = Nothing
         , simplexNoiseLookup = Nothing
         , localModel = LoadingLocalModel []
         , hasCmdKey = False
@@ -644,6 +645,9 @@ updateLoaded audioData msg model =
             ( model, Command.none )
 
         TextureLoaded _ ->
+            ( model, Command.none )
+
+        LightsTextureLoaded _ ->
             ( model, Command.none )
 
         SimplexLookupTextureLoaded _ ->
@@ -1240,6 +1244,14 @@ updateLoaded audioData msg model =
             case result of
                 Ok texture ->
                     ( { model | trainTexture = Just texture }, Command.none )
+
+                Err _ ->
+                    ( model, Command.none )
+
+        TrainLightsTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( { model | trainLightsTexture = Just texture }, Command.none )
 
                 Err _ ->
                     ( model, Command.none )
@@ -3998,8 +4010,8 @@ shaderTime model =
 
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
-    case Effect.WebGL.Texture.unwrap model.texture of
-        Just texture ->
+    case ( Effect.WebGL.Texture.unwrap model.texture, Effect.WebGL.Texture.unwrap model.lightsTexture ) of
+        ( Just texture, Just lightsTexture ) ->
             let
                 viewBounds_ : BoundingBox2d WorldUnit WorldUnit
                 viewBounds_ =
@@ -4013,13 +4025,6 @@ canvasView audioData model =
 
                 { x, y } =
                     Point2d.unwrap (Toolbar.actualViewPoint model)
-
-                viewMatrix =
-                    Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
-                        |> Mat4.translate3
-                            (negate <| toFloat <| round (x * toFloat Units.tileWidth))
-                            (negate <| toFloat <| round (y * toFloat Units.tileHeight))
-                            0
 
                 localGrid : LocalGrid_
                 localGrid =
@@ -4042,6 +4047,18 @@ canvasView audioData model =
 
                 shaderTime2 =
                     shaderTime model
+
+                renderData =
+                    { lights = lightsTexture
+                    , texture = texture
+                    , nightFactor = 1
+                    , viewMatrix =
+                        Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                            |> Mat4.translate3
+                                (negate <| toFloat <| round (x * toFloat Units.tileWidth))
+                                (negate <| toFloat <| round (y * toFloat Units.tileHeight))
+                                0
+                    }
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4058,8 +4075,12 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (case Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture of
-                    Just trainTexture ->
+                (case
+                    ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
+                    , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
+                    )
+                 of
+                    ( Just trainTexture, Just trainLights ) ->
                         let
                             textureSize : Vec2
                             textureSize =
@@ -4080,16 +4101,16 @@ canvasView audioData model =
                                     )
                                     model.meshes
                         in
-                        Shaders.drawBackground meshes viewMatrix texture shaderTime2
+                        Shaders.drawBackground renderData meshes shaderTime2
                             ++ drawForeground
+                                renderData
                                 model.contextMenu
                                 model.currentTool
                                 hoverAt2
                                 meshes
-                                viewMatrix
-                                texture
                                 shaderTime2
                             ++ Train.draw
+                                renderData
                                 (case model.contextMenu of
                                     Just contextMenu ->
                                         contextMenu.userId
@@ -4100,32 +4121,34 @@ canvasView audioData model =
                                 model.time
                                 localGrid.mail
                                 model.trains
-                                viewMatrix
                                 trainTexture
+                                trainLights
                                 viewBounds_
                                 shaderTime2
-                            ++ drawAnimals texture viewMatrix model shaderTime2
-                            ++ drawFlags texture viewMatrix model shaderTime2
+                            ++ drawAnimals renderData model shaderTime2
+                            ++ drawFlags renderData model shaderTime2
                             ++ [ Effect.WebGL.entityWith
                                     [ Shaders.blend ]
                                     Shaders.debrisVertexShader
                                     Shaders.fragmentShader
                                     model.debrisMesh
-                                    { view = viewMatrix
+                                    { view = renderData.viewMatrix
                                     , texture = texture
+                                    , lights = lightsTexture
                                     , textureSize = textureSize
                                     , time = shaderTime2
                                     , time2 = shaderTime2
                                     , color = Vec4.vec4 1 1 1 1
+                                    , night = renderData.nightFactor
                                     }
-                               , drawReports texture viewMatrix model.reportsMesh
+                               , drawReports renderData model.reportsMesh
                                ]
-                            ++ drawOtherCursors texture viewMatrix model shaderTime2
-                            ++ Train.drawSpeechBubble texture viewMatrix model.time model.trains shaderTime2
-                            ++ drawTilePlacer audioData viewMatrix texture model shaderTime2
+                            ++ drawOtherCursors renderData model shaderTime2
+                            ++ Train.drawSpeechBubble renderData model.time model.trains shaderTime2
+                            ++ drawTilePlacer renderData audioData model shaderTime2
                             ++ (case model.mailEditor of
                                     Just _ ->
-                                        [ MailEditor.backgroundLayer texture shaderTime2 ]
+                                        [ MailEditor.backgroundLayer renderData shaderTime2 ]
 
                                     Nothing ->
                                         []
@@ -4139,19 +4162,21 @@ canvasView audioData model =
                                         Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
                                             |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                                     , texture = texture
+                                    , lights = lightsTexture
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected
                                     , time = shaderTime2
+                                    , night = renderData.nightFactor * 0.5
                                     }
                                ]
                             ++ drawMap model
                             ++ (case model.mailEditor of
                                     Just mailEditor ->
                                         MailEditor.drawMail
+                                            renderData
                                             mailPosition
                                             mailSize
-                                            texture
                                             (LoadingPage.mouseScreenPosition model)
                                             windowWidth
                                             windowHeight
@@ -4164,7 +4189,7 @@ canvasView audioData model =
                                )
                             ++ (case LocalGrid.currentUserId model of
                                     Just userId ->
-                                        drawCursor showMousePointer texture viewMatrix userId model shaderTime2
+                                        drawCursor renderData showMousePointer userId model shaderTime2
 
                                     Nothing ->
                                         []
@@ -4174,12 +4199,12 @@ canvasView audioData model =
                         []
                 )
 
-        Nothing ->
+        _ ->
             Html.text ""
 
 
-drawReports : WebGL.Texture.Texture -> Mat4 -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
-drawReports texture viewMatrix reportsMesh =
+drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
+drawReports { nightFactor, lights, texture, viewMatrix } reportsMesh =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -4187,15 +4212,17 @@ drawReports texture viewMatrix reportsMesh =
         reportsMesh
         { view = viewMatrix
         , texture = texture
+        , lights = lights
         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , color = Vec4.vec4 1 1 1 1
         , userId = Shaders.noUserIdSelected
         , time = 0
+        , night = nightFactor
         }
 
 
-drawAnimals : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawAnimals texture viewMatrix model shaderTime2 =
+drawAnimals : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawAnimals { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -4230,6 +4257,7 @@ drawAnimals texture viewMatrix model shaderTime2 =
                             Train.instancedMesh
                             { view = viewMatrix
                             , texture = texture
+                            , lights = lights
                             , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
@@ -4248,6 +4276,7 @@ drawAnimals texture viewMatrix model shaderTime2 =
                                     + textureW
                                     * Coord.yRaw animalData.texturePosition
                                     |> toFloat
+                            , night = nightFactor
                             }
                             |> Just
 
@@ -4260,8 +4289,8 @@ drawAnimals texture viewMatrix model shaderTime2 =
         (IdDict.toList localGrid.animals)
 
 
-drawFlags : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawFlags texture viewMatrix model shaderTime2 =
+drawFlags : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawFlags { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
     List.filterMap
         (\flag ->
             let
@@ -4294,10 +4323,12 @@ drawFlags texture viewMatrix model shaderTime2 =
                                 0
                                 |> Mat4.mul viewMatrix
                         , texture = texture
+                        , lights = lights
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
                         , time = shaderTime2
+                        , night = nightFactor
                         }
                         |> Just
 
@@ -4307,8 +4338,8 @@ drawFlags texture viewMatrix model shaderTime2 =
         (getFlags model)
 
 
-drawTilePlacer : AudioData -> Mat4 -> WebGL.Texture.Texture -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawTilePlacer audioData viewMatrix texture model shaderTime2 =
+drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawTilePlacer { nightFactor, lights, viewMatrix, texture } audioData model shaderTime2 =
     let
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -4370,6 +4401,7 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                             (toFloat mouseY * toFloat Units.tileHeight)
                             0
                 , texture = texture
+                , lights = lights
                 , textureSize = textureSize
                 , color =
                     if currentTile.tileGroup == EmptyTileGroup then
@@ -4395,6 +4427,7 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
                 , time = shaderTime2
+                , night = nightFactor
                 }
             ]
 
@@ -4409,6 +4442,7 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                         (Coord.multiply Units.tileSize textTool.cursorPosition)
                         viewMatrix
                 , texture = texture
+                , lights = lights
                 , textureSize = textureSize
                 , color =
                     if
@@ -4431,6 +4465,7 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
                 , time = shaderTime2
+                , night = nightFactor
                 }
             ]
 
@@ -4599,8 +4634,8 @@ lastPlacementOffset audioData model =
             0
 
 
-drawOtherCursors : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawOtherCursors texture viewMatrix model shaderTime2 =
+drawOtherCursors : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawOtherCursors { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -4656,10 +4691,12 @@ drawOtherCursors texture viewMatrix model shaderTime2 =
                                     0
                                     |> Mat4.mul viewMatrix
                             , texture = texture
+                            , lights = lights
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime2
+                            , night = nightFactor
                             }
                             |> Just
 
@@ -4669,14 +4706,13 @@ drawOtherCursors texture viewMatrix model shaderTime2 =
 
 
 drawCursor :
-    { cursorType : CursorType, scale : Int }
-    -> WebGL.Texture.Texture
-    -> Mat4
+    RenderData
+    -> { cursorType : CursorType, scale : Int }
     -> Id UserId
     -> FrontendLoaded
     -> Float
     -> List Effect.WebGL.Entity
-drawCursor showMousePointer texture viewMatrix userId model shaderTime2 =
+drawCursor { nightFactor, lights, texture, viewMatrix } showMousePointer userId model shaderTime2 =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -4711,10 +4747,12 @@ drawCursor showMousePointer texture viewMatrix userId model shaderTime2 =
                                         |> Mat4.scale3 scale scale 1
                                         |> Mat4.mul viewMatrix
                                 , texture = texture
+                                , lights = lights
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , color = Vec4.vec4 1 1 1 1
                                 , userId = Shaders.noUserIdSelected
                                 , time = shaderTime2
+                                , night = nightFactor
                                 }
                             ]
 
@@ -4824,15 +4862,14 @@ getFlags model =
 
 
 drawForeground :
-    Maybe ContextMenu
+    RenderData
+    -> Maybe ContextMenu
     -> Tool
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
-    -> Mat4
-    -> WebGL.Texture.Texture
     -> Float
     -> List Effect.WebGL.Entity
-drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture shaderTime2 =
+drawForeground { nightFactor, lights, viewMatrix, texture } maybeContextMenu currentTool2 hoverAt2 meshes shaderTime2 =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -4846,6 +4883,7 @@ drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture 
                     mesh.foreground
                     { view = viewMatrix
                     , texture = texture
+                    , lights = lights
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId =
@@ -4871,6 +4909,7 @@ drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture 
                                     _ ->
                                         -3
                     , time = shaderTime2
+                    , night = nightFactor
                     }
             )
 

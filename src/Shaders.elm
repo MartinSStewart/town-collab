@@ -2,6 +2,7 @@ module Shaders exposing
     ( DebrisVertex
     , InstancedVertex
     , MapOverlayVertex
+    , RenderData
     , Vertex
     , blend
     , debrisVertexShader
@@ -56,6 +57,14 @@ type alias Vertex =
 type alias InstancedVertex =
     { localPosition : Vec2
     , index : Float
+    }
+
+
+type alias RenderData =
+    { nightFactor : Float
+    , texture : WebGL.Texture.Texture
+    , lights : WebGL.Texture.Texture
+    , viewMatrix : Mat4
     }
 
 
@@ -140,12 +149,11 @@ mapSquare =
 
 
 drawBackground :
-    Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
-    -> Mat4
-    -> WebGL.Texture.Texture
+    RenderData
+    -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Float
     -> List Effect.WebGL.Entity
-drawBackground meshes viewMatrix texture time =
+drawBackground { nightFactor, viewMatrix, texture, lights } meshes time =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -163,6 +171,8 @@ drawBackground meshes viewMatrix texture time =
                     , color = Vec4.vec4 1 1 1 1
                     , userId = noUserIdSelected
                     , time = time
+                    , night = nightFactor
+                    , lights = lights
                     }
             )
 
@@ -413,7 +423,7 @@ void main () {
 fragmentShader :
     Shader
         {}
-        { u | texture : WebGL.Texture.Texture, time : Float, color : Vec4 }
+        { u | texture : WebGL.Texture.Texture, lights : WebGL.Texture.Texture, time : Float, color : Vec4, night : Float }
         { vcoord : Vec2
         , opacity : Float
         , primaryColor2 : Vec3
@@ -425,8 +435,10 @@ fragmentShader =
     [glsl|
 precision mediump float;
 uniform sampler2D texture;
+uniform sampler2D lights;
 uniform float time;
 uniform vec4 color;
+uniform float night;
 varying vec2 vcoord;
 varying float opacity;
 varying vec3 primaryColor2;
@@ -449,8 +461,8 @@ void main () {
     vec4 highlight =
         vec4(1.3, 1.0, 1.0, 0.0) * (mod(-time + floor(position2.x + position2.y) / 40.0, 1.0)) - vec4(0.4, 0.4, 0.4, 0.0);
 
-    gl_FragColor =
-        (textureColor.xyz == primaryColor
+    vec4 textureColor2 =
+        textureColor.xyz == primaryColor
             ? vec4(primaryColor2, opacity)
             : textureColor.xyz == primaryColorMidShade
                 ? vec4(primaryColor2 * 0.9, opacity)
@@ -460,8 +472,16 @@ void main () {
                         ? vec4(secondaryColor2, opacity)
                         : textureColor.xyz == secondaryColorShade
                             ? vec4(secondaryColor2 * 0.8, opacity)
-                            : vec4(textureColor.xyz, opacity)
-        ) * color + 0.6 * isSelected * highlight;
+                            : vec4(textureColor.xyz, opacity);
+
+    vec3 nightColor = vec3(1.0, 1.0, 1.0) * (1.0 - night) + vec3(0.314, 0.396, 0.745) * night;
+
+    vec3 light =
+        night > 0.5
+            ? texture2D(lights, vcoord).xyz * vec3(2.0, 2.0, 1.5) + 1.0
+            : vec3(1.0, 1.0, 1.0);
+
+    gl_FragColor = textureColor2 * vec4(nightColor, 1.0) * vec4(light, 1.0) * color + 0.6 * isSelected * highlight;
 }|]
 
 

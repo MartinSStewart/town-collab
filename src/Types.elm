@@ -106,6 +106,7 @@ type alias FrontendLoading =
     , musicVolume : Int
     , soundEffectVolume : Int
     , texture : Maybe Texture
+    , lightsTexture : Maybe Texture
     , simplexNoiseLookup : Maybe Texture
     , localModel : LoadingLocalModel
     , hasCmdKey : Bool
@@ -145,8 +146,10 @@ type alias FrontendLoaded =
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
     , texture : Texture
+    , lightsTexture : Texture
     , simplexNoiseLookup : Texture
     , trainTexture : Maybe Texture
+    , trainLightsTexture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
     , cssWindowSize : Coord CssPixels
@@ -392,8 +395,10 @@ type FrontendMsg_
     | UrlChanged Url
     | NoOpFrontendMsg
     | TextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | LightsTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | SimplexLookupTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | TrainLightsTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | KeyMsg Keyboard.Msg
     | KeyDown Keyboard.RawKey
     | WindowResized (Coord CssPixels)
