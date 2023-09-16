@@ -3333,40 +3333,20 @@ createDebrisMesh appStartTime removedTiles =
                 data =
                     Tile.getData tile
             in
-            (case data.texturePosition of
-                Just texturePosition ->
-                    createDebrisMeshHelper
-                        position
-                        texturePosition
-                        data.size
-                        colors
-                        (case tile of
-                            BigText _ ->
-                                2
+            createDebrisMeshHelper
+                position
+                data.texturePosition
+                data.size
+                colors
+                (case tile of
+                    BigText _ ->
+                        2
 
-                            _ ->
-                                1
-                        )
-                        appStartTime
-                        time
-
-                Nothing ->
-                    []
-            )
-                ++ (case data.texturePositionTopLayer of
-                        Just topLayer ->
-                            createDebrisMeshHelper
-                                position
-                                topLayer.texturePosition
-                                data.size
-                                colors
-                                1
-                                appStartTime
-                                time
-
-                        Nothing ->
-                            []
-                   )
+                    _ ->
+                        1
+                )
+                appStartTime
+                time
         )
         list
         |> Sprite.toMesh

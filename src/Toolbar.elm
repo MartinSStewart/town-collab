@@ -1301,36 +1301,18 @@ tileMesh colors tile =
                     (Coord.xy 28 27)
 
             else
-                (case data.texturePosition of
-                    Just texturePosition ->
-                        Sprite.spriteWithTwoColors
-                            colors
-                            Coord.origin
-                            spriteSize
-                            texturePosition
-                            (case tile of
-                                BigText _ ->
-                                    size |> Coord.divide (Coord.xy 2 2)
+                Sprite.spriteWithTwoColors
+                    colors
+                    Coord.origin
+                    spriteSize
+                    data.texturePosition
+                    (case tile of
+                        BigText _ ->
+                            size |> Coord.divide (Coord.xy 2 2)
 
-                                _ ->
-                                    size
-                            )
-
-                    Nothing ->
-                        []
-                )
-                    ++ (case data.texturePositionTopLayer of
-                            Just topLayer ->
-                                Sprite.spriteWithTwoColors
-                                    colors
-                                    Coord.origin
-                                    spriteSize
-                                    topLayer.texturePosition
-                                    size
-
-                            Nothing ->
-                                []
-                       )
+                        _ ->
+                            size
+                    )
         }
 
 

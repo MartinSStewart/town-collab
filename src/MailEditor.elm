@@ -798,21 +798,7 @@ getImageData image =
                     Tile.getData (List.Nonempty.get rotationIndex tileGroupData.tiles)
             in
             { textureSize = Coord.multiply Units.tileSize tileData.size
-            , texturePosition =
-                (case tileData.texturePosition of
-                    Just texturePosition ->
-                        [ texturePosition ]
-
-                    Nothing ->
-                        []
-                )
-                    ++ (case tileData.texturePositionTopLayer of
-                            Just { texturePosition } ->
-                                [ texturePosition ]
-
-                            Nothing ->
-                                []
-                       )
+            , texturePosition = [ tileData.texturePosition ]
             , colors = colors
             }
 
@@ -1549,42 +1535,21 @@ tileMesh tile position scale colors =
         data =
             Tile.getData tile
     in
-    (case data.texturePosition of
-        Just texturePosition ->
-            Grid.tileMeshHelper2
-                Shaders.opaque
-                colors
-                False
-                0
-                position
-                (case tile of
-                    BigText _ ->
-                        2 * scale
+    Grid.tileMeshHelper2
+        Shaders.opaque
+        colors
+        False
+        0
+        position
+        (case tile of
+            BigText _ ->
+                2 * scale
 
-                    _ ->
-                        scale
-                )
-                texturePosition
-                (Coord.scalar scale data.size)
-
-        Nothing ->
-            []
-    )
-        ++ (case data.texturePositionTopLayer of
-                Just topLayer ->
-                    Grid.tileMeshHelper2
-                        Shaders.opaque
-                        colors
-                        True
-                        topLayer.yOffset
-                        position
-                        scale
-                        topLayer.texturePosition
-                        (Coord.scalar scale data.size)
-
-                Nothing ->
-                    []
-           )
+            _ ->
+                scale
+        )
+        data.texturePosition
+        (Coord.scalar scale data.size)
 
 
 mailView : Int -> List Content -> Maybe Tool -> Ui.Element id
