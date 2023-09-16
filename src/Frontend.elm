@@ -4086,8 +4086,8 @@ getNightFactor model =
             let
                 hour =
                     toFloat (Time.toHour Time.utc model.time)
-                        + (toFloat (Time.toMinute Time.utc model.time) * 60)
-                        + (toFloat (Time.toSecond Time.utc model.time) * 60 * 60)
+                        + (toFloat (Time.toMinute Time.utc model.time) / 60)
+                        + (toFloat (Time.toSecond Time.utc model.time) / (60 * 60))
             in
             if hour < 5 then
                 0
