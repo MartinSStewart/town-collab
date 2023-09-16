@@ -372,6 +372,7 @@ loadedInit time loading texture lightsTexture simplexNoiseLookup loadedLocalMode
             , lastReportTilePlaced = Nothing
             , lastReportTileRemoved = Nothing
             , hideUi = False
+            , lightsSwitched = Nothing
             }
                 |> setCurrentTool HandToolButton
     in

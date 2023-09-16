@@ -214,6 +214,7 @@ type alias FrontendLoaded =
     , lastReportTilePlaced : Maybe Effect.Time.Posix
     , lastReportTileRemoved : Maybe Effect.Time.Posix
     , hideUi : Bool
+    , lightsSwitched : Maybe Time.Posix
     }
 
 

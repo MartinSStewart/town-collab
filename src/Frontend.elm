@@ -412,6 +412,12 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , case model.lightsSwitched of
+        Just time ->
+            playSound LightSwitch time |> Audio.scaleVolume 0.8
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
         |> Audio.scaleVolumeAt [ ( model.startTime, 0 ), ( Duration.addTo model.startTime Duration.second, 1 ) ]
@@ -558,15 +564,30 @@ update audioData msg model =
                    )
                 |> (\( newModel, cmd ) ->
                         let
+                            oldNightFactor : Float
+                            oldNightFactor =
+                                getNightFactor frontendLoaded
+
+                            newNightFactor : Float
+                            newNightFactor =
+                                getNightFactor newModel
+
+                            newModel2 =
+                                if (oldNightFactor > 0.5) /= (newNightFactor > 0.5) then
+                                    { newModel | lightsSwitched = Just newModel.time }
+
+                                else
+                                    newModel
+
                             newTool : Cursor.OtherUsersTool
                             newTool =
-                                LocalGrid.currentTool newModel |> Tool.toCursor
+                                LocalGrid.currentTool newModel2 |> Tool.toCursor
                         in
                         ( if Tool.toCursor (LocalGrid.currentTool frontendLoaded) == newTool then
-                            newModel
+                            newModel2
 
                           else
-                            updateLocalModel (Change.ChangeTool newTool) newModel |> Tuple.first
+                            updateLocalModel (Change.ChangeTool newTool) newModel2 |> Tuple.first
                         , cmd
                         )
                    )
@@ -4045,6 +4066,51 @@ shaderTime model =
     Duration.from model.startTime model.time |> Duration.inSeconds
 
 
+getNightFactor : FrontendLoaded -> Float
+getNightFactor model =
+    let
+        localGrid =
+            LocalGrid.localModel model.localModel
+
+        timeOfDay : TimeOfDay
+        timeOfDay =
+            case localGrid.userStatus of
+                LoggedIn loggedIn ->
+                    loggedIn.timeOfDay
+
+                NotLoggedIn notLoggedIn ->
+                    notLoggedIn.timeOfDay
+    in
+    case timeOfDay of
+        Automatic ->
+            let
+                hour =
+                    toFloat (Time.toHour Time.utc model.time)
+                        + (toFloat (Time.toMinute Time.utc model.time) * 60)
+                        + (toFloat (Time.toSecond Time.utc model.time) * 60 * 60)
+            in
+            if hour < 5 then
+                0
+
+            else if hour < 8 then
+                (hour - 5) / 3
+
+            else if hour < 18 then
+                1
+
+            else if hour < 21 then
+                (21 - hour) / 3
+
+            else
+                0
+
+        AlwaysDay ->
+            0
+
+        AlwaysNight ->
+            1
+
+
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
     case ( Effect.WebGL.Texture.unwrap model.texture, Effect.WebGL.Texture.unwrap model.lightsTexture ) of
@@ -4085,47 +4151,11 @@ canvasView audioData model =
                 shaderTime2 =
                     shaderTime model
 
-                timeOfDay : TimeOfDay
-                timeOfDay =
-                    case localGrid.userStatus of
-                        LoggedIn loggedIn ->
-                            loggedIn.timeOfDay
-
-                        NotLoggedIn notLoggedIn ->
-                            notLoggedIn.timeOfDay
-
+                renderData : RenderData
                 renderData =
                     { lights = lightsTexture
                     , texture = texture
-                    , nightFactor =
-                        case timeOfDay of
-                            Automatic ->
-                                let
-                                    hour =
-                                        toFloat (Time.toHour Time.utc model.time)
-                                            + (toFloat (Time.toMinute Time.utc model.time) * 60)
-                                            + (toFloat (Time.toSecond Time.utc model.time) * 60 * 60)
-                                in
-                                if hour < 5 then
-                                    0
-
-                                else if hour < 8 then
-                                    (hour - 5) / 3
-
-                                else if hour < 18 then
-                                    1
-
-                                else if hour < 21 then
-                                    (21 - hour) / 3
-
-                                else
-                                    0
-
-                            AlwaysDay ->
-                                0
-
-                            AlwaysNight ->
-                                1
+                    , nightFactor = getNightFactor model
                     , viewMatrix =
                         Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
                             |> Mat4.translate3
