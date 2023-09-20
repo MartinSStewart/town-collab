@@ -1538,8 +1538,6 @@ tileMesh tile position scale colors =
     Grid.tileMeshHelper2
         Shaders.opaque
         colors
-        False
-        0
         position
         (case tile of
             BigText _ ->

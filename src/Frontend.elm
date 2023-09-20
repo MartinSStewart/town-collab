@@ -4070,19 +4070,19 @@ getNightFactor model =
                         + (toFloat (Time.toSecond Time.utc model.time) / (60 * 60))
             in
             if hour < 5 then
-                0
-
-            else if hour < 8 then
-                (hour - 5) / 3
-
-            else if hour < 18 then
                 1
 
+            else if hour < 8 then
+                (8 - hour) / 3
+
+            else if hour < 18 then
+                0
+
             else if hour < 21 then
-                (21 - hour) / 3
+                (hour - 18) / 3
 
             else
-                0
+                1
 
         AlwaysDay ->
             0
@@ -4351,7 +4351,7 @@ drawAnimals { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
                                 Vec3.vec3
                                     (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2))
                                     (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2))
-                                    (Grid.tileZ True point.y (Coord.yRaw animalData.size))
+                                    0
                             , primaryColor0 = Color.toInt Color.white |> toFloat
                             , secondaryColor0 = Color.toInt Color.black |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)

@@ -30,7 +30,6 @@ module Grid exposing
     , removeUser
     , tileMesh
     , tileMeshHelper2
-    , tileZ
     , toggleRailSplit
     , worldToCellAndLocalCoord
     , worldToCellAndLocalPoint
@@ -511,17 +510,15 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                 case data.railPath of
                     RailSplitPath pathData ->
                         if AssocSet.member position railSplitToggled then
-                            tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
+                            tileMeshHelper2 opacityAndUserId colors (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
 
                         else
-                            tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 data.texturePosition data.size
+                            tileMeshHelper2 opacityAndUserId colors (Coord.multiply Units.tileSize position2) 1 data.texturePosition data.size
 
                     _ ->
                         tileMeshHelper2
                             opacityAndUserId
                             colors
-                            False
-                            0
                             (Coord.multiply Units.tileSize position2)
                             (case value of
                                 BigText _ ->
@@ -754,8 +751,6 @@ tileMesh tile position scale colors =
         tileMeshHelper2
             Shaders.opaque
             colors
-            False
-            0
             position
             (case tile of
                 BigText _ ->
@@ -771,39 +766,21 @@ tileMesh tile position scale colors =
 tileMeshHelper2 :
     Float
     -> Colors
-    -> Bool
-    -> Float
     -> Coord unit2
     -> Int
     -> Coord unit
     -> Coord unit
     -> List Vertex
-tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } isTopLayer yOffset position scale texturePosition size =
+tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale texturePosition size =
     Sprite.spriteWithZAndOpacityAndUserId
         opacityAndUserId
         primaryColor
         secondaryColor
         position
-        (tileZ
-            isTopLayer
-            ((toFloat (Coord.yRaw position) + yOffset) / toFloat Units.tileHeight)
-            (Coord.yRaw size)
-        )
+        0
         (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
         texturePosition
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
-
-
-tileZ : Bool -> Float -> Int -> Float
-tileZ isTopLayer y height =
-    (if isTopLayer then
-        -0.5
-
-     else
-        0
-    )
-        + (y + toFloat height)
-        / -1000
 
 
 removeUser : Id UserId -> Grid -> Grid

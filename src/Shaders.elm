@@ -454,10 +454,10 @@ vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 
 void main () {
     vec4 textureColor = texture2D(texture, vcoord);
+
     if (textureColor.a == 0.0) {
         discard;
     }
-
     vec4 highlight =
         vec4(1.3, 1.0, 1.0, 0.0) * (mod(-time + floor(position2.x + position2.y) / 40.0, 1.0)) - vec4(0.4, 0.4, 0.4, 0.0);
 

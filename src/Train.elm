@@ -1325,7 +1325,7 @@ trainEntity { nightFactor, viewMatrix } maybeUserId trainTexture trainLights sha
             Vec3.vec3
                 (toFloat tileW * trainData.x - (toFloat trainW / 2) + offsetX)
                 (toFloat tileH * trainData.y - (toFloat trainH / 2) - 5)
-                (Grid.tileZ True trainData.y 0)
+                0
         , size0 = Vec2.vec2 (toFloat trainW) y2
         , texturePosition0 = textureX + (trainData.rotationFrame * trainH * textureWidth) |> toFloat
         , primaryColor0 = Color.toInt trainData.color |> toFloat
