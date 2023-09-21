@@ -64,6 +64,7 @@ type alias RenderData =
     { nightFactor : Float
     , texture : WebGL.Texture.Texture
     , lights : WebGL.Texture.Texture
+    , depth : WebGL.Texture.Texture
     , viewMatrix : Mat4
     }
 
@@ -153,7 +154,7 @@ drawBackground :
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Float
     -> List Effect.WebGL.Entity
-drawBackground { nightFactor, viewMatrix, texture, lights } meshes time =
+drawBackground { nightFactor, viewMatrix, texture, lights, depth } meshes time =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -173,6 +174,7 @@ drawBackground { nightFactor, viewMatrix, texture, lights } meshes time =
                     , time = time
                     , night = nightFactor
                     , lights = lights
+                    , depth = depth
                     }
             )
 
@@ -423,7 +425,14 @@ void main () {
 fragmentShader :
     Shader
         {}
-        { u | texture : WebGL.Texture.Texture, lights : WebGL.Texture.Texture, time : Float, color : Vec4, night : Float }
+        { u
+            | texture : WebGL.Texture.Texture
+            , lights : WebGL.Texture.Texture
+            , depth : WebGL.Texture.Texture
+            , time : Float
+            , color : Vec4
+            , night : Float
+        }
         { vcoord : Vec2
         , opacity : Float
         , primaryColor2 : Vec3
@@ -433,9 +442,11 @@ fragmentShader :
         }
 fragmentShader =
     [glsl|
+#extension GL_EXT_frag_depth : enable
 precision mediump float;
 uniform sampler2D texture;
 uniform sampler2D lights;
+uniform sampler2D depth;
 uniform float time;
 uniform vec4 color;
 uniform float night;
@@ -454,6 +465,8 @@ vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 
 void main () {
     vec4 textureColor = texture2D(texture, vcoord);
+
+    gl_FragDepthEXT = texture2D(depth, vcoord).x;
 
     if (textureColor.a == 0.0) {
         discard;

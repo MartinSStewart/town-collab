@@ -110,6 +110,14 @@ update msg loadingModel =
                 Err _ ->
                     ( Loading loadingModel, Command.none, Audio.cmdNone )
 
+        DepthTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( Loading { loadingModel | depthTexture = Just texture }, Command.none, Audio.cmdNone )
+
+                Err _ ->
+                    ( Loading loadingModel, Command.none, Audio.cmdNone )
+
         SimplexLookupTextureLoaded result ->
             case result of
                 Ok texture ->
@@ -186,6 +194,15 @@ update msg loadingModel =
                     }
                     "/lights.png"
                     |> Effect.Task.attempt LightsTextureLoaded
+                , Effect.WebGL.Texture.loadWith
+                    { magnify = Effect.WebGL.Texture.nearest
+                    , minify = Effect.WebGL.Texture.nearest
+                    , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+                    , verticalWrap = Effect.WebGL.Texture.clampToEdge
+                    , flipY = False
+                    }
+                    "/depth.png"
+                    |> Effect.Task.attempt DepthTextureLoaded
                 , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
                 ]
             , Audio.cmdNone
@@ -212,13 +229,14 @@ tryLoading frontendLoading =
             Nothing
 
         LoadedLocalModel loadedLocalModel ->
-            Maybe.map4
-                (\time texture lightsTexture simplexNoiseLookup () ->
-                    loadedInit time frontendLoading texture lightsTexture simplexNoiseLookup loadedLocalModel
+            Maybe.map5
+                (\time texture lightsTexture depthTexture simplexNoiseLookup () ->
+                    loadedInit time frontendLoading texture lightsTexture depthTexture simplexNoiseLookup loadedLocalModel
                 )
                 frontendLoading.time
                 frontendLoading.texture
                 frontendLoading.lightsTexture
+                frontendLoading.depthTexture
                 frontendLoading.simplexNoiseLookup
 
 
@@ -228,9 +246,10 @@ loadedInit :
     -> Texture
     -> Texture
     -> Texture
+    -> Texture
     -> LoadedLocalModel_
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
-loadedInit time loading texture lightsTexture simplexNoiseLookup loadedLocalModel =
+loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup loadedLocalModel =
     let
         currentTool2 =
             HandTool
@@ -276,9 +295,11 @@ loadedInit time loading texture lightsTexture simplexNoiseLookup loadedLocalMode
             , viewPointLastInterval = Point2d.origin
             , texture = texture
             , lightsTexture = lightsTexture
+            , depthTexture = depthTexture
             , simplexNoiseLookup = simplexNoiseLookup
             , trainTexture = Nothing
             , trainLightsTexture = Nothing
+            , trainDepthTexture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
             , cssWindowSize = loading.cssWindowSize
@@ -1023,9 +1044,10 @@ loadingCanvasView model =
         (case
             ( Maybe.andThen Effect.WebGL.Texture.unwrap model.texture
             , Maybe.andThen Effect.WebGL.Texture.unwrap model.lightsTexture
+            , Maybe.andThen Effect.WebGL.Texture.unwrap model.depthTexture
             )
          of
-            ( Just texture, Just lightsTexture ) ->
+            ( Just texture, Just lightsTexture, Just depth ) ->
                 let
                     textureSize =
                         WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -1044,6 +1066,7 @@ loadingCanvasView model =
                             |> Coord.translateMat4 (touchDevicesNotSupportedPosition model.windowSize)
                     , texture = texture
                     , lights = lightsTexture
+                    , depth = depth
                     , textureSize = textureSize
                     , color = Vec4.vec4 1 1 1 1
                     , userId = Shaders.noUserIdSelected
@@ -1071,6 +1094,7 @@ loadingCanvasView model =
                                             |> Coord.translateMat4 loadingTextPosition2
                                     , texture = texture
                                     , lights = lightsTexture
+                                    , depth = depth
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected
@@ -1095,6 +1119,7 @@ loadingCanvasView model =
                                             |> Coord.translateMat4 (loadingTextPosition model.windowSize)
                                     , texture = texture
                                     , lights = lightsTexture
+                                    , depth = depth
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected

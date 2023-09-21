@@ -1336,7 +1336,7 @@ scaleForScreenToWorld windowSize =
 
 
 backgroundLayer : RenderData -> Float -> Effect.WebGL.Entity
-backgroundLayer { lights, nightFactor, texture } shaderTime =
+backgroundLayer { lights, nightFactor, texture, depth } shaderTime =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -1350,6 +1350,7 @@ backgroundLayer { lights, nightFactor, texture } shaderTime =
         , userId = Shaders.noUserIdSelected
         , time = shaderTime
         , night = nightFactor
+        , depth = depth
         }
 
 
@@ -1364,7 +1365,7 @@ drawMail :
     -> Model
     -> Float
     -> List Effect.WebGL.Entity
-drawMail { lights, nightFactor, texture } mailPosition mailSize2 mousePosition windowWidth windowHeight config model shaderTime2 =
+drawMail { lights, nightFactor, texture, depth } mailPosition mailSize2 mousePosition windowWidth windowHeight config model shaderTime2 =
     let
         zoomFactor : Float
         zoomFactor =
@@ -1433,6 +1434,7 @@ drawMail { lights, nightFactor, texture } mailPosition mailSize2 mousePosition w
             , userId = Shaders.noUserIdSelected
             , time = shaderTime2
             , night = nightFactor
+            , depth = depth
             }
         ]
 

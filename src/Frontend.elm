@@ -525,6 +525,7 @@ init url key =
         , soundEffectVolume = 0
         , texture = Nothing
         , lightsTexture = Nothing
+        , depthTexture = Nothing
         , simplexNoiseLookup = Nothing
         , localModel = LoadingLocalModel []
         , hasCmdKey = False
@@ -1332,6 +1333,17 @@ updateLoaded audioData msg model =
               }
             , Command.none
             )
+
+        TrainDepthTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( { model | trainDepthTexture = Just texture }, Command.none )
+
+                Err _ ->
+                    ( model, Command.none )
+
+        DepthTextureLoaded _ ->
+            ( model, Command.none )
 
 
 pasteTextTool : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
@@ -4093,8 +4105,13 @@ getNightFactor model =
 
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
-    case ( Effect.WebGL.Texture.unwrap model.texture, Effect.WebGL.Texture.unwrap model.lightsTexture ) of
-        ( Just texture, Just lightsTexture ) ->
+    case
+        ( Effect.WebGL.Texture.unwrap model.texture
+        , Effect.WebGL.Texture.unwrap model.lightsTexture
+        , Effect.WebGL.Texture.unwrap model.depthTexture
+        )
+    of
+        ( Just texture, Just lightsTexture, Just depth ) ->
             let
                 viewBounds_ : BoundingBox2d WorldUnit WorldUnit
                 viewBounds_ =
@@ -4135,6 +4152,7 @@ canvasView audioData model =
                 renderData =
                     { lights = lightsTexture
                     , texture = texture
+                    , depth = depth
                     , nightFactor = getNightFactor model
                     , viewMatrix =
                         Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
@@ -4143,6 +4161,25 @@ canvasView audioData model =
                                 (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                                 0
                     }
+
+                textureSize : Vec2
+                textureSize =
+                    WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+
+                gridViewBounds : BoundingBox2d WorldUnit WorldUnit
+                gridViewBounds =
+                    LoadingPage.viewLoadingBoundingBox model
+
+                meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
+                meshes =
+                    Dict.filter
+                        (\key _ ->
+                            Coord.tuple key
+                                |> Units.cellToTile
+                                |> Coord.toPoint2d
+                                |> (\p -> BoundingBox2d.contains p gridViewBounds)
+                        )
+                        model.meshes
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4159,128 +4196,120 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (case
-                    ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
-                    , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
-                    )
-                 of
-                    ( Just trainTexture, Just trainLights ) ->
-                        let
-                            textureSize : Vec2
-                            textureSize =
-                                WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                (Shaders.drawBackground renderData meshes shaderTime2
+                    ++ drawForeground
+                        renderData
+                        model.contextMenu
+                        model.currentTool
+                        hoverAt2
+                        meshes
+                        shaderTime2
+                    ++ (case
+                            ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
+                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
+                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainDepthTexture
+                            )
+                        of
+                            ( Just trainTexture, Just trainLights, Just trainDepth ) ->
+                                Train.draw
+                                    { lights = trainLights
+                                    , texture = trainTexture
+                                    , depth = trainDepth
+                                    , nightFactor = getNightFactor model
+                                    , viewMatrix =
+                                        Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                                            |> Mat4.translate3
+                                                (negate <| toFloat <| round (x * toFloat Units.tileWidth))
+                                                (negate <| toFloat <| round (y * toFloat Units.tileHeight))
+                                                0
+                                    }
+                                    (case model.contextMenu of
+                                        Just contextMenu ->
+                                            contextMenu.userId
 
-                            gridViewBounds : BoundingBox2d WorldUnit WorldUnit
-                            gridViewBounds =
-                                LoadingPage.viewLoadingBoundingBox model
-
-                            meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
-                            meshes =
-                                Dict.filter
-                                    (\key _ ->
-                                        Coord.tuple key
-                                            |> Units.cellToTile
-                                            |> Coord.toPoint2d
-                                            |> (\p -> BoundingBox2d.contains p gridViewBounds)
+                                        Nothing ->
+                                            Nothing
                                     )
-                                    model.meshes
-                        in
-                        Shaders.drawBackground renderData meshes shaderTime2
-                            ++ drawForeground
-                                renderData
-                                model.contextMenu
-                                model.currentTool
-                                hoverAt2
-                                meshes
-                                shaderTime2
-                            ++ Train.draw
-                                renderData
-                                (case model.contextMenu of
-                                    Just contextMenu ->
-                                        contextMenu.userId
+                                    model.time
+                                    localGrid.mail
+                                    model.trains
+                                    viewBounds_
+                                    shaderTime2
 
-                                    Nothing ->
-                                        Nothing
-                                )
-                                model.time
-                                localGrid.mail
-                                model.trains
-                                trainTexture
-                                trainLights
-                                viewBounds_
-                                shaderTime2
-                            ++ drawAnimals renderData model shaderTime2
-                            ++ drawFlags renderData model shaderTime2
-                            ++ [ Effect.WebGL.entityWith
-                                    [ Shaders.blend ]
-                                    Shaders.debrisVertexShader
-                                    Shaders.fragmentShader
-                                    model.debrisMesh
-                                    { view = renderData.viewMatrix
-                                    , texture = texture
-                                    , lights = lightsTexture
-                                    , textureSize = textureSize
-                                    , time = shaderTime2
-                                    , time2 = shaderTime2
-                                    , color = Vec4.vec4 1 1 1 1
-                                    , night = renderData.nightFactor
-                                    }
-                               , drawReports renderData model.reportsMesh
-                               ]
-                            ++ drawOtherCursors renderData model shaderTime2
-                            ++ Train.drawSpeechBubble renderData model.time model.trains shaderTime2
-                            ++ drawTilePlacer renderData audioData model shaderTime2
-                            ++ (case model.mailEditor of
-                                    Just _ ->
-                                        [ MailEditor.backgroundLayer renderData shaderTime2 ]
+                            _ ->
+                                []
+                       )
+                    ++ drawAnimals renderData model shaderTime2
+                    ++ drawFlags renderData model shaderTime2
+                    ++ [ Effect.WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.debrisVertexShader
+                            Shaders.fragmentShader
+                            model.debrisMesh
+                            { view = renderData.viewMatrix
+                            , texture = texture
+                            , lights = lightsTexture
+                            , depth = depth
+                            , textureSize = textureSize
+                            , time = shaderTime2
+                            , time2 = shaderTime2
+                            , color = Vec4.vec4 1 1 1 1
+                            , night = renderData.nightFactor
+                            }
+                       , drawReports renderData model.reportsMesh
+                       ]
+                    ++ drawOtherCursors renderData model shaderTime2
+                    ++ Train.drawSpeechBubble renderData model.time model.trains shaderTime2
+                    ++ drawTilePlacer renderData audioData model shaderTime2
+                    ++ (case model.mailEditor of
+                            Just _ ->
+                                [ MailEditor.backgroundLayer renderData shaderTime2 ]
 
-                                    Nothing ->
-                                        []
-                               )
-                            ++ [ Effect.WebGL.entityWith
-                                    [ Shaders.blend ]
-                                    Shaders.vertexShader
-                                    Shaders.fragmentShader
-                                    model.uiMesh
-                                    { view =
-                                        Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
-                                            |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                    , texture = texture
-                                    , lights = lightsTexture
-                                    , textureSize = textureSize
-                                    , color = Vec4.vec4 1 1 1 1
-                                    , userId = Shaders.noUserIdSelected
-                                    , time = shaderTime2
-                                    , night = renderData.nightFactor * 0.5
-                                    }
-                               ]
-                            ++ drawMap model
-                            ++ (case model.mailEditor of
-                                    Just mailEditor ->
-                                        MailEditor.drawMail
-                                            renderData
-                                            mailPosition
-                                            mailSize
-                                            (LoadingPage.mouseScreenPosition model)
-                                            windowWidth
-                                            windowHeight
-                                            model
-                                            mailEditor
-                                            shaderTime2
+                            Nothing ->
+                                []
+                       )
+                    ++ [ Effect.WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            model.uiMesh
+                            { view =
+                                Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
+                                    |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                            , texture = texture
+                            , lights = lightsTexture
+                            , depth = depth
+                            , textureSize = textureSize
+                            , color = Vec4.vec4 1 1 1 1
+                            , userId = Shaders.noUserIdSelected
+                            , time = shaderTime2
+                            , night = renderData.nightFactor * 0.5
+                            }
+                       ]
+                    ++ drawMap model
+                    ++ (case model.mailEditor of
+                            Just mailEditor ->
+                                MailEditor.drawMail
+                                    renderData
+                                    mailPosition
+                                    mailSize
+                                    (LoadingPage.mouseScreenPosition model)
+                                    windowWidth
+                                    windowHeight
+                                    model
+                                    mailEditor
+                                    shaderTime2
 
-                                    Nothing ->
-                                        []
-                               )
-                            ++ (case LocalGrid.currentUserId model of
-                                    Just userId ->
-                                        drawCursor renderData showMousePointer userId model shaderTime2
+                            Nothing ->
+                                []
+                       )
+                    ++ (case LocalGrid.currentUserId model of
+                            Just userId ->
+                                drawCursor renderData showMousePointer userId model shaderTime2
 
-                                    Nothing ->
-                                        []
-                               )
-
-                    _ ->
-                        []
+                            Nothing ->
+                                []
+                       )
                 )
 
         _ ->
@@ -4288,7 +4317,7 @@ canvasView audioData model =
 
 
 drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
-drawReports { nightFactor, lights, texture, viewMatrix } reportsMesh =
+drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -4297,6 +4326,7 @@ drawReports { nightFactor, lights, texture, viewMatrix } reportsMesh =
         { view = viewMatrix
         , texture = texture
         , lights = lights
+        , depth = depth
         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , color = Vec4.vec4 1 1 1 1
         , userId = Shaders.noUserIdSelected
@@ -4306,7 +4336,7 @@ drawReports { nightFactor, lights, texture, viewMatrix } reportsMesh =
 
 
 drawAnimals : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawAnimals { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
+drawAnimals { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -4342,6 +4372,7 @@ drawAnimals { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
                             { view = viewMatrix
                             , texture = texture
                             , lights = lights
+                            , depth = depth
                             , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
@@ -4374,7 +4405,7 @@ drawAnimals { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
 
 
 drawFlags : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawFlags { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
+drawFlags { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
     List.filterMap
         (\flag ->
             let
@@ -4408,6 +4439,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
                                 |> Mat4.mul viewMatrix
                         , texture = texture
                         , lights = lights
+                        , depth = depth
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
@@ -4423,7 +4455,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
 
 
 drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawTilePlacer { nightFactor, lights, viewMatrix, texture } audioData model shaderTime2 =
+drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth } audioData model shaderTime2 =
     let
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -4486,6 +4518,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture } audioData model shad
                             0
                 , texture = texture
                 , lights = lights
+                , depth = depth
                 , textureSize = textureSize
                 , color =
                     if currentTile.tileGroup == EmptyTileGroup then
@@ -4527,6 +4560,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture } audioData model shad
                         viewMatrix
                 , texture = texture
                 , lights = lights
+                , depth = depth
                 , textureSize = textureSize
                 , color =
                     if
@@ -4719,7 +4753,7 @@ lastPlacementOffset audioData model =
 
 
 drawOtherCursors : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawOtherCursors { nightFactor, lights, texture, viewMatrix } model shaderTime2 =
+drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -4776,6 +4810,7 @@ drawOtherCursors { nightFactor, lights, texture, viewMatrix } model shaderTime2 
                                     |> Mat4.mul viewMatrix
                             , texture = texture
                             , lights = lights
+                            , depth = depth
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
@@ -4796,7 +4831,7 @@ drawCursor :
     -> FrontendLoaded
     -> Float
     -> List Effect.WebGL.Entity
-drawCursor { nightFactor, lights, texture, viewMatrix } showMousePointer userId model shaderTime2 =
+drawCursor { nightFactor, lights, texture, viewMatrix, depth } showMousePointer userId model shaderTime2 =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -4832,6 +4867,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix } showMousePointer userId 
                                         |> Mat4.mul viewMatrix
                                 , texture = texture
                                 , lights = lights
+                                , depth = depth
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , color = Vec4.vec4 1 1 1 1
                                 , userId = Shaders.noUserIdSelected
@@ -4953,13 +4989,13 @@ drawForeground :
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> Float
     -> List Effect.WebGL.Entity
-drawForeground { nightFactor, lights, viewMatrix, texture } maybeContextMenu currentTool2 hoverAt2 meshes shaderTime2 =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth } maybeContextMenu currentTool2 hoverAt2 meshes shaderTime2 =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
                 Effect.WebGL.entityWith
                     [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
-                    , Effect.WebGL.Settings.DepthTest.default
+                    , Effect.WebGL.Settings.DepthTest.lessOrEqual { write = True, near = 0, far = 1 }
                     , Shaders.blend
                     ]
                     Shaders.vertexShader
@@ -4968,6 +5004,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture } maybeContextMenu cur
                     { view = viewMatrix
                     , texture = texture
                     , lights = lights
+                    , depth = depth
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId =
