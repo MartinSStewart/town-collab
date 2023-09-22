@@ -417,6 +417,15 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             }
             "/train-lights.png"
             |> Effect.Task.attempt TrainLightsTextureLoaded
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/train-depth.png"
+            |> Effect.Task.attempt TrainDepthTextureLoaded
         , Effect.Lamdera.sendToBackend PingRequest
         ]
     )
