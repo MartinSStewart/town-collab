@@ -3,6 +3,7 @@ module Ui exposing
     , ButtonData
     , Element(..)
     , HoverType(..)
+    , InputType(..)
     , Padding
     , RowColumn
     , UiEvent(..)
@@ -11,6 +12,7 @@ module Ui exposing
     , button
     , center
     , centerRight
+    , checkbox
     , colorScaledText
     , colorSprite
     , colorText
@@ -18,8 +20,9 @@ module Ui exposing
     , customButton
     , defaultButtonBorderAndFill
     , defaultButtonBorderAndFillFocus
+    , defaultElBorderAndFill
     , el
-    , findElement
+    , findInput
     , hover
     , ignoreInputs
     , noPadding
@@ -30,12 +33,16 @@ module Ui exposing
     , quads
     , row
     , scaledText
+    , selectableButton
     , size
     , sprite
     , tabBackward
     , tabForward
+    , table
     , text
     , textInput
+    , topLeft
+    , topLeft2
     , topRight
     , view
     , visuallyEqual
@@ -73,6 +80,14 @@ type alias ButtonData id =
     }
 
 
+type alias TextInputData id =
+    { id : id
+    , width : Int
+    , isValid : Bool
+    , state : TextInput.State
+    }
+
+
 type UiEvent
     = MouseDown { elementPosition : Coord Pixels }
     | MousePressed { elementPosition : Coord Pixels }
@@ -89,12 +104,7 @@ type Element id
         , text : String
         , cachedSize : Coord Pixels
         }
-    | TextInput
-        { id : id
-        , width : Int
-        , isValid : Bool
-        , state : TextInput.State
-        }
+    | TextInput (TextInputData id)
     | Button (ButtonData id) (Element id)
     | Row RowColumn (List (Element id))
     | Column RowColumn (List (Element id))
@@ -361,6 +371,15 @@ button data child =
         child
 
 
+defaultElBorderAndFill : BorderAndFill
+defaultElBorderAndFill =
+    BorderAndFill
+        { borderWidth = 2
+        , borderColor = Color.outlineColor
+        , fillColor = Color.fillColor
+        }
+
+
 defaultButtonBorderAndFill : BorderAndFill
 defaultButtonBorderAndFill =
     BorderAndFill
@@ -452,17 +471,62 @@ center data element2 =
         size2 =
             size element2
 
-        topLeft : Coord Pixels
-        topLeft =
+        topLeft3 : Coord Pixels
+        topLeft3 =
             data.size |> Coord.minus size2 |> Coord.divide (Coord.xy 2 2)
     in
     Single
         { padding =
-            { topLeft = topLeft
-            , bottomRight = data.size |> Coord.minus size2 |> Coord.minus topLeft
+            { topLeft = topLeft3
+            , bottomRight = data.size |> Coord.minus size2 |> Coord.minus topLeft3
             }
         , inFront = []
         , borderAndFill = NoBorderOrFill
+        , cachedSize = data.size
+        }
+        element2
+
+
+topLeft : { size : Coord Pixels } -> Element id -> Element id
+topLeft data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy 0 0
+            , bottomRight = Coord.xy (sizeX - childSizeX) (sizeY - childSizeY)
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , cachedSize = data.size
+        }
+        element2
+
+
+topLeft2 :
+    { size : Coord Pixels, inFront : List (Element id), borderAndFill : BorderAndFill }
+    -> Element id
+    -> Element id
+topLeft2 data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy 0 0
+            , bottomRight = Coord.xy (sizeX - childSizeX) (sizeY - childSizeY)
+            }
+        , inFront = data.inFront
+        , borderAndFill = data.borderAndFill
         , cachedSize = data.size
         }
         element2
@@ -923,23 +987,32 @@ columnSize data children =
            )
 
 
-findElement : id -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
-findElement id element =
+type InputType id
+    = ButtonType { data : ButtonData id, position : Coord Pixels }
+    | TextInputType { data : TextInputData id, position : Coord Pixels }
+
+
+findInput : id -> Element id -> Maybe (InputType id)
+findInput id element =
     findButtonHelper id Coord.origin element
 
 
-findButtonHelper : id -> Coord Pixels -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
+findButtonHelper : id -> Coord Pixels -> Element id -> Maybe (InputType id)
 findButtonHelper id position element =
     case element of
         Text _ ->
             Nothing
 
-        TextInput _ ->
-            Nothing
+        TextInput data ->
+            if data.id == id then
+                TextInputType { data = data, position = position } |> Just
+
+            else
+                Nothing
 
         Button data _ ->
             if data.id == id then
-                Just { buttonData = data, position = position }
+                ButtonType { data = data, position = position } |> Just
 
             else
                 Nothing
@@ -1137,3 +1210,76 @@ type TabForward id
     = FoundId
     | FoundNextId id
     | NotFound
+
+
+table : List { header : Element id, row : data -> Element id } -> List data -> Element id
+table columns data =
+    row
+        { spacing = 24, padding = noPadding }
+        (List.map
+            (\a -> column { spacing = 8, padding = noPadding } (a.header :: List.map a.row data))
+            columns
+        )
+
+
+checkbox : id -> Bool -> String -> Element id
+checkbox id isChecked text2 =
+    customButton
+        { id = id
+        , padding = paddingXY 2 2
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , borderAndFillFocus = FillOnly Color.fillColor2
+        }
+        (row
+            { spacing = 8, padding = noPadding }
+            [ if isChecked then
+                colorSprite
+                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
+                    , size = Coord.xy 36 36
+                    , texturePosition = Coord.xy 591 72
+                    , textureSize = Coord.xy 36 36
+                    }
+
+              else
+                colorSprite
+                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
+                    , size = Coord.xy 36 36
+                    , texturePosition = Coord.xy 627 72
+                    , textureSize = Coord.xy 36 36
+                    }
+            , text text2
+            ]
+        )
+
+
+selectableButton : { id : id, padding : Padding } -> Bool -> Element id -> Element id
+selectableButton data isSelected child =
+    customButton
+        { id = data.id
+        , padding = data.padding
+        , inFront = []
+        , borderAndFill =
+            BorderAndFill
+                { borderWidth = 2
+                , borderColor = Color.outlineColor
+                , fillColor =
+                    if isSelected then
+                        Color.highlightColor
+
+                    else
+                        Color.fillColor2
+                }
+        , borderAndFillFocus =
+            BorderAndFill
+                { borderWidth = 2
+                , borderColor = Color.focusedUiColor
+                , fillColor =
+                    if isSelected then
+                        Color.highlightColor
+
+                    else
+                        Color.fillColor2
+                }
+        }
+        child

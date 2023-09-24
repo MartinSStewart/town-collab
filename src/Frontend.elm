@@ -1,5 +1,6 @@
 module Frontend exposing (app)
 
+import AdminPage
 import Animal exposing (Animal)
 import Array
 import AssocList
@@ -7,7 +8,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
-import Change exposing (AreTrainsDisabled(..), Change(..), UserStatus(..))
+import Change exposing (AreTrainsDisabled(..), Change(..), TimeOfDay(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
@@ -64,7 +65,7 @@ import Ports
 import Quantity exposing (Quantity(..))
 import Random
 import Route
-import Shaders exposing (DebrisVertex, MapOverlayVertex, Vertex)
+import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import TextInput exposing (OutMsg(..))
@@ -181,12 +182,15 @@ audioLoaded audioData model =
             clamp
                 0
                 1
-                (case ( model.lastMailEditorToggle, model.mailEditor ) of
-                    ( Just time, Nothing ) ->
+                (case ( model.lastMailEditorToggle, model.page ) of
+                    ( Just time, WorldPage _ ) ->
                         Quantity.ratio (Duration.from time model.time) MailEditor.openAnimationLength
 
-                    ( Just time, Just _ ) ->
+                    ( Just time, MailPage _ ) ->
                         1 - Quantity.ratio (Duration.from time model.time) MailEditor.openAnimationLength
+
+                    ( _, AdminPage _ ) ->
+                        0
 
                     ( Nothing, _ ) ->
                         1
@@ -239,10 +243,6 @@ audioLoaded audioData model =
         (\( _, train ) ->
             case Train.stuckOrDerailed model.time train of
                 Train.IsDerailed derailTime _ ->
-                    --let
-                    --    _ =
-                    --        Debug.log "time" (Duration.from derailTime model.time)
-                    --in
                     playSound TrainCrash derailTime
                         |> Audio.scaleVolume (volume model (Train.trainPosition model.time train) * 0.5)
 
@@ -275,8 +275,8 @@ audioLoaded audioData model =
         Nothing ->
             Audio.silence
     , List.map (playSound WhooshSound) model.lastTileRotation |> Audio.group |> Audio.scaleVolume 0.5
-    , case model.mailEditor of
-        Just mailEditor ->
+    , case model.page of
+        MailPage mailEditor ->
             [ List.map (playSound WhooshSound) mailEditor.lastRotation |> Audio.group |> Audio.scaleVolume 0.5
             , case mailEditor.lastPlacedImage of
                 Just time ->
@@ -293,7 +293,7 @@ audioLoaded audioData model =
             ]
                 |> Audio.group
 
-        Nothing ->
+        _ ->
             Audio.silence
     , case model.lastPlacementError of
         Just time ->
@@ -412,6 +412,12 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , case model.lightsSwitched of
+        Just time ->
+            playSound LightSwitch time |> Audio.scaleVolume 0.8
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
         |> Audio.scaleVolumeAt [ ( model.startTime, 0 ), ( Duration.addTo model.startTime Duration.second, 1 ) ]
@@ -518,6 +524,8 @@ init url key =
         , musicVolume = 0
         , soundEffectVolume = 0
         , texture = Nothing
+        , lightsTexture = Nothing
+        , depthTexture = Nothing
         , simplexNoiseLookup = Nothing
         , localModel = LoadingLocalModel []
         , hasCmdKey = False
@@ -557,15 +565,30 @@ update audioData msg model =
                    )
                 |> (\( newModel, cmd ) ->
                         let
+                            oldNightFactor : Float
+                            oldNightFactor =
+                                getNightFactor frontendLoaded
+
+                            newNightFactor : Float
+                            newNightFactor =
+                                getNightFactor newModel
+
+                            newModel2 =
+                                if (oldNightFactor > 0.5) /= (newNightFactor > 0.5) then
+                                    { newModel | lightsSwitched = Just newModel.time }
+
+                                else
+                                    newModel
+
                             newTool : Cursor.OtherUsersTool
                             newTool =
-                                LocalGrid.currentTool newModel |> Tool.toCursor
+                                LocalGrid.currentTool newModel2 |> Tool.toCursor
                         in
                         ( if Tool.toCursor (LocalGrid.currentTool frontendLoaded) == newTool then
-                            newModel
+                            newModel2
 
                           else
-                            updateLocalModel (Change.ChangeTool newTool) newModel |> Tuple.first
+                            updateLocalModel (Change.ChangeTool newTool) newModel2 |> Tuple.first
                         , cmd
                         )
                    )
@@ -646,6 +669,9 @@ updateLoaded audioData msg model =
         TextureLoaded _ ->
             ( model, Command.none )
 
+        LightsTextureLoaded _ ->
+            ( model, Command.none )
+
         SimplexLookupTextureLoaded _ ->
             ( model, Command.none )
 
@@ -655,25 +681,25 @@ updateLoaded audioData msg model =
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
-                    case model.mailEditor of
-                        Just mailEditor ->
+                    case model.page of
+                        MailPage mailEditor ->
                             case MailEditor.handleKeyDown model.time (LocalGrid.ctrlOrMeta model) key mailEditor of
                                 Just ( newMailEditor, outMsg ) ->
                                     { model
-                                        | mailEditor = Just newMailEditor
+                                        | page = MailPage newMailEditor
                                         , lastMailEditorToggle = model.lastMailEditorToggle
                                     }
                                         |> handleMailEditorOutMsg outMsg
 
                                 Nothing ->
                                     ( { model
-                                        | mailEditor = Nothing
+                                        | page = WorldPage { showMap = False }
                                         , lastMailEditorToggle = Just model.time
                                       }
                                     , Command.none
                                     )
 
-                        Nothing ->
+                        _ ->
                             case ( model.focus, key ) of
                                 ( _, Keyboard.Tab ) ->
                                     ( setFocus
@@ -788,12 +814,15 @@ updateLoaded audioData msg model =
                     ( { model
                         | mouseMiddle = MouseButtonUp { current = mousePosition }
                         , viewPoint =
-                            case model.mailEditor of
-                                Just _ ->
+                            case model.page of
+                                MailPage _ ->
                                     model.viewPoint
 
-                                Nothing ->
+                                WorldPage _ ->
                                     Toolbar.offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
+
+                                AdminPage _ ->
+                                    model.viewPoint
                       }
                     , Command.none
                     )
@@ -835,39 +864,45 @@ updateLoaded audioData msg model =
                             DeltaPage ->
                                 event.deltaY * 1000
                           )
-            in
-            ( if abs scrollThreshold > 50 then
-                case model.mailEditor of
-                    Just mailEditor ->
+
+                worldZoom () =
+                    if LocalGrid.ctrlOrMeta model then
                         { model
-                            | mailEditor =
-                                MailEditor.scroll (scrollThreshold > 0) audioData model mailEditor |> Just
+                            | zoomFactor =
+                                (if scrollThreshold > 0 then
+                                    model.zoomFactor - 1
+
+                                 else
+                                    model.zoomFactor + 1
+                                )
+                                    |> clamp 1 3
+                            , scrollThreshold = 0
                         }
 
-                    Nothing ->
-                        if LocalGrid.ctrlOrMeta model then
-                            { model
-                                | zoomFactor =
-                                    (if scrollThreshold > 0 then
-                                        model.zoomFactor - 1
+                    else
+                        case ( scrollThreshold > 0, model.currentTool ) of
+                            ( True, TilePlacerTool currentTile ) ->
+                                tileRotationHelper audioData 1 currentTile model
 
-                                     else
-                                        model.zoomFactor + 1
-                                    )
-                                        |> clamp 1 3
-                                , scrollThreshold = 0
-                            }
+                            ( False, TilePlacerTool currentTile ) ->
+                                tileRotationHelper audioData -1 currentTile model
 
-                        else
-                            case ( scrollThreshold > 0, model.currentTool ) of
-                                ( True, TilePlacerTool currentTile ) ->
-                                    tileRotationHelper audioData 1 currentTile model
+                            _ ->
+                                { model | scrollThreshold = 0 }
+            in
+            ( if abs scrollThreshold > 50 then
+                case model.page of
+                    MailPage mailEditor ->
+                        { model
+                            | page =
+                                MailEditor.scroll (scrollThreshold > 0) audioData model mailEditor |> MailPage
+                        }
 
-                                ( False, TilePlacerTool currentTile ) ->
-                                    tileRotationHelper audioData -1 currentTile model
+                    WorldPage _ ->
+                        worldZoom ()
 
-                                _ ->
-                                    { model | scrollThreshold = 0 }
+                    AdminPage _ ->
+                        model
 
               else
                 { model | scrollThreshold = scrollThreshold }
@@ -1130,9 +1165,6 @@ updateLoaded audioData msg model =
                                         AllowEmailNotificationsCheckbox ->
                                             True
 
-                                        ResetConnectionsButton ->
-                                            True
-
                                         UsersOnlineButton ->
                                             True
 
@@ -1140,12 +1172,6 @@ updateLoaded audioData msg model =
                                             True
 
                                         ReportUserButton ->
-                                            True
-
-                                        ToggleIsGridReadOnlyButton ->
-                                            True
-
-                                        ToggleTrainsDisabledButton ->
                                             True
 
                                         ZoomInButton ->
@@ -1158,6 +1184,21 @@ updateLoaded audioData msg model =
                                             True
 
                                         RotateRightButton ->
+                                            True
+
+                                        AutomaticTimeOfDayButton ->
+                                            True
+
+                                        AlwaysDayTimeOfDayButton ->
+                                            True
+
+                                        AlwaysNightTimeOfDayButton ->
+                                            True
+
+                                        ShowAdminPage ->
+                                            True
+
+                                        AdminHover _ ->
                                             True
 
                                 Nothing ->
@@ -1216,12 +1257,26 @@ updateLoaded audioData msg model =
 
                 newUi =
                     Toolbar.view model4
+
+                visuallyEqual =
+                    Ui.visuallyEqual newUi model4.ui
             in
             ( { model4
                 | ui = newUi
                 , previousFocus = model4.focus
+                , focus =
+                    if visuallyEqual then
+                        model4.focus
+
+                    else
+                        case Maybe.andThen (\id -> Ui.findInput id newUi) model4.focus of
+                            Just _ ->
+                                model4.focus
+
+                            Nothing ->
+                                Nothing
                 , uiMesh =
-                    if Ui.visuallyEqual newUi model4.ui && model4.focus == model4.previousFocus then
+                    if visuallyEqual && model4.focus == model4.previousFocus then
                         model4.uiMesh
 
                     else
@@ -1240,6 +1295,14 @@ updateLoaded audioData msg model =
             case result of
                 Ok texture ->
                     ( { model | trainTexture = Just texture }, Command.none )
+
+                Err _ ->
+                    ( model, Command.none )
+
+        TrainLightsTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( { model | trainLightsTexture = Just texture }, Command.none )
 
                 Err _ ->
                     ( model, Command.none )
@@ -1280,16 +1343,27 @@ updateLoaded audioData msg model =
 
         ImportedMail2 result ->
             ( { model
-                | mailEditor =
-                    case model.mailEditor of
-                        Just mailEditor ->
-                            MailEditor.importMail result mailEditor |> Just
+                | page =
+                    case model.page of
+                        MailPage mailEditor ->
+                            MailEditor.importMail result mailEditor |> MailPage
 
-                        Nothing ->
-                            Nothing
+                        _ ->
+                            model.page
               }
             , Command.none
             )
+
+        TrainDepthTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( { model | trainDepthTexture = Just texture }, Command.none )
+
+                Err _ ->
+                    ( model, Command.none )
+
+        DepthTextureLoaded _ ->
+            ( model, Command.none )
 
 
 pasteTextTool : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
@@ -1709,44 +1783,50 @@ keyMsgCanvasUpdate audioData key model =
             if model.contextMenu /= Nothing then
                 ( { model | contextMenu = Nothing }, Command.none )
 
-            else if model.showMap then
-                ( { model | showMap = False }, Command.none )
-
             else
-                ( case model.currentTool of
-                    TilePlacerTool _ ->
-                        LoadingPage.setCurrentTool HandToolButton model
+                case model.page of
+                    WorldPage worldPage ->
+                        if worldPage.showMap then
+                            ( { model | page = WorldPage { worldPage | showMap = False } }, Command.none )
 
-                    TilePickerTool ->
-                        LoadingPage.setCurrentTool HandToolButton model
+                        else
+                            ( case model.currentTool of
+                                TilePlacerTool _ ->
+                                    LoadingPage.setCurrentTool HandToolButton model
 
-                    HandTool ->
-                        case isHoldingCow model of
-                            Just { cowId } ->
-                                updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
-                                    |> Tuple.first
+                                TilePickerTool ->
+                                    LoadingPage.setCurrentTool HandToolButton model
 
-                            Nothing ->
-                                { model
-                                    | viewPoint =
-                                        case model.viewPoint of
-                                            TrainViewPoint _ ->
-                                                Toolbar.actualViewPoint model |> NormalViewPoint
+                                HandTool ->
+                                    case isHoldingCow model of
+                                        Just { cowId } ->
+                                            updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
+                                                |> Tuple.first
 
-                                            NormalViewPoint _ ->
-                                                model.viewPoint
-                                }
+                                        Nothing ->
+                                            { model
+                                                | viewPoint =
+                                                    case model.viewPoint of
+                                                        TrainViewPoint _ ->
+                                                            Toolbar.actualViewPoint model |> NormalViewPoint
 
-                    TextTool (Just _) ->
-                        LoadingPage.setCurrentTool TextToolButton model
+                                                        NormalViewPoint _ ->
+                                                            model.viewPoint
+                                            }
 
-                    TextTool Nothing ->
-                        LoadingPage.setCurrentTool HandToolButton model
+                                TextTool (Just _) ->
+                                    LoadingPage.setCurrentTool TextToolButton model
 
-                    ReportTool ->
-                        LoadingPage.setCurrentTool HandToolButton model
-                , Command.none
-                )
+                                TextTool Nothing ->
+                                    LoadingPage.setCurrentTool HandToolButton model
+
+                                ReportTool ->
+                                    LoadingPage.setCurrentTool HandToolButton model
+                            , Command.none
+                            )
+
+                    _ ->
+                        ( model, Command.none )
 
         ( Keyboard.Character "v", True ) ->
             case model.currentTool of
@@ -1825,7 +1905,17 @@ keyMsgCanvasUpdate audioData key model =
                             ( tileRotationHelper audioData 1 currentTile model, Command.none )
 
                         "m" ->
-                            ( { model | showMap = not model.showMap }, Command.none )
+                            ( { model
+                                | page =
+                                    case model.page of
+                                        WorldPage worldPage ->
+                                            WorldPage { worldPage | showMap = not worldPage.showMap }
+
+                                        _ ->
+                                            model.page
+                              }
+                            , Command.none
+                            )
 
                         _ ->
                             setTileFromHotkey string model
@@ -1833,7 +1923,17 @@ keyMsgCanvasUpdate audioData key model =
                 _ ->
                     case string of
                         "m" ->
-                            ( { model | showMap = not model.showMap }, Command.none )
+                            ( { model
+                                | page =
+                                    case model.page of
+                                        WorldPage worldPage ->
+                                            WorldPage { worldPage | showMap = not worldPage.showMap }
+
+                                        _ ->
+                                            model.page
+                              }
+                            , Command.none
+                            )
 
                         _ ->
                             setTileFromHotkey string model
@@ -2004,7 +2104,13 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                     (\() ->
                         if currentUserId2 == userId then
                             ( { model
-                                | mailEditor = MailEditor.init Nothing |> Just
+                                | page =
+                                    case model.page of
+                                        WorldPage _ ->
+                                            MailEditor.init Nothing |> MailPage
+
+                                        _ ->
+                                            model.page
                                 , lastMailEditorToggle = Just model.time
                               }
                             , Command.none
@@ -2018,15 +2124,20 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                             case localModel.users |> IdDict.get userId of
                                 Just user ->
                                     ( { model
-                                        | mailEditor =
-                                            MailEditor.init
-                                                (Just
-                                                    { userId = userId
-                                                    , name = user.name
-                                                    , draft = IdDict.get userId drafts |> Maybe.withDefault []
-                                                    }
-                                                )
-                                                |> Just
+                                        | page =
+                                            case model.page of
+                                                WorldPage _ ->
+                                                    MailEditor.init
+                                                        (Just
+                                                            { userId = userId
+                                                            , name = user.name
+                                                            , draft = IdDict.get userId drafts |> Maybe.withDefault []
+                                                            }
+                                                        )
+                                                        |> MailPage
+
+                                                _ ->
+                                                    model.page
                                         , lastMailEditorToggle = Just model.time
                                       }
                                     , Command.none
@@ -2119,40 +2230,48 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                             else
                                 model.contextMenu
                 , viewPoint =
-                    case ( model.mailEditor, model.mouseMiddle ) of
-                        ( Nothing, MouseButtonUp _ ) ->
-                            case model.currentTool of
-                                TilePlacerTool _ ->
+                    case model.page of
+                        WorldPage _ ->
+                            case model.mouseMiddle of
+                                MouseButtonUp _ ->
+                                    case model.currentTool of
+                                        TilePlacerTool _ ->
+                                            model.viewPoint
+
+                                        HandTool ->
+                                            Toolbar.offsetViewPoint
+                                                model
+                                                previousMouseState.hover
+                                                previousMouseState.start
+                                                mousePosition
+                                                |> NormalViewPoint
+
+                                        TilePickerTool ->
+                                            Toolbar.offsetViewPoint
+                                                model
+                                                previousMouseState.hover
+                                                previousMouseState.start
+                                                mousePosition
+                                                |> NormalViewPoint
+
+                                        TextTool _ ->
+                                            model.viewPoint
+
+                                        ReportTool ->
+                                            Toolbar.offsetViewPoint
+                                                model
+                                                previousMouseState.hover
+                                                previousMouseState.start
+                                                mousePosition
+                                                |> NormalViewPoint
+
+                                MouseButtonDown _ ->
                                     model.viewPoint
 
-                                HandTool ->
-                                    Toolbar.offsetViewPoint
-                                        model
-                                        previousMouseState.hover
-                                        previousMouseState.start
-                                        mousePosition
-                                        |> NormalViewPoint
+                        MailPage _ ->
+                            model.viewPoint
 
-                                TilePickerTool ->
-                                    Toolbar.offsetViewPoint
-                                        model
-                                        previousMouseState.hover
-                                        previousMouseState.start
-                                        mousePosition
-                                        |> NormalViewPoint
-
-                                TextTool _ ->
-                                    model.viewPoint
-
-                                ReportTool ->
-                                    Toolbar.offsetViewPoint
-                                        model
-                                        previousMouseState.hover
-                                        previousMouseState.start
-                                        mousePosition
-                                        |> NormalViewPoint
-
-                        _ ->
+                        AdminPage _ ->
                             model.viewPoint
             }
                 |> (\m ->
@@ -2590,7 +2709,7 @@ uiUpdate audioData id event model =
                                         |> SettingsMenu
                                         |> Just
 
-                                NotLoggedIn ->
+                                NotLoggedIn _ ->
                                     Just LoggedOutSettingsMenu
                       }
                     , Command.none
@@ -2635,8 +2754,8 @@ uiUpdate audioData id event model =
                     ( model, Command.none )
 
         MailEditorHover mailEditorId ->
-            case model.mailEditor of
-                Just mailEditor ->
+            case model.page of
+                MailPage mailEditor ->
                     let
                         ( newMailEditor, outMsg ) =
                             MailEditor.uiUpdate
@@ -2648,7 +2767,13 @@ uiUpdate audioData id event model =
 
                         model2 =
                             { model
-                                | mailEditor = newMailEditor
+                                | page =
+                                    case newMailEditor of
+                                        Just a ->
+                                            MailPage a
+
+                                        Nothing ->
+                                            WorldPage { showMap = False }
                                 , lastMailEditorToggle =
                                     if newMailEditor == Nothing then
                                         Just model.time
@@ -2659,14 +2784,29 @@ uiUpdate audioData id event model =
                     in
                     handleMailEditorOutMsg outMsg model2
 
-                Nothing ->
+                _ ->
                     ( model, Command.none )
 
         YouGotMailButton ->
             onPress audioData event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
 
         ShowMapButton ->
-            onPress audioData event (\() -> ( { model | showMap = not model.showMap }, Command.none )) model
+            onPress audioData
+                event
+                (\() ->
+                    ( { model
+                        | page =
+                            case model.page of
+                                WorldPage worldPage ->
+                                    WorldPage { worldPage | showMap = not worldPage.showMap }
+
+                                _ ->
+                                    model.page
+                      }
+                    , Command.none
+                    )
+                )
+                model
 
         AllowEmailNotificationsCheckbox ->
             onPress
@@ -2680,16 +2820,9 @@ uiUpdate audioData id event model =
                                 model
                                 |> handleOutMsg False
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             ( model, Command.none )
                 )
-                model
-
-        ResetConnectionsButton ->
-            onPress
-                audioData
-                event
-                (\() -> updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False)
                 model
 
         UsersOnlineButton ->
@@ -2734,44 +2867,6 @@ uiUpdate audioData id event model =
 
                         Nothing ->
                             ( model, Command.none )
-                )
-                model
-
-        ToggleIsGridReadOnlyButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    case LocalGrid.localModel model.localModel |> .userStatus of
-                        LoggedIn { isGridReadOnly } ->
-                            updateLocalModel
-                                (Change.AdminSetGridReadOnly (not isGridReadOnly) |> Change.AdminChange)
-                                model
-                                |> handleOutMsg False
-
-                        NotLoggedIn ->
-                            ( model, Command.none )
-                )
-                model
-
-        ToggleTrainsDisabledButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    updateLocalModel
-                        (Change.AdminSetTrainsDisabled
-                            (case LocalGrid.localModel model.localModel |> .trainsDisabled of
-                                TrainsDisabled ->
-                                    TrainsEnabled
-
-                                TrainsEnabled ->
-                                    TrainsDisabled
-                            )
-                            |> Change.AdminChange
-                        )
-                        model
-                        |> handleOutMsg False
                 )
                 model
 
@@ -2820,6 +2915,53 @@ uiUpdate audioData id event model =
                     )
                 )
                 model
+
+        AutomaticTimeOfDayButton ->
+            onPress
+                audioData
+                event
+                (\() -> updateLocalModel (Change.SetTimeOfDay Automatic) model |> handleOutMsg False)
+                model
+
+        AlwaysDayTimeOfDayButton ->
+            onPress
+                audioData
+                event
+                (\() -> updateLocalModel (Change.SetTimeOfDay AlwaysDay) model |> handleOutMsg False)
+                model
+
+        AlwaysNightTimeOfDayButton ->
+            onPress
+                audioData
+                event
+                (\() -> updateLocalModel (Change.SetTimeOfDay AlwaysNight) model |> handleOutMsg False)
+                model
+
+        ShowAdminPage ->
+            onPress audioData event (\() -> ( { model | page = AdminPage AdminPage.init }, Command.none )) model
+
+        AdminHover adminHover ->
+            case model.page of
+                AdminPage adminPage ->
+                    let
+                        ( adminPage2, outMsg ) =
+                            AdminPage.update model adminHover event adminPage
+                    in
+                    case outMsg of
+                        AdminPage.NoOutMsg ->
+                            ( { model | page = AdminPage adminPage2 }, Command.none )
+
+                        AdminPage.AdminPageClosed ->
+                            ( { model | page = WorldPage { showMap = False } }, Command.none )
+
+                        AdminPage.OutMsgAdminChange adminChange ->
+                            updateLocalModel
+                                (Change.AdminChange adminChange)
+                                { model | page = AdminPage adminPage2 }
+                                |> handleOutMsg False
+
+                _ ->
+                    ( model, Command.none )
 
 
 textInputUpdate :
@@ -3048,8 +3190,8 @@ setTrainViewPoint trainId model =
 
 canOpenMailEditor : FrontendLoaded -> Maybe (IdDict UserId (List MailEditor.Content))
 canOpenMailEditor model =
-    case ( model.mailEditor, model.currentTool, LocalGrid.localModel model.localModel |> .userStatus ) of
-        ( Nothing, HandTool, LoggedIn loggedIn ) ->
+    case ( model.page, model.currentTool, LocalGrid.localModel model.localModel |> .userStatus ) of
+        ( WorldPage _, HandTool, LoggedIn loggedIn ) ->
             Just loggedIn.mailDrafts
 
         _ ->
@@ -3058,12 +3200,12 @@ canOpenMailEditor model =
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
 updateLocalModel msg model =
+    let
+        ( newLocalModel, outMsg ) =
+            LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
+    in
     case LocalGrid.localModel model.localModel |> .userStatus of
         LoggedIn _ ->
-            let
-                ( newLocalModel, outMsg ) =
-                    LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
-            in
             ( { model
                 | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
                 , localModel = newLocalModel
@@ -3072,8 +3214,15 @@ updateLocalModel msg model =
             , outMsg
             )
 
-        NotLoggedIn ->
-            ( model, LocalGrid.NoOutMsg )
+        NotLoggedIn _ ->
+            ( { model
+                | localModel =
+                    -- If we are not logged in then we don't send any msgs to the server and therefore don't want to keep all of the msgs in the localMsgs list
+                    LocalModel.unwrap newLocalModel
+                        |> (\a -> LocalModel.unsafe { a | localMsgs = [], model = a.localModel })
+              }
+            , LocalGrid.NoOutMsg
+            )
 
 
 placeTile : Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
@@ -3263,40 +3412,20 @@ createDebrisMesh appStartTime removedTiles =
                 data =
                     Tile.getData tile
             in
-            (case data.texturePosition of
-                Just texturePosition ->
-                    createDebrisMeshHelper
-                        position
-                        texturePosition
-                        data.size
-                        colors
-                        (case tile of
-                            BigText _ ->
-                                2
+            createDebrisMeshHelper
+                position
+                data.texturePosition
+                data.size
+                colors
+                (case tile of
+                    BigText _ ->
+                        2
 
-                            _ ->
-                                1
-                        )
-                        appStartTime
-                        time
-
-                Nothing ->
-                    []
-            )
-                ++ (case data.texturePositionTopLayer of
-                        Just topLayer ->
-                            createDebrisMeshHelper
-                                position
-                                topLayer.texturePosition
-                                data.size
-                                colors
-                                1
-                                appStartTime
-                                time
-
-                        Nothing ->
-                            []
-                   )
+                    _ ->
+                        1
+                )
+                appStartTime
+                time
         )
         list
         |> Sprite.toMesh
@@ -3797,8 +3926,8 @@ cursorSprite hover model =
         Just userId ->
             let
                 helper () =
-                    case model.mailEditor of
-                        Just mailEditor ->
+                    case model.page of
+                        MailPage mailEditor ->
                             case hover of
                                 UiHover (MailEditorHover uiHover) _ ->
                                     MailEditor.cursorSprite model.windowSize uiHover mailEditor
@@ -3806,7 +3935,10 @@ cursorSprite hover model =
                                 _ ->
                                     { cursorType = DefaultCursor, scale = 1 }
 
-                        Nothing ->
+                        AdminPage _ ->
+                            { cursorType = DefaultCursor, scale = 1 }
+
+                        WorldPage _ ->
                             { cursorType =
                                 if isHoldingCow model /= Nothing then
                                     CursorSprite PinchSpriteCursor
@@ -3954,11 +4086,11 @@ isDraggingView :
             , hover : Hover
             }
 isDraggingView hover model =
-    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( Nothing, _, MouseButtonDown a ) ->
+    case ( model.page, model.mouseLeft, model.mouseMiddle ) of
+        ( WorldPage _, _, MouseButtonDown a ) ->
             Just a
 
-        ( Nothing, MouseButtonDown a, _ ) ->
+        ( WorldPage _, MouseButtonDown a, _ ) ->
             case model.currentTool of
                 TilePlacerTool _ ->
                     Nothing
@@ -3996,10 +4128,60 @@ shaderTime model =
     Duration.from model.startTime model.time |> Duration.inSeconds
 
 
+getNightFactor : FrontendLoaded -> Float
+getNightFactor model =
+    let
+        localGrid =
+            LocalGrid.localModel model.localModel
+
+        timeOfDay : TimeOfDay
+        timeOfDay =
+            case localGrid.userStatus of
+                LoggedIn loggedIn ->
+                    loggedIn.timeOfDay
+
+                NotLoggedIn notLoggedIn ->
+                    notLoggedIn.timeOfDay
+    in
+    case timeOfDay of
+        Automatic ->
+            let
+                hour =
+                    toFloat (Time.toHour Time.utc model.time)
+                        + (toFloat (Time.toMinute Time.utc model.time) / 60)
+                        + (toFloat (Time.toSecond Time.utc model.time) / (60 * 60))
+            in
+            if hour < 5 then
+                1
+
+            else if hour < 8 then
+                (8 - hour) / 3
+
+            else if hour < 18 then
+                0
+
+            else if hour < 21 then
+                (hour - 18) / 3
+
+            else
+                1
+
+        AlwaysDay ->
+            0
+
+        AlwaysNight ->
+            1
+
+
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
-    case Effect.WebGL.Texture.unwrap model.texture of
-        Just texture ->
+    case
+        ( Effect.WebGL.Texture.unwrap model.texture
+        , Effect.WebGL.Texture.unwrap model.lightsTexture
+        , Effect.WebGL.Texture.unwrap model.depthTexture
+        )
+    of
+        ( Just texture, Just lightsTexture, Just depth ) ->
             let
                 viewBounds_ : BoundingBox2d WorldUnit WorldUnit
                 viewBounds_ =
@@ -4014,13 +4196,6 @@ canvasView audioData model =
                 { x, y } =
                     Point2d.unwrap (Toolbar.actualViewPoint model)
 
-                viewMatrix =
-                    Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
-                        |> Mat4.translate3
-                            (negate <| toFloat <| round (x * toFloat Units.tileWidth))
-                            (negate <| toFloat <| round (y * toFloat Units.tileHeight))
-                            0
-
                 localGrid : LocalGrid_
                 localGrid =
                     LocalGrid.localModel model.localModel
@@ -4032,16 +4207,41 @@ canvasView audioData model =
                 showMousePointer =
                     cursorSprite hoverAt2 model
 
-                ( mailPosition, mailSize ) =
-                    case Ui.findElement (MailEditorHover MailEditor.MailButton) model.ui of
-                        Just mailButton ->
-                            ( mailButton.position, mailButton.buttonData.cachedSize )
-
-                        Nothing ->
-                            ( Coord.origin, Coord.origin )
-
                 shaderTime2 =
                     shaderTime model
+
+                renderData : RenderData
+                renderData =
+                    { lights = lightsTexture
+                    , texture = texture
+                    , depth = depth
+                    , nightFactor = getNightFactor model
+                    , viewMatrix =
+                        Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                            |> Mat4.translate3
+                                (negate <| toFloat <| round (x * toFloat Units.tileWidth))
+                                (negate <| toFloat <| round (y * toFloat Units.tileHeight))
+                                0
+                    }
+
+                textureSize : Vec2
+                textureSize =
+                    WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+
+                gridViewBounds : BoundingBox2d WorldUnit WorldUnit
+                gridViewBounds =
+                    LoadingPage.viewLoadingBoundingBox model
+
+                meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
+                meshes =
+                    Dict.filter
+                        (\key _ ->
+                            Coord.tuple key
+                                |> Units.cellToTile
+                                |> Coord.toPoint2d
+                                |> (\p -> BoundingBox2d.contains p gridViewBounds)
+                        )
+                        model.meshes
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4058,128 +4258,137 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (case Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture of
-                    Just trainTexture ->
-                        let
-                            textureSize : Vec2
-                            textureSize =
-                                WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                (Shaders.drawBackground renderData meshes shaderTime2
+                    ++ drawForeground
+                        renderData
+                        model.contextMenu
+                        model.currentTool
+                        hoverAt2
+                        meshes
+                        shaderTime2
+                    ++ (case
+                            ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
+                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
+                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainDepthTexture
+                            )
+                        of
+                            ( Just trainTexture, Just trainLights, Just trainDepth ) ->
+                                Train.draw
+                                    { lights = trainLights
+                                    , texture = trainTexture
+                                    , depth = trainDepth
+                                    , nightFactor = getNightFactor model
+                                    , viewMatrix =
+                                        Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                                            |> Mat4.translate3
+                                                (negate <| toFloat <| round (x * toFloat Units.tileWidth))
+                                                (negate <| toFloat <| round (y * toFloat Units.tileHeight))
+                                                0
+                                    }
+                                    (case model.contextMenu of
+                                        Just contextMenu ->
+                                            contextMenu.userId
 
-                            gridViewBounds : BoundingBox2d WorldUnit WorldUnit
-                            gridViewBounds =
-                                LoadingPage.viewLoadingBoundingBox model
-
-                            meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
-                            meshes =
-                                Dict.filter
-                                    (\key _ ->
-                                        Coord.tuple key
-                                            |> Units.cellToTile
-                                            |> Coord.toPoint2d
-                                            |> (\p -> BoundingBox2d.contains p gridViewBounds)
+                                        Nothing ->
+                                            Nothing
                                     )
-                                    model.meshes
-                        in
-                        Shaders.drawBackground meshes viewMatrix texture shaderTime2
-                            ++ drawForeground
-                                model.contextMenu
-                                model.currentTool
-                                hoverAt2
-                                meshes
-                                viewMatrix
-                                texture
-                                shaderTime2
-                            ++ Train.draw
-                                (case model.contextMenu of
-                                    Just contextMenu ->
-                                        contextMenu.userId
+                                    model.time
+                                    localGrid.mail
+                                    model.trains
+                                    viewBounds_
+                                    shaderTime2
 
-                                    Nothing ->
-                                        Nothing
-                                )
-                                model.time
-                                localGrid.mail
-                                model.trains
-                                viewMatrix
-                                trainTexture
-                                viewBounds_
-                                shaderTime2
-                            ++ drawAnimals texture viewMatrix model shaderTime2
-                            ++ drawFlags texture viewMatrix model shaderTime2
-                            ++ [ Effect.WebGL.entityWith
-                                    [ Shaders.blend ]
-                                    Shaders.debrisVertexShader
-                                    Shaders.fragmentShader
-                                    model.debrisMesh
-                                    { view = viewMatrix
-                                    , texture = texture
-                                    , textureSize = textureSize
-                                    , time = shaderTime2
-                                    , time2 = shaderTime2
-                                    , color = Vec4.vec4 1 1 1 1
-                                    }
-                               , drawReports texture viewMatrix model.reportsMesh
-                               ]
-                            ++ drawOtherCursors texture viewMatrix model shaderTime2
-                            ++ Train.drawSpeechBubble texture viewMatrix model.time model.trains shaderTime2
-                            ++ drawTilePlacer audioData viewMatrix texture model shaderTime2
-                            ++ (case model.mailEditor of
-                                    Just _ ->
-                                        [ MailEditor.backgroundLayer texture shaderTime2 ]
+                            _ ->
+                                []
+                       )
+                    ++ drawAnimals renderData model shaderTime2
+                    ++ drawFlags renderData model shaderTime2
+                    ++ [ Effect.WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.debrisVertexShader
+                            Shaders.fragmentShader
+                            model.debrisMesh
+                            { view = renderData.viewMatrix
+                            , texture = texture
+                            , lights = lightsTexture
+                            , depth = depth
+                            , textureSize = textureSize
+                            , time = shaderTime2
+                            , time2 = shaderTime2
+                            , color = Vec4.vec4 1 1 1 1
+                            , night = renderData.nightFactor
+                            }
+                       , drawReports renderData model.reportsMesh
+                       ]
+                    ++ drawOtherCursors renderData model shaderTime2
+                    ++ Train.drawSpeechBubble renderData model.time model.trains shaderTime2
+                    ++ drawTilePlacer renderData audioData model shaderTime2
+                    ++ (case model.page of
+                            MailPage _ ->
+                                [ MailEditor.backgroundLayer renderData shaderTime2 ]
 
-                                    Nothing ->
-                                        []
-                               )
-                            ++ [ Effect.WebGL.entityWith
-                                    [ Shaders.blend ]
-                                    Shaders.vertexShader
-                                    Shaders.fragmentShader
-                                    model.uiMesh
-                                    { view =
-                                        Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
-                                            |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                                    , texture = texture
-                                    , textureSize = textureSize
-                                    , color = Vec4.vec4 1 1 1 1
-                                    , userId = Shaders.noUserIdSelected
-                                    , time = shaderTime2
-                                    }
-                               ]
-                            ++ drawMap model
-                            ++ (case model.mailEditor of
-                                    Just mailEditor ->
-                                        MailEditor.drawMail
-                                            mailPosition
-                                            mailSize
-                                            texture
-                                            (LoadingPage.mouseScreenPosition model)
-                                            windowWidth
-                                            windowHeight
-                                            model
-                                            mailEditor
-                                            shaderTime2
+                            _ ->
+                                []
+                       )
+                    ++ [ Effect.WebGL.entityWith
+                            [ Shaders.blend ]
+                            Shaders.vertexShader
+                            Shaders.fragmentShader
+                            model.uiMesh
+                            { view =
+                                Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
+                                    |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                            , texture = texture
+                            , lights = lightsTexture
+                            , depth = depth
+                            , textureSize = textureSize
+                            , color = Vec4.vec4 1 1 1 1
+                            , userId = Shaders.noUserIdSelected
+                            , time = shaderTime2
+                            , night = renderData.nightFactor * 0.5
+                            }
+                       ]
+                    ++ drawMap model
+                    ++ (case model.page of
+                            MailPage mailEditor ->
+                                let
+                                    ( mailPosition, mailSize ) =
+                                        case Ui.findInput (MailEditorHover MailEditor.MailButton) model.ui of
+                                            Just (Ui.ButtonType mailButton) ->
+                                                ( mailButton.position, mailButton.data.cachedSize )
 
-                                    Nothing ->
-                                        []
-                               )
-                            ++ (case LocalGrid.currentUserId model of
-                                    Just userId ->
-                                        drawCursor showMousePointer texture viewMatrix userId model shaderTime2
+                                            _ ->
+                                                ( Coord.origin, Coord.origin )
+                                in
+                                MailEditor.drawMail
+                                    renderData
+                                    mailPosition
+                                    mailSize
+                                    (LoadingPage.mouseScreenPosition model)
+                                    windowWidth
+                                    windowHeight
+                                    model
+                                    mailEditor
+                                    shaderTime2
 
-                                    Nothing ->
-                                        []
-                               )
+                            _ ->
+                                []
+                       )
+                    ++ (case LocalGrid.currentUserId model of
+                            Just userId ->
+                                drawCursor renderData showMousePointer userId model shaderTime2
 
-                    _ ->
-                        []
+                            Nothing ->
+                                []
+                       )
                 )
 
-        Nothing ->
+        _ ->
             Html.text ""
 
 
-drawReports : WebGL.Texture.Texture -> Mat4 -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
-drawReports texture viewMatrix reportsMesh =
+drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
+drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -4187,15 +4396,18 @@ drawReports texture viewMatrix reportsMesh =
         reportsMesh
         { view = viewMatrix
         , texture = texture
+        , lights = lights
+        , depth = depth
         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , color = Vec4.vec4 1 1 1 1
         , userId = Shaders.noUserIdSelected
         , time = 0
+        , night = nightFactor
         }
 
 
-drawAnimals : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawAnimals texture viewMatrix model shaderTime2 =
+drawAnimals : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawAnimals { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -4230,6 +4442,8 @@ drawAnimals texture viewMatrix model shaderTime2 =
                             Train.instancedMesh
                             { view = viewMatrix
                             , texture = texture
+                            , lights = lights
+                            , depth = depth
                             , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
@@ -4239,7 +4453,7 @@ drawAnimals texture viewMatrix model shaderTime2 =
                                 Vec3.vec3
                                     (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2))
                                     (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2))
-                                    (Grid.tileZ True point.y (Coord.yRaw animalData.size))
+                                    0
                             , primaryColor0 = Color.toInt Color.white |> toFloat
                             , secondaryColor0 = Color.toInt Color.black |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
@@ -4248,6 +4462,7 @@ drawAnimals texture viewMatrix model shaderTime2 =
                                     + textureW
                                     * Coord.yRaw animalData.texturePosition
                                     |> toFloat
+                            , night = nightFactor
                             }
                             |> Just
 
@@ -4260,8 +4475,8 @@ drawAnimals texture viewMatrix model shaderTime2 =
         (IdDict.toList localGrid.animals)
 
 
-drawFlags : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawFlags texture viewMatrix model shaderTime2 =
+drawFlags : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawFlags { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
     List.filterMap
         (\flag ->
             let
@@ -4294,10 +4509,13 @@ drawFlags texture viewMatrix model shaderTime2 =
                                 0
                                 |> Mat4.mul viewMatrix
                         , texture = texture
+                        , lights = lights
+                        , depth = depth
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
                         , time = shaderTime2
+                        , night = nightFactor
                         }
                         |> Just
 
@@ -4307,8 +4525,8 @@ drawFlags texture viewMatrix model shaderTime2 =
         (getFlags model)
 
 
-drawTilePlacer : AudioData -> Mat4 -> WebGL.Texture.Texture -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawTilePlacer audioData viewMatrix texture model shaderTime2 =
+drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth } audioData model shaderTime2 =
     let
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -4370,6 +4588,8 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                             (toFloat mouseY * toFloat Units.tileHeight)
                             0
                 , texture = texture
+                , lights = lights
+                , depth = depth
                 , textureSize = textureSize
                 , color =
                     if currentTile.tileGroup == EmptyTileGroup then
@@ -4395,6 +4615,7 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
                 , time = shaderTime2
+                , night = nightFactor
                 }
             ]
 
@@ -4409,6 +4630,8 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                         (Coord.multiply Units.tileSize textTool.cursorPosition)
                         viewMatrix
                 , texture = texture
+                , lights = lights
+                , depth = depth
                 , textureSize = textureSize
                 , color =
                     if
@@ -4431,6 +4654,7 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
                 , time = shaderTime2
+                , night = nightFactor
                 }
             ]
 
@@ -4440,104 +4664,108 @@ drawTilePlacer audioData viewMatrix texture model shaderTime2 =
 
 drawMap : FrontendLoaded -> List Effect.WebGL.Entity
 drawMap model =
-    case ( model.showMap, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
-        ( True, Just simplexNoiseLookup ) ->
-            let
-                grid : Grid
-                grid =
-                    LocalGrid.localModel model.localModel |> .grid
+    case ( model.page, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
+        ( WorldPage worldPage, Just simplexNoiseLookup ) ->
+            if worldPage.showMap then
+                let
+                    grid : Grid
+                    grid =
+                        LocalGrid.localModel model.localModel |> .grid
 
-                viewPoint =
-                    Toolbar.actualViewPoint model |> Point2d.unwrap
+                    viewPoint =
+                        Toolbar.actualViewPoint model |> Point2d.unwrap
 
-                mapSize : Int
-                mapSize =
-                    Toolbar.mapSize model.windowSize
+                    mapSize : Int
+                    mapSize =
+                        Toolbar.mapSize model.windowSize
 
-                ( windowWidth, windowHeight ) =
-                    Coord.toTuple model.windowSize |> Tuple.mapBoth toFloat toFloat
+                    ( windowWidth, windowHeight ) =
+                        Coord.toTuple model.windowSize |> Tuple.mapBoth toFloat toFloat
 
-                settings =
-                    [ Effect.WebGL.Settings.scissor
-                        ((windowWidth - toFloat mapSize) / 2 |> floor)
-                        ((windowHeight - toFloat mapSize) / 2 |> floor)
-                        mapSize
-                        mapSize
-                    , Shaders.blend
-                    ]
+                    settings =
+                        [ Effect.WebGL.Settings.scissor
+                            ((windowWidth - toFloat mapSize) / 2 |> floor)
+                            ((windowHeight - toFloat mapSize) / 2 |> floor)
+                            mapSize
+                            mapSize
+                        , Shaders.blend
+                        ]
 
-                mapTerrainSize =
-                    Quantity.unwrap Shaders.mapSize
+                    mapTerrainSize =
+                        Quantity.unwrap Shaders.mapSize
 
-                mapTerrainSizeChunks =
-                    mapTerrainSize // 4 + 1
-            in
-            Effect.WebGL.entityWith
+                    mapTerrainSizeChunks =
+                        mapTerrainSize // 4 + 1
+                in
+                Effect.WebGL.entityWith
+                    []
+                    Shaders.worldMapVertexShader
+                    Shaders.worldMapFragmentShader
+                    Shaders.mapSquare
+                    { view =
+                        Mat4.makeScale3 (toFloat mapSize * 2 / windowWidth) (toFloat mapSize * -2 / windowHeight) 1
+                            |> Mat4.translate3 -0.5 -0.5 -0.5
+                    , texture = simplexNoiseLookup
+                    , cellPosition =
+                        Toolbar.actualViewPoint model
+                            |> Grid.worldToCellPoint
+                            |> Point2d.unwrap
+                            |> Vec2.fromRecord
+                    }
+                    :: List.map
+                        (\index ->
+                            let
+                                x =
+                                    4 * modBy mapTerrainSizeChunks index + floor (viewPoint.x / 16) - 2 * mapTerrainSizeChunks
+
+                                y =
+                                    4 * (index // mapTerrainSizeChunks) + floor (viewPoint.y / 16) - 2 * mapTerrainSizeChunks
+
+                                getMapPixelData : Int -> Int -> Vec2
+                                getMapPixelData x2 y2 =
+                                    case Grid.getCell (Coord.xy (x2 + x) (y2 + y)) grid of
+                                        Just cell ->
+                                            GridCell.mapPixelData cell
+
+                                        Nothing ->
+                                            Vec2.vec2 0 0
+                            in
+                            Effect.WebGL.entityWith
+                                settings
+                                Shaders.worldMapOverlayVertexShader
+                                Shaders.worldMapOverlayFragmentShader
+                                mapOverlayMesh
+                                { view =
+                                    Mat4.makeScale3
+                                        (toFloat mapSize * 2 / (mapTerrainSize * windowWidth))
+                                        (toFloat mapSize * -2 / (mapTerrainSize * windowHeight))
+                                        1
+                                        |> Mat4.translate3
+                                            (-viewPoint.x / 16 + toFloat x)
+                                            (-viewPoint.y / 16 + toFloat y)
+                                            0
+                                , pixelData_0_0 = getMapPixelData 0 0
+                                , pixelData_1_0 = getMapPixelData 1 0
+                                , pixelData_2_0 = getMapPixelData 2 0
+                                , pixelData_3_0 = getMapPixelData 3 0
+                                , pixelData_0_1 = getMapPixelData 0 1
+                                , pixelData_1_1 = getMapPixelData 1 1
+                                , pixelData_2_1 = getMapPixelData 2 1
+                                , pixelData_3_1 = getMapPixelData 3 1
+                                , pixelData_0_2 = getMapPixelData 0 2
+                                , pixelData_1_2 = getMapPixelData 1 2
+                                , pixelData_2_2 = getMapPixelData 2 2
+                                , pixelData_3_2 = getMapPixelData 3 2
+                                , pixelData_0_3 = getMapPixelData 0 3
+                                , pixelData_1_3 = getMapPixelData 1 3
+                                , pixelData_2_3 = getMapPixelData 2 3
+                                , pixelData_3_3 = getMapPixelData 3 3
+                                }
+                        )
+                        (List.range 0 (mapTerrainSizeChunks * mapTerrainSizeChunks - 1))
+
+            else
                 []
-                Shaders.worldMapVertexShader
-                Shaders.worldMapFragmentShader
-                Shaders.mapSquare
-                { view =
-                    Mat4.makeScale3 (toFloat mapSize * 2 / windowWidth) (toFloat mapSize * -2 / windowHeight) 1
-                        |> Mat4.translate3 -0.5 -0.5 -0.5
-                , texture = simplexNoiseLookup
-                , cellPosition =
-                    Toolbar.actualViewPoint model
-                        |> Grid.worldToCellPoint
-                        |> Point2d.unwrap
-                        |> Vec2.fromRecord
-                }
-                :: List.map
-                    (\index ->
-                        let
-                            x =
-                                4 * modBy mapTerrainSizeChunks index + floor (viewPoint.x / 16) - 2 * mapTerrainSizeChunks
-
-                            y =
-                                4 * (index // mapTerrainSizeChunks) + floor (viewPoint.y / 16) - 2 * mapTerrainSizeChunks
-
-                            getMapPixelData : Int -> Int -> Vec2
-                            getMapPixelData x2 y2 =
-                                case Grid.getCell (Coord.xy (x2 + x) (y2 + y)) grid of
-                                    Just cell ->
-                                        GridCell.mapPixelData cell
-
-                                    Nothing ->
-                                        Vec2.vec2 0 0
-                        in
-                        Effect.WebGL.entityWith
-                            settings
-                            Shaders.worldMapOverlayVertexShader
-                            Shaders.worldMapOverlayFragmentShader
-                            mapOverlayMesh
-                            { view =
-                                Mat4.makeScale3
-                                    (toFloat mapSize * 2 / (mapTerrainSize * windowWidth))
-                                    (toFloat mapSize * -2 / (mapTerrainSize * windowHeight))
-                                    1
-                                    |> Mat4.translate3
-                                        (-viewPoint.x / 16 + toFloat x)
-                                        (-viewPoint.y / 16 + toFloat y)
-                                        0
-                            , pixelData_0_0 = getMapPixelData 0 0
-                            , pixelData_1_0 = getMapPixelData 1 0
-                            , pixelData_2_0 = getMapPixelData 2 0
-                            , pixelData_3_0 = getMapPixelData 3 0
-                            , pixelData_0_1 = getMapPixelData 0 1
-                            , pixelData_1_1 = getMapPixelData 1 1
-                            , pixelData_2_1 = getMapPixelData 2 1
-                            , pixelData_3_1 = getMapPixelData 3 1
-                            , pixelData_0_2 = getMapPixelData 0 2
-                            , pixelData_1_2 = getMapPixelData 1 2
-                            , pixelData_2_2 = getMapPixelData 2 2
-                            , pixelData_3_2 = getMapPixelData 3 2
-                            , pixelData_0_3 = getMapPixelData 0 3
-                            , pixelData_1_3 = getMapPixelData 1 3
-                            , pixelData_2_3 = getMapPixelData 2 3
-                            , pixelData_3_3 = getMapPixelData 3 3
-                            }
-                    )
-                    (List.range 0 (mapTerrainSizeChunks * mapTerrainSizeChunks - 1))
 
         _ ->
             []
@@ -4599,8 +4827,8 @@ lastPlacementOffset audioData model =
             0
 
 
-drawOtherCursors : WebGL.Texture.Texture -> Mat4 -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawOtherCursors texture viewMatrix model shaderTime2 =
+drawOtherCursors : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
+drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -4656,10 +4884,13 @@ drawOtherCursors texture viewMatrix model shaderTime2 =
                                     0
                                     |> Mat4.mul viewMatrix
                             , texture = texture
+                            , lights = lights
+                            , depth = depth
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime2
+                            , night = nightFactor
                             }
                             |> Just
 
@@ -4669,14 +4900,13 @@ drawOtherCursors texture viewMatrix model shaderTime2 =
 
 
 drawCursor :
-    { cursorType : CursorType, scale : Int }
-    -> WebGL.Texture.Texture
-    -> Mat4
+    RenderData
+    -> { cursorType : CursorType, scale : Int }
     -> Id UserId
     -> FrontendLoaded
     -> Float
     -> List Effect.WebGL.Entity
-drawCursor showMousePointer texture viewMatrix userId model shaderTime2 =
+drawCursor { nightFactor, lights, texture, viewMatrix, depth } showMousePointer userId model shaderTime2 =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -4711,10 +4941,13 @@ drawCursor showMousePointer texture viewMatrix userId model shaderTime2 =
                                         |> Mat4.scale3 scale scale 1
                                         |> Mat4.mul viewMatrix
                                 , texture = texture
+                                , lights = lights
+                                , depth = depth
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , color = Vec4.vec4 1 1 1 1
                                 , userId = Shaders.noUserIdSelected
                                 , time = shaderTime2
+                                , night = nightFactor
                                 }
                             ]
 
@@ -4824,21 +5057,20 @@ getFlags model =
 
 
 drawForeground :
-    Maybe ContextMenu
+    RenderData
+    -> Maybe ContextMenu
     -> Tool
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
-    -> Mat4
-    -> WebGL.Texture.Texture
     -> Float
     -> List Effect.WebGL.Entity
-drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture shaderTime2 =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth } maybeContextMenu currentTool2 hoverAt2 meshes shaderTime2 =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
                 Effect.WebGL.entityWith
                     [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
-                    , Effect.WebGL.Settings.DepthTest.default
+                    , Effect.WebGL.Settings.DepthTest.lessOrEqual { write = True, near = 0, far = 1 }
                     , Shaders.blend
                     ]
                     Shaders.vertexShader
@@ -4846,6 +5078,8 @@ drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture 
                     mesh.foreground
                     { view = viewMatrix
                     , texture = texture
+                    , lights = lights
+                    , depth = depth
                     , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId =
@@ -4871,6 +5105,7 @@ drawForeground maybeContextMenu currentTool2 hoverAt2 meshes viewMatrix texture 
                                     _ ->
                                         -3
                     , time = shaderTime2
+                    , night = nightFactor
                     }
             )
 

@@ -57,7 +57,7 @@ import Math.Vector4 as Vec4
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
-import Shaders exposing (InstancedVertex, Vertex)
+import Shaders exposing (InstancedVertex, RenderData, Vertex)
 import Sprite
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
@@ -1023,16 +1023,15 @@ trainDirection time train =
 
 
 draw :
-    Maybe (Id UserId)
+    RenderData
+    -> Maybe (Id UserId)
     -> Effect.Time.Posix
     -> IdDict MailId FrontendMail
     -> IdDict TrainId Train
-    -> Mat4
-    -> WebGL.Texture.Texture
     -> BoundingBox2d WorldUnit WorldUnit
     -> Float
     -> List Effect.WebGL.Entity
-draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds shaderTime =
+draw renderData maybeSelectedUserId time mail trains viewBounds shaderTime =
     let
         trainViewBounds =
             BoundingBox2d.expandBy (Coord.maxComponent trainSize |> Quantity.toFloatQuantity) viewBounds
@@ -1205,7 +1204,7 @@ draw maybeSelectedUserId time mail trains viewMatrix trainTexture viewBounds sha
                    )
         )
         (IdDict.toList trains)
-        |> List.map (trainEntity maybeSelectedUserId trainTexture viewMatrix shaderTime)
+        |> List.map (trainEntity renderData maybeSelectedUserId shaderTime)
 
 
 startTeleportingHome : Effect.Time.Posix -> Train -> Train
@@ -1264,14 +1263,8 @@ type alias TrainEntity =
     }
 
 
-trainEntity :
-    Maybe (Id UserId)
-    -> WebGL.Texture.Texture
-    -> Mat4
-    -> Float
-    -> TrainEntity
-    -> Effect.WebGL.Entity
-trainEntity maybeUserId trainTexture viewMatrix shaderTime trainData =
+trainEntity : RenderData -> Maybe (Id UserId) -> Float -> TrainEntity -> Effect.WebGL.Entity
+trainEntity { nightFactor, viewMatrix, texture, lights, depth } maybeUserId shaderTime trainData =
     let
         ( tileW, tileH ) =
             Coord.toTuple Units.tileSize
@@ -1280,7 +1273,7 @@ trainEntity maybeUserId trainTexture viewMatrix shaderTime trainData =
             Coord.toTuple trainSize
 
         ( textureWidth, textureHeight ) =
-            WebGL.Texture.size trainTexture
+            WebGL.Texture.size texture
 
         offsetX =
             sin (100 * trainData.teleportAmount) * min 1 (trainData.teleportAmount * 3)
@@ -1306,7 +1299,9 @@ trainEntity maybeUserId trainTexture viewMatrix shaderTime trainData =
         Shaders.fragmentShader
         instancedMesh
         { view = viewMatrix
-        , texture = trainTexture
+        , texture = texture
+        , lights = lights
+        , depth = depth
         , textureSize = Vec2.vec2 (toFloat textureWidth) (toFloat textureHeight)
         , color = Vec4.vec4 1 1 1 1
         , userId =
@@ -1322,11 +1317,12 @@ trainEntity maybeUserId trainTexture viewMatrix shaderTime trainData =
             Vec3.vec3
                 (toFloat tileW * trainData.x - (toFloat trainW / 2) + offsetX)
                 (toFloat tileH * trainData.y - (toFloat trainH / 2) - 5)
-                (Grid.tileZ True trainData.y 0)
+                0
         , size0 = Vec2.vec2 (toFloat trainW) y2
         , texturePosition0 = textureX + (trainData.rotationFrame * trainH * textureWidth) |> toFloat
         , primaryColor0 = Color.toInt trainData.color |> toFloat
         , secondaryColor0 = 0
+        , night = nightFactor
         }
 
 
@@ -1583,13 +1579,12 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
 
 
 drawSpeechBubble :
-    WebGL.Texture.Texture
-    -> Mat4
+    RenderData
     -> Effect.Time.Posix
     -> IdDict TrainId Train
     -> Float
     -> List Effect.WebGL.Entity
-drawSpeechBubble texture viewMatrix time trains shaderTime2 =
+drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix } time trains shaderTime2 =
     List.filterMap
         (\{ position, isRadio } ->
             let
@@ -1633,10 +1628,13 @@ drawSpeechBubble texture viewMatrix time trains shaderTime2 =
                                 0
                                 |> Mat4.mul viewMatrix
                         , texture = texture
+                        , lights = lights
+                        , depth = depth
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
                         , time = shaderTime2
+                        , night = nightFactor
                         }
                         |> Just
 

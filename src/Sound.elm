@@ -53,6 +53,7 @@ type Sound
     | Hamster0
     | Hamster1
     | Hamster2
+    | LightSwitch
 
 
 allSounds =
@@ -90,6 +91,7 @@ allSounds =
     , Hamster0
     , Hamster1
     , Hamster2
+    , LightSwitch
     ]
 
 
@@ -261,6 +263,9 @@ load onLoad =
 
                         Hamster2 ->
                             "hamster2.mp3"
+
+                        LightSwitch ->
+                            "light-switch.mp3"
                    )
             )
                 |> Audio.loadAudio (onLoad sound)

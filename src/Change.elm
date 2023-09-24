@@ -9,6 +9,7 @@ module Change exposing
     , LoggedIn_
     , Report
     , ServerChange(..)
+    , TimeOfDay(..)
     , UserStatus(..)
     )
 
@@ -26,7 +27,7 @@ import GridCell
 import Id exposing (AnimalId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
-import MailEditor exposing (MailStatus)
+import MailEditor exposing (BackendMail, MailStatus)
 import Point2d exposing (Point2d)
 import Train exposing (TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
@@ -61,6 +62,7 @@ type LocalChange
     | AdminChange AdminChange
     | ReportVandalism Report
     | RemoveReport (Coord WorldUnit)
+    | SetTimeOfDay TimeOfDay
 
 
 type AdminChange
@@ -116,7 +118,11 @@ type ServerChange
 
 type UserStatus
     = LoggedIn LoggedIn_
-    | NotLoggedIn
+    | NotLoggedIn NotLoggedIn_
+
+
+type alias NotLoggedIn_ =
+    { timeOfDay : TimeOfDay }
 
 
 type alias LoggedIn_ =
@@ -131,7 +137,14 @@ type alias LoggedIn_ =
     , adminData : Maybe AdminData
     , reports : List Report
     , isGridReadOnly : Bool
+    , timeOfDay : TimeOfDay
     }
+
+
+type TimeOfDay
+    = Automatic
+    | AlwaysDay
+    | AlwaysNight
 
 
 type alias Report =
@@ -142,6 +155,7 @@ type alias AdminData =
     { lastCacheRegeneration : Maybe Effect.Time.Posix
     , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
     , reported : IdDict UserId (Nonempty BackendReport)
+    , mail : IdDict MailId BackendMail
     }
 
 

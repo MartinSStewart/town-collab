@@ -30,7 +30,6 @@ module Grid exposing
     , removeUser
     , tileMesh
     , tileMeshHelper2
-    , tileZ
     , toggleRailSplit
     , worldToCellAndLocalCoord
     , worldToCellAndLocalPoint
@@ -508,92 +507,79 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                     opacityAndUserId =
                         Shaders.opacityAndUserId opacity userId
                 in
-                (case data.railPath of
+                case data.railPath of
                     RailSplitPath pathData ->
                         if AssocSet.member position railSplitToggled then
-                            tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
+                            tileMeshHelper2 opacityAndUserId colors (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
 
                         else
-                            case data.texturePosition of
-                                Just texturePosition ->
-                                    tileMeshHelper2 opacityAndUserId colors False 0 (Coord.multiply Units.tileSize position2) 1 texturePosition data.size
-
-                                Nothing ->
-                                    []
+                            tileMeshHelper2 opacityAndUserId colors (Coord.multiply Units.tileSize position2) 1 data.texturePosition data.size
 
                     _ ->
-                        case data.texturePosition of
-                            Just texturePosition ->
-                                tileMeshHelper2
-                                    opacityAndUserId
-                                    colors
-                                    False
-                                    0
-                                    (Coord.multiply Units.tileSize position2)
-                                    (case value of
-                                        BigText _ ->
-                                            2
+                        tileMeshHelper2
+                            opacityAndUserId
+                            colors
+                            (Coord.multiply Units.tileSize position2)
+                            (case value of
+                                BigText _ ->
+                                    2
 
-                                        _ ->
-                                            1
-                                    )
-                                    texturePosition
-                                    data.size
-
-                            Nothing ->
-                                []
-                )
-                    ++ (case data.texturePositionTopLayer of
-                            Just topLayer ->
-                                if value == PostOffice && Just userId /= maybeCurrentUserId then
-                                    let
-                                        text =
-                                            Sprite.textWithZAndOpacityAndUserId
-                                                opacityAndUserId
-                                                colors.secondaryColor
-                                                1
-                                                (case IdDict.get userId users of
-                                                    Just user ->
-                                                        let
-                                                            name =
-                                                                DisplayName.toString user.name
-                                                        in
-                                                        String.left 5 name ++ "\n" ++ String.dropLeft 5 name
-
-                                                    Nothing ->
-                                                        ""
-                                                )
-                                                -5
-                                                (Coord.multiply position2 Units.tileSize
-                                                    |> Coord.plus (Coord.xy 15 19)
-                                                )
-                                                (tileZ True (toFloat (Coord.yRaw position2)) 6)
-                                    in
-                                    text
-                                        ++ tileMeshHelper2
-                                            opacityAndUserId
-                                            colors
-                                            True
-                                            topLayer.yOffset
-                                            (Coord.multiply Units.tileSize position2)
-                                            1
-                                            (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
-                                            data.size
-
-                                else
-                                    tileMeshHelper2
-                                        opacityAndUserId
-                                        colors
-                                        True
-                                        topLayer.yOffset
-                                        (Coord.multiply Units.tileSize position2)
-                                        1
-                                        topLayer.texturePosition
-                                        data.size
-
-                            Nothing ->
-                                []
-                       )
+                                _ ->
+                                    1
+                            )
+                            data.texturePosition
+                            data.size
+                --++ (case data.texturePositionTopLayer of
+                --        Just topLayer ->
+                --            if value == PostOffice && Just userId /= maybeCurrentUserId then
+                --                let
+                --                    text =
+                --                        Sprite.textWithZAndOpacityAndUserId
+                --                            opacityAndUserId
+                --                            colors.secondaryColor
+                --                            1
+                --                            (case IdDict.get userId users of
+                --                                Just user ->
+                --                                    let
+                --                                        name =
+                --                                            DisplayName.toString user.name
+                --                                    in
+                --                                    String.left 5 name ++ "\n" ++ String.dropLeft 5 name
+                --
+                --                                Nothing ->
+                --                                    ""
+                --                            )
+                --                            -5
+                --                            (Coord.multiply position2 Units.tileSize
+                --                                |> Coord.plus (Coord.xy 15 19)
+                --                            )
+                --                            (tileZ True (toFloat (Coord.yRaw position2)) 6)
+                --                in
+                --                text
+                --                    ++ tileMeshHelper2
+                --                        opacityAndUserId
+                --                        colors
+                --                        True
+                --                        topLayer.yOffset
+                --                        (Coord.multiply Units.tileSize position2)
+                --                        1
+                --                        (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
+                --                        data.size
+                --
+                --            else
+                --                tileMeshHelper2
+                --                    opacityAndUserId
+                --                    colors
+                --                    True
+                --                    topLayer.yOffset
+                --                    (Coord.multiply Units.tileSize position2)
+                --                    1
+                --                    topLayer.texturePosition
+                --                    data.size
+                --
+                --        Nothing ->
+                --            []
+                --   )
 
             else
                 []
@@ -762,72 +748,39 @@ tileMesh tile position scale colors =
         Sprite.sprite (Coord.plus (Coord.xy 6 -16) position) (Coord.xy 28 27) (Coord.xy 504 42) (Coord.xy 28 27)
 
     else
-        (case data.texturePosition of
-            Just texturePosition ->
-                tileMeshHelper2
-                    Shaders.opaque
-                    colors
-                    False
-                    0
-                    position
-                    (case tile of
-                        BigText _ ->
-                            2 * scale
+        tileMeshHelper2
+            Shaders.opaque
+            colors
+            position
+            (case tile of
+                BigText _ ->
+                    2 * scale
 
-                        _ ->
-                            scale
-                    )
-                    texturePosition
-                    data.size
-
-            Nothing ->
-                []
-        )
-            ++ (case data.texturePositionTopLayer of
-                    Just topLayer ->
-                        tileMeshHelper2 Shaders.opaque colors True topLayer.yOffset position scale topLayer.texturePosition data.size
-
-                    Nothing ->
-                        []
-               )
+                _ ->
+                    scale
+            )
+            data.texturePosition
+            data.size
 
 
 tileMeshHelper2 :
     Float
     -> Colors
-    -> Bool
-    -> Float
     -> Coord unit2
     -> Int
     -> Coord unit
     -> Coord unit
     -> List Vertex
-tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } isTopLayer yOffset position scale texturePosition size =
+tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale texturePosition size =
     Sprite.spriteWithZAndOpacityAndUserId
         opacityAndUserId
         primaryColor
         secondaryColor
         position
-        (tileZ
-            isTopLayer
-            ((toFloat (Coord.yRaw position) + yOffset) / toFloat Units.tileHeight)
-            (Coord.yRaw size)
-        )
+        0
         (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
         texturePosition
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
-
-
-tileZ : Bool -> Float -> Int -> Float
-tileZ isTopLayer y height =
-    (if isTopLayer then
-        -0.5
-
-     else
-        0
-    )
-        + (y + toFloat height)
-        / -1000
 
 
 removeUser : Id UserId -> Grid -> Grid

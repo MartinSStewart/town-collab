@@ -20,6 +20,7 @@ module Types exposing
     , LoadingLocalModel(..)
     , LoginRequestedBy(..)
     , MouseButtonState(..)
+    , Page(..)
     , RemovedTileParticle
     , SubmitStatus(..)
     , ToBackend(..)
@@ -30,14 +31,16 @@ module Types exposing
     , UpdateMeshesData
     , UserSettings
     , ViewPoint(..)
+    , WorldPage2
     )
 
+import AdminPage
 import Animal exposing (Animal)
 import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsDisabled, BackendReport, Change, UserStatus)
+import Change exposing (AreTrainsDisabled, BackendReport, Change, TimeOfDay, UserStatus)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -106,6 +109,8 @@ type alias FrontendLoading =
     , musicVolume : Int
     , soundEffectVolume : Int
     , texture : Maybe Texture
+    , lightsTexture : Maybe Texture
+    , depthTexture : Maybe Texture
     , simplexNoiseLookup : Maybe Texture
     , localModel : LoadingLocalModel
     , hasCmdKey : Bool
@@ -145,8 +150,12 @@ type alias FrontendLoaded =
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
     , texture : Texture
+    , lightsTexture : Texture
+    , depthTexture : Texture
     , simplexNoiseLookup : Texture
     , trainTexture : Maybe Texture
+    , trainLightsTexture : Maybe Texture
+    , trainDepthTexture : Maybe Texture
     , pressedKeys : List Keyboard.Key
     , windowSize : Coord Pixels
     , cssWindowSize : Coord CssPixels
@@ -169,7 +178,6 @@ type alias FrontendLoaded =
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Effect.Time.Posix
-    , mailEditor : Maybe Model
     , lastMailEditorToggle : Maybe Effect.Time.Posix
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
@@ -203,7 +211,6 @@ type alias FrontendLoaded =
     , lastReceivedMail : Maybe Time.Posix
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
-    , showMap : Bool
     , showInviteTree : Bool
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
@@ -211,7 +218,19 @@ type alias FrontendLoaded =
     , lastReportTilePlaced : Maybe Effect.Time.Posix
     , lastReportTileRemoved : Maybe Effect.Time.Posix
     , hideUi : Bool
+    , lightsSwitched : Maybe Time.Posix
+    , page : Page
     }
+
+
+type Page
+    = MailPage MailEditor.Model
+    | AdminPage AdminPage.Model
+    | WorldPage WorldPage2
+
+
+type alias WorldPage2 =
+    { showMap : Bool }
 
 
 type alias UpdateMeshesData =
@@ -222,7 +241,7 @@ type alias UpdateMeshesData =
     , windowSize : Coord Pixels
     , devicePixelRatio : Float
     , zoomFactor : Int
-    , mailEditor : Maybe MailEditor.Model
+    , page : Page
     , mouseMiddle : MouseButtonState
     , viewPoint : ViewPoint
     , trains : IdDict TrainId Train
@@ -297,16 +316,18 @@ type UiHover
     | YouGotMailButton
     | ShowMapButton
     | AllowEmailNotificationsCheckbox
-    | ResetConnectionsButton
     | UsersOnlineButton
     | CopyPositionUrlButton
     | ReportUserButton
-    | ToggleIsGridReadOnlyButton
-    | ToggleTrainsDisabledButton
     | ZoomInButton
     | ZoomOutButton
     | RotateLeftButton
     | RotateRightButton
+    | AutomaticTimeOfDayButton
+    | AlwaysDayTimeOfDayButton
+    | AlwaysNightTimeOfDayButton
+    | ShowAdminPage
+    | AdminHover AdminPage.Hover
 
 
 type alias BackendModel =
@@ -376,6 +397,7 @@ type alias BackendUserData =
     , acceptedInvites : IdDict UserId ()
     , name : DisplayName
     , allowEmailNotifications : Bool
+    , timeOfDay : TimeOfDay
     }
 
 
@@ -392,8 +414,12 @@ type FrontendMsg_
     | UrlChanged Url
     | NoOpFrontendMsg
     | TextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | LightsTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | DepthTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | SimplexLookupTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | TrainLightsTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
+    | TrainDepthTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | KeyMsg Keyboard.Msg
     | KeyDown Keyboard.RawKey
     | WindowResized (Coord CssPixels)

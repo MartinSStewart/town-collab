@@ -69,7 +69,7 @@ import Tile exposing (Tile, TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
-import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
+import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
 import Ui
 import Units exposing (CellUnit, WorldUnit)
 import WebGL.Texture
@@ -98,6 +98,22 @@ update msg loadingModel =
             case result of
                 Ok texture ->
                     ( Loading { loadingModel | texture = Just texture }, Command.none, Sound.load SoundLoaded )
+
+                Err _ ->
+                    ( Loading loadingModel, Command.none, Audio.cmdNone )
+
+        LightsTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( Loading { loadingModel | lightsTexture = Just texture }, Command.none, Audio.cmdNone )
+
+                Err _ ->
+                    ( Loading loadingModel, Command.none, Audio.cmdNone )
+
+        DepthTextureLoaded result ->
+            case result of
+                Ok texture ->
+                    ( Loading { loadingModel | depthTexture = Just texture }, Command.none, Audio.cmdNone )
 
                 Err _ ->
                     ( Loading loadingModel, Command.none, Audio.cmdNone )
@@ -169,6 +185,24 @@ update msg loadingModel =
                     }
                     "/texture.png"
                     |> Effect.Task.attempt TextureLoaded
+                , Effect.WebGL.Texture.loadWith
+                    { magnify = Effect.WebGL.Texture.nearest
+                    , minify = Effect.WebGL.Texture.nearest
+                    , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+                    , verticalWrap = Effect.WebGL.Texture.clampToEdge
+                    , flipY = False
+                    }
+                    "/lights.png"
+                    |> Effect.Task.attempt LightsTextureLoaded
+                , Effect.WebGL.Texture.loadWith
+                    { magnify = Effect.WebGL.Texture.nearest
+                    , minify = Effect.WebGL.Texture.nearest
+                    , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+                    , verticalWrap = Effect.WebGL.Texture.clampToEdge
+                    , flipY = False
+                    }
+                    "/depth.png"
+                    |> Effect.Task.attempt DepthTextureLoaded
                 , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
                 ]
             , Audio.cmdNone
@@ -195,12 +229,14 @@ tryLoading frontendLoading =
             Nothing
 
         LoadedLocalModel loadedLocalModel ->
-            Maybe.map3
-                (\time texture simplexNoiseLookup () ->
-                    loadedInit time frontendLoading texture simplexNoiseLookup loadedLocalModel
+            Maybe.map5
+                (\time texture lightsTexture depthTexture simplexNoiseLookup () ->
+                    loadedInit time frontendLoading texture lightsTexture depthTexture simplexNoiseLookup loadedLocalModel
                 )
                 frontendLoading.time
                 frontendLoading.texture
+                frontendLoading.lightsTexture
+                frontendLoading.depthTexture
                 frontendLoading.simplexNoiseLookup
 
 
@@ -209,9 +245,11 @@ loadedInit :
     -> FrontendLoading
     -> Texture
     -> Texture
+    -> Texture
+    -> Texture
     -> LoadedLocalModel_
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
-loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
+loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup loadedLocalModel =
     let
         currentTool2 =
             HandTool
@@ -241,7 +279,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , windowSize = loading.windowSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , mailEditor = Nothing
+            , page = WorldPage { showMap = False }
             , viewPoint = viewpoint
             , trains = loadedLocalModel.trains
             , time = time
@@ -256,8 +294,12 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , viewPoint = viewpoint
             , viewPointLastInterval = Point2d.origin
             , texture = texture
+            , lightsTexture = lightsTexture
+            , depthTexture = depthTexture
             , simplexNoiseLookup = simplexNoiseLookup
             , trainTexture = Nothing
+            , trainLightsTexture = Nothing
+            , trainDepthTexture = Nothing
             , pressedKeys = []
             , windowSize = loading.windowSize
             , cssWindowSize = loading.cssWindowSize
@@ -280,13 +322,13 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , removedTileParticles = []
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
-            , mailEditor =
+            , page =
                 case ( loading.showInbox, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
                     ( True, LoggedIn _ ) ->
-                        MailEditor.init Nothing |> Just
+                        MailEditor.init Nothing |> MailPage
 
                     _ ->
-                        Nothing
+                        WorldPage { showMap = False }
             , lastMailEditorToggle = Nothing
             , currentTool = currentTool2
             , lastTileRotation = []
@@ -340,7 +382,6 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , lastReceivedMail = Nothing
             , isReconnecting = False
             , lastCheckConnection = time
-            , showMap = False
             , showInviteTree = False
             , contextMenu = Nothing
             , previousUpdateMeshData = previousUpdateMeshData
@@ -351,6 +392,7 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             , lastReportTilePlaced = Nothing
             , lastReportTileRemoved = Nothing
             , hideUi = False
+            , lightsSwitched = Nothing
             }
                 |> setCurrentTool HandToolButton
     in
@@ -365,6 +407,24 @@ loadedInit time loading texture simplexNoiseLookup loadedLocalModel =
             }
             "/trains.png"
             |> Effect.Task.attempt TrainTextureLoaded
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/train-lights.png"
+            |> Effect.Task.attempt TrainLightsTextureLoaded
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/train-depth.png"
+            |> Effect.Task.attempt TrainDepthTextureLoaded
         , Effect.Lamdera.sendToBackend PingRequest
         ]
     )
@@ -559,7 +619,7 @@ updateMeshes newModel =
             , windowSize = newModel.windowSize
             , devicePixelRatio = newModel.devicePixelRatio
             , zoomFactor = newModel.zoomFactor
-            , mailEditor = newModel.mailEditor
+            , page = newModel.page
             , mouseMiddle = newModel.mouseMiddle
             , viewPoint = newModel.viewPoint
             , trains = newModel.trains
@@ -574,7 +634,7 @@ mouseWorldPosition :
         , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
         , devicePixelRatio : Float
         , zoomFactor : Int
-        , mailEditor : Maybe b
+        , page : Page
         , mouseMiddle : MouseButtonState
         , viewPoint : ViewPoint
         , trains : IdDict TrainId Train
@@ -604,7 +664,7 @@ cursorPosition :
             , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
             , devicePixelRatio : Float
             , zoomFactor : Int
-            , mailEditor : Maybe c
+            , page : Page
             , mouseMiddle : MouseButtonState
             , viewPoint : ViewPoint
             , trains : IdDict TrainId Train
@@ -760,7 +820,7 @@ getReports localModel =
         LoggedIn loggedIn ->
             loggedIn.reports
 
-        NotLoggedIn ->
+        NotLoggedIn _ ->
             []
 
 
@@ -775,7 +835,7 @@ getAdminReports localModel =
                 Nothing ->
                     IdDict.empty
 
-        NotLoggedIn ->
+        NotLoggedIn _ ->
             IdDict.empty
 
 
@@ -989,8 +1049,13 @@ loadingCanvasView model =
          ]
             ++ mouseListeners model
         )
-        (case Maybe.andThen Effect.WebGL.Texture.unwrap model.texture of
-            Just texture ->
+        (case
+            ( Maybe.andThen Effect.WebGL.Texture.unwrap model.texture
+            , Maybe.andThen Effect.WebGL.Texture.unwrap model.lightsTexture
+            , Maybe.andThen Effect.WebGL.Texture.unwrap model.depthTexture
+            )
+         of
+            ( Just texture, Just lightsTexture, Just depth ) ->
                 let
                     textureSize =
                         WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -1008,10 +1073,13 @@ loadingCanvasView model =
                             |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                             |> Coord.translateMat4 (touchDevicesNotSupportedPosition model.windowSize)
                     , texture = texture
+                    , lights = lightsTexture
+                    , depth = depth
                     , textureSize = textureSize
                     , color = Vec4.vec4 1 1 1 1
                     , userId = Shaders.noUserIdSelected
                     , time = 0
+                    , night = 0
                     }
                     :: (case tryLoading model of
                             Just _ ->
@@ -1033,10 +1101,13 @@ loadingCanvasView model =
                                             |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                                             |> Coord.translateMat4 loadingTextPosition2
                                     , texture = texture
+                                    , lights = lightsTexture
+                                    , depth = depth
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected
                                     , time = 0
+                                    , night = 0
                                     }
                                 ]
 
@@ -1055,15 +1126,18 @@ loadingCanvasView model =
                                                 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
                                             |> Coord.translateMat4 (loadingTextPosition model.windowSize)
                                     , texture = texture
+                                    , lights = lightsTexture
+                                    , depth = depth
                                     , textureSize = textureSize
                                     , color = Vec4.vec4 1 1 1 1
                                     , userId = Shaders.noUserIdSelected
                                     , time = 0
+                                    , night = 0
                                     }
                                 ]
                        )
 
-            Nothing ->
+            _ ->
                 []
         )
 

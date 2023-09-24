@@ -68,7 +68,7 @@ currentUserId model =
         LoggedIn loggedIn ->
             Just loggedIn.userId
 
-        NotLoggedIn ->
+        NotLoggedIn _ ->
             Nothing
 
 
@@ -210,7 +210,7 @@ updateLocalChange localChange model =
                     , TilesRemoved change.removed
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         LocalRedo ->
@@ -226,7 +226,7 @@ updateLocalChange localChange model =
                         Nothing ->
                             model
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     model
             , NoOutMsg
             )
@@ -248,7 +248,7 @@ updateLocalChange localChange model =
                         Nothing ->
                             model
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     model
             , NoOutMsg
             )
@@ -258,7 +258,7 @@ updateLocalChange localChange model =
                 LoggedIn loggedIn ->
                     { model | userStatus = Undo.add loggedIn |> LoggedIn }
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     model
             , NoOutMsg
             )
@@ -271,7 +271,7 @@ updateLocalChange localChange model =
                 LoggedIn loggedIn ->
                     pickupCow loggedIn.userId cowId position time model
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         DropCow cowId position _ ->
@@ -279,7 +279,7 @@ updateLocalChange localChange model =
                 LoggedIn loggedIn ->
                     dropCow loggedIn.userId cowId position model
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         MoveCursor position ->
@@ -287,7 +287,7 @@ updateLocalChange localChange model =
                 LoggedIn loggedIn ->
                     moveCursor loggedIn.userId position model
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         ChangeHandColor colors ->
@@ -303,7 +303,7 @@ updateLocalChange localChange model =
                     , HandColorOrNameChanged loggedIn.userId
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         ToggleRailSplit coord ->
@@ -322,7 +322,7 @@ updateLocalChange localChange model =
                     , HandColorOrNameChanged loggedIn.userId
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         SubmitMail submitMail ->
@@ -343,7 +343,7 @@ updateLocalChange localChange model =
                     , NoOutMsg
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         UpdateDraft updateDraft ->
@@ -360,7 +360,7 @@ updateLocalChange localChange model =
                     , NoOutMsg
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         TeleportHomeTrainRequest trainId time ->
@@ -406,7 +406,7 @@ updateLocalChange localChange model =
                             }
                                 |> LoggedIn
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             model.userStatus
               }
             , NoOutMsg
@@ -417,7 +417,7 @@ updateLocalChange localChange model =
                 LoggedIn loggedIn ->
                     { model | userStatus = LoggedIn { loggedIn | allowEmailNotifications = allow } }
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     model
             , NoOutMsg
             )
@@ -433,7 +433,7 @@ updateLocalChange localChange model =
                                 model.cursors
                     }
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     model
             , NoOutMsg
             )
@@ -445,7 +445,7 @@ updateLocalChange localChange model =
                     , NoOutMsg
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         RemoveReport position ->
@@ -462,7 +462,7 @@ updateLocalChange localChange model =
                     , NoOutMsg
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         AdminChange adminChange ->
@@ -490,7 +490,7 @@ updateLocalChange localChange model =
                                 Nothing ->
                                     model
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             model
                     , NoOutMsg
                     )
@@ -502,11 +502,21 @@ updateLocalChange localChange model =
                             , NoOutMsg
                             )
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             ( model, NoOutMsg )
 
                 AdminSetTrainsDisabled trainsDisabled ->
                     ( { model | trainsDisabled = trainsDisabled }, NoOutMsg )
+
+        SetTimeOfDay timeOfDay ->
+            ( case model.userStatus of
+                LoggedIn loggedIn ->
+                    { model | userStatus = LoggedIn { loggedIn | timeOfDay = timeOfDay } }
+
+                NotLoggedIn notLoggedIn ->
+                    { model | userStatus = NotLoggedIn { notLoggedIn | timeOfDay = timeOfDay } }
+            , NoOutMsg
+            )
 
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -657,7 +667,7 @@ updateServerChange serverChange model =
                     , ReceivedMail
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         ServerViewedMail mailId userId ->
@@ -697,7 +707,7 @@ updateServerChange serverChange model =
                             else
                                 model.userStatus
 
-                        NotLoggedIn ->
+                        NotLoggedIn _ ->
                             model.userStatus
               }
             , NoOutMsg
@@ -723,7 +733,7 @@ updateServerChange serverChange model =
                     , NoOutMsg
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         ServerVandalismReportedToAdmin reportedBy backendReport ->
@@ -749,7 +759,7 @@ updateServerChange serverChange model =
                     , NoOutMsg
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         ServerVandalismRemovedToAdmin reportedBy position ->
@@ -775,7 +785,7 @@ updateServerChange serverChange model =
                     , NoOutMsg
                     )
 
-                NotLoggedIn ->
+                NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
         ServerSetTrainsDisabled areTrainsDisabled ->
