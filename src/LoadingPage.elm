@@ -394,6 +394,8 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastReportTileRemoved = Nothing
             , hideUi = False
             , lightsSwitched = Nothing
+            , showAdminPage = False
+            , adminPageMailPage = 0
             }
                 |> setCurrentTool HandToolButton
     in

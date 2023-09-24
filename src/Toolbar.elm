@@ -10,6 +10,7 @@ module Toolbar exposing
     , view
     )
 
+import AdminPage
 import AssocList
 import Change exposing (AdminData, AreTrainsDisabled(..), LoggedIn_, TimeOfDay(..), UserStatus(..))
 import Color exposing (Color, Colors)
@@ -26,7 +27,7 @@ import IdDict exposing (IdDict)
 import List.Extra as List
 import List.Nonempty
 import LocalGrid
-import MailEditor
+import MailEditor exposing (MailStatus(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -50,7 +51,36 @@ view model =
         localModel : LocalGrid.LocalGrid_
         localModel =
             LocalGrid.localModel model.localModel
+    in
+    case ( localModel.userStatus, model.mailEditor, model.showAdminPage ) of
+        ( LoggedIn loggedIn, Just mailEditor, False ) ->
+            MailEditor.ui
+                (isDisconnected model)
+                model.windowSize
+                MailEditorHover
+                localModel.users
+                loggedIn.inbox
+                mailEditor
 
+        ( LoggedIn loggedIn, _, True ) ->
+            case loggedIn.adminData of
+                Just adminData ->
+                    AdminPage.adminView
+                        model.windowSize
+                        loggedIn.isGridReadOnly
+                        adminData
+                        model.adminPageMailPage
+                        localModel
+
+                Nothing ->
+                    normalView model
+
+        _ ->
+            normalView model
+
+
+normalView model =
+    let
         otherUsersOnline =
             case localModel.userStatus of
                 LoggedIn { userId } ->
@@ -58,6 +88,10 @@ view model =
 
                 NotLoggedIn _ ->
                     IdDict.size localModel.cursors
+
+        localModel : LocalGrid.LocalGrid_
+        localModel =
+            LocalGrid.localModel model.localModel
 
         toolbarElement =
             if model.hideUi then
@@ -67,7 +101,7 @@ view model =
                 Ui.el
                     { padding = Ui.noPadding
                     , inFront = []
-                    , borderAndFill = borderAndFill
+                    , borderAndFill = Ui.defaultElBorderAndFill
                     }
                     (case localModel.userStatus of
                         LoggedIn loggedIn ->
@@ -101,185 +135,174 @@ view model =
                             loginToolbarUi model.pressedSubmitEmail model.loginTextInput
                     )
     in
-    case ( localModel.userStatus, model.mailEditor ) of
-        ( LoggedIn loggedIn, Just mailEditor ) ->
-            MailEditor.ui
-                (isDisconnected model)
-                model.windowSize
-                MailEditorHover
-                localModel.users
-                loggedIn.inbox
-                mailEditor
+    Ui.bottomCenter
+        { size = model.windowSize
+        , inFront =
+            (if model.hideUi then
+                []
 
-        _ ->
-            Ui.bottomCenter
-                { size = model.windowSize
-                , inFront =
-                    (if model.hideUi then
-                        []
+             else
+                [ case model.contextMenu of
+                    Just contextMenu ->
+                        contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
 
-                     else
-                        [ case model.contextMenu of
-                            Just contextMenu ->
-                                contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
+                    Nothing ->
+                        Ui.none
+                , if model.showInviteTree then
+                    Ui.topRight
+                        { size = model.windowSize }
+                        (Ui.el
+                            { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
+                            (User.drawInviteTree localModel.users localModel.inviteTree)
+                        )
 
-                            Nothing ->
-                                Ui.none
-                        , if model.showInviteTree then
-                            Ui.topRight
-                                { size = model.windowSize }
-                                (Ui.el
-                                    { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
-                                    (User.drawInviteTree localModel.users localModel.inviteTree)
-                                )
+                  else
+                    Ui.none
+                , if isDisconnected model then
+                    MailEditor.disconnectWarning model.windowSize
 
-                          else
-                            Ui.none
-                        , if isDisconnected model then
-                            MailEditor.disconnectWarning model.windowSize
-
-                          else
-                            Ui.topRight
-                                { size = model.windowSize }
-                                (Ui.row
-                                    { spacing = 5, padding = Ui.noPadding }
-                                    [ case localModel.userStatus of
-                                        LoggedIn loggedIn ->
-                                            case ( loggedIn.isGridReadOnly, localModel.trainsDisabled ) of
-                                                ( True, TrainsEnabled ) ->
-                                                    Ui.el
-                                                        { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                        (Ui.colorText Color.white "Placing tiles currently disabled")
-
-                                                ( True, TrainsDisabled ) ->
-                                                    Ui.el
-                                                        { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                        (Ui.colorText Color.white "Trains and placing tiles disabled")
-
-                                                ( False, TrainsDisabled ) ->
-                                                    Ui.el
-                                                        { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                        (Ui.colorText Color.white "Trains currently disabled")
-
-                                                ( False, TrainsEnabled ) ->
-                                                    Ui.none
-
-                                        NotLoggedIn _ ->
-                                            Ui.none
-                                    , Ui.button
-                                        { id = UsersOnlineButton
-                                        , padding = Ui.paddingXY 10 4
-                                        }
-                                        (if otherUsersOnline == 1 then
-                                            Ui.text "1 user online"
-
-                                         else
-                                            Ui.text (String.fromInt otherUsersOnline ++ " users online")
-                                        )
-                                    ]
-                                )
-                        , Ui.row
-                            { padding = Ui.noPadding, spacing = 4 }
-                            [ case model.topMenuOpened of
-                                Just (SettingsMenu nameTextInput) ->
-                                    case localModel.userStatus of
-                                        LoggedIn loggedIn ->
-                                            settingsView
-                                                model.musicVolume
-                                                model.soundEffectVolume
-                                                nameTextInput
-                                                localModel
-                                                loggedIn
-
-                                        NotLoggedIn _ ->
-                                            Ui.none
-
-                                Just LoggedOutSettingsMenu ->
-                                    case localModel.userStatus of
-                                        LoggedIn loggedIn ->
-                                            Ui.none
-
-                                        NotLoggedIn notLoggedIn ->
-                                            loggedOutSettingsView notLoggedIn.timeOfDay model.musicVolume model.soundEffectVolume
-
-                                _ ->
-                                    Ui.button
-                                        { id = SettingsButton
-                                        , padding = Ui.paddingXY 10 4
-                                        }
-                                        (Ui.text "Settings")
-                            , case localModel.userStatus of
+                  else
+                    Ui.topRight
+                        { size = model.windowSize }
+                        (Ui.row
+                            { spacing = 5, padding = Ui.noPadding }
+                            [ case localModel.userStatus of
                                 LoggedIn loggedIn ->
-                                    inviteView
-                                        (model.topMenuOpened == Just InviteMenu)
-                                        loggedIn.emailAddress
-                                        model.inviteTextInput
-                                        model.inviteSubmitStatus
+                                    case ( loggedIn.isGridReadOnly, localModel.trainsDisabled ) of
+                                        ( True, TrainsEnabled ) ->
+                                            Ui.el
+                                                { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                (Ui.colorText Color.white "Placing tiles currently disabled")
+
+                                        ( True, TrainsDisabled ) ->
+                                            Ui.el
+                                                { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                (Ui.colorText Color.white "Trains and placing tiles disabled")
+
+                                        ( False, TrainsDisabled ) ->
+                                            Ui.el
+                                                { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
+                                                (Ui.colorText Color.white "Trains currently disabled")
+
+                                        ( False, TrainsEnabled ) ->
+                                            Ui.none
 
                                 NotLoggedIn _ ->
                                     Ui.none
-                            , case localModel.userStatus of
-                                LoggedIn loggedIn ->
-                                    let
-                                        unviewedMail =
-                                            IdDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
-                                    in
-                                    if IdDict.isEmpty unviewedMail then
-                                        Ui.none
+                            , Ui.button
+                                { id = UsersOnlineButton
+                                , padding = Ui.paddingXY 10 4
+                                }
+                                (if otherUsersOnline == 1 then
+                                    Ui.text "1 user online"
 
-                                    else
-                                        Ui.customButton
-                                            { id = YouGotMailButton
-                                            , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
-                                            , borderAndFill = Ui.defaultButtonBorderAndFill
-                                            , borderAndFillFocus = Ui.defaultButtonBorderAndFill
-                                            , inFront = []
-                                            }
-                                            (Ui.row
-                                                { spacing = 4, padding = Ui.noPadding }
-                                                [ Ui.text "You got mail"
-                                                , Ui.el
-                                                    { padding = Ui.paddingXY 8 0
-                                                    , inFront = []
-                                                    , borderAndFill = FillOnly (Color.rgb255 255 50 50)
-                                                    }
-                                                    (Ui.colorText Color.white (String.fromInt (IdDict.size unviewedMail)))
-                                                ]
-                                            )
-
-                                NotLoggedIn _ ->
-                                    Ui.none
+                                 else
+                                    Ui.text (String.fromInt otherUsersOnline ++ " users online")
+                                )
                             ]
-                        ]
-                    )
-                        ++ (if model.showMap then
-                                [ let
-                                    mapSize2 =
-                                        mapSize model.windowSize
-                                  in
-                                  Ui.el
-                                    { padding =
-                                        { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
-                                        , bottomRight = Coord.origin
-                                        }
-                                    , borderAndFill =
-                                        BorderAndFill
-                                            { borderWidth = 2
-                                            , borderColor = Color.outlineColor
-                                            , fillColor = Color.fillColor
-                                            }
-                                    , inFront = []
-                                    }
+                        )
+                , Ui.row
+                    { padding = Ui.noPadding, spacing = 4 }
+                    [ case model.topMenuOpened of
+                        Just (SettingsMenu nameTextInput) ->
+                            case localModel.userStatus of
+                                LoggedIn loggedIn ->
+                                    settingsView
+                                        model.musicVolume
+                                        model.soundEffectVolume
+                                        nameTextInput
+                                        localModel
+                                        loggedIn
+
+                                NotLoggedIn _ ->
                                     Ui.none
-                                    |> Ui.ignoreInputs
-                                    |> Ui.center { size = model.windowSize }
-                                ]
+
+                        Just LoggedOutSettingsMenu ->
+                            case localModel.userStatus of
+                                LoggedIn loggedIn ->
+                                    Ui.none
+
+                                NotLoggedIn notLoggedIn ->
+                                    loggedOutSettingsView notLoggedIn.timeOfDay model.musicVolume model.soundEffectVolume
+
+                        _ ->
+                            Ui.button
+                                { id = SettingsButton
+                                , padding = Ui.paddingXY 10 4
+                                }
+                                (Ui.text "Settings")
+                    , case localModel.userStatus of
+                        LoggedIn loggedIn ->
+                            inviteView
+                                (model.topMenuOpened == Just InviteMenu)
+                                loggedIn.emailAddress
+                                model.inviteTextInput
+                                model.inviteSubmitStatus
+
+                        NotLoggedIn _ ->
+                            Ui.none
+                    , case localModel.userStatus of
+                        LoggedIn loggedIn ->
+                            let
+                                unviewedMail =
+                                    IdDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
+                            in
+                            if IdDict.isEmpty unviewedMail then
+                                Ui.none
 
                             else
-                                []
-                           )
-                }
-                toolbarElement
+                                Ui.customButton
+                                    { id = YouGotMailButton
+                                    , padding = { topLeft = Coord.xy 10 4, bottomRight = Coord.xy 4 4 }
+                                    , borderAndFill = Ui.defaultButtonBorderAndFill
+                                    , borderAndFillFocus = Ui.defaultButtonBorderAndFill
+                                    , inFront = []
+                                    }
+                                    (Ui.row
+                                        { spacing = 4, padding = Ui.noPadding }
+                                        [ Ui.text "You got mail"
+                                        , Ui.el
+                                            { padding = Ui.paddingXY 8 0
+                                            , inFront = []
+                                            , borderAndFill = FillOnly (Color.rgb255 255 50 50)
+                                            }
+                                            (Ui.colorText Color.white (String.fromInt (IdDict.size unviewedMail)))
+                                        ]
+                                    )
+
+                        NotLoggedIn _ ->
+                            Ui.none
+                    ]
+                ]
+            )
+                ++ (if model.showMap then
+                        [ let
+                            mapSize2 =
+                                mapSize model.windowSize
+                          in
+                          Ui.el
+                            { padding =
+                                { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
+                                , bottomRight = Coord.origin
+                                }
+                            , borderAndFill =
+                                BorderAndFill
+                                    { borderWidth = 2
+                                    , borderColor = Color.outlineColor
+                                    , fillColor = Color.fillColor
+                                    }
+                            , inFront = []
+                            }
+                            Ui.none
+                            |> Ui.ignoreInputs
+                            |> Ui.center { size = model.windowSize }
+                        ]
+
+                    else
+                        []
+                   )
+        }
+        toolbarElement
 
 
 contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover
@@ -459,17 +482,11 @@ settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
                 LowerMusicVolume
                 RaiseMusicVolume
                 musicVolume
-
-        allowEmailNotifications =
-            checkbox
-                AllowEmailNotificationsCheckbox
-                loggedIn.allowEmailNotifications
-                "Allow email notifications"
     in
     Ui.el
         { padding = Ui.paddingXY 8 8
         , inFront = []
-        , borderAndFill = borderAndFill
+        , borderAndFill = Ui.defaultElBorderAndFill
         }
         (Ui.column
             { spacing = 16
@@ -506,112 +523,22 @@ settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
                     , state = nameTextInput.current
                     }
                 ]
-             , allowEmailNotifications
+             , Ui.checkbox
+                AllowEmailNotificationsCheckbox
+                loggedIn.allowEmailNotifications
+                "Allow email notifications"
              ]
                 ++ (case loggedIn.adminData of
-                        Just adminData ->
-                            [ adminView
-                                (Ui.size allowEmailNotifications |> Coord.xRaw)
-                                loggedIn.isGridReadOnly
-                                localModel.trainsDisabled
-                                adminData
+                        Just _ ->
+                            [ Ui.button
+                                { id = ShowAdminPage, padding = Ui.paddingXY 10 4 }
+                                (Ui.text "Open admin")
                             ]
 
                         Nothing ->
                             []
                    )
             )
-        )
-
-
-adminView : Int -> Bool -> AreTrainsDisabled -> AdminData -> Ui.Element UiHover
-adminView parentWidth isGridReadOnly trainsDisabled adminData =
-    Ui.column
-        { spacing = 8, padding = Ui.noPadding }
-        [ Ui.el
-            { padding =
-                { topLeft = Coord.xy parentWidth 2
-                , bottomRight = Coord.origin
-                }
-            , inFront = []
-            , borderAndFill = FillOnly Color.outlineColor
-            }
-            Ui.none
-        , Ui.row { spacing = 0, padding = Ui.noPadding }
-            [ Ui.text "Admin stuff"
-            , if Env.isProduction then
-                Ui.colorText Color.errorColor "(PRODUCTION)"
-
-              else
-                Ui.text "(dev)"
-            ]
-        , checkbox ToggleIsGridReadOnlyButton isGridReadOnly "Read only grid"
-        , checkbox ToggleTrainsDisabledButton (trainsDisabled == TrainsDisabled) "Disable trains"
-        , Ui.text
-            ("Last cache regen: "
-                ++ (case adminData.lastCacheRegeneration of
-                        Just time ->
-                            MailEditor.date time
-
-                        Nothing ->
-                            "Never"
-                   )
-            )
-        , Ui.text "Sessions (id:count)"
-        , Ui.button
-            { id = ResetConnectionsButton
-            , padding = Ui.paddingXY 10 4
-            }
-            (Ui.text "Reset connections")
-        , Ui.column
-            { spacing = 4, padding = Ui.noPadding }
-            (List.map
-                (\data ->
-                    "  "
-                        ++ (case data.userId of
-                                Just userId ->
-                                    Id.toInt userId |> String.fromInt
-
-                                Nothing ->
-                                    "-"
-                           )
-                        ++ ":"
-                        ++ String.fromInt data.connectionCount
-                        |> Ui.text
-                )
-                (List.filter (\a -> a.connectionCount > 0) adminData.userSessions)
-            )
-        ]
-
-
-checkbox : id -> Bool -> String -> Ui.Element id
-checkbox id isChecked text =
-    Ui.customButton
-        { id = id
-        , padding = Ui.paddingXY 2 2
-        , inFront = []
-        , borderAndFill = NoBorderOrFill
-        , borderAndFillFocus = FillOnly Color.fillColor2
-        }
-        (Ui.row
-            { spacing = 8, padding = Ui.noPadding }
-            [ if isChecked then
-                Ui.colorSprite
-                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
-                    , size = Coord.xy 36 36
-                    , texturePosition = Coord.xy 591 72
-                    , textureSize = Coord.xy 36 36
-                    }
-
-              else
-                Ui.colorSprite
-                    { colors = { primaryColor = Color.outlineColor, secondaryColor = Color.fillColor }
-                    , size = Coord.xy 36 36
-                    , texturePosition = Coord.xy 627 72
-                    , textureSize = Coord.xy 36 36
-                    }
-            , Ui.text text
-            ]
         )
 
 
@@ -639,7 +566,7 @@ loggedOutSettingsView timeOfDay musicVolume soundEffectVolume =
     Ui.el
         { padding = Ui.paddingXY 8 8
         , inFront = []
-        , borderAndFill = borderAndFill
+        , borderAndFill = Ui.defaultElBorderAndFill
         }
         (Ui.column
             { spacing = 8
@@ -779,7 +706,7 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
                     ]
         in
         Ui.el
-            { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = borderAndFill }
+            { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = Ui.defaultElBorderAndFill }
             (case inviteSubmitStatus of
                 Submitted inviteEmailAddress ->
                     Ui.column
@@ -805,15 +732,6 @@ inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
             , padding = Ui.paddingXY 10 4
             }
             (Ui.text "Invite")
-
-
-borderAndFill : BorderAndFill
-borderAndFill =
-    BorderAndFill
-        { borderWidth = 2
-        , borderColor = Color.outlineColor
-        , fillColor = Color.fillColor
-        }
 
 
 pressedSubmit : SubmitStatus a -> Bool
@@ -892,7 +810,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                         |> Coord.divide (Coord.xy 2 2)
                         |> Ui.paddingXY2
                 , inFront = []
-                , borderAndFill = borderAndFill
+                , borderAndFill = Ui.defaultElBorderAndFill
                 }
                 submittedText
 

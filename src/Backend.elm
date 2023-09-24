@@ -1521,6 +1521,7 @@ getAdminData userId model =
                         }
                     )
         , reported = model.reported
+        , mail = model.mail
         }
             |> Just
 

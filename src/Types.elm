@@ -218,6 +218,8 @@ type alias FrontendLoaded =
     , lastReportTileRemoved : Maybe Effect.Time.Posix
     , hideUi : Bool
     , lightsSwitched : Maybe Time.Posix
+    , showAdminPage : Bool
+    , adminPageMailPage : Int
     }
 
 
@@ -317,6 +319,9 @@ type UiHover
     | AutomaticTimeOfDayButton
     | AlwaysDayTimeOfDayButton
     | AlwaysNightTimeOfDayButton
+    | ShowAdminPage
+    | CloseAdminPage
+    | AdminMailPageButton Int
 
 
 type alias BackendModel =

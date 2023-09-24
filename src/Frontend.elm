@@ -1195,6 +1195,15 @@ updateLoaded audioData msg model =
                                         AlwaysNightTimeOfDayButton ->
                                             True
 
+                                        ShowAdminPage ->
+                                            True
+
+                                        CloseAdminPage ->
+                                            True
+
+                                        AdminMailPageButton _ ->
+                                            True
+
                                 Nothing ->
                                     True
 
@@ -2895,6 +2904,15 @@ uiUpdate audioData id event model =
                 event
                 (\() -> updateLocalModel (Change.SetTimeOfDay AlwaysNight) model |> handleOutMsg False)
                 model
+
+        ShowAdminPage ->
+            onPress audioData event (\() -> ( { model | showAdminPage = True }, Command.none )) model
+
+        CloseAdminPage ->
+            onPress audioData event (\() -> ( { model | showAdminPage = False }, Command.none )) model
+
+        AdminMailPageButton index ->
+            onPress audioData event (\() -> ( { model | adminPageMailPage = index }, Command.none )) model
 
 
 textInputUpdate :

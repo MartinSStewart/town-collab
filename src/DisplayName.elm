@@ -6,11 +6,13 @@ module DisplayName exposing
     , maxLength
     , minLength
     , nameAndId
+    , nameAndId2
     , toNonemptyString
     , toString
     )
 
 import Id exposing (Id, UserId)
+import IdDict exposing (IdDict)
 import String.Nonempty exposing (NonemptyString(..))
 
 
@@ -72,3 +74,13 @@ default =
 nameAndId : DisplayName -> Id UserId -> String
 nameAndId name userId =
     toString name ++ "#" ++ String.fromInt (Id.toInt userId)
+
+
+nameAndId2 : Id UserId -> IdDict UserId { a | name : DisplayName } -> String
+nameAndId2 userId users =
+    case IdDict.get userId users of
+        Just user ->
+            nameAndId user.name userId
+
+        Nothing ->
+            "Not found"

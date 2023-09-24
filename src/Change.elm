@@ -27,7 +27,7 @@ import GridCell
 import Id exposing (AnimalId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
-import MailEditor exposing (MailStatus)
+import MailEditor exposing (BackendMail, MailStatus)
 import Point2d exposing (Point2d)
 import Train exposing (TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
@@ -155,6 +155,7 @@ type alias AdminData =
     { lastCacheRegeneration : Maybe Effect.Time.Posix
     , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
     , reported : IdDict UserId (Nonempty BackendReport)
+    , mail : IdDict MailId BackendMail
     }
 
 
