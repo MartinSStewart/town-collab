@@ -3936,7 +3936,15 @@ cursorSprite hover model =
                                     { cursorType = DefaultCursor, scale = 1 }
 
                         AdminPage _ ->
-                            { cursorType = DefaultCursor, scale = 1 }
+                            { cursorType =
+                                case hover of
+                                    UiHover _ _ ->
+                                        PointerCursor
+
+                                    _ ->
+                                        DefaultCursor
+                            , scale = 1
+                            }
 
                         WorldPage _ ->
                             { cursorType =
