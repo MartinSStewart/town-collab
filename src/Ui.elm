@@ -3,6 +3,7 @@ module Ui exposing
     , ButtonData
     , Element(..)
     , HoverType(..)
+    , InputType(..)
     , Padding
     , RowColumn
     , UiEvent(..)
@@ -21,7 +22,7 @@ module Ui exposing
     , defaultButtonBorderAndFillFocus
     , defaultElBorderAndFill
     , el
-    , findElement
+    , findInput
     , hover
     , ignoreInputs
     , noPadding
@@ -79,6 +80,14 @@ type alias ButtonData id =
     }
 
 
+type alias TextInputData id =
+    { id : id
+    , width : Int
+    , isValid : Bool
+    , state : TextInput.State
+    }
+
+
 type UiEvent
     = MouseDown { elementPosition : Coord Pixels }
     | MousePressed { elementPosition : Coord Pixels }
@@ -95,12 +104,7 @@ type Element id
         , text : String
         , cachedSize : Coord Pixels
         }
-    | TextInput
-        { id : id
-        , width : Int
-        , isValid : Bool
-        , state : TextInput.State
-        }
+    | TextInput (TextInputData id)
     | Button (ButtonData id) (Element id)
     | Row RowColumn (List (Element id))
     | Column RowColumn (List (Element id))
@@ -983,23 +987,32 @@ columnSize data children =
            )
 
 
-findElement : id -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
-findElement id element =
+type InputType id
+    = ButtonType { data : ButtonData id, position : Coord Pixels }
+    | TextInputType { data : TextInputData id, position : Coord Pixels }
+
+
+findInput : id -> Element id -> Maybe (InputType id)
+findInput id element =
     findButtonHelper id Coord.origin element
 
 
-findButtonHelper : id -> Coord Pixels -> Element id -> Maybe { buttonData : ButtonData id, position : Coord Pixels }
+findButtonHelper : id -> Coord Pixels -> Element id -> Maybe (InputType id)
 findButtonHelper id position element =
     case element of
         Text _ ->
             Nothing
 
-        TextInput _ ->
-            Nothing
+        TextInput data ->
+            if data.id == id then
+                TextInputType { data = data, position = position } |> Just
+
+            else
+                Nothing
 
         Button data _ ->
             if data.id == id then
-                Just { buttonData = data, position = position }
+                ButtonType { data = data, position = position } |> Just
 
             else
                 Nothing

@@ -38,7 +38,7 @@ import TextInput
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Tool exposing (Tool(..))
 import Train
-import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
 import User
@@ -52,8 +52,8 @@ view model =
         localModel =
             LocalGrid.localModel model.localModel
     in
-    case ( localModel.userStatus, model.mailEditor, model.showAdminPage ) of
-        ( LoggedIn loggedIn, Just mailEditor, False ) ->
+    case ( localModel.userStatus, model.page ) of
+        ( LoggedIn loggedIn, MailPage mailEditor ) ->
             MailEditor.ui
                 (isDisconnected model)
                 model.windowSize
@@ -62,14 +62,15 @@ view model =
                 loggedIn.inbox
                 mailEditor
 
-        ( LoggedIn loggedIn, _, True ) ->
+        ( LoggedIn loggedIn, AdminPage adminPage ) ->
             case loggedIn.adminData of
                 Just adminData ->
                     AdminPage.adminView
+                        AdminHover
                         model.windowSize
                         loggedIn.isGridReadOnly
                         adminData
-                        model.adminPageMailPage
+                        adminPage
                         localModel
 
                 Nothing ->
@@ -79,6 +80,7 @@ view model =
             normalView model
 
 
+normalView : FrontendLoaded -> Ui.Element UiHover
 normalView model =
     let
         otherUsersOnline =
@@ -275,31 +277,36 @@ normalView model =
                     ]
                 ]
             )
-                ++ (if model.showMap then
-                        [ let
-                            mapSize2 =
-                                mapSize model.windowSize
-                          in
-                          Ui.el
-                            { padding =
-                                { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
-                                , bottomRight = Coord.origin
-                                }
-                            , borderAndFill =
-                                BorderAndFill
-                                    { borderWidth = 2
-                                    , borderColor = Color.outlineColor
-                                    , fillColor = Color.fillColor
+                ++ (case model.page of
+                        WorldPage worldPage ->
+                            if worldPage.showMap then
+                                [ let
+                                    mapSize2 =
+                                        mapSize model.windowSize
+                                  in
+                                  Ui.el
+                                    { padding =
+                                        { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
+                                        , bottomRight = Coord.origin
+                                        }
+                                    , borderAndFill =
+                                        BorderAndFill
+                                            { borderWidth = 2
+                                            , borderColor = Color.outlineColor
+                                            , fillColor = Color.fillColor
+                                            }
+                                    , inFront = []
                                     }
-                            , inFront = []
-                            }
-                            Ui.none
-                            |> Ui.ignoreInputs
-                            |> Ui.center { size = model.windowSize }
-                        ]
+                                    Ui.none
+                                    |> Ui.ignoreInputs
+                                    |> Ui.center { size = model.windowSize }
+                                ]
 
-                    else
-                        []
+                            else
+                                []
+
+                        _ ->
+                            []
                    )
         }
         toolbarElement
@@ -859,22 +866,32 @@ toolbarUi handColor model currentToolButton =
                             { borderWidth = 2
                             , borderColor = Color.outlineColor
                             , fillColor =
-                                if model.showMap then
-                                    Color.highlightColor
+                                case model.page of
+                                    WorldPage worldPage ->
+                                        if worldPage.showMap then
+                                            Color.highlightColor
 
-                                else
-                                    Color.fillColor2
+                                        else
+                                            Color.fillColor2
+
+                                    _ ->
+                                        Color.fillColor2
                             }
                     , borderAndFillFocus =
                         BorderAndFill
                             { borderWidth = 2
                             , borderColor = Color.focusedUiColor
                             , fillColor =
-                                if model.showMap then
-                                    Color.highlightColor
+                                case model.page of
+                                    WorldPage worldPage ->
+                                        if worldPage.showMap then
+                                            Color.highlightColor
 
-                                else
-                                    Color.fillColor2
+                                        else
+                                            Color.fillColor2
+
+                                    _ ->
+                                        Color.fillColor2
                             }
                     }
                     mapSprite
@@ -1315,7 +1332,7 @@ screenToWorld :
         | windowSize : ( Quantity Int sourceUnits, Quantity Int sourceUnits )
         , devicePixelRatio : Float
         , zoomFactor : Int
-        , mailEditor : Maybe b
+        , page : Page
         , mouseLeft : MouseButtonState
         , mouseMiddle : MouseButtonState
         , viewPoint : ViewPoint
@@ -1443,7 +1460,7 @@ canDragView hover =
 
 actualViewPoint :
     { a
-        | mailEditor : Maybe b
+        | page : Page
         , mouseLeft : MouseButtonState
         , mouseMiddle : MouseButtonState
         , devicePixelRatio : Float
@@ -1455,11 +1472,11 @@ actualViewPoint :
     }
     -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
-    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( Nothing, _, MouseButtonDown { start, current, hover } ) ->
+    case ( model.page, model.mouseLeft, model.mouseMiddle ) of
+        ( WorldPage _, _, MouseButtonDown { start, current, hover } ) ->
             offsetViewPoint model hover start current
 
-        ( Nothing, MouseButtonDown { start, current, hover }, _ ) ->
+        ( WorldPage _, MouseButtonDown { start, current, hover }, _ ) ->
             case model.currentTool of
                 TilePlacerTool _ ->
                     actualViewPointHelper model

@@ -20,6 +20,7 @@ module Types exposing
     , LoadingLocalModel(..)
     , LoginRequestedBy(..)
     , MouseButtonState(..)
+    , Page(..)
     , RemovedTileParticle
     , SubmitStatus(..)
     , ToBackend(..)
@@ -30,8 +31,10 @@ module Types exposing
     , UpdateMeshesData
     , UserSettings
     , ViewPoint(..)
+    , WorldPage2
     )
 
+import AdminPage
 import Animal exposing (Animal)
 import AssocList
 import Audio
@@ -175,7 +178,6 @@ type alias FrontendLoaded =
     , removedTileParticles : List RemovedTileParticle
     , debrisMesh : WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Effect.Time.Posix
-    , mailEditor : Maybe Model
     , lastMailEditorToggle : Maybe Effect.Time.Posix
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
@@ -209,7 +211,6 @@ type alias FrontendLoaded =
     , lastReceivedMail : Maybe Time.Posix
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
-    , showMap : Bool
     , showInviteTree : Bool
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
@@ -218,9 +219,18 @@ type alias FrontendLoaded =
     , lastReportTileRemoved : Maybe Effect.Time.Posix
     , hideUi : Bool
     , lightsSwitched : Maybe Time.Posix
-    , showAdminPage : Bool
-    , adminPageMailPage : Int
+    , page : Page
     }
+
+
+type Page
+    = MailPage MailEditor.Model
+    | AdminPage AdminPage.Model
+    | WorldPage WorldPage2
+
+
+type alias WorldPage2 =
+    { showMap : Bool }
 
 
 type alias UpdateMeshesData =
@@ -231,7 +241,7 @@ type alias UpdateMeshesData =
     , windowSize : Coord Pixels
     , devicePixelRatio : Float
     , zoomFactor : Int
-    , mailEditor : Maybe MailEditor.Model
+    , page : Page
     , mouseMiddle : MouseButtonState
     , viewPoint : ViewPoint
     , trains : IdDict TrainId Train
@@ -306,12 +316,9 @@ type UiHover
     | YouGotMailButton
     | ShowMapButton
     | AllowEmailNotificationsCheckbox
-    | ResetConnectionsButton
     | UsersOnlineButton
     | CopyPositionUrlButton
     | ReportUserButton
-    | ToggleIsGridReadOnlyButton
-    | ToggleTrainsDisabledButton
     | ZoomInButton
     | ZoomOutButton
     | RotateLeftButton
@@ -320,8 +327,7 @@ type UiHover
     | AlwaysDayTimeOfDayButton
     | AlwaysNightTimeOfDayButton
     | ShowAdminPage
-    | CloseAdminPage
-    | AdminMailPageButton Int
+    | AdminHover AdminPage.Hover
 
 
 type alias BackendModel =

@@ -69,7 +69,7 @@ import Tile exposing (Tile, TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
-import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
+import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
 import Ui
 import Units exposing (CellUnit, WorldUnit)
 import WebGL.Texture
@@ -279,7 +279,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , windowSize = loading.windowSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , mailEditor = Nothing
+            , page = WorldPage { showMap = False }
             , viewPoint = viewpoint
             , trains = loadedLocalModel.trains
             , time = time
@@ -322,13 +322,13 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , removedTileParticles = []
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
-            , mailEditor =
+            , page =
                 case ( loading.showInbox, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
                     ( True, LoggedIn _ ) ->
-                        MailEditor.init Nothing |> Just
+                        MailEditor.init Nothing |> MailPage
 
                     _ ->
-                        Nothing
+                        WorldPage { showMap = False }
             , lastMailEditorToggle = Nothing
             , currentTool = currentTool2
             , lastTileRotation = []
@@ -382,7 +382,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastReceivedMail = Nothing
             , isReconnecting = False
             , lastCheckConnection = time
-            , showMap = False
             , showInviteTree = False
             , contextMenu = Nothing
             , previousUpdateMeshData = previousUpdateMeshData
@@ -394,8 +393,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastReportTileRemoved = Nothing
             , hideUi = False
             , lightsSwitched = Nothing
-            , showAdminPage = False
-            , adminPageMailPage = 0
             }
                 |> setCurrentTool HandToolButton
     in
@@ -622,7 +619,7 @@ updateMeshes newModel =
             , windowSize = newModel.windowSize
             , devicePixelRatio = newModel.devicePixelRatio
             , zoomFactor = newModel.zoomFactor
-            , mailEditor = newModel.mailEditor
+            , page = newModel.page
             , mouseMiddle = newModel.mouseMiddle
             , viewPoint = newModel.viewPoint
             , trains = newModel.trains
@@ -637,7 +634,7 @@ mouseWorldPosition :
         , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
         , devicePixelRatio : Float
         , zoomFactor : Int
-        , mailEditor : Maybe b
+        , page : Page
         , mouseMiddle : MouseButtonState
         , viewPoint : ViewPoint
         , trains : IdDict TrainId Train
@@ -667,7 +664,7 @@ cursorPosition :
             , windowSize : ( Quantity Int Pixels, Quantity Int Pixels )
             , devicePixelRatio : Float
             , zoomFactor : Int
-            , mailEditor : Maybe c
+            , page : Page
             , mouseMiddle : MouseButtonState
             , viewPoint : ViewPoint
             , trains : IdDict TrainId Train

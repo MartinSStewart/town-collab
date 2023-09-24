@@ -1,5 +1,6 @@
 module Frontend exposing (app)
 
+import AdminPage
 import Animal exposing (Animal)
 import Array
 import AssocList
@@ -181,12 +182,15 @@ audioLoaded audioData model =
             clamp
                 0
                 1
-                (case ( model.lastMailEditorToggle, model.mailEditor ) of
-                    ( Just time, Nothing ) ->
+                (case ( model.lastMailEditorToggle, model.page ) of
+                    ( Just time, WorldPage _ ) ->
                         Quantity.ratio (Duration.from time model.time) MailEditor.openAnimationLength
 
-                    ( Just time, Just _ ) ->
+                    ( Just time, MailPage _ ) ->
                         1 - Quantity.ratio (Duration.from time model.time) MailEditor.openAnimationLength
+
+                    ( _, AdminPage _ ) ->
+                        0
 
                     ( Nothing, _ ) ->
                         1
@@ -239,10 +243,6 @@ audioLoaded audioData model =
         (\( _, train ) ->
             case Train.stuckOrDerailed model.time train of
                 Train.IsDerailed derailTime _ ->
-                    --let
-                    --    _ =
-                    --        Debug.log "time" (Duration.from derailTime model.time)
-                    --in
                     playSound TrainCrash derailTime
                         |> Audio.scaleVolume (volume model (Train.trainPosition model.time train) * 0.5)
 
@@ -275,8 +275,8 @@ audioLoaded audioData model =
         Nothing ->
             Audio.silence
     , List.map (playSound WhooshSound) model.lastTileRotation |> Audio.group |> Audio.scaleVolume 0.5
-    , case model.mailEditor of
-        Just mailEditor ->
+    , case model.page of
+        MailPage mailEditor ->
             [ List.map (playSound WhooshSound) mailEditor.lastRotation |> Audio.group |> Audio.scaleVolume 0.5
             , case mailEditor.lastPlacedImage of
                 Just time ->
@@ -293,7 +293,7 @@ audioLoaded audioData model =
             ]
                 |> Audio.group
 
-        Nothing ->
+        _ ->
             Audio.silence
     , case model.lastPlacementError of
         Just time ->
@@ -681,25 +681,25 @@ updateLoaded audioData msg model =
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
-                    case model.mailEditor of
-                        Just mailEditor ->
+                    case model.page of
+                        MailPage mailEditor ->
                             case MailEditor.handleKeyDown model.time (LocalGrid.ctrlOrMeta model) key mailEditor of
                                 Just ( newMailEditor, outMsg ) ->
                                     { model
-                                        | mailEditor = Just newMailEditor
+                                        | page = MailPage newMailEditor
                                         , lastMailEditorToggle = model.lastMailEditorToggle
                                     }
                                         |> handleMailEditorOutMsg outMsg
 
                                 Nothing ->
                                     ( { model
-                                        | mailEditor = Nothing
+                                        | page = WorldPage { showMap = False }
                                         , lastMailEditorToggle = Just model.time
                                       }
                                     , Command.none
                                     )
 
-                        Nothing ->
+                        _ ->
                             case ( model.focus, key ) of
                                 ( _, Keyboard.Tab ) ->
                                     ( setFocus
@@ -814,12 +814,15 @@ updateLoaded audioData msg model =
                     ( { model
                         | mouseMiddle = MouseButtonUp { current = mousePosition }
                         , viewPoint =
-                            case model.mailEditor of
-                                Just _ ->
+                            case model.page of
+                                MailPage _ ->
                                     model.viewPoint
 
-                                Nothing ->
+                                WorldPage _ ->
                                     Toolbar.offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
+
+                                AdminPage _ ->
+                                    model.viewPoint
                       }
                     , Command.none
                     )
@@ -861,39 +864,45 @@ updateLoaded audioData msg model =
                             DeltaPage ->
                                 event.deltaY * 1000
                           )
-            in
-            ( if abs scrollThreshold > 50 then
-                case model.mailEditor of
-                    Just mailEditor ->
+
+                worldZoom () =
+                    if LocalGrid.ctrlOrMeta model then
                         { model
-                            | mailEditor =
-                                MailEditor.scroll (scrollThreshold > 0) audioData model mailEditor |> Just
+                            | zoomFactor =
+                                (if scrollThreshold > 0 then
+                                    model.zoomFactor - 1
+
+                                 else
+                                    model.zoomFactor + 1
+                                )
+                                    |> clamp 1 3
+                            , scrollThreshold = 0
                         }
 
-                    Nothing ->
-                        if LocalGrid.ctrlOrMeta model then
-                            { model
-                                | zoomFactor =
-                                    (if scrollThreshold > 0 then
-                                        model.zoomFactor - 1
+                    else
+                        case ( scrollThreshold > 0, model.currentTool ) of
+                            ( True, TilePlacerTool currentTile ) ->
+                                tileRotationHelper audioData 1 currentTile model
 
-                                     else
-                                        model.zoomFactor + 1
-                                    )
-                                        |> clamp 1 3
-                                , scrollThreshold = 0
-                            }
+                            ( False, TilePlacerTool currentTile ) ->
+                                tileRotationHelper audioData -1 currentTile model
 
-                        else
-                            case ( scrollThreshold > 0, model.currentTool ) of
-                                ( True, TilePlacerTool currentTile ) ->
-                                    tileRotationHelper audioData 1 currentTile model
+                            _ ->
+                                { model | scrollThreshold = 0 }
+            in
+            ( if abs scrollThreshold > 50 then
+                case model.page of
+                    MailPage mailEditor ->
+                        { model
+                            | page =
+                                MailEditor.scroll (scrollThreshold > 0) audioData model mailEditor |> MailPage
+                        }
 
-                                ( False, TilePlacerTool currentTile ) ->
-                                    tileRotationHelper audioData -1 currentTile model
+                    WorldPage _ ->
+                        worldZoom ()
 
-                                _ ->
-                                    { model | scrollThreshold = 0 }
+                    AdminPage _ ->
+                        model
 
               else
                 { model | scrollThreshold = scrollThreshold }
@@ -1156,9 +1165,6 @@ updateLoaded audioData msg model =
                                         AllowEmailNotificationsCheckbox ->
                                             True
 
-                                        ResetConnectionsButton ->
-                                            True
-
                                         UsersOnlineButton ->
                                             True
 
@@ -1166,12 +1172,6 @@ updateLoaded audioData msg model =
                                             True
 
                                         ReportUserButton ->
-                                            True
-
-                                        ToggleIsGridReadOnlyButton ->
-                                            True
-
-                                        ToggleTrainsDisabledButton ->
                                             True
 
                                         ZoomInButton ->
@@ -1198,10 +1198,7 @@ updateLoaded audioData msg model =
                                         ShowAdminPage ->
                                             True
 
-                                        CloseAdminPage ->
-                                            True
-
-                                        AdminMailPageButton _ ->
+                                        AdminHover _ ->
                                             True
 
                                 Nothing ->
@@ -1260,12 +1257,26 @@ updateLoaded audioData msg model =
 
                 newUi =
                     Toolbar.view model4
+
+                visuallyEqual =
+                    Ui.visuallyEqual newUi model4.ui
             in
             ( { model4
                 | ui = newUi
                 , previousFocus = model4.focus
+                , focus =
+                    if visuallyEqual then
+                        model4.focus
+
+                    else
+                        case Maybe.andThen (\id -> Ui.findInput id newUi) model4.focus of
+                            Just _ ->
+                                model4.focus
+
+                            Nothing ->
+                                Nothing
                 , uiMesh =
-                    if Ui.visuallyEqual newUi model4.ui && model4.focus == model4.previousFocus then
+                    if visuallyEqual && model4.focus == model4.previousFocus then
                         model4.uiMesh
 
                     else
@@ -1332,13 +1343,13 @@ updateLoaded audioData msg model =
 
         ImportedMail2 result ->
             ( { model
-                | mailEditor =
-                    case model.mailEditor of
-                        Just mailEditor ->
-                            MailEditor.importMail result mailEditor |> Just
+                | page =
+                    case model.page of
+                        MailPage mailEditor ->
+                            MailEditor.importMail result mailEditor |> MailPage
 
-                        Nothing ->
-                            Nothing
+                        _ ->
+                            model.page
               }
             , Command.none
             )
@@ -1772,44 +1783,50 @@ keyMsgCanvasUpdate audioData key model =
             if model.contextMenu /= Nothing then
                 ( { model | contextMenu = Nothing }, Command.none )
 
-            else if model.showMap then
-                ( { model | showMap = False }, Command.none )
-
             else
-                ( case model.currentTool of
-                    TilePlacerTool _ ->
-                        LoadingPage.setCurrentTool HandToolButton model
+                case model.page of
+                    WorldPage worldPage ->
+                        if worldPage.showMap then
+                            ( { model | page = WorldPage { worldPage | showMap = False } }, Command.none )
 
-                    TilePickerTool ->
-                        LoadingPage.setCurrentTool HandToolButton model
+                        else
+                            ( case model.currentTool of
+                                TilePlacerTool _ ->
+                                    LoadingPage.setCurrentTool HandToolButton model
 
-                    HandTool ->
-                        case isHoldingCow model of
-                            Just { cowId } ->
-                                updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
-                                    |> Tuple.first
+                                TilePickerTool ->
+                                    LoadingPage.setCurrentTool HandToolButton model
 
-                            Nothing ->
-                                { model
-                                    | viewPoint =
-                                        case model.viewPoint of
-                                            TrainViewPoint _ ->
-                                                Toolbar.actualViewPoint model |> NormalViewPoint
+                                HandTool ->
+                                    case isHoldingCow model of
+                                        Just { cowId } ->
+                                            updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
+                                                |> Tuple.first
 
-                                            NormalViewPoint _ ->
-                                                model.viewPoint
-                                }
+                                        Nothing ->
+                                            { model
+                                                | viewPoint =
+                                                    case model.viewPoint of
+                                                        TrainViewPoint _ ->
+                                                            Toolbar.actualViewPoint model |> NormalViewPoint
 
-                    TextTool (Just _) ->
-                        LoadingPage.setCurrentTool TextToolButton model
+                                                        NormalViewPoint _ ->
+                                                            model.viewPoint
+                                            }
 
-                    TextTool Nothing ->
-                        LoadingPage.setCurrentTool HandToolButton model
+                                TextTool (Just _) ->
+                                    LoadingPage.setCurrentTool TextToolButton model
 
-                    ReportTool ->
-                        LoadingPage.setCurrentTool HandToolButton model
-                , Command.none
-                )
+                                TextTool Nothing ->
+                                    LoadingPage.setCurrentTool HandToolButton model
+
+                                ReportTool ->
+                                    LoadingPage.setCurrentTool HandToolButton model
+                            , Command.none
+                            )
+
+                    _ ->
+                        ( model, Command.none )
 
         ( Keyboard.Character "v", True ) ->
             case model.currentTool of
@@ -1888,7 +1905,17 @@ keyMsgCanvasUpdate audioData key model =
                             ( tileRotationHelper audioData 1 currentTile model, Command.none )
 
                         "m" ->
-                            ( { model | showMap = not model.showMap }, Command.none )
+                            ( { model
+                                | page =
+                                    case model.page of
+                                        WorldPage worldPage ->
+                                            WorldPage { worldPage | showMap = not worldPage.showMap }
+
+                                        _ ->
+                                            model.page
+                              }
+                            , Command.none
+                            )
 
                         _ ->
                             setTileFromHotkey string model
@@ -1896,7 +1923,17 @@ keyMsgCanvasUpdate audioData key model =
                 _ ->
                     case string of
                         "m" ->
-                            ( { model | showMap = not model.showMap }, Command.none )
+                            ( { model
+                                | page =
+                                    case model.page of
+                                        WorldPage worldPage ->
+                                            WorldPage { worldPage | showMap = not worldPage.showMap }
+
+                                        _ ->
+                                            model.page
+                              }
+                            , Command.none
+                            )
 
                         _ ->
                             setTileFromHotkey string model
@@ -2067,7 +2104,13 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                     (\() ->
                         if currentUserId2 == userId then
                             ( { model
-                                | mailEditor = MailEditor.init Nothing |> Just
+                                | page =
+                                    case model.page of
+                                        WorldPage _ ->
+                                            MailEditor.init Nothing |> MailPage
+
+                                        _ ->
+                                            model.page
                                 , lastMailEditorToggle = Just model.time
                               }
                             , Command.none
@@ -2081,15 +2124,20 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                             case localModel.users |> IdDict.get userId of
                                 Just user ->
                                     ( { model
-                                        | mailEditor =
-                                            MailEditor.init
-                                                (Just
-                                                    { userId = userId
-                                                    , name = user.name
-                                                    , draft = IdDict.get userId drafts |> Maybe.withDefault []
-                                                    }
-                                                )
-                                                |> Just
+                                        | page =
+                                            case model.page of
+                                                WorldPage _ ->
+                                                    MailEditor.init
+                                                        (Just
+                                                            { userId = userId
+                                                            , name = user.name
+                                                            , draft = IdDict.get userId drafts |> Maybe.withDefault []
+                                                            }
+                                                        )
+                                                        |> MailPage
+
+                                                _ ->
+                                                    model.page
                                         , lastMailEditorToggle = Just model.time
                                       }
                                     , Command.none
@@ -2182,40 +2230,48 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                             else
                                 model.contextMenu
                 , viewPoint =
-                    case ( model.mailEditor, model.mouseMiddle ) of
-                        ( Nothing, MouseButtonUp _ ) ->
-                            case model.currentTool of
-                                TilePlacerTool _ ->
+                    case model.page of
+                        WorldPage _ ->
+                            case model.mouseMiddle of
+                                MouseButtonUp _ ->
+                                    case model.currentTool of
+                                        TilePlacerTool _ ->
+                                            model.viewPoint
+
+                                        HandTool ->
+                                            Toolbar.offsetViewPoint
+                                                model
+                                                previousMouseState.hover
+                                                previousMouseState.start
+                                                mousePosition
+                                                |> NormalViewPoint
+
+                                        TilePickerTool ->
+                                            Toolbar.offsetViewPoint
+                                                model
+                                                previousMouseState.hover
+                                                previousMouseState.start
+                                                mousePosition
+                                                |> NormalViewPoint
+
+                                        TextTool _ ->
+                                            model.viewPoint
+
+                                        ReportTool ->
+                                            Toolbar.offsetViewPoint
+                                                model
+                                                previousMouseState.hover
+                                                previousMouseState.start
+                                                mousePosition
+                                                |> NormalViewPoint
+
+                                MouseButtonDown _ ->
                                     model.viewPoint
 
-                                HandTool ->
-                                    Toolbar.offsetViewPoint
-                                        model
-                                        previousMouseState.hover
-                                        previousMouseState.start
-                                        mousePosition
-                                        |> NormalViewPoint
+                        MailPage _ ->
+                            model.viewPoint
 
-                                TilePickerTool ->
-                                    Toolbar.offsetViewPoint
-                                        model
-                                        previousMouseState.hover
-                                        previousMouseState.start
-                                        mousePosition
-                                        |> NormalViewPoint
-
-                                TextTool _ ->
-                                    model.viewPoint
-
-                                ReportTool ->
-                                    Toolbar.offsetViewPoint
-                                        model
-                                        previousMouseState.hover
-                                        previousMouseState.start
-                                        mousePosition
-                                        |> NormalViewPoint
-
-                        _ ->
+                        AdminPage _ ->
                             model.viewPoint
             }
                 |> (\m ->
@@ -2698,8 +2754,8 @@ uiUpdate audioData id event model =
                     ( model, Command.none )
 
         MailEditorHover mailEditorId ->
-            case model.mailEditor of
-                Just mailEditor ->
+            case model.page of
+                MailPage mailEditor ->
                     let
                         ( newMailEditor, outMsg ) =
                             MailEditor.uiUpdate
@@ -2711,7 +2767,13 @@ uiUpdate audioData id event model =
 
                         model2 =
                             { model
-                                | mailEditor = newMailEditor
+                                | page =
+                                    case newMailEditor of
+                                        Just a ->
+                                            MailPage a
+
+                                        Nothing ->
+                                            WorldPage { showMap = False }
                                 , lastMailEditorToggle =
                                     if newMailEditor == Nothing then
                                         Just model.time
@@ -2722,14 +2784,29 @@ uiUpdate audioData id event model =
                     in
                     handleMailEditorOutMsg outMsg model2
 
-                Nothing ->
+                _ ->
                     ( model, Command.none )
 
         YouGotMailButton ->
             onPress audioData event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
 
         ShowMapButton ->
-            onPress audioData event (\() -> ( { model | showMap = not model.showMap }, Command.none )) model
+            onPress audioData
+                event
+                (\() ->
+                    ( { model
+                        | page =
+                            case model.page of
+                                WorldPage worldPage ->
+                                    WorldPage { worldPage | showMap = not worldPage.showMap }
+
+                                _ ->
+                                    model.page
+                      }
+                    , Command.none
+                    )
+                )
+                model
 
         AllowEmailNotificationsCheckbox ->
             onPress
@@ -2746,13 +2823,6 @@ uiUpdate audioData id event model =
                         NotLoggedIn _ ->
                             ( model, Command.none )
                 )
-                model
-
-        ResetConnectionsButton ->
-            onPress
-                audioData
-                event
-                (\() -> updateLocalModel (Change.AdminChange Change.AdminResetSessions) model |> handleOutMsg False)
                 model
 
         UsersOnlineButton ->
@@ -2797,44 +2867,6 @@ uiUpdate audioData id event model =
 
                         Nothing ->
                             ( model, Command.none )
-                )
-                model
-
-        ToggleIsGridReadOnlyButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    case LocalGrid.localModel model.localModel |> .userStatus of
-                        LoggedIn { isGridReadOnly } ->
-                            updateLocalModel
-                                (Change.AdminSetGridReadOnly (not isGridReadOnly) |> Change.AdminChange)
-                                model
-                                |> handleOutMsg False
-
-                        NotLoggedIn _ ->
-                            ( model, Command.none )
-                )
-                model
-
-        ToggleTrainsDisabledButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    updateLocalModel
-                        (Change.AdminSetTrainsDisabled
-                            (case LocalGrid.localModel model.localModel |> .trainsDisabled of
-                                TrainsDisabled ->
-                                    TrainsEnabled
-
-                                TrainsEnabled ->
-                                    TrainsDisabled
-                            )
-                            |> Change.AdminChange
-                        )
-                        model
-                        |> handleOutMsg False
                 )
                 model
 
@@ -2906,13 +2938,30 @@ uiUpdate audioData id event model =
                 model
 
         ShowAdminPage ->
-            onPress audioData event (\() -> ( { model | showAdminPage = True }, Command.none )) model
+            onPress audioData event (\() -> ( { model | page = AdminPage AdminPage.init }, Command.none )) model
 
-        CloseAdminPage ->
-            onPress audioData event (\() -> ( { model | showAdminPage = False }, Command.none )) model
+        AdminHover adminHover ->
+            case model.page of
+                AdminPage adminPage ->
+                    let
+                        ( adminPage2, outMsg ) =
+                            AdminPage.update model adminHover event adminPage
+                    in
+                    case outMsg of
+                        AdminPage.NoOutMsg ->
+                            ( { model | page = AdminPage adminPage2 }, Command.none )
 
-        AdminMailPageButton index ->
-            onPress audioData event (\() -> ( { model | adminPageMailPage = index }, Command.none )) model
+                        AdminPage.AdminPageClosed ->
+                            ( { model | page = WorldPage { showMap = False } }, Command.none )
+
+                        AdminPage.OutMsgAdminChange adminChange ->
+                            updateLocalModel
+                                (Change.AdminChange adminChange)
+                                { model | page = AdminPage adminPage2 }
+                                |> handleOutMsg False
+
+                _ ->
+                    ( model, Command.none )
 
 
 textInputUpdate :
@@ -3141,8 +3190,8 @@ setTrainViewPoint trainId model =
 
 canOpenMailEditor : FrontendLoaded -> Maybe (IdDict UserId (List MailEditor.Content))
 canOpenMailEditor model =
-    case ( model.mailEditor, model.currentTool, LocalGrid.localModel model.localModel |> .userStatus ) of
-        ( Nothing, HandTool, LoggedIn loggedIn ) ->
+    case ( model.page, model.currentTool, LocalGrid.localModel model.localModel |> .userStatus ) of
+        ( WorldPage _, HandTool, LoggedIn loggedIn ) ->
             Just loggedIn.mailDrafts
 
         _ ->
@@ -3877,8 +3926,8 @@ cursorSprite hover model =
         Just userId ->
             let
                 helper () =
-                    case model.mailEditor of
-                        Just mailEditor ->
+                    case model.page of
+                        MailPage mailEditor ->
                             case hover of
                                 UiHover (MailEditorHover uiHover) _ ->
                                     MailEditor.cursorSprite model.windowSize uiHover mailEditor
@@ -3886,7 +3935,10 @@ cursorSprite hover model =
                                 _ ->
                                     { cursorType = DefaultCursor, scale = 1 }
 
-                        Nothing ->
+                        AdminPage _ ->
+                            { cursorType = DefaultCursor, scale = 1 }
+
+                        WorldPage _ ->
                             { cursorType =
                                 if isHoldingCow model /= Nothing then
                                     CursorSprite PinchSpriteCursor
@@ -4034,11 +4086,11 @@ isDraggingView :
             , hover : Hover
             }
 isDraggingView hover model =
-    case ( model.mailEditor, model.mouseLeft, model.mouseMiddle ) of
-        ( Nothing, _, MouseButtonDown a ) ->
+    case ( model.page, model.mouseLeft, model.mouseMiddle ) of
+        ( WorldPage _, _, MouseButtonDown a ) ->
             Just a
 
-        ( Nothing, MouseButtonDown a, _ ) ->
+        ( WorldPage _, MouseButtonDown a, _ ) ->
             case model.currentTool of
                 TilePlacerTool _ ->
                     Nothing
@@ -4154,14 +4206,6 @@ canvasView audioData model =
 
                 showMousePointer =
                     cursorSprite hoverAt2 model
-
-                ( mailPosition, mailSize ) =
-                    case Ui.findElement (MailEditorHover MailEditor.MailButton) model.ui of
-                        Just mailButton ->
-                            ( mailButton.position, mailButton.buttonData.cachedSize )
-
-                        Nothing ->
-                            ( Coord.origin, Coord.origin )
 
                 shaderTime2 =
                     shaderTime model
@@ -4279,11 +4323,11 @@ canvasView audioData model =
                     ++ drawOtherCursors renderData model shaderTime2
                     ++ Train.drawSpeechBubble renderData model.time model.trains shaderTime2
                     ++ drawTilePlacer renderData audioData model shaderTime2
-                    ++ (case model.mailEditor of
-                            Just _ ->
+                    ++ (case model.page of
+                            MailPage _ ->
                                 [ MailEditor.backgroundLayer renderData shaderTime2 ]
 
-                            Nothing ->
+                            _ ->
                                 []
                        )
                     ++ [ Effect.WebGL.entityWith
@@ -4305,8 +4349,17 @@ canvasView audioData model =
                             }
                        ]
                     ++ drawMap model
-                    ++ (case model.mailEditor of
-                            Just mailEditor ->
+                    ++ (case model.page of
+                            MailPage mailEditor ->
+                                let
+                                    ( mailPosition, mailSize ) =
+                                        case Ui.findInput (MailEditorHover MailEditor.MailButton) model.ui of
+                                            Just (Ui.ButtonType mailButton) ->
+                                                ( mailButton.position, mailButton.data.cachedSize )
+
+                                            _ ->
+                                                ( Coord.origin, Coord.origin )
+                                in
                                 MailEditor.drawMail
                                     renderData
                                     mailPosition
@@ -4318,7 +4371,7 @@ canvasView audioData model =
                                     mailEditor
                                     shaderTime2
 
-                            Nothing ->
+                            _ ->
                                 []
                        )
                     ++ (case LocalGrid.currentUserId model of
@@ -4611,104 +4664,108 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth } audioData mod
 
 drawMap : FrontendLoaded -> List Effect.WebGL.Entity
 drawMap model =
-    case ( model.showMap, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
-        ( True, Just simplexNoiseLookup ) ->
-            let
-                grid : Grid
-                grid =
-                    LocalGrid.localModel model.localModel |> .grid
+    case ( model.page, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
+        ( WorldPage worldPage, Just simplexNoiseLookup ) ->
+            if worldPage.showMap then
+                let
+                    grid : Grid
+                    grid =
+                        LocalGrid.localModel model.localModel |> .grid
 
-                viewPoint =
-                    Toolbar.actualViewPoint model |> Point2d.unwrap
+                    viewPoint =
+                        Toolbar.actualViewPoint model |> Point2d.unwrap
 
-                mapSize : Int
-                mapSize =
-                    Toolbar.mapSize model.windowSize
+                    mapSize : Int
+                    mapSize =
+                        Toolbar.mapSize model.windowSize
 
-                ( windowWidth, windowHeight ) =
-                    Coord.toTuple model.windowSize |> Tuple.mapBoth toFloat toFloat
+                    ( windowWidth, windowHeight ) =
+                        Coord.toTuple model.windowSize |> Tuple.mapBoth toFloat toFloat
 
-                settings =
-                    [ Effect.WebGL.Settings.scissor
-                        ((windowWidth - toFloat mapSize) / 2 |> floor)
-                        ((windowHeight - toFloat mapSize) / 2 |> floor)
-                        mapSize
-                        mapSize
-                    , Shaders.blend
-                    ]
+                    settings =
+                        [ Effect.WebGL.Settings.scissor
+                            ((windowWidth - toFloat mapSize) / 2 |> floor)
+                            ((windowHeight - toFloat mapSize) / 2 |> floor)
+                            mapSize
+                            mapSize
+                        , Shaders.blend
+                        ]
 
-                mapTerrainSize =
-                    Quantity.unwrap Shaders.mapSize
+                    mapTerrainSize =
+                        Quantity.unwrap Shaders.mapSize
 
-                mapTerrainSizeChunks =
-                    mapTerrainSize // 4 + 1
-            in
-            Effect.WebGL.entityWith
+                    mapTerrainSizeChunks =
+                        mapTerrainSize // 4 + 1
+                in
+                Effect.WebGL.entityWith
+                    []
+                    Shaders.worldMapVertexShader
+                    Shaders.worldMapFragmentShader
+                    Shaders.mapSquare
+                    { view =
+                        Mat4.makeScale3 (toFloat mapSize * 2 / windowWidth) (toFloat mapSize * -2 / windowHeight) 1
+                            |> Mat4.translate3 -0.5 -0.5 -0.5
+                    , texture = simplexNoiseLookup
+                    , cellPosition =
+                        Toolbar.actualViewPoint model
+                            |> Grid.worldToCellPoint
+                            |> Point2d.unwrap
+                            |> Vec2.fromRecord
+                    }
+                    :: List.map
+                        (\index ->
+                            let
+                                x =
+                                    4 * modBy mapTerrainSizeChunks index + floor (viewPoint.x / 16) - 2 * mapTerrainSizeChunks
+
+                                y =
+                                    4 * (index // mapTerrainSizeChunks) + floor (viewPoint.y / 16) - 2 * mapTerrainSizeChunks
+
+                                getMapPixelData : Int -> Int -> Vec2
+                                getMapPixelData x2 y2 =
+                                    case Grid.getCell (Coord.xy (x2 + x) (y2 + y)) grid of
+                                        Just cell ->
+                                            GridCell.mapPixelData cell
+
+                                        Nothing ->
+                                            Vec2.vec2 0 0
+                            in
+                            Effect.WebGL.entityWith
+                                settings
+                                Shaders.worldMapOverlayVertexShader
+                                Shaders.worldMapOverlayFragmentShader
+                                mapOverlayMesh
+                                { view =
+                                    Mat4.makeScale3
+                                        (toFloat mapSize * 2 / (mapTerrainSize * windowWidth))
+                                        (toFloat mapSize * -2 / (mapTerrainSize * windowHeight))
+                                        1
+                                        |> Mat4.translate3
+                                            (-viewPoint.x / 16 + toFloat x)
+                                            (-viewPoint.y / 16 + toFloat y)
+                                            0
+                                , pixelData_0_0 = getMapPixelData 0 0
+                                , pixelData_1_0 = getMapPixelData 1 0
+                                , pixelData_2_0 = getMapPixelData 2 0
+                                , pixelData_3_0 = getMapPixelData 3 0
+                                , pixelData_0_1 = getMapPixelData 0 1
+                                , pixelData_1_1 = getMapPixelData 1 1
+                                , pixelData_2_1 = getMapPixelData 2 1
+                                , pixelData_3_1 = getMapPixelData 3 1
+                                , pixelData_0_2 = getMapPixelData 0 2
+                                , pixelData_1_2 = getMapPixelData 1 2
+                                , pixelData_2_2 = getMapPixelData 2 2
+                                , pixelData_3_2 = getMapPixelData 3 2
+                                , pixelData_0_3 = getMapPixelData 0 3
+                                , pixelData_1_3 = getMapPixelData 1 3
+                                , pixelData_2_3 = getMapPixelData 2 3
+                                , pixelData_3_3 = getMapPixelData 3 3
+                                }
+                        )
+                        (List.range 0 (mapTerrainSizeChunks * mapTerrainSizeChunks - 1))
+
+            else
                 []
-                Shaders.worldMapVertexShader
-                Shaders.worldMapFragmentShader
-                Shaders.mapSquare
-                { view =
-                    Mat4.makeScale3 (toFloat mapSize * 2 / windowWidth) (toFloat mapSize * -2 / windowHeight) 1
-                        |> Mat4.translate3 -0.5 -0.5 -0.5
-                , texture = simplexNoiseLookup
-                , cellPosition =
-                    Toolbar.actualViewPoint model
-                        |> Grid.worldToCellPoint
-                        |> Point2d.unwrap
-                        |> Vec2.fromRecord
-                }
-                :: List.map
-                    (\index ->
-                        let
-                            x =
-                                4 * modBy mapTerrainSizeChunks index + floor (viewPoint.x / 16) - 2 * mapTerrainSizeChunks
-
-                            y =
-                                4 * (index // mapTerrainSizeChunks) + floor (viewPoint.y / 16) - 2 * mapTerrainSizeChunks
-
-                            getMapPixelData : Int -> Int -> Vec2
-                            getMapPixelData x2 y2 =
-                                case Grid.getCell (Coord.xy (x2 + x) (y2 + y)) grid of
-                                    Just cell ->
-                                        GridCell.mapPixelData cell
-
-                                    Nothing ->
-                                        Vec2.vec2 0 0
-                        in
-                        Effect.WebGL.entityWith
-                            settings
-                            Shaders.worldMapOverlayVertexShader
-                            Shaders.worldMapOverlayFragmentShader
-                            mapOverlayMesh
-                            { view =
-                                Mat4.makeScale3
-                                    (toFloat mapSize * 2 / (mapTerrainSize * windowWidth))
-                                    (toFloat mapSize * -2 / (mapTerrainSize * windowHeight))
-                                    1
-                                    |> Mat4.translate3
-                                        (-viewPoint.x / 16 + toFloat x)
-                                        (-viewPoint.y / 16 + toFloat y)
-                                        0
-                            , pixelData_0_0 = getMapPixelData 0 0
-                            , pixelData_1_0 = getMapPixelData 1 0
-                            , pixelData_2_0 = getMapPixelData 2 0
-                            , pixelData_3_0 = getMapPixelData 3 0
-                            , pixelData_0_1 = getMapPixelData 0 1
-                            , pixelData_1_1 = getMapPixelData 1 1
-                            , pixelData_2_1 = getMapPixelData 2 1
-                            , pixelData_3_1 = getMapPixelData 3 1
-                            , pixelData_0_2 = getMapPixelData 0 2
-                            , pixelData_1_2 = getMapPixelData 1 2
-                            , pixelData_2_2 = getMapPixelData 2 2
-                            , pixelData_3_2 = getMapPixelData 3 2
-                            , pixelData_0_3 = getMapPixelData 0 3
-                            , pixelData_1_3 = getMapPixelData 1 3
-                            , pixelData_2_3 = getMapPixelData 2 3
-                            , pixelData_3_3 = getMapPixelData 3 3
-                            }
-                    )
-                    (List.range 0 (mapTerrainSizeChunks * mapTerrainSizeChunks - 1))
 
         _ ->
             []
