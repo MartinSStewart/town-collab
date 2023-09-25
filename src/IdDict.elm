@@ -5,7 +5,7 @@ module IdDict exposing
     , keys, values, toList, fromList
     , map, foldl, foldr, filter, partition
     , union, intersect, diff, merge
-    , NColor(..), filterMap, nextId
+    , NColor(..), filterMap, nextId, update2
     )
 
 {-| A dictionary mapping unique keys to values. The keys can be any comparable
@@ -437,6 +437,11 @@ update targetKey alter dictionary =
 
         Nothing ->
             remove targetKey dictionary
+
+
+update2 : Id a -> (v -> v) -> IdDict a v -> IdDict a v
+update2 id function idDict =
+    update id (Maybe.map function) idDict
 
 
 {-| Create a dictionary with one key-value pair.

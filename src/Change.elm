@@ -69,6 +69,8 @@ type AdminChange
     = AdminResetSessions
     | AdminSetGridReadOnly Bool
     | AdminSetTrainsDisabled AreTrainsDisabled
+    | AdminDeleteMail (Id MailId) Effect.Time.Posix
+    | AdminRestoreMail (Id MailId)
 
 
 type AreTrainsDisabled

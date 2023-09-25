@@ -424,7 +424,7 @@ moveUndoPoint : Id UserId -> Int -> Coord CellUnit -> Cell -> Cell
 moveUndoPoint userId moveAmount cellPosition (Cell cell) =
     Cell
         { history = cell.history
-        , undoPoint = IdDict.update userId (Maybe.map ((+) moveAmount)) cell.undoPoint
+        , undoPoint = IdDict.update2 userId ((+) moveAmount) cell.undoPoint
         , cache = cell.cache
         , railSplitToggled = cell.railSplitToggled
         , mapCache = cell.mapCache

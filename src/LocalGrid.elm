@@ -6,12 +6,14 @@ module LocalGrid exposing
     , ctrlOrMeta
     , currentTool
     , currentUserId
+    , deleteMail
     , getCowsForCell
     , incrementUndoCurrent
     , init
     , keyDown
     , localModel
     , removeReported
+    , restoreMail
     , update
     , updateFromBackend
     )
@@ -31,7 +33,7 @@ import IdDict exposing (IdDict)
 import Keyboard
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (FrontendMail, MailStatus(..))
+import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -294,11 +296,7 @@ updateLocalChange localChange model =
             case model.userStatus of
                 LoggedIn loggedIn ->
                     ( { model
-                        | users =
-                            IdDict.update
-                                loggedIn.userId
-                                (Maybe.map (\user -> { user | handColor = colors }))
-                                model.users
+                        | users = IdDict.update2 loggedIn.userId (\user -> { user | handColor = colors }) model.users
                       }
                     , HandColorOrNameChanged loggedIn.userId
                     )
@@ -313,11 +311,7 @@ updateLocalChange localChange model =
             case model.userStatus of
                 LoggedIn loggedIn ->
                     ( { model
-                        | users =
-                            IdDict.update
-                                loggedIn.userId
-                                (Maybe.map (\user -> { user | name = displayName }))
-                                model.users
+                        | users = IdDict.update2 loggedIn.userId (\user -> { user | name = displayName }) model.users
                       }
                     , HandColorOrNameChanged loggedIn.userId
                     )
@@ -364,51 +358,30 @@ updateLocalChange localChange model =
                     ( model, NoOutMsg )
 
         TeleportHomeTrainRequest trainId time ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome time)) model.trains }
+            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome time) model.trains }
             , TeleportTrainHome trainId
             )
 
         LeaveHomeTrainRequest trainId time ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome time)) model.trains }
+            ( { model | trains = IdDict.update2 trainId (Train.leaveHome time) model.trains }
             , TrainLeaveHome trainId
             )
 
         ViewedMail mailId ->
             ( { model
-                | mail =
-                    IdDict.update
-                        mailId
-                        (Maybe.map
-                            (\mail ->
-                                { mail
-                                    | status =
-                                        case mail.status of
-                                            MailReceived data ->
-                                                MailReceivedAndViewed data
-
-                                            _ ->
-                                                mail.status
-                                }
-                            )
-                        )
-                        model.mail
-                , userStatus =
+                | userStatus =
                     case model.userStatus of
                         LoggedIn loggedIn ->
                             { loggedIn
-                                | inbox =
-                                    IdDict.update
-                                        mailId
-                                        (Maybe.map
-                                            (\mail -> { mail | isViewed = True })
-                                        )
-                                        loggedIn.inbox
+                                | inbox = IdDict.update2 mailId (\mail -> { mail | isViewed = True }) loggedIn.inbox
+                                , adminData = Maybe.map (viewMail mailId) loggedIn.adminData
                             }
                                 |> LoggedIn
 
                         NotLoggedIn _ ->
                             model.userStatus
               }
+                |> viewMail mailId
             , NoOutMsg
             )
 
@@ -427,10 +400,7 @@ updateLocalChange localChange model =
                 LoggedIn loggedIn ->
                     { model
                         | cursors =
-                            IdDict.update
-                                loggedIn.userId
-                                (Maybe.map (\cursor -> { cursor | currentTool = tool }))
-                                model.cursors
+                            IdDict.update2 loggedIn.userId (\cursor -> { cursor | currentTool = tool }) model.cursors
                     }
 
                 NotLoggedIn _ ->
@@ -508,6 +478,12 @@ updateLocalChange localChange model =
                 AdminSetTrainsDisabled trainsDisabled ->
                     ( { model | trainsDisabled = trainsDisabled }, NoOutMsg )
 
+                AdminDeleteMail mailId time ->
+                    ( deleteMail mailId time model, NoOutMsg )
+
+                AdminRestoreMail mailId ->
+                    ( restoreMail mailId model, NoOutMsg )
+
         SetTimeOfDay timeOfDay ->
             ( case model.userStatus of
                 LoggedIn loggedIn ->
@@ -517,6 +493,96 @@ updateLocalChange localChange model =
                     { model | userStatus = NotLoggedIn { notLoggedIn | timeOfDay = timeOfDay } }
             , NoOutMsg
             )
+
+
+viewMail mailId model =
+    { model
+        | mail =
+            IdDict.update2
+                mailId
+                (\mail ->
+                    { mail
+                        | status =
+                            case mail.status of
+                                MailReceived data ->
+                                    MailReceivedAndViewed data
+
+                                _ ->
+                                    mail.status
+                    }
+                )
+                model.mail
+    }
+
+
+restoreMail :
+    Id MailId
+    -> { b | mail : IdDict MailId { c | status : MailStatus } }
+    -> { b | mail : IdDict MailId { c | status : MailStatus } }
+restoreMail mailId model =
+    { model
+        | mail =
+            IdDict.update2
+                mailId
+                (\mail ->
+                    case mail.status of
+                        MailDeletedByAdmin deleted ->
+                            { mail
+                                | status =
+                                    MailEditor.mailStatus2ToMailStatus deleted.previousStatus
+                            }
+
+                        _ ->
+                            mail
+                )
+                model.mail
+    }
+
+
+deleteMail :
+    Id MailId
+    -> Effect.Time.Posix
+    -> { b | mail : IdDict MailId { c | status : MailStatus } }
+    -> { b | mail : IdDict MailId { c | status : MailStatus } }
+deleteMail mailId time model =
+    { model
+        | mail =
+            IdDict.update2
+                mailId
+                (\mail ->
+                    { mail
+                        | status =
+                            case mail.status of
+                                MailWaitingPickup ->
+                                    MailDeletedByAdmin
+                                        { previousStatus = MailWaitingPickup2
+                                        , deletedAt = time
+                                        }
+
+                                MailInTransit id ->
+                                    MailDeletedByAdmin
+                                        { previousStatus = MailInTransit2 id
+                                        , deletedAt = time
+                                        }
+
+                                MailReceived record ->
+                                    MailDeletedByAdmin
+                                        { previousStatus = MailReceived2 record
+                                        , deletedAt = time
+                                        }
+
+                                MailReceivedAndViewed record ->
+                                    MailDeletedByAdmin
+                                        { previousStatus = MailReceivedAndViewed2 record
+                                        , deletedAt = time
+                                        }
+
+                                MailDeletedByAdmin _ ->
+                                    mail.status
+                    }
+                )
+                model.mail
+    }
 
 
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -561,9 +627,9 @@ updateServerChange serverChange model =
         ServerChangeHandColor userId colors ->
             ( { model
                 | users =
-                    IdDict.update
+                    IdDict.update2
                         userId
-                        (Maybe.map (\user -> { user | handColor = colors }))
+                        (\user -> { user | handColor = colors })
                         model.users
               }
             , HandColorOrNameChanged userId
@@ -591,9 +657,9 @@ updateServerChange serverChange model =
         ServerChangeDisplayName userId displayName ->
             ( { model
                 | users =
-                    IdDict.update
+                    IdDict.update2
                         userId
-                        (Maybe.map (\user -> { user | name = displayName }))
+                        (\user -> { user | name = displayName })
                         model.users
               }
             , HandColorOrNameChanged userId
@@ -609,17 +675,39 @@ updateServerChange serverChange model =
             )
 
         ServerMailStatusChanged mailId mailStatus ->
-            ( { model | mail = IdDict.update mailId (Maybe.map (\mail -> { mail | status = mailStatus })) model.mail }
+            ( { model
+                | mail = IdDict.update2 mailId (\mail -> { mail | status = mailStatus }) model.mail
+                , userStatus =
+                    case model.userStatus of
+                        LoggedIn loggedIn ->
+                            case loggedIn.adminData of
+                                Just adminData ->
+                                    { loggedIn
+                                        | adminData =
+                                            { adminData
+                                                | mail =
+                                                    IdDict.update2 mailId (\mail -> { mail | status = mailStatus }) adminData.mail
+                                            }
+                                                |> Just
+                                    }
+                                        |> LoggedIn
+
+                                Nothing ->
+                                    model.userStatus
+
+                        NotLoggedIn notLoggedIn_ ->
+                            model.userStatus
+              }
             , NoOutMsg
             )
 
         ServerTeleportHomeTrainRequest trainId time ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome time)) model.trains }
+            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome time) model.trains }
             , TeleportTrainHome trainId
             )
 
         ServerLeaveHomeTrainRequest trainId time ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome time)) model.trains }
+            ( { model | trains = IdDict.update2 trainId (Train.leaveHome time) model.trains }
             , TrainLeaveHome trainId
             )
 
@@ -659,9 +747,9 @@ updateServerChange serverChange model =
                                             loggedIn.inbox
                                 }
                         , mail =
-                            IdDict.update
+                            IdDict.update2
                                 mailId
-                                (Maybe.map (\mail -> { mail | status = MailReceived { deliveryTime = deliveryTime } }))
+                                (\mail -> { mail | status = MailReceived { deliveryTime = deliveryTime } })
                                 model.mail
                       }
                     , ReceivedMail
@@ -673,20 +761,18 @@ updateServerChange serverChange model =
         ServerViewedMail mailId userId ->
             ( { model
                 | mail =
-                    IdDict.update
+                    IdDict.update2
                         mailId
-                        (Maybe.map
-                            (\mail ->
-                                { mail
-                                    | status =
-                                        case mail.status of
-                                            MailReceived data ->
-                                                MailReceivedAndViewed data
+                        (\mail ->
+                            { mail
+                                | status =
+                                    case mail.status of
+                                        MailReceived data ->
+                                            MailReceivedAndViewed data
 
-                                            _ ->
-                                                mail.status
-                                }
-                            )
+                                        _ ->
+                                            mail.status
+                            }
                         )
                         model.mail
                 , userStatus =
@@ -695,12 +781,7 @@ updateServerChange serverChange model =
                             if userId == loggedIn.userId then
                                 { loggedIn
                                     | inbox =
-                                        IdDict.update
-                                            mailId
-                                            (Maybe.map
-                                                (\mail -> { mail | isViewed = True })
-                                            )
-                                            loggedIn.inbox
+                                        IdDict.update2 mailId (\mail -> { mail | isViewed = True }) loggedIn.inbox
                                 }
                                     |> LoggedIn
 
@@ -721,7 +802,7 @@ updateServerChange serverChange model =
         ServerChangeTool userId tool ->
             ( { model
                 | cursors =
-                    IdDict.update userId (Maybe.map (\cursor -> { cursor | currentTool = tool })) model.cursors
+                    IdDict.update2 userId (\cursor -> { cursor | currentTool = tool }) model.cursors
               }
             , NoOutMsg
             )

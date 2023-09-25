@@ -29,7 +29,7 @@ import Lamdera
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import MailEditor exposing (BackendMail, MailStatus(..))
+import MailEditor exposing (BackendMail, MailStatus(..), MailStatus2(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity
 import Route exposing (LoginOrInviteToken(..), Route(..))
@@ -1181,9 +1181,9 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                                     )
                                     { model
                                         | cows =
-                                            IdDict.update
+                                            IdDict.update2
                                                 cowId
-                                                (Maybe.map (\cow -> { cow | position = position }))
+                                                (\cow -> { cow | position = position })
                                                 model.cows
                                     }
                                 , ( eventId, DropCow cowId position (adjustEventTime time time2) )
@@ -1280,13 +1280,7 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                 adjustedTime =
                     adjustEventTime time teleportTime
             in
-            ( { model
-                | trains =
-                    IdDict.update
-                        trainId
-                        (Maybe.map (Train.startTeleportingHome adjustedTime))
-                        model.trains
-              }
+            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome adjustedTime) model.trains }
             , ( eventId, TeleportHomeTrainRequest trainId adjustedTime )
             , ServerTeleportHomeTrainRequest trainId adjustedTime |> BroadcastToEveryoneElse
             )
@@ -1296,7 +1290,7 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                 adjustedTime =
                     adjustEventTime time leaveTime
             in
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome adjustedTime)) model.trains }
+            ( { model | trains = IdDict.update2 trainId (Train.leaveHome adjustedTime) model.trains }
             , ( eventId, LeaveHomeTrainRequest trainId adjustedTime )
             , ServerLeaveHomeTrainRequest trainId adjustedTime |> BroadcastToEveryoneElse
             )
@@ -1387,6 +1381,22 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                         , ServerSetTrainsDisabled areTrainsDisabled |> BroadcastToEveryoneElse
                         )
 
+                    AdminDeleteMail mailId deleteTime ->
+                        let
+                            adjustedTime =
+                                adjustEventTime time deleteTime
+                        in
+                        ( LocalGrid.deleteMail mailId adjustedTime model
+                        , ( eventId, AdminDeleteMail mailId adjustedTime |> AdminChange )
+                        , BroadcastToNoOne
+                        )
+
+                    AdminRestoreMail mailId ->
+                        ( LocalGrid.restoreMail mailId model
+                        , originalChange
+                        , BroadcastToNoOne
+                        )
+
             else
                 ( model, invalidChange, BroadcastToNoOne )
 
@@ -1464,6 +1474,24 @@ removeTrain trainId model =
 
                         MailReceivedAndViewed _ ->
                             mail
+
+                        MailDeletedByAdmin record ->
+                            case record.previousStatus of
+                                MailInTransit2 trainId2 ->
+                                    if trainId == trainId2 then
+                                        { mail | status = MailWaitingPickup }
+
+                                    else
+                                        mail
+
+                                MailWaitingPickup2 ->
+                                    mail
+
+                                MailReceived2 _ ->
+                                    mail
+
+                                MailReceivedAndViewed2 _ ->
+                                    mail
                 )
                 model.mail
     }
@@ -1471,7 +1499,7 @@ removeTrain trainId model =
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
 updateUser userId updateUserFunc model =
-    { model | users = IdDict.update userId (Maybe.map updateUserFunc) model.users }
+    { model | users = IdDict.update2 userId updateUserFunc model.users }
 
 
 getUserInbox : Id UserId -> BackendModel -> IdDict MailId MailEditor.ReceivedMail
@@ -1501,6 +1529,9 @@ getUserInbox userId model =
                             , isViewed = True
                             , deliveryTime = deliveryTime
                             }
+
+                    MailDeletedByAdmin record ->
+                        Nothing
 
             else
                 Nothing
@@ -1650,9 +1681,9 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites
                                 , users =
-                                    IdDict.update
+                                    IdDict.update2
                                         invite.invitedBy
-                                        (Maybe.map (\user -> { user | acceptedInvites = IdDict.insert userId () user.acceptedInvites }))
+                                        (\user -> { user | acceptedInvites = IdDict.insert userId () user.acceptedInvites })
                                         model4.users
                               }
                             , Nothing

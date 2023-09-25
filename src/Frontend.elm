@@ -3657,12 +3657,12 @@ handleOutMsg isFromBackend ( model, outMsg ) =
             )
 
         LocalGrid.TeleportTrainHome trainId ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.startTeleportingHome model.time)) model.trains }
+            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome model.time) model.trains }
             , Command.none
             )
 
         LocalGrid.TrainLeaveHome trainId ->
-            ( { model | trains = IdDict.update trainId (Maybe.map (Train.leaveHome model.time)) model.trains }
+            ( { model | trains = IdDict.update2 trainId (Train.leaveHome model.time) model.trains }
             , Command.none
             )
 

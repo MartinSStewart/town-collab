@@ -6,13 +6,14 @@ import Color
 import Coord exposing (Coord)
 import DisplayName
 import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.Time
 import Env
-import Id
+import Id exposing (Id, MailId)
 import IdDict
 import Keyboard
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (MailStatus(..))
+import MailEditor exposing (MailStatus(..), MailStatus2(..))
 import Pixels exposing (Pixels)
 import Ui exposing (BorderAndFill(..), UiEvent)
 
@@ -27,6 +28,8 @@ type Hover
     | ResetConnectionsButton
     | CloseAdminPage
     | AdminMailPageButton Int
+    | RestoreMailButton (Id MailId)
+    | DeleteMailButton (Id MailId)
 
 
 init : Model
@@ -53,7 +56,7 @@ type OutMsg
 
 
 type alias Config a =
-    { a | localModel : LocalModel Change LocalGrid }
+    { a | localModel : LocalModel Change LocalGrid, time : Effect.Time.Posix }
 
 
 update : Config a -> Hover -> UiEvent -> Model -> ( Model, OutMsg )
@@ -98,6 +101,12 @@ update config hover event model =
 
         AdminMailPageButton index ->
             onPress event (\() -> ( { model | mailPage = index }, NoOutMsg )) model
+
+        RestoreMailButton mailId ->
+            onPress event (\() -> ( model, Change.AdminRestoreMail mailId |> OutMsgAdminChange )) model
+
+        DeleteMailButton mailId ->
+            onPress event (\() -> ( model, Change.AdminDeleteMail mailId config.time |> OutMsgAdminChange )) model
 
 
 adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
@@ -185,7 +194,41 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                             "Received " ++ MailEditor.date deliveryTime |> Ui.text
 
                                         MailReceivedAndViewed { deliveryTime } ->
-                                            "Received (viewed) " ++ MailEditor.date deliveryTime |> Ui.text
+                                            "Viewed " ++ MailEditor.date deliveryTime |> Ui.text
+
+                                        MailDeletedByAdmin deleted ->
+                                            "Deleted at "
+                                                ++ MailEditor.date deleted.deletedAt
+                                                ++ " (was "
+                                                ++ (case deleted.previousStatus of
+                                                        MailWaitingPickup2 ->
+                                                            "waiting pickup"
+
+                                                        MailInTransit2 _ ->
+                                                            "in transit"
+
+                                                        MailReceived2 _ ->
+                                                            "received"
+
+                                                        MailReceivedAndViewed2 _ ->
+                                                            "viewed"
+                                                   )
+                                                ++ ")"
+                                                |> Ui.text
+                          }
+                        , { header = Ui.text ""
+                          , row =
+                                \( mailId, mail ) ->
+                                    case mail.status of
+                                        MailDeletedByAdmin _ ->
+                                            Ui.button
+                                                { id = RestoreMailButton mailId |> idMap, padding = Ui.paddingXY 6 0 }
+                                                (Ui.text "Restore")
+
+                                        _ ->
+                                            Ui.button
+                                                { id = DeleteMailButton mailId |> idMap, padding = Ui.paddingXY 6 0 }
+                                                (Ui.text "Delete")
                           }
                         ]
                 , List.range 0 (IdDict.size adminData.mail // mailPerPage)
