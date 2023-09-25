@@ -189,6 +189,7 @@ vertexShader :
         , secondaryColor2 : Vec3
         , isSelected : Float
         , position2 : Vec2
+        , z2 : Float
         }
 vertexShader =
     [glsl|
@@ -208,6 +209,7 @@ varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
+varying float z2;
 
 int OR(int n1, int n2){
 
@@ -290,6 +292,7 @@ void main () {
     primaryColor2 = floatColorToVec3(primaryColor);
     secondaryColor2 = floatColorToVec3(secondaryColor);
     position2 = vec2(x, y);
+    z2 = z;
 }|]
 
 
@@ -313,6 +316,7 @@ instancedVertexShader :
         , secondaryColor2 : Vec3
         , isSelected : Float
         , position2 : Vec2
+        , z2 : Float
         }
 instancedVertexShader =
     [glsl|
@@ -333,6 +337,7 @@ varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
+varying float z2;
 
 int OR(int n1, int n2){
 
@@ -419,6 +424,7 @@ void main () {
     primaryColor2 = floatColorToVec3(primaryColor0);
     secondaryColor2 = floatColorToVec3(secondaryColor0);
     position2 = position0.xy + localPosition2;
+    z2 = 0.0;
 }|]
 
 
@@ -439,6 +445,7 @@ fragmentShader :
         , secondaryColor2 : Vec3
         , isSelected : Float
         , position2 : Vec2
+        , z2 : Float
         }
 fragmentShader =
     [glsl|
@@ -456,6 +463,7 @@ varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
+varying float z2;
 
 vec3 primaryColor = vec3(1.0, 0.0, 1.0);
 vec3 primaryColorMidShade = vec3(233.0 / 255.0, 45.0 / 255.0, 231.0 / 255.0);
@@ -466,7 +474,7 @@ vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 void main () {
     vec4 textureColor = texture2D(texture, vcoord);
 
-    gl_FragDepthEXT = texture2D(depth, vcoord).x;
+    gl_FragDepthEXT = texture2D(depth, vcoord).x + z2;
 
     if (textureColor.a == 0.0) {
         discard;
@@ -518,6 +526,7 @@ debrisVertexShader :
         , secondaryColor2 : Vec3
         , isSelected : Float
         , position2 : Vec2
+        , z2 : Float
         }
 debrisVertexShader =
     [glsl|
@@ -536,6 +545,7 @@ varying vec3 primaryColor2;
 varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
+varying float z2;
 
 int OR(int n1, int n2){
 
@@ -616,6 +626,7 @@ void main () {
     primaryColor2 = floatColorToVec3(primaryColor);
     secondaryColor2 = floatColorToVec3(secondaryColor);
     position2 = position;
+    z2 = 0.0;
 }|]
 
 
