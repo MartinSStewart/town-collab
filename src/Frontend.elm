@@ -1,4 +1,4 @@
-module Frontend exposing (app)
+module Frontend exposing (app, app_)
 
 import AdminPage
 import Animal exposing (Animal)
@@ -100,23 +100,24 @@ app :
     , onUrlChange : Url -> Audio.Msg FrontendMsg_
     }
 app =
-    Effect.Lamdera.frontend
-        Lamdera.sendToBackend
-        (Audio.lamderaFrontendWithAudio
-            { init = init
-            , onUrlRequest = UrlClicked
-            , onUrlChange = UrlChanged
-            , update = \audioData msg model -> update audioData msg model
-            , updateFromBackend = \_ msg model -> updateFromBackend msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
-            , subscriptions = subscriptions
-            , view = view
-            , audio = audio
-            , audioPort =
-                { toJS = Command.sendToJs "audioPortToJS" Ports.audioPortToJS
-                , fromJS = Subscription.fromJs "audioPortFromJS" Ports.audioPortFromJS
-                }
+    Effect.Lamdera.frontend Lamdera.sendToBackend app_
+
+
+app_ =
+    Audio.lamderaFrontendWithAudio
+        { init = init
+        , onUrlRequest = UrlClicked
+        , onUrlChange = UrlChanged
+        , update = \audioData msg model -> update audioData msg model
+        , updateFromBackend = \_ msg model -> updateFromBackend msg model |> (\( a, b ) -> ( a, b, Audio.cmdNone ))
+        , subscriptions = subscriptions
+        , view = view
+        , audio = audio
+        , audioPort =
+            { toJS = Command.sendToJs "audioPortToJS" Ports.audioPortToJS
+            , fromJS = Subscription.fromJs "audioPortFromJS" Ports.audioPortFromJS
             }
-        )
+        }
 
 
 audio : AudioData -> FrontendModel_ -> Audio

@@ -222,7 +222,7 @@ endToEndTests =
                                                 LoggedIn _ ->
                                                     Err "Shouldn't be logged in"
 
-                                                NotLoggedIn ->
+                                                NotLoggedIn _ ->
                                                     Ok ()
 
                                         LoadingLocalModel _ ->
@@ -265,7 +265,7 @@ endToEndTests =
                                                                                 LoggedIn loggedIn ->
                                                                                     Ok ()
 
-                                                                                NotLoggedIn ->
+                                                                                NotLoggedIn _ ->
                                                                                     Err "Not logged in"
 
                                                                         LoadingLocalModel _ ->
@@ -293,7 +293,7 @@ endToEndTests =
                                                                                 LoggedIn loggedIn ->
                                                                                     Ok ()
 
-                                                                                NotLoggedIn ->
+                                                                                NotLoggedIn _ ->
                                                                                     Err "Not logged in"
 
                                                                         LoadingLocalModel _ ->
@@ -319,7 +319,7 @@ endToEndTests =
                                                 LoggedIn _ ->
                                                     Ok ()
 
-                                                NotLoggedIn ->
+                                                NotLoggedIn _ ->
                                                     Err "Original session not logged in"
 
                                         LoadingLocalModel _ ->

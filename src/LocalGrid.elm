@@ -695,13 +695,7 @@ updateServerChange serverChange model =
                     IdDict.size model.mail |> Id.fromInt
             in
             ( { model
-                | mail =
-                    IdDict.insert mailId
-                        { to = to
-                        , from = from
-                        , status = MailWaitingPickup
-                        }
-                        model.mail
+                | mail = IdDict.insert mailId { to = to, from = from, status = MailWaitingPickup } model.mail
                 , userStatus =
                     case model.userStatus of
                         LoggedIn loggedIn ->
@@ -812,7 +806,12 @@ updateServerChange serverChange model =
                                                     | mail =
                                                         IdDict.update2
                                                             mailId
-                                                            (\mail -> { mail | status = MailReceived { deliveryTime = deliveryTime } })
+                                                            (\mail ->
+                                                                { mail
+                                                                    | status =
+                                                                        MailReceived { deliveryTime = deliveryTime }
+                                                                }
+                                                            )
                                                             adminData.mail
                                                 }
                                                     |> Just

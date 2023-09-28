@@ -1,4 +1,4 @@
-module Backend exposing (app)
+module Backend exposing (app, app_)
 
 import Animal exposing (Animal)
 import AssocList

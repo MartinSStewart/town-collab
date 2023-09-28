@@ -1,4 +1,4 @@
-module Env exposing (adminEmail, adminUserId, domain, isProduction, postmarkApiKey, secretKey)
+module Env exposing (adminEmail, adminEmail2, adminUserId, domain, isProduction, postmarkApiKey, secretKey)
 
 -- The Env.elm file is for per-environment configuration.
 -- See https://dashboard.lamdera.app/docs/environment for more info.
