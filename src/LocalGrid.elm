@@ -328,7 +328,27 @@ updateLocalChange localChange model =
                     in
                     ( { model
                         | userStatus =
-                            LoggedIn { loggedIn | mailDrafts = IdDict.remove submitMail.to loggedIn.mailDrafts }
+                            LoggedIn
+                                { loggedIn
+                                    | mailDrafts = IdDict.remove submitMail.to loggedIn.mailDrafts
+                                    , adminData =
+                                        case loggedIn.adminData of
+                                            Just adminData ->
+                                                { adminData
+                                                    | mail =
+                                                        IdDict.insert mailId
+                                                            { to = submitMail.to
+                                                            , from = loggedIn.userId
+                                                            , status = MailWaitingPickup
+                                                            , content = submitMail.content
+                                                            }
+                                                            adminData.mail
+                                                }
+                                                    |> Just
+
+                                            Nothing ->
+                                                Nothing
+                                }
                         , mail =
                             IdDict.insert mailId
                                 { to = submitMail.to, from = loggedIn.userId, status = MailWaitingPickup }
@@ -495,6 +515,10 @@ updateLocalChange localChange model =
             )
 
 
+viewMail :
+    Id MailId
+    -> { b | mail : IdDict MailId { c | status : MailStatus } }
+    -> { b | mail : IdDict MailId { c | status : MailStatus } }
 viewMail mailId model =
     { model
         | mail =
@@ -670,7 +694,43 @@ updateServerChange serverChange model =
                 mailId =
                     IdDict.size model.mail |> Id.fromInt
             in
-            ( { model | mail = IdDict.insert mailId { to = to, from = from, status = MailWaitingPickup } model.mail }
+            ( { model
+                | mail =
+                    IdDict.insert mailId
+                        { to = to
+                        , from = from
+                        , status = MailWaitingPickup
+                        }
+                        model.mail
+                , userStatus =
+                    case model.userStatus of
+                        LoggedIn loggedIn ->
+                            case loggedIn.adminData of
+                                Just adminData ->
+                                    { loggedIn
+                                        | adminData =
+                                            { adminData
+                                                | mail =
+                                                    IdDict.insert mailId
+                                                        { to = to
+                                                        , from = from
+                                                        , status = MailWaitingPickup
+                                                        , content =
+                                                            -- TODO include content for admin
+                                                            []
+                                                        }
+                                                        adminData.mail
+                                            }
+                                                |> Just
+                                    }
+                                        |> LoggedIn
+
+                                Nothing ->
+                                    model.userStatus
+
+                        NotLoggedIn notLoggedIn_ ->
+                            model.userStatus
+              }
             , NoOutMsg
             )
 
@@ -695,7 +755,7 @@ updateServerChange serverChange model =
                                 Nothing ->
                                     model.userStatus
 
-                        NotLoggedIn notLoggedIn_ ->
+                        NotLoggedIn _ ->
                             model.userStatus
               }
             , NoOutMsg
@@ -745,6 +805,20 @@ updateServerChange serverChange model =
                                             , isViewed = False
                                             }
                                             loggedIn.inbox
+                                    , adminData =
+                                        case loggedIn.adminData of
+                                            Just adminData ->
+                                                { adminData
+                                                    | mail =
+                                                        IdDict.update2
+                                                            mailId
+                                                            (\mail -> { mail | status = MailReceived { deliveryTime = deliveryTime } })
+                                                            adminData.mail
+                                                }
+                                                    |> Just
+
+                                            Nothing ->
+                                                Nothing
                                 }
                         , mail =
                             IdDict.update2
@@ -782,6 +856,30 @@ updateServerChange serverChange model =
                                 { loggedIn
                                     | inbox =
                                         IdDict.update2 mailId (\mail -> { mail | isViewed = True }) loggedIn.inbox
+                                    , adminData =
+                                        case loggedIn.adminData of
+                                            Just adminData ->
+                                                { adminData
+                                                    | mail =
+                                                        IdDict.update2
+                                                            mailId
+                                                            (\mail ->
+                                                                { mail
+                                                                    | status =
+                                                                        case mail.status of
+                                                                            MailReceived data ->
+                                                                                MailReceivedAndViewed data
+
+                                                                            _ ->
+                                                                                mail.status
+                                                                }
+                                                            )
+                                                            adminData.mail
+                                                }
+                                                    |> Just
+
+                                            Nothing ->
+                                                Nothing
                                 }
                                     |> LoggedIn
 
