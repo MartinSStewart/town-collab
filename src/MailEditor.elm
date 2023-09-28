@@ -23,7 +23,6 @@ module MailEditor exposing
     , handleKeyDown
     , importMail
     , init
-    , mailStatus2ToMailStatus
     , openAnimationLength
     , redo
     , scroll
@@ -151,22 +150,6 @@ type MailStatus2
     | MailInTransit2 (Id TrainId)
     | MailReceived2 { deliveryTime : Effect.Time.Posix }
     | MailReceivedAndViewed2 { deliveryTime : Effect.Time.Posix }
-
-
-mailStatus2ToMailStatus : MailStatus2 -> MailStatus
-mailStatus2ToMailStatus mailStatus2 =
-    case mailStatus2 of
-        MailWaitingPickup2 ->
-            MailWaitingPickup
-
-        MailInTransit2 id ->
-            MailInTransit id
-
-        MailReceived2 record ->
-            MailReceived record
-
-        MailReceivedAndViewed2 record ->
-            MailReceivedAndViewed record
 
 
 type Tool

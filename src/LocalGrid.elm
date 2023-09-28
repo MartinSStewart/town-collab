@@ -499,10 +499,38 @@ updateLocalChange localChange model =
                     ( { model | trainsDisabled = trainsDisabled }, NoOutMsg )
 
                 AdminDeleteMail mailId time ->
-                    ( deleteMail mailId time model, NoOutMsg )
+                    ( case model.userStatus of
+                        LoggedIn loggedIn ->
+                            { model
+                                | userStatus =
+                                    LoggedIn
+                                        { loggedIn
+                                            | adminData = Maybe.map (deleteMail mailId time) loggedIn.adminData
+                                        }
+                            }
+                                |> deleteMail mailId time
+
+                        NotLoggedIn _ ->
+                            model
+                    , NoOutMsg
+                    )
 
                 AdminRestoreMail mailId ->
-                    ( restoreMail mailId model, NoOutMsg )
+                    ( case model.userStatus of
+                        LoggedIn loggedIn ->
+                            { model
+                                | userStatus =
+                                    LoggedIn
+                                        { loggedIn
+                                            | adminData = Maybe.map (restoreMail mailId) loggedIn.adminData
+                                        }
+                            }
+                                |> restoreMail mailId
+
+                        NotLoggedIn _ ->
+                            model
+                    , NoOutMsg
+                    )
 
         SetTimeOfDay timeOfDay ->
             ( case model.userStatus of
@@ -553,7 +581,18 @@ restoreMail mailId model =
                         MailDeletedByAdmin deleted ->
                             { mail
                                 | status =
-                                    MailEditor.mailStatus2ToMailStatus deleted.previousStatus
+                                    case deleted.previousStatus of
+                                        MailWaitingPickup2 ->
+                                            MailWaitingPickup
+
+                                        MailInTransit2 id ->
+                                            MailWaitingPickup
+
+                                        MailReceived2 record ->
+                                            MailReceived record
+
+                                        MailReceivedAndViewed2 record ->
+                                            MailReceivedAndViewed record
                             }
 
                         _ ->

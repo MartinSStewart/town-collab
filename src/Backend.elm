@@ -1475,23 +1475,8 @@ removeTrain trainId model =
                         MailReceivedAndViewed _ ->
                             mail
 
-                        MailDeletedByAdmin record ->
-                            case record.previousStatus of
-                                MailInTransit2 trainId2 ->
-                                    if trainId == trainId2 then
-                                        { mail | status = MailWaitingPickup }
-
-                                    else
-                                        mail
-
-                                MailWaitingPickup2 ->
-                                    mail
-
-                                MailReceived2 _ ->
-                                    mail
-
-                                MailReceivedAndViewed2 _ ->
-                                    mail
+                        MailDeletedByAdmin _ ->
+                            mail
                 )
                 model.mail
     }
