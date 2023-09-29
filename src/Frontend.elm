@@ -1202,6 +1202,9 @@ updateLoaded audioData msg model =
                                         AdminHover _ ->
                                             True
 
+                                        CategoryButton _ ->
+                                            True
+
                                 Nothing ->
                                     True
 
@@ -2963,6 +2966,9 @@ uiUpdate audioData id event model =
 
                 _ ->
                     ( model, Command.none )
+
+        CategoryButton category ->
+            onPress audioData event (\() -> ( { model | selectedTileCategory = category }, Command.none )) model
 
 
 textInputUpdate :

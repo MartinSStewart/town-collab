@@ -44,6 +44,7 @@ module Ui exposing
     , topLeft
     , topLeft2
     , topRight
+    , underlinedText
     , view
     , visuallyEqual
     , wrappedColorText
@@ -102,6 +103,7 @@ type Element id
         , color : Color
         , scale : Int
         , text : String
+        , underlined : Bool
         , cachedSize : Coord Pixels
         }
     | TextInput (TextInputData id)
@@ -164,6 +166,7 @@ visuallyEqual a b =
                 && (aText.color == bText.color)
                 && (aText.scale == bText.scale)
                 && (aText.text == bText.text)
+                && (aText.underlined == bText.underlined)
 
         ( TextInput aTextInput, TextInput bTextInput ) ->
             (aTextInput.width == bTextInput.width)
@@ -212,6 +215,19 @@ text text2 =
         , color = Color.black
         , scale = defaultCharScale
         , text = text2
+        , underlined = False
+        , cachedSize = Sprite.textSize defaultCharScale text2
+        }
+
+
+underlinedText : String -> Element id
+underlinedText text2 =
+    Text
+        { outline = Nothing
+        , color = Color.black
+        , scale = defaultCharScale
+        , text = text2
+        , underlined = True
         , cachedSize = Sprite.textSize defaultCharScale text2
         }
 
@@ -223,6 +239,7 @@ scaledText scale text2 =
         , color = Color.black
         , scale = scale
         , text = text2
+        , underlined = False
         , cachedSize = Sprite.textSize scale text2
         }
 
@@ -234,6 +251,7 @@ colorText color text2 =
         , color = color
         , scale = defaultCharScale
         , text = text2
+        , underlined = False
         , cachedSize = Sprite.textSize defaultCharScale text2
         }
 
@@ -245,6 +263,7 @@ colorScaledText color scale text2 =
         , color = color
         , scale = scale
         , text = text2
+        , underlined = False
         , cachedSize = Sprite.textSize scale text2
         }
 
@@ -256,6 +275,7 @@ outlinedText data =
         , color = data.color
         , scale = defaultCharScale
         , text = data.text
+        , underlined = False
         , cachedSize = Sprite.textSize defaultCharScale data.text
         }
 
@@ -339,6 +359,7 @@ wrappedColorText maxWidth color text2 =
         , color = color
         , scale = defaultCharScale
         , text = text3
+        , underlined = False
         , cachedSize = Sprite.textSize defaultCharScale text3
         }
 
@@ -799,7 +820,11 @@ viewHelper focus position vertices element2 =
                     Sprite.outlinedText outline data.color data.scale data.text position
 
                 Nothing ->
-                    Sprite.text data.color data.scale data.text position
+                    if data.underlined then
+                        Sprite.underlinedText data.color data.scale data.text position
+
+                    else
+                        Sprite.text data.color data.scale data.text position
             )
                 ++ vertices
 

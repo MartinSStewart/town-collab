@@ -1,5 +1,6 @@
 module Tile exposing
-    ( CollisionMask(..)
+    ( Category(..)
+    , CollisionMask(..)
     , DefaultColor(..)
     , Direction(..)
     , RailData
@@ -8,7 +9,10 @@ module Tile exposing
     , Tile(..)
     , TileData
     , TileGroup(..)
+    , allCategories
     , allTileGroupsExceptText
+    , buildingCategory
+    , categoryToString
     , codec
     , defaultPineTreeColor
     , defaultPostOfficeColor
@@ -19,9 +23,12 @@ module Tile exposing
     , hasCollision
     , hasCollisionWithCoord
     , pathDirection
+    , railCategory
     , railDataReverse
     , railPathData
     , reverseDirection
+    , roadCategory
+    , sceneryCategory
     , texturePositionPixels
     , tileToTileGroup
     , trainHouseLeftRailPath
@@ -41,6 +48,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Set exposing (Set)
 import Sprite
+import String.Nonempty exposing (NonemptyString(..))
 import Units exposing (CellLocalUnit, TileLocalUnit)
 import Vector2d
 
@@ -144,13 +152,7 @@ codec =
 allTileGroupsExceptText : List TileGroup
 allTileGroupsExceptText =
     [ EmptyTileGroup
-    , CornerHouseGroup
     , HouseGroup
-    , LogCabinGroup
-    , ApartmentGroup
-    , HospitalGroup
-    , PostOfficeGroup
-    , StatueGroup
     , RailStraightGroup
     , RailTurnGroup
     , RailTurnLargeGroup
@@ -162,6 +164,10 @@ allTileGroupsExceptText =
     , SidewalkRailGroup
     , RailTurnSplitGroup
     , RailTurnSplitMirrorGroup
+    , PostOfficeGroup
+    , PineTreeGroup
+    , BigPineTreeGroup
+    , LogCabinGroup
     , RoadStraightGroup
     , RoadTurnGroup
     , Road4WayGroup
@@ -169,18 +175,117 @@ allTileGroupsExceptText =
     , Road3WayGroup
     , RoadRailCrossingGroup
     , RoadDeadendGroup
-    , BusStopGroup
     , FenceStraightGroup
+    , BusStopGroup
+    , HospitalGroup
+    , StatueGroup
     , HedgeRowGroup
     , HedgeCornerGroup
     , HedgePillarGroup
-    , PineTreeGroup
-    , BigPineTreeGroup
+    , ApartmentGroup
     , RockGroup
     , FlowersGroup
     , ElmTreeGroup
     , DirtPathGroup
+    , HyperlinkGroup
     , BenchGroup
+    , ParkingLotGroup
+    , ParkingRoadGroup
+    , ParkingRoundaboutGroup
+    , CornerHouseGroup
+    ]
+
+
+categoryToString : Category -> NonemptyString
+categoryToString category =
+    case category of
+        Buildings ->
+            NonemptyString 'b' "uildings"
+
+        Scenery ->
+            NonemptyString 's' "cenery"
+
+        Rail ->
+            NonemptyString 't' "rains"
+
+        Road ->
+            NonemptyString 'r' "oads"
+
+
+type Category
+    = Scenery
+    | Buildings
+    | Rail
+    | Road
+
+
+allCategories : List Category
+allCategories =
+    [ Scenery
+    , Buildings
+    , Rail
+    , Road
+    ]
+
+
+sceneryCategory : List TileGroup
+sceneryCategory =
+    [ PineTreeGroup
+    , BigPineTreeGroup
+    , FenceStraightGroup
+    , StatueGroup
+    , HedgeRowGroup
+    , HedgeCornerGroup
+    , HedgePillarGroup
+    , RockGroup
+    , FlowersGroup
+    , ElmTreeGroup
+    , DirtPathGroup
+    , SidewalkGroup
+    , BenchGroup
+    ]
+
+
+buildingCategory : List TileGroup
+buildingCategory =
+    [ HouseGroup
+    , TrainHouseGroup
+    , PostOfficeGroup
+    , LogCabinGroup
+    , BusStopGroup
+    , HospitalGroup
+    , ApartmentGroup
+    , CornerHouseGroup
+    ]
+
+
+railCategory : List TileGroup
+railCategory =
+    [ RailStraightGroup
+    , RailTurnGroup
+    , RailTurnLargeGroup
+    , RailStrafeGroup
+    , RailStrafeSmallGroup
+    , RailCrossingGroup
+    , TrainHouseGroup
+    , SidewalkRailGroup
+    , RailTurnSplitGroup
+    , RailTurnSplitMirrorGroup
+    , PostOfficeGroup
+    , RoadRailCrossingGroup
+    ]
+
+
+roadCategory : List TileGroup
+roadCategory =
+    [ SidewalkGroup
+    , RoadStraightGroup
+    , RoadTurnGroup
+    , Road4WayGroup
+    , RoadSidewalkCrossingGroup
+    , Road3WayGroup
+    , RoadRailCrossingGroup
+    , RoadDeadendGroup
     , ParkingLotGroup
     , ParkingRoadGroup
     , ParkingRoundaboutGroup

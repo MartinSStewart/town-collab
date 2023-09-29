@@ -65,7 +65,7 @@ import Sound
 import Sprite
 import Terrain
 import TextInput
-import Tile exposing (Tile, TileGroup(..))
+import Tile exposing (Category(..), Tile, TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
@@ -393,6 +393,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastReportTileRemoved = Nothing
             , hideUi = False
             , lightsSwitched = Nothing
+            , selectedTileCategory = Buildings
             }
                 |> setCurrentTool HandToolButton
     in
@@ -681,38 +682,7 @@ cursorPosition tileData model =
 defaultTileHotkeys : Dict String TileGroup
 defaultTileHotkeys =
     Dict.fromList
-        [ ( " ", EmptyTileGroup )
-        , ( "1", HouseGroup )
-        , ( "a", ApartmentGroup )
-        , ( "2", HospitalGroup )
-        , ( "s", StatueGroup )
-        , ( "3", RailStraightGroup )
-        , ( "e", RailTurnGroup )
-        , ( "d", RailTurnLargeGroup )
-        , ( "4", RailStrafeGroup )
-        , ( "r", RailStrafeSmallGroup )
-        , ( "f", RailCrossingGroup )
-        , ( "5", TrainHouseGroup )
-        , ( "t", SidewalkGroup )
-        , ( "g", SidewalkRailGroup )
-        , ( "6", RailTurnSplitGroup )
-        , ( "y", RailTurnSplitMirrorGroup )
-        , ( "h", RoadStraightGroup )
-        , ( "7", RoadTurnGroup )
-        , ( "u", Road4WayGroup )
-        , ( "j", RoadSidewalkCrossingGroup )
-        , ( "8", Road3WayGroup )
-        , ( "i", RoadRailCrossingGroup )
-        , ( "k", RoadDeadendGroup )
-        , ( "9", BusStopGroup )
-        , ( "o", FenceStraightGroup )
-        , ( "l", HedgeRowGroup )
-        , ( "0", HedgeCornerGroup )
-        , ( "p", HedgePillarGroup )
-        , ( ";", PineTreeGroup )
-        , ( "-", RockGroup )
-        , ( "=", FlowersGroup )
-        ]
+        []
 
 
 getHandColor : Id UserId -> { a | localModel : LocalModel b LocalGrid } -> Colors

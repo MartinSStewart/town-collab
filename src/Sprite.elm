@@ -18,6 +18,7 @@ module Sprite exposing
     , textWithZAndOpacityAndUserId
     , textureWidth
     , toMesh
+    , underlinedText
     )
 
 import Color exposing (Color, Colors)
@@ -303,6 +304,18 @@ charTexturePosition char =
             Coord.xy 0 0
 
 
+underlinedCharTexturePosition : Char -> Coord unit
+underlinedCharTexturePosition char =
+    case Dict.get char charToInt of
+        Just index ->
+            Coord.xy
+                (768 + modBy charsPerRow index * Coord.xRaw charSize)
+                (180 + (index // charsPerRow) * Coord.yRaw charSize)
+
+        Nothing ->
+            Coord.xy 0 0
+
+
 charToInt : Dict Char Int
 charToInt =
     List.Nonempty.toList asciiChars
@@ -335,6 +348,39 @@ text color charScale string position =
                             (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
                             charSize2
                             (charTexturePosition char)
+                            charSize
+                            ++ state.vertices
+                    }
+            )
+            { offsetX = 0, offsetY = 0, vertices = [] }
+        |> .vertices
+
+
+underlinedText : Color -> Int -> String -> Coord unit -> List Vertex
+underlinedText color charScale string position =
+    let
+        charSize2 : Coord unit
+        charSize2 =
+            Coord.multiplyTuple ( charScale, charScale ) charSize
+    in
+    String.toList string
+        |> List.foldl
+            (\char state ->
+                if char == '\n' then
+                    { offsetX = 0
+                    , offsetY = state.offsetY + Coord.yRaw charSize2
+                    , vertices = state.vertices
+                    }
+
+                else
+                    { offsetX = state.offsetX + Coord.xRaw charSize2
+                    , offsetY = state.offsetY
+                    , vertices =
+                        spriteWithColor
+                            color
+                            (Coord.addTuple_ ( state.offsetX, state.offsetY ) position)
+                            charSize2
+                            (underlinedCharTexturePosition char)
                             charSize
                             ++ state.vertices
                     }

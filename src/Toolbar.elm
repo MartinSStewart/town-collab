@@ -34,8 +34,9 @@ import Quantity exposing (Quantity(..), Rate)
 import Shaders
 import Sound
 import Sprite
+import String.Nonempty
 import TextInput
-import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
+import Tile exposing (Category(..), DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Tool exposing (Tool(..))
 import Train
 import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
@@ -828,9 +829,9 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
 toolbarUi : Colors -> FrontendLoaded -> ToolButton -> Ui.Element UiHover
 toolbarUi handColor model currentToolButton =
     Ui.row
-        { spacing = 0, padding = Ui.noPadding }
+        { spacing = 2, padding = Ui.noPadding }
         [ Ui.column
-            { spacing = 2, padding = { topLeft = Coord.origin, bottomRight = Coord.xy 2 0 } }
+            { spacing = 2, padding = Ui.noPadding }
             [ Ui.row
                 { spacing = 2, padding = Ui.noPadding }
                 [ Ui.button { id = ZoomInButton, padding = smallToolButtonPadding } zoomInSprite
@@ -895,12 +896,73 @@ toolbarUi handColor model currentToolButton =
                             }
                     }
                     mapSprite
+                , Ui.selectableButton
+                    { id = ToolButtonHover ReportToolButton
+                    , padding = smallToolButtonPadding
+                    }
+                    (currentToolButton == ReportToolButton)
+                    Cursor.gavelCursor2
                 ]
             ]
-        , List.map (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton) buttonTiles
+        , List.map
+            (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
+            [ HandToolButton
+            , TilePickerToolButton
+            , TextToolButton
+            , TilePlacerToolButton EmptyTileGroup
+            ]
             |> List.greedyGroupsOf toolbarRowCount
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
+        , Ui.column
+            { spacing = 0
+            , padding = { topLeft = Coord.xy 0 -40, bottomRight = Coord.xy 0 0 }
+            }
+            [ List.map
+                (\category ->
+                    let
+                        text =
+                            Tile.categoryToString category
+                    in
+                    Ui.selectableButton
+                        { id = CategoryButton category
+                        , padding = Ui.paddingXY 6 2
+                        }
+                        (model.selectedTileCategory == category)
+                        (Ui.row
+                            { spacing = 0, padding = Ui.noPadding }
+                            [ Ui.underlinedText (String.fromChar (String.Nonempty.head text))
+                            , Ui.text (String.Nonempty.tail text)
+                            ]
+                        )
+                )
+                Tile.allCategories
+                |> Ui.row { spacing = 4, padding = Ui.noPadding }
+            , (case model.selectedTileCategory of
+                Buildings ->
+                    Tile.buildingCategory
+
+                Scenery ->
+                    Tile.sceneryCategory
+
+                Rail ->
+                    Tile.railCategory
+
+                Road ->
+                    Tile.roadCategory
+              )
+                |> List.map (\a -> TilePlacerToolButton a |> toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
+                |> List.greedyGroupsOf toolbarRowCount
+                |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
+                |> Ui.row { spacing = 2, padding = Ui.noPadding }
+            ]
+
+        --List.map
+        --    (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
+        --    buttonTiles
+        --    |> List.greedyGroupsOf toolbarRowCount
+        --    |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
+        --    |> Ui.row { spacing = 2, padding = Ui.noPadding }
         , selectedToolView handColor model.primaryColorTextInput model.secondaryColorTextInput model.tileColors currentToolButton
         ]
 
@@ -1187,19 +1249,9 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
         (Ui.center { size = buttonSize } label)
 
 
-buttonTiles : List ToolButton
-buttonTiles =
-    [ HandToolButton
-    , TilePickerToolButton
-    , ReportToolButton
-    , TextToolButton
-    ]
-        ++ List.map TilePlacerToolButton Tile.allTileGroupsExceptText
-
-
 toolbarRowCount : number
 toolbarRowCount =
-    3
+    2
 
 
 tileMesh : Colors -> Tile -> Ui.Element id
@@ -1258,7 +1310,7 @@ primaryColorInputWidth =
 
 buttonSize : Coord units
 buttonSize =
-    Coord.xy 80 80
+    Coord.xy 84 86
 
 
 showColorTextInputs :

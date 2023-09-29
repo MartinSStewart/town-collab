@@ -73,7 +73,7 @@ import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeE
 import Shaders exposing (DebrisVertex, Vertex)
 import Sound exposing (Sound)
 import TextInput
-import Tile exposing (Tile, TileGroup)
+import Tile exposing (Category, Tile, TileGroup)
 import Time
 import Tool exposing (Tool)
 import Train exposing (Train)
@@ -220,6 +220,7 @@ type alias FrontendLoaded =
     , hideUi : Bool
     , lightsSwitched : Maybe Time.Posix
     , page : Page
+    , selectedTileCategory : Category
     }
 
 
@@ -328,6 +329,7 @@ type UiHover
     | AlwaysNightTimeOfDayButton
     | ShowAdminPage
     | AdminHover AdminPage.Hover
+    | CategoryButton Category
 
 
 type alias BackendModel =
