@@ -14,13 +14,15 @@ module LocalGrid exposing
     , localModel
     , removeReported
     , restoreMail
+    , setTileHotkey
     , update
     , updateFromBackend
     )
 
 import Animal exposing (Animal, AnimalType(..))
+import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -38,7 +40,7 @@ import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
 import Terrain exposing (TerrainType(..))
-import Tile exposing (Tile)
+import Tile exposing (Tile, TileGroup)
 import Tool exposing (Tool(..))
 import Train exposing (Train)
 import Undo
@@ -486,14 +488,7 @@ updateLocalChange localChange model =
                     )
 
                 AdminSetGridReadOnly isGridReadOnly ->
-                    case model.userStatus of
-                        LoggedIn loggedIn ->
-                            ( { model | userStatus = LoggedIn { loggedIn | isGridReadOnly = isGridReadOnly } }
-                            , NoOutMsg
-                            )
-
-                        NotLoggedIn _ ->
-                            ( model, NoOutMsg )
+                    updateLoggedIn model (\loggedIn -> { loggedIn | isGridReadOnly = isGridReadOnly })
 
                 AdminSetTrainsDisabled trainsDisabled ->
                     ( { model | trainsDisabled = trainsDisabled }, NoOutMsg )
@@ -541,6 +536,37 @@ updateLocalChange localChange model =
                     { model | userStatus = NotLoggedIn { notLoggedIn | timeOfDay = timeOfDay } }
             , NoOutMsg
             )
+
+        SetTileHotkey tileHotkey tileGroup ->
+            updateLoggedIn model (setTileHotkey tileHotkey tileGroup)
+
+
+setTileHotkey :
+    TileHotkey
+    -> TileGroup
+    -> { c | tileHotkeys : AssocList.Dict TileHotkey TileGroup }
+    -> { c | tileHotkeys : AssocList.Dict TileHotkey TileGroup }
+setTileHotkey hotkey tileGroup user =
+    { user
+        | tileHotkeys =
+            AssocList.filter (\_ value -> value /= tileGroup) user.tileHotkeys
+                |> AssocList.insert hotkey tileGroup
+    }
+
+
+updateLoggedIn : LocalGrid_ -> (Change.LoggedIn_ -> Change.LoggedIn_) -> ( LocalGrid_, OutMsg )
+updateLoggedIn model updateFunc =
+    ( case model.userStatus of
+        LoggedIn loggedIn ->
+            { model
+                | userStatus =
+                    updateFunc loggedIn |> LoggedIn
+            }
+
+        NotLoggedIn _ ->
+            model
+    , NoOutMsg
+    )
 
 
 viewMail :

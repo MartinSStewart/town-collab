@@ -333,7 +333,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , currentTool = currentTool2
             , lastTileRotation = []
             , lastPlacementError = Nothing
-            , tileHotkeys = defaultTileHotkeys
             , ui = Ui.none
             , uiMesh = Shaders.triangleFan []
             , previousTileHover = Nothing
@@ -394,6 +393,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , hideUi = False
             , lightsSwitched = Nothing
             , selectedTileCategory = Buildings
+            , lastHotkeyChange = Nothing
             }
                 |> setCurrentTool HandToolButton
     in
@@ -677,12 +677,6 @@ cursorPosition tileData model =
     mouseWorldPosition model
         |> Coord.floorPoint
         |> Coord.minus (tileData.size |> Coord.divide (Coord.tuple ( 2, 2 )))
-
-
-defaultTileHotkeys : Dict String TileGroup
-defaultTileHotkeys =
-    Dict.fromList
-        []
 
 
 getHandColor : Id UserId -> { a | localModel : LocalModel b LocalGrid } -> Colors

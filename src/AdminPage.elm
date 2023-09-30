@@ -42,7 +42,7 @@ onPress event updateFunc model =
         Ui.MousePressed _ ->
             updateFunc ()
 
-        Ui.KeyDown Keyboard.Enter ->
+        Ui.KeyDown _ Keyboard.Enter ->
             updateFunc ()
 
         _ ->

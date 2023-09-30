@@ -9,11 +9,14 @@ module Change exposing
     , LoggedIn_
     , Report
     , ServerChange(..)
+    , TileHotkey(..)
     , TimeOfDay(..)
     , UserStatus(..)
+    , tileHotkeyDict
     )
 
 import Animal exposing (Animal)
+import AssocList
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
@@ -29,6 +32,7 @@ import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (BackendMail, MailStatus)
 import Point2d exposing (Point2d)
+import Tile exposing (TileGroup)
 import Train exposing (TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import User exposing (FrontendUser)
@@ -63,6 +67,36 @@ type LocalChange
     | ReportVandalism Report
     | RemoveReport (Coord WorldUnit)
     | SetTimeOfDay TimeOfDay
+    | SetTileHotkey TileHotkey TileGroup
+
+
+tileHotkeyDict : Dict String TileHotkey
+tileHotkeyDict =
+    Dict.fromList
+        [ ( "Digit0", Hotkey0 )
+        , ( "Digit1", Hotkey1 )
+        , ( "Digit2", Hotkey2 )
+        , ( "Digit3", Hotkey3 )
+        , ( "Digit4", Hotkey4 )
+        , ( "Digit5", Hotkey5 )
+        , ( "Digit6", Hotkey6 )
+        , ( "Digit7", Hotkey7 )
+        , ( "Digit8", Hotkey8 )
+        , ( "Digit9", Hotkey9 )
+        ]
+
+
+type TileHotkey
+    = Hotkey0
+    | Hotkey1
+    | Hotkey2
+    | Hotkey3
+    | Hotkey4
+    | Hotkey5
+    | Hotkey6
+    | Hotkey7
+    | Hotkey8
+    | Hotkey9
 
 
 type AdminChange
@@ -140,6 +174,7 @@ type alias LoggedIn_ =
     , reports : List Report
     , isGridReadOnly : Bool
     , timeOfDay : TimeOfDay
+    , tileHotkeys : AssocList.Dict TileHotkey TileGroup
     }
 
 

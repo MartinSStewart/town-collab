@@ -93,7 +93,7 @@ type UiEvent
     = MouseDown { elementPosition : Coord Pixels }
     | MousePressed { elementPosition : Coord Pixels }
     | MouseMove { elementPosition : Coord Pixels }
-    | KeyDown Keyboard.Key
+    | KeyDown Keyboard.RawKey Keyboard.Key
     | PastedText String
 
 

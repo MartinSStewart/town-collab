@@ -1406,6 +1406,18 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             , BroadcastToNoOne
             )
 
+        SetTileHotkey tileHotkey tileGroup ->
+            ( { model
+                | users =
+                    IdDict.insert
+                        userId
+                        (LocalGrid.setTileHotkey tileHotkey tileGroup user)
+                        model.users
+              }
+            , originalChange
+            , BroadcastToNoOne
+            )
+
 
 generateVisibleRegion :
     Maybe (Bounds CellUnit)
@@ -1587,6 +1599,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , reports = getUserReports userId model
                         , isGridReadOnly = model.isGridReadOnly
                         , timeOfDay = user.timeOfDay
+                        , tileHotkeys = user.tileHotkeys
                         }
 
                 Nothing ->
@@ -1616,6 +1629,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , reports = getUserReports data.userId model
                                             , isGridReadOnly = model.isGridReadOnly
                                             , timeOfDay = user.timeOfDay
+                                            , tileHotkeys = user.tileHotkeys
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , case data.requestedBy of
@@ -1662,6 +1676,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , reports = getUserReports userId model
                                 , isGridReadOnly = model.isGridReadOnly
                                 , timeOfDay = Automatic
+                                , tileHotkeys = newUser.tileHotkeys
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites
@@ -1851,6 +1866,7 @@ createUser userId emailAddress model =
             , name = DisplayName.default
             , allowEmailNotifications = True
             , timeOfDay = Automatic
+            , tileHotkeys = AssocList.empty
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

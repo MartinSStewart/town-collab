@@ -35,7 +35,7 @@ type alias Arrows =
 -}
 arrowKey : KeyParser
 arrowKey rawKey =
-    case Keyboard.rawValue rawKey of
+    case Keyboard.rawValue rawKey |> .key of
         -- Navigation
         "ArrowDown" ->
             Just ArrowDown

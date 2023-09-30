@@ -116,6 +116,7 @@ normalView model =
                                     Nothing ->
                                         Cursor.defaultColors
                                 )
+                                loggedIn
                                 model
                                 (case model.currentTool of
                                     HandTool ->
@@ -826,8 +827,8 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
             loginUi
 
 
-toolbarUi : Colors -> FrontendLoaded -> ToolButton -> Ui.Element UiHover
-toolbarUi handColor model currentToolButton =
+toolbarUi : Colors -> LoggedIn_ -> FrontendLoaded -> ToolButton -> Ui.Element UiHover
+toolbarUi handColor loggedIn model currentToolButton =
     Ui.row
         { spacing = 2, padding = Ui.noPadding }
         [ Ui.column
@@ -905,7 +906,7 @@ toolbarUi handColor model currentToolButton =
                 ]
             ]
         , List.map
-            (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
+            (toolButtonUi model.hasCmdKey handColor model.tileColors loggedIn.tileHotkeys currentToolButton)
             [ HandToolButton
             , TilePickerToolButton
             , TextToolButton
@@ -915,8 +916,8 @@ toolbarUi handColor model currentToolButton =
             |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             |> Ui.row { spacing = 2, padding = Ui.noPadding }
         , Ui.column
-            { spacing = 0
-            , padding = { topLeft = Coord.xy 0 -40, bottomRight = Coord.xy 0 0 }
+            { spacing = -2
+            , padding = { topLeft = Coord.xy 0 -38, bottomRight = Coord.xy 0 0 }
             }
             [ List.map
                 (\category ->
@@ -951,7 +952,11 @@ toolbarUi handColor model currentToolButton =
                 Road ->
                     Tile.roadCategory
               )
-                |> List.map (\a -> TilePlacerToolButton a |> toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
+                |> List.map
+                    (\a ->
+                        TilePlacerToolButton a
+                            |> toolButtonUi model.hasCmdKey handColor model.tileColors loggedIn.tileHotkeys currentToolButton
+                    )
                 |> List.greedyGroupsOf toolbarRowCount
                 |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
                 |> Ui.row { spacing = 2, padding = Ui.noPadding }
@@ -1140,7 +1145,7 @@ toolButtonUi :
     Bool
     -> Colors
     -> AssocList.Dict TileGroup Colors
-    -> Dict String TileGroup
+    -> AssocList.Dict Change.TileHotkey TileGroup
     -> ToolButton
     -> ToolButton
     -> Ui.Element UiHover
@@ -1177,7 +1182,17 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
         hotkeyText =
             case tool of
                 TilePlacerToolButton tileGroup ->
-                    Dict.toList hotkeys |> List.find (Tuple.second >> (==) tileGroup) |> Maybe.map Tuple.first
+                    case AssocList.toList hotkeys |> List.find (\( _, tileGroup2 ) -> tileGroup2 == tileGroup) of
+                        Just ( hotkey, _ ) ->
+                            case Dict.toList Change.tileHotkeyDict |> List.find (\( _, hotkey2 ) -> hotkey2 == hotkey) of
+                                Just ( text, _ ) ->
+                                    String.right 1 text |> Just
+
+                                Nothing ->
+                                    Nothing
+
+                        Nothing ->
+                            Nothing
 
                 HandToolButton ->
                     Just "Esc"

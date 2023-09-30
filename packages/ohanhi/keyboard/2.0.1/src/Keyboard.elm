@@ -91,7 +91,7 @@ Use a `KeyParser` to turn it into something useful.
 
 -}
 type RawKey
-    = RawKey String
+    = RawKey String String
 
 
 {-| A key parser can turn `RawKey`s into meaningful `Key`s for your program.
@@ -102,9 +102,9 @@ type alias KeyParser =
 
 {-| Get the original string value of the `RawKey`.
 -}
-rawValue : RawKey -> String
-rawValue (RawKey key) =
-    key
+rawValue : RawKey -> { key : String, keyCode : String }
+rawValue (RawKey key keyCode) =
+    { key = key, keyCode = keyCode }
 
 
 {-| Use this with Html keyboard events to retrieve a `RawKey` representing the key
@@ -115,7 +115,9 @@ which triggered the event.
 -}
 eventKeyDecoder : Json.Decoder RawKey
 eventKeyDecoder =
-    Json.field "key" (Json.string |> Json.map RawKey)
+    Json.map2 RawKey
+        (Json.field "key" Json.string)
+        (Json.field "code" Json.string)
 
 
 {-| Subscription for key down events.
@@ -421,7 +423,7 @@ Examples on a US layout:
 
 -}
 characterKeyUpper : KeyParser
-characterKeyUpper (RawKey value) =
+characterKeyUpper (RawKey value _) =
     if String.length value == 1 then
         Just (Character (String.toUpper value))
 
@@ -446,7 +448,7 @@ Examples on a US layout:
 
 -}
 characterKeyOriginal : KeyParser
-characterKeyOriginal (RawKey value) =
+characterKeyOriginal (RawKey value _) =
     if String.length value == 1 then
         Just (Character value)
 
@@ -462,7 +464,7 @@ characterKeyOriginal (RawKey value) =
 
 -}
 modifierKey : KeyParser
-modifierKey (RawKey value) =
+modifierKey (RawKey value _) =
     case value of
         -- Modifiers
         "Alt" ->
@@ -523,7 +525,7 @@ modifierKey (RawKey value) =
 
 -}
 whitespaceKey : KeyParser
-whitespaceKey (RawKey value) =
+whitespaceKey (RawKey value _) =
     case value of
         -- Whitespace
         "Enter" ->
@@ -550,7 +552,7 @@ whitespaceKey (RawKey value) =
 
 -}
 navigationKey : KeyParser
-navigationKey (RawKey value) =
+navigationKey (RawKey value _) =
     case value of
         -- Navigation
         "ArrowDown" ->
@@ -601,7 +603,7 @@ navigationKey (RawKey value) =
 
 -}
 editingKey : KeyParser
-editingKey (RawKey value) =
+editingKey (RawKey value _) =
     case value of
         "Backspace" ->
             Just Backspace
@@ -651,7 +653,7 @@ editingKey (RawKey value) =
 
 -}
 functionKey : KeyParser
-functionKey (RawKey value) =
+functionKey (RawKey value _) =
     case value of
         "F1" ->
             Just F1
@@ -720,7 +722,7 @@ functionKey (RawKey value) =
 {-| Converts a `RawKey` if it is one of the [UI keys](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values#UI_keys).
 -}
 uiKey : KeyParser
-uiKey (RawKey value) =
+uiKey (RawKey value _) =
     case value of
         -- UI
         "Again" ->
@@ -775,7 +777,7 @@ uiKey (RawKey value) =
 {-| Converts a `RawKey` if it is one of the [phone keys](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values#Phone_keys).
 -}
 phoneKey : KeyParser
-phoneKey (RawKey value) =
+phoneKey (RawKey value _) =
     case value of
         -- Phone
         "AppSwitch" ->
@@ -821,7 +823,7 @@ phoneKey (RawKey value) =
 {-| Converts a `RawKey` if it is one of the [media keys](https://developer.mozilla.org/en-US/docs/Web/API/KeyboardEvent/key/Key_Values#Media_keys).
 -}
 mediaKey : KeyParser
-mediaKey (RawKey value) =
+mediaKey (RawKey value _) =
     case value of
         -- Media
         "ChannelDown" ->

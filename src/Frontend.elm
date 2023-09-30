@@ -69,7 +69,7 @@ import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData, Vertex)
 import Sound exposing (Sound(..))
 import Sprite
 import TextInput exposing (OutMsg(..))
-import Tile exposing (Tile(..), TileGroup(..))
+import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Time
 import Tool exposing (Tool(..))
 import Toolbar
@@ -419,6 +419,12 @@ audioLoaded audioData model =
 
         Nothing ->
             Audio.silence
+    , case model.lastHotkeyChange of
+        Just time ->
+            playSound PopSound time |> Audio.scaleVolume 0.8
+
+        Nothing ->
+            Audio.silence
     ]
         |> Audio.group
         |> Audio.scaleVolumeAt [ ( model.startTime, 0 ), ( Duration.addTo model.startTime Duration.second, 1 ) ]
@@ -718,10 +724,10 @@ updateLoaded audioData msg model =
                                     ( { model | hideUi = not model.hideUi }, Command.none )
 
                                 ( Just id, _ ) ->
-                                    uiUpdate audioData id (Ui.KeyDown key) model
+                                    uiUpdate audioData id (Ui.KeyDown rawKey key) model
 
                                 _ ->
-                                    keyMsgCanvasUpdate audioData key model
+                                    keyMsgCanvasUpdate audioData rawKey key model
 
                 Nothing ->
                     ( model, Command.none )
@@ -1756,8 +1762,8 @@ replaceUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Effect.Browser.Navigation.replaceUrl model.key url )
 
 
-keyMsgCanvasUpdate : AudioData -> Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-keyMsgCanvasUpdate audioData key model =
+keyMsgCanvasUpdate : AudioData -> Keyboard.RawKey -> Keyboard.Key -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+keyMsgCanvasUpdate audioData rawKey key model =
     case ( key, LocalGrid.ctrlOrMeta model ) of
         ( Keyboard.Character "z", True ) ->
             case model.currentTool of
@@ -1846,7 +1852,7 @@ keyMsgCanvasUpdate audioData key model =
                     ( placeChar ' ' model, Command.none )
 
                 _ ->
-                    setTileFromHotkey " " model
+                    setTileFromHotkey rawKey " " model
 
         ( Keyboard.Backspace, False ) ->
             ( case model.currentTool of
@@ -1922,7 +1928,11 @@ keyMsgCanvasUpdate audioData key model =
                             )
 
                         _ ->
-                            setTileFromHotkey string model
+                            if List.member Keyboard.Shift model.pressedKeys then
+                                setHokeyForTile rawKey model
+
+                            else
+                                setTileFromHotkey rawKey string model
 
                 _ ->
                     case string of
@@ -1940,7 +1950,11 @@ keyMsgCanvasUpdate audioData key model =
                             )
 
                         _ ->
-                            setTileFromHotkey string model
+                            if List.member Keyboard.Shift model.pressedKeys then
+                                setHokeyForTile rawKey model
+
+                            else
+                                setTileFromHotkey rawKey string model
 
         ( Keyboard.Enter, False ) ->
             ( case model.currentTool of
@@ -2036,14 +2050,59 @@ placeChar char model =
             model
 
 
-setTileFromHotkey : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
-setTileFromHotkey string model =
-    ( case Dict.get string model.tileHotkeys of
-        Just tile ->
-            LoadingPage.setCurrentTool (TilePlacerToolButton tile) model
+categoryHotkeys : Dict String Category
+categoryHotkeys =
+    Dict.fromList
+        [ ( "s", Scenery )
+        , ( "b", Buildings )
+        , ( "t", Rail )
+        , ( "r", Road )
+        ]
+
+
+setHokeyForTile : Keyboard.RawKey -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
+setHokeyForTile hotkeyText model =
+    case ( Dict.get (Keyboard.rawValue hotkeyText |> .keyCode) Change.tileHotkeyDict, model.currentTool ) of
+        ( Just hotkey, TilePlacerTool { tileGroup } ) ->
+            if tileGroup == EmptyTileGroup then
+                ( model, Command.none )
+
+            else
+                updateLocalModel
+                    (Change.SetTileHotkey hotkey tileGroup)
+                    { model | lastHotkeyChange = Just model.time }
+                    |> handleOutMsg False
+
+        _ ->
+            ( model, Command.none )
+
+
+setTileFromHotkey : Keyboard.RawKey -> String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
+setTileFromHotkey rawKey string model =
+    ( case Dict.get string categoryHotkeys of
+        Just category ->
+            { model | selectedTileCategory = category }
 
         Nothing ->
-            model
+            let
+                localModel =
+                    LocalGrid.localModel model.localModel
+            in
+            if string == " " then
+                LoadingPage.setCurrentTool (TilePlacerToolButton EmptyTileGroup) model
+
+            else
+                case ( Dict.get (Keyboard.rawValue rawKey |> .keyCode) Change.tileHotkeyDict, localModel.userStatus ) of
+                    ( Just tileHotkey, LoggedIn loggedIn ) ->
+                        case AssocList.get tileHotkey loggedIn.tileHotkeys of
+                            Just tile ->
+                                LoadingPage.setCurrentTool (TilePlacerToolButton tile) model
+
+                            Nothing ->
+                                model
+
+                    _ ->
+                        model
     , Command.none
     )
 
@@ -2490,11 +2549,11 @@ onPress audioData event updateFunc model =
         Ui.MousePressed _ ->
             updateFunc ()
 
-        Ui.KeyDown Keyboard.Enter ->
+        Ui.KeyDown _ Keyboard.Enter ->
             updateFunc ()
 
-        Ui.KeyDown key ->
-            keyMsgCanvasUpdate audioData key model
+        Ui.KeyDown rawKey key ->
+            keyMsgCanvasUpdate audioData rawKey key model
 
         _ ->
             ( model, Command.none )
@@ -2563,10 +2622,10 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
 
-                Ui.KeyDown Keyboard.Escape ->
+                Ui.KeyDown _ Keyboard.Escape ->
                     ( setFocus Nothing model, Command.none )
 
-                Ui.KeyDown key ->
+                Ui.KeyDown _ key ->
                     case LocalGrid.currentUserId model of
                         Just userId ->
                             handleKeyDownColorInput
@@ -2624,10 +2683,10 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
 
-                Ui.KeyDown Keyboard.Escape ->
+                Ui.KeyDown _ Keyboard.Escape ->
                     ( setFocus Nothing model, Command.none )
 
-                Ui.KeyDown key ->
+                Ui.KeyDown _ key ->
                     case LocalGrid.currentUserId model of
                         Just userId ->
                             handleKeyDownColorInput
@@ -3001,13 +3060,13 @@ textInputUpdate id textChanged onEnter textInput setTextInput event model =
             , Command.none
             )
 
-        Ui.KeyDown Keyboard.Escape ->
+        Ui.KeyDown _ Keyboard.Escape ->
             ( setFocus Nothing model, Command.none )
 
-        Ui.KeyDown Keyboard.Enter ->
+        Ui.KeyDown _ Keyboard.Enter ->
             onEnter ()
 
-        Ui.KeyDown key ->
+        Ui.KeyDown _ key ->
             let
                 ( newTextInput, outMsg ) =
                     TextInput.keyMsg

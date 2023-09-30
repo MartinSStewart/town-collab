@@ -182,7 +182,6 @@ type alias FrontendLoaded =
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix
-    , tileHotkeys : Dict String TileGroup
     , ui : Ui.Element UiHover
     , uiMesh : WebGL.Mesh Vertex
     , previousTileHover : Maybe TileGroup
@@ -221,6 +220,7 @@ type alias FrontendLoaded =
     , lightsSwitched : Maybe Time.Posix
     , page : Page
     , selectedTileCategory : Category
+    , lastHotkeyChange : Maybe Time.Posix
     }
 
 
@@ -400,6 +400,7 @@ type alias BackendUserData =
     , name : DisplayName
     , allowEmailNotifications : Bool
     , timeOfDay : TimeOfDay
+    , tileHotkeys : AssocList.Dict Change.TileHotkey TileGroup
     }
 
 
