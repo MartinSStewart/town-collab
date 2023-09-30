@@ -97,6 +97,11 @@ type TileGroup
     | ParkingRoadGroup
     | ParkingRoundaboutGroup
     | CornerHouseGroup
+    | DogHouseGroup
+    | MushroomGroup
+    | TreeStumpGroup
+    | SunflowersGroup
+    | RailDeadendGroup
 
 
 codec : Codec TileGroup
@@ -146,6 +151,11 @@ codec =
         , ( "ParkingRoad", ParkingRoadGroup )
         , ( "ParkingRoundabout", ParkingRoundaboutGroup )
         , ( "CornerHouse", CornerHouseGroup )
+        , ( "DogHouse", DogHouseGroup )
+        , ( "Mushroom", MushroomGroup )
+        , ( "TreeStump", TreeStumpGroup )
+        , ( "Sunflowers", SunflowersGroup )
+        , ( "RailDeadend", RailDeadendGroup )
         ]
 
 
@@ -232,6 +242,7 @@ sceneryCategory : List TileGroup
 sceneryCategory =
     [ PineTreeGroup
     , BigPineTreeGroup
+    , TreeStumpGroup
     , FenceStraightGroup
     , StatueGroup
     , HedgeRowGroup
@@ -239,10 +250,13 @@ sceneryCategory =
     , HedgePillarGroup
     , RockGroup
     , FlowersGroup
+    , SunflowersGroup
     , ElmTreeGroup
     , DirtPathGroup
     , SidewalkGroup
     , BenchGroup
+    , DogHouseGroup
+    , MushroomGroup
     ]
 
 
@@ -256,6 +270,7 @@ buildingCategory =
     , HospitalGroup
     , ApartmentGroup
     , CornerHouseGroup
+    , DogHouseGroup
     ]
 
 
@@ -273,6 +288,7 @@ railCategory =
     , RailTurnSplitMirrorGroup
     , PostOfficeGroup
     , RoadRailCrossingGroup
+    , RailDeadendGroup
     ]
 
 
@@ -580,6 +596,36 @@ getTileGroupData tileGroup =
             , name = "Corner house"
             }
 
+        DogHouseGroup ->
+            { defaultColors = defaultLogCabinColor
+            , tiles = Nonempty DogHouseDown [ DogHouseLeft, DogHouseUp, DogHouseRight ]
+            , name = "Dog house"
+            }
+
+        MushroomGroup ->
+            { defaultColors = defaultMushroomColor
+            , tiles = Nonempty Mushroom []
+            , name = "Mushroom"
+            }
+
+        TreeStumpGroup ->
+            { defaultColors = defaultTreeStumpColor
+            , tiles = Nonempty TreeStump1 [ TreeStump2 ]
+            , name = "Tree stump"
+            }
+
+        SunflowersGroup ->
+            { defaultColors = defaultSunflowerColor
+            , tiles = Nonempty Sunflowers []
+            , name = "Mushroom"
+            }
+
+        RailDeadendGroup ->
+            { defaultColors = defaultRailDeadEndColor
+            , tiles = Nonempty RailDeadEndLeft [ RailDeadEndRight ]
+            , name = "Rail dead end"
+            }
+
 
 type Tile
     = EmptyTile
@@ -697,6 +743,16 @@ type Tile
     | CornerHouseUpRight
     | CornerHouseDownLeft
     | CornerHouseDownRight
+    | DogHouseDown
+    | DogHouseRight
+    | DogHouseUp
+    | DogHouseLeft
+    | Mushroom
+    | TreeStump1
+    | TreeStump2
+    | Sunflowers
+    | RailDeadEndLeft
+    | RailDeadEndRight
 
 
 type Direction
@@ -1215,6 +1271,26 @@ defaultFenceColor =
     OneDefaultColor (Color.rgb255 220 129 97)
 
 
+defaultTreeStumpColor : DefaultColor
+defaultTreeStumpColor =
+    OneDefaultColor (Color.rgb255 141 96 65)
+
+
+defaultRailDeadEndColor : DefaultColor
+defaultRailDeadEndColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 217 209 40, secondaryColor = Color.rgb255 217 139 40 }
+
+
+defaultSunflowerColor : DefaultColor
+defaultSunflowerColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 255 224 36, secondaryColor = Color.rgb255 77 185 91 }
+
+
+defaultMushroomColor : DefaultColor
+defaultMushroomColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 211 39 39, secondaryColor = Color.rgb255 238 238 238 }
+
+
 defaultPineTreeColor : DefaultColor
 defaultPineTreeColor =
     TwoDefaultColors { primaryColor = Color.rgb255 24 150 65, secondaryColor = Color.rgb255 141 96 65 }
@@ -1629,6 +1705,36 @@ getData tile =
 
         CornerHouseDownRight ->
             cornerHouseDownRight
+
+        DogHouseDown ->
+            dogHouseDown
+
+        DogHouseRight ->
+            dogHouseRight
+
+        DogHouseUp ->
+            dogHouseUp
+
+        DogHouseLeft ->
+            dogHouseLeft
+
+        Mushroom ->
+            mushroom
+
+        TreeStump1 ->
+            treeStump1
+
+        TreeStump2 ->
+            treeStump2
+
+        Sunflowers ->
+            sunflowers
+
+        RailDeadEndLeft ->
+            railDeadEndLeft
+
+        RailDeadEndRight ->
+            railDeadEndRight
 
 
 emptyTile : TileData units
@@ -3189,6 +3295,116 @@ cornerHouseDownRight =
         , ( 0, 3 )
         , ( 1, 3 )
         , ( 2, 3 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+dogHouseDown =
+    { texturePosition = Coord.xy 360 288
+    , size = Coord.xy 1 2
+    , collisionMask =
+        [ ( 0, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+dogHouseUp =
+    { texturePosition = Coord.xy 380 288
+    , size = Coord.xy 1 2
+    , collisionMask =
+        [ ( 0, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+dogHouseLeft =
+    { texturePosition = Coord.xy 360 252
+    , size = Coord.xy 1 2
+    , collisionMask =
+        [ ( 0, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+dogHouseRight =
+    { texturePosition = Coord.xy 380 252
+    , size = Coord.xy 1 2
+    , collisionMask =
+        [ ( 0, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+mushroom =
+    { texturePosition = Coord.xy 740 936
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+treeStump1 =
+    { texturePosition = Coord.xy 720 936
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+treeStump2 =
+    { texturePosition = Coord.xy 720 954
+    , size = Coord.xy 1 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+sunflowers =
+    { texturePosition = Coord.xy 720 900
+    , size = Coord.xy 3 2
+    , collisionMask =
+        [ ( 1, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+railDeadEndLeft =
+    { texturePosition = Coord.xy 220 72
+    , size = Coord.xy 2 2
+    , collisionMask =
+        [ ( 0, 1 )
+        , ( 1, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    }
+
+
+railDeadEndRight =
+    { texturePosition = Coord.xy 220 108
+    , size = Coord.xy 2 2
+    , collisionMask =
+        [ ( 0, 1 )
+        , ( 1, 1 )
         ]
             |> Set.fromList
             |> CustomCollision

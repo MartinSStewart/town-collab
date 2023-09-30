@@ -1266,7 +1266,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
 
 toolbarRowCount : number
 toolbarRowCount =
-    2
+    3
 
 
 tileMesh : Colors -> Tile -> Ui.Element id
@@ -1325,7 +1325,7 @@ primaryColorInputWidth =
 
 buttonSize : Coord units
 buttonSize =
-    Coord.xy 84 86
+    Coord.xy 80 80
 
 
 showColorTextInputs :
