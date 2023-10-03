@@ -102,6 +102,8 @@ type TileGroup
     | TreeStumpGroup
     | SunflowersGroup
     | RailDeadendGroup
+    | RailStrafeSplitGroup
+    | RailStrafeSplitMirrorGroup
 
 
 codec : Codec TileGroup
@@ -156,6 +158,8 @@ codec =
         , ( "TreeStump", TreeStumpGroup )
         , ( "Sunflowers", SunflowersGroup )
         , ( "RailDeadend", RailDeadendGroup )
+        , ( "RailStrafeSplit", RailStrafeSplitGroup )
+        , ( "RailStrafeSplitMirror", RailStrafeSplitMirrorGroup )
         ]
 
 
@@ -289,6 +293,8 @@ railCategory =
     , PostOfficeGroup
     , RoadRailCrossingGroup
     , RailDeadendGroup
+    , RailStrafeSplitGroup
+    , RailStrafeSplitMirrorGroup
     ]
 
 
@@ -626,6 +632,30 @@ getTileGroupData tileGroup =
             , name = "Rail dead end"
             }
 
+        RailStrafeSplitGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles =
+                Nonempty
+                    RailStrafeLeftToRight_SplitUp
+                    [ RailStrafeTopToBottom_SplitLeft
+                    , RailStrafeRightToLeft_SplitDown
+                    , RailStrafeBottomToTop_SplitLeft
+                    ]
+            , name = "Rail split strafe L."
+            }
+
+        RailStrafeSplitMirrorGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles =
+                Nonempty
+                    RailStrafeRightToLeft_SplitUp
+                    [ RailStrafeBottomToTop_SplitRight
+                    , RailStrafeLeftToRight_SplitDown
+                    , RailStrafeTopToBottom_SplitRight
+                    ]
+            , name = "Rail split strafe R."
+            }
+
 
 type Tile
     = EmptyTile
@@ -753,6 +783,14 @@ type Tile
     | Sunflowers
     | RailDeadEndLeft
     | RailDeadEndRight
+    | RailStrafeLeftToRight_SplitUp
+    | RailStrafeLeftToRight_SplitDown
+    | RailStrafeRightToLeft_SplitUp
+    | RailStrafeRightToLeft_SplitDown
+    | RailStrafeTopToBottom_SplitLeft
+    | RailStrafeTopToBottom_SplitRight
+    | RailStrafeBottomToTop_SplitLeft
+    | RailStrafeBottomToTop_SplitRight
 
 
 type Direction
@@ -1735,6 +1773,30 @@ getData tile =
 
         RailDeadEndRight ->
             railDeadEndRight
+
+        RailStrafeLeftToRight_SplitUp ->
+            railStrafeLeftToRight_SplitUp
+
+        RailStrafeLeftToRight_SplitDown ->
+            railStrafeLeftToRight_SplitDown
+
+        RailStrafeRightToLeft_SplitUp ->
+            railStrafeRightToLeft_SplitUp
+
+        RailStrafeRightToLeft_SplitDown ->
+            railStrafeRightToLeft_SplitDown
+
+        RailStrafeTopToBottom_SplitLeft ->
+            railStrafeTopToBottom_SplitLeft
+
+        RailStrafeTopToBottom_SplitRight ->
+            railStrafeTopToBottom_SplitRight
+
+        RailStrafeBottomToTop_SplitLeft ->
+            railStrafeBottomToTop_SplitLeft
+
+        RailStrafeBottomToTop_SplitRight ->
+            railStrafeBottomToTop_SplitRight
 
 
 emptyTile : TileData units
@@ -3409,6 +3471,222 @@ railDeadEndRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    }
+
+
+railStrafeLeftToRight_SplitUp =
+    { texturePosition = Coord.xy 360 54
+    , size = Coord.xy 5 3
+    , collisionMask =
+        [ ( 2, 0 )
+        , ( 3, 0 )
+        , ( 4, 0 )
+        , ( 0, 1 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 3, 1 )
+        , ( 4, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathHorizontal { offsetX = 0, offsetY = 2, length = 3 }
+            , secondary = RailPathStrafeUp
+            , texturePosition = Coord.xy 360 0
+            }
+    }
+
+
+railStrafeLeftToRight_SplitDown =
+    { texturePosition = Coord.xy 260 108
+    , size = Coord.xy 5 3
+    , collisionMask =
+        [ ( 0, 0 )
+        , ( 1, 0 )
+        , ( 2, 0 )
+        , ( 0, 1 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 3, 1 )
+        , ( 4, 1 )
+        , ( 2, 2 )
+        , ( 3, 2 )
+        , ( 4, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 }
+            , secondary = RailPathStrafeDown
+            , texturePosition = Coord.xy 260 162
+            }
+    }
+
+
+railStrafeRightToLeft_SplitUp =
+    { texturePosition = Coord.xy 260 54
+    , size = Coord.xy 5 3
+    , collisionMask =
+        [ ( 0, 0 )
+        , ( 1, 0 )
+        , ( 2, 0 )
+        , ( 0, 1 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 3, 1 )
+        , ( 4, 1 )
+        , ( 2, 2 )
+        , ( 3, 2 )
+        , ( 4, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathHorizontal { offsetX = 2, offsetY = 2, length = 3 }
+            , secondary = RailPathStrafeDown
+            , texturePosition = Coord.xy 260 0
+            }
+    }
+
+
+railStrafeRightToLeft_SplitDown =
+    { texturePosition = Coord.xy 360 108
+    , size = Coord.xy 5 3
+    , collisionMask =
+        [ ( 2, 0 )
+        , ( 3, 0 )
+        , ( 4, 0 )
+        , ( 0, 1 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 3, 1 )
+        , ( 4, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathHorizontal { offsetX = 2, offsetY = 0, length = 3 }
+            , secondary = RailPathStrafeUp
+            , texturePosition = Coord.xy 360 162
+            }
+    }
+
+
+railStrafeTopToBottom_SplitLeft =
+    { texturePosition = Coord.xy 700 324
+    , size = Coord.xy 3 5
+    , collisionMask =
+        [ ( 0, 0 )
+        , ( 1, 0 )
+        , ( 0, 1 )
+        , ( 1, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        , ( 1, 3 )
+        , ( 2, 3 )
+        , ( 1, 4 )
+        , ( 2, 4 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathVertical { offsetX = 0, offsetY = 0, length = 3 }
+            , secondary = RailPathStrafeRight
+            , texturePosition = Coord.xy 640 324
+            }
+    }
+
+
+railStrafeTopToBottom_SplitRight =
+    { texturePosition = Coord.xy 640 144
+    , size = Coord.xy 3 5
+    , collisionMask =
+        [ ( 1, 0 )
+        , ( 2, 0 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        , ( 0, 3 )
+        , ( 1, 3 )
+        , ( 0, 4 )
+        , ( 1, 4 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathVertical { offsetX = 2, offsetY = 0, length = 3 }
+            , secondary = RailPathStrafeLeft
+            , texturePosition = Coord.xy 700 144
+            }
+    }
+
+
+railStrafeBottomToTop_SplitLeft =
+    { texturePosition = Coord.xy 640 234
+    , size = Coord.xy 3 5
+    , collisionMask =
+        [ ( 0, 0 )
+        , ( 1, 0 )
+        , ( 0, 1 )
+        , ( 1, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        , ( 1, 3 )
+        , ( 2, 3 )
+        , ( 1, 4 )
+        , ( 2, 4 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathVertical { offsetX = 2, offsetY = 2, length = 3 }
+            , secondary = RailPathStrafeRight
+            , texturePosition = Coord.xy 700 234
+            }
+    }
+
+
+railStrafeBottomToTop_SplitRight =
+    { texturePosition = Coord.xy 700 414
+    , size = Coord.xy 3 5
+    , collisionMask =
+        [ ( 1, 0 )
+        , ( 2, 0 )
+        , ( 1, 1 )
+        , ( 2, 1 )
+        , ( 0, 2 )
+        , ( 1, 2 )
+        , ( 2, 2 )
+        , ( 0, 3 )
+        , ( 1, 3 )
+        , ( 0, 4 )
+        , ( 1, 4 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath =
+        RailSplitPath
+            { primary = RailPathVertical { offsetX = 0, offsetY = 2, length = 3 }
+            , secondary = RailPathStrafeLeft
+            , texturePosition = Coord.xy 640 414
+            }
     }
 
 

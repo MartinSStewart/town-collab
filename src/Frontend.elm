@@ -2256,6 +2256,30 @@ tileInteraction currentUserId2 { tile, userId, position } model =
         RailTopToLeft_SplitDown ->
             handleRailSplit
 
+        RailStrafeLeftToRight_SplitUp ->
+            handleRailSplit
+
+        RailStrafeLeftToRight_SplitDown ->
+            handleRailSplit
+
+        RailStrafeRightToLeft_SplitUp ->
+            handleRailSplit
+
+        RailStrafeRightToLeft_SplitDown ->
+            handleRailSplit
+
+        RailStrafeTopToBottom_SplitLeft ->
+            handleRailSplit
+
+        RailStrafeTopToBottom_SplitRight ->
+            handleRailSplit
+
+        RailStrafeBottomToTop_SplitLeft ->
+            handleRailSplit
+
+        RailStrafeBottomToTop_SplitRight ->
+            handleRailSplit
+
         _ ->
             Nothing
 

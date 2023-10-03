@@ -510,10 +510,22 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                 case data.railPath of
                     RailSplitPath pathData ->
                         if AssocSet.member position railSplitToggled then
-                            tileMeshHelper2 opacityAndUserId colors (Coord.multiply Units.tileSize position2) 1 pathData.texturePosition data.size
+                            tileMeshHelper2
+                                opacityAndUserId
+                                colors
+                                (Coord.multiply Units.tileSize position2)
+                                1
+                                pathData.texturePosition
+                                data.size
 
                         else
-                            tileMeshHelper2 opacityAndUserId colors (Coord.multiply Units.tileSize position2) 1 data.texturePosition data.size
+                            tileMeshHelper2
+                                opacityAndUserId
+                                colors
+                                (Coord.multiply Units.tileSize position2)
+                                1
+                                data.texturePosition
+                                data.size
 
                     _ ->
                         if value == PostOffice && Just userId /= maybeCurrentUserId then
@@ -650,7 +662,7 @@ backgroundMesh cellPosition =
                                 tile =
                                     case originValue of
                                         Mountain ->
-                                            draw 640 216
+                                            draw 680 72
 
                                         Ground ->
                                             draw 220 216
