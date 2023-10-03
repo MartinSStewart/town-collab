@@ -104,6 +104,7 @@ type TileGroup
     | RailDeadendGroup
     | RailStrafeSplitGroup
     | RailStrafeSplitMirrorGroup
+    | RoadStraightManholeGroup
 
 
 codec : Codec TileGroup
@@ -160,6 +161,7 @@ codec =
         , ( "RailDeadend", RailDeadendGroup )
         , ( "RailStrafeSplit", RailStrafeSplitGroup )
         , ( "RailStrafeSplitMirror", RailStrafeSplitMirrorGroup )
+        , ( "RoadManhole", RoadStraightManholeGroup )
         ]
 
 
@@ -302,6 +304,7 @@ roadCategory : List TileGroup
 roadCategory =
     [ SidewalkGroup
     , RoadStraightGroup
+    , RoadStraightManholeGroup
     , RoadTurnGroup
     , Road4WayGroup
     , RoadSidewalkCrossingGroup
@@ -648,12 +651,18 @@ getTileGroupData tileGroup =
             { defaultColors = ZeroDefaultColors
             , tiles =
                 Nonempty
-                    RailStrafeRightToLeft_SplitUp
-                    [ RailStrafeBottomToTop_SplitRight
-                    , RailStrafeLeftToRight_SplitDown
-                    , RailStrafeTopToBottom_SplitRight
+                    RailStrafeLeftToRight_SplitDown
+                    [ RailStrafeTopToBottom_SplitRight
+                    , RailStrafeRightToLeft_SplitUp
+                    , RailStrafeBottomToTop_SplitRight
                     ]
             , name = "Rail split strafe R."
+            }
+
+        RoadStraightManholeGroup ->
+            { defaultColors = defaultRoadColor
+            , tiles = Nonempty RoadManholeDown [ RoadManholeLeft, RoadManholeUp, RoadManholeRight ]
+            , name = "Manhole road"
             }
 
 
@@ -791,6 +800,10 @@ type Tile
     | RailStrafeTopToBottom_SplitRight
     | RailStrafeBottomToTop_SplitLeft
     | RailStrafeBottomToTop_SplitRight
+    | RoadManholeDown
+    | RoadManholeLeft
+    | RoadManholeUp
+    | RoadManholeRight
 
 
 type Direction
@@ -1797,6 +1810,18 @@ getData tile =
 
         RailStrafeBottomToTop_SplitRight ->
             railStrafeBottomToTop_SplitRight
+
+        RoadManholeDown ->
+            roadManholeDown
+
+        RoadManholeLeft ->
+            roadManholeLeft
+
+        RoadManholeUp ->
+            roadManholeUp
+
+        RoadManholeRight ->
+            roadManholeRight
 
 
 emptyTile : TileData units
@@ -3687,6 +3712,38 @@ railStrafeBottomToTop_SplitRight =
             , secondary = RailPathStrafeLeft
             , texturePosition = Coord.xy 640 414
             }
+    }
+
+
+roadManholeDown =
+    { texturePosition = Coord.xy 380 378
+    , size = Coord.xy 1 3
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+roadManholeLeft =
+    { texturePosition = Coord.xy 240 756
+    , size = Coord.xy 3 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+roadManholeUp =
+    { texturePosition = Coord.xy 380 432
+    , size = Coord.xy 1 3
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
+    }
+
+
+roadManholeRight =
+    { texturePosition = Coord.xy 340 558
+    , size = Coord.xy 3 1
+    , collisionMask = DefaultCollision
+    , railPath = NoRailPath
     }
 
 
