@@ -2299,6 +2299,19 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
         hoverAt2 =
             hoverAt model mousePosition
 
+        sameUiHover : Maybe UiHover
+        sameUiHover =
+            case ( hoverAt2, previousMouseState.hover ) of
+                ( UiHover new _, UiHover old _ ) ->
+                    if new == old then
+                        Just new
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
         model2 =
             { model
                 | mouseLeft = MouseButtonUp { current = mousePosition }
@@ -2362,28 +2375,33 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                             model.viewPoint
             }
                 |> (\m ->
-                        if isSmallDistance2 then
-                            setFocus (getUiHover hoverAt2) m
+                        case sameUiHover of
+                            Just uiHover ->
+                                setFocus (Just uiHover) m
 
-                        else
-                            m
+                            Nothing ->
+                                m
                    )
     in
-    if isSmallDistance2 then
-        case isHoldingCow model2 of
-            Just { cowId } ->
+    case isHoldingCow model2 of
+        Just { cowId } ->
+            if isSmallDistance2 then
                 let
                     ( model3, _ ) =
                         updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                 in
                 ( model3, Command.none )
 
-            Nothing ->
-                case hoverAt2 of
-                    UiBackgroundHover ->
-                        ( model2, Command.none )
+            else
+                ( model2, Command.none )
 
-                    TileHover data ->
+        Nothing ->
+            case hoverAt2 of
+                UiBackgroundHover ->
+                    ( model2, Command.none )
+
+                TileHover data ->
+                    if isSmallDistance2 then
                         case LocalGrid.currentUserId model2 of
                             Just userId ->
                                 case LocalGrid.currentTool model2 of
@@ -2454,7 +2472,11 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                             Nothing ->
                                 ( model2, Command.none )
 
-                    TrainHover { trainId, train } ->
+                    else
+                        ( model2, Command.none )
+
+                TrainHover { trainId, train } ->
+                    if isSmallDistance2 then
                         case Train.status model.time train of
                             WaitingAtHome ->
                                 clickLeaveHomeTrain trainId model2
@@ -2480,7 +2502,11 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                     Train.IsNotStuckOrDerailed ->
                                         ( setTrainViewPoint trainId model2, Command.none )
 
-                    MapHover ->
+                    else
+                        ( model2, Command.none )
+
+                MapHover ->
+                    if isSmallDistance2 then
                         case LocalGrid.currentTool model2 of
                             ReportTool ->
                                 let
@@ -2506,22 +2532,31 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                 , Command.none
                                 )
 
-                    CowHover { cowId } ->
+                    else
+                        ( model2, Command.none )
+
+                CowHover { cowId } ->
+                    if isSmallDistance2 then
                         let
                             ( model3, _ ) =
                                 updateLocalModel (Change.PickupCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                         in
                         ( model3, Command.none )
 
-                    UiHover id data ->
-                        uiUpdate
-                            audioData
-                            id
-                            (Ui.MousePressed { elementPosition = data.position })
-                            model2
+                    else
+                        ( model2, Command.none )
 
-    else
-        ( model2, Command.none )
+                UiHover id data ->
+                    case sameUiHover of
+                        Just _ ->
+                            uiUpdate
+                                audioData
+                                id
+                                (Ui.MousePressed { elementPosition = data.position })
+                                model2
+
+                        Nothing ->
+                            ( model2, Command.none )
 
 
 handleMailEditorOutMsg :
