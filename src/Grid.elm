@@ -550,7 +550,7 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                                         (Coord.multiply position2 Units.tileSize
                                             |> Coord.plus (Coord.xy 15 19)
                                         )
-                                        -0.5
+                                        -0.55
                             in
                             text
                                 ++ tileMeshHelper2
