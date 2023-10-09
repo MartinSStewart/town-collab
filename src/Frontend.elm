@@ -3388,6 +3388,7 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                     , change = tile
                     , userId = userId
                     , colors = colors
+                    , time = model.time
                     }
 
                 grid : Grid
@@ -3452,6 +3453,7 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                                 { position = cursorPosition_
                                 , change = tile
                                 , colors = colors
+                                , time = model.time
                                 }
                             )
                             model2
@@ -3999,6 +4001,9 @@ updateLoadedFromBackend msg model =
 
         CheckConnectionBroadcast ->
             ( { model | lastCheckConnection = model.time }, Command.none )
+
+        ChangesSinceResponse since changes ->
+            ( { model | latestChanges = GotChangesSinceRequest { since = since, changes = changes } }, Command.none )
 
 
 actualTime : FrontendLoaded -> Effect.Time.Posix
@@ -4714,6 +4719,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                                 { primaryColor = Color.rgb255 0 0 0
                                 , secondaryColor = Color.rgb255 255 255 255
                                 }
+                            , time = model.time
                             }
                             model.trains
                             (LocalGrid.localModel model.localModel |> .grid)
@@ -4753,6 +4759,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                                 { primaryColor = Color.rgb255 0 0 0
                                 , secondaryColor = Color.rgb255 255 255 255
                                 }
+                            , time = model.time
                             }
                             model.trains
                             (LocalGrid.localModel model.localModel |> .grid)

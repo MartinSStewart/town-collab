@@ -11,6 +11,7 @@ module GridCell exposing
     , getPostOffices
     , getToggledRailSplit
     , hasChangesBy
+    , latestChange
     , mapPixelData
     , moveUndoPoint
     , removeUser
@@ -23,6 +24,7 @@ import Bitwise
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
 import Coord exposing (Coord)
+import Effect.Time
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty(..))
@@ -261,7 +263,12 @@ type Cell
 
 
 type alias Value =
-    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, colors : Colors }
+    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, colors : Colors, time : Effect.Time.Posix }
+
+
+latestChange : Cell -> Maybe Value
+latestChange (Cell cell) =
+    List.head cell.history
 
 
 getPostOffices : Cell -> List { position : Coord CellLocalUnit, userId : Id UserId }
@@ -516,6 +523,7 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
 
                                     else
                                         rockColor
+                                , time = Effect.Time.millisToPosix 0
                                 }
                                     :: cell2
                             )

@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , ChangesSinceStatus(..)
     , ContextMenu
     , CssPixels
     , EmailEvent(..)
@@ -223,7 +224,14 @@ type alias FrontendLoaded =
     , page : Page
     , selectedTileCategory : Category
     , lastHotkeyChange : Maybe Time.Posix
+    , latestChanges : ChangesSinceStatus
     }
+
+
+type ChangesSinceStatus
+    = NoChangesSinceRequest
+    | PendingChangesSinceRequest
+    | GotChangesSinceRequest { since : Effect.Time.Posix, changes : List (Coord CellUnit) }
 
 
 type Page
@@ -455,6 +463,7 @@ type ToBackend
     | SendLoginEmailRequest (Untrusted EmailAddress)
     | SendInviteEmailRequest (Untrusted EmailAddress)
     | PostOfficePositionRequest
+    | ChangesSinceRequest Effect.Time.Posix
 
 
 type BackendMsg
@@ -482,6 +491,7 @@ type ToFrontend
     | PostOfficePositionResponse (Maybe (Coord WorldUnit))
     | ClientConnected
     | CheckConnectionBroadcast
+    | ChangesSinceResponse Effect.Time.Posix (List (Coord CellUnit))
 
 
 type EmailEvent

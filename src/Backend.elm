@@ -930,6 +930,18 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     )
                 )
 
+        ChangesSinceRequest since ->
+            asUser
+                sessionId
+                model
+                (\_ _ model2 ->
+                    ( model2
+                    , Grid.modifiedSince since model.grid
+                        |> ChangesSinceResponse since
+                        |> Effect.Lamdera.sendToFrontend clientId
+                    )
+                )
+
 
 {-| Allow a client to say when something happened but restrict how far it can be away from the current time.
 -}
@@ -1027,19 +1039,27 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
 
             else
                 let
+                    localChange2 : Grid.LocalGridChange
+                    localChange2 =
+                        { position = localChange.position
+                        , change = localChange.change
+                        , colors = localChange.colors
+                        , time = time
+                        }
+
                     ( cellPosition, localPosition ) =
-                        Grid.worldToCellAndLocalCoord localChange.position
+                        Grid.worldToCellAndLocalCoord localChange2.position
 
                     maybeTrain : Maybe ( Id TrainId, Train )
                     maybeTrain =
                         if IdDict.size model.trains < 50 then
-                            Train.handleAddingTrain model.trains userId localChange.change localChange.position
+                            Train.handleAddingTrain model.trains userId localChange2.change localChange2.position
 
                         else
                             Nothing
 
                     { removed, newCells } =
-                        Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+                        Grid.addChange (Grid.localChangeToChange userId localChange2) model.grid
 
                     nextCowId =
                         IdDict.nextId model.cows |> Id.toInt
@@ -1056,7 +1076,7 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                                 removeTrain
                                 { model
                                     | grid =
-                                        Grid.addChange (Grid.localChangeToChange userId localChange) model.grid
+                                        Grid.addChange (Grid.localChangeToChange userId localChange2) model.grid
                                             |> .grid
                                     , trains =
                                         case maybeTrain of
@@ -1075,9 +1095,9 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
                                             LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
                                     }
                                 )
-                        , originalChange
+                        , ( eventId, Change.LocalGridChange localChange2 )
                         , ServerGridChange
-                            { gridChange = Grid.localChangeToChange userId localChange
+                            { gridChange = Grid.localChangeToChange userId localChange2
                             , newCells = newCells
                             , newCows = newCows
                             }

@@ -25,6 +25,7 @@ module Grid exposing
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
     , localTilePointPlusWorldCoord
+    , modifiedSince
     , moveUndoPoint
     , region
     , removeUser
@@ -44,6 +45,8 @@ import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import DisplayName
+import Duration
+import Effect.Time
 import GridCell exposing (Cell, CellData)
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
@@ -176,11 +179,11 @@ cellAndLocalPointToWorld cell local =
 
 
 type alias GridChange =
-    { position : Coord WorldUnit, change : Tile, userId : Id UserId, colors : Colors }
+    { position : Coord WorldUnit, change : Tile, userId : Id UserId, colors : Colors, time : Effect.Time.Posix }
 
 
 type alias LocalGridChange =
-    { position : Coord WorldUnit, change : Tile, colors : Colors }
+    { position : Coord WorldUnit, change : Tile, colors : Colors, time : Effect.Time.Posix }
 
 
 localChangeToChange : Id UserId -> LocalGridChange -> GridChange
@@ -189,7 +192,26 @@ localChangeToChange userId change_ =
     , change = change_.change
     , userId = userId
     , colors = change_.colors
+    , time = change_.time
     }
+
+
+modifiedSince : Effect.Time.Posix -> Grid -> List (Coord CellUnit)
+modifiedSince time (Grid grid) =
+    Dict.toList grid
+        |> List.filterMap
+            (\( coord, cell ) ->
+                case GridCell.latestChange cell of
+                    Just latestChange ->
+                        if Duration.from time latestChange.time |> Quantity.greaterThanZero then
+                            Just (Coord.tuple coord)
+
+                        else
+                            Nothing
+
+                    Nothing ->
+                        Nothing
+            )
 
 
 moveUndoPoint : Id UserId -> Dict RawCellCoord Int -> Grid -> Grid
@@ -351,6 +373,7 @@ addChange change grid =
             , position = localPosition
             , value = change.change
             , colors = change.colors
+            , time = change.time
             }
 
         neighborCells_ :
