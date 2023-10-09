@@ -13,7 +13,8 @@ import Color exposing (Color)
 import Coord exposing (Coord)
 import Effect.WebGL
 import Pixels exposing (Pixels)
-import Shaders exposing (Vertex)
+import Shaders
+import Sprite exposing (Vertex)
 import Tile
 import Units exposing (WorldUnit)
 import Vector2d exposing (Vector2d)
@@ -72,7 +73,7 @@ flagMesh position scale color frame =
       , y = y2
       , z = 0
       , texturePosition = topLeft
-      , opacityAndUserId = Shaders.opaque
+      , opacityAndUserId = Sprite.opaque
       , primaryColor = colorVec
       , secondaryColor = 0
       }
@@ -80,7 +81,7 @@ flagMesh position scale color frame =
       , y = y2
       , z = 0
       , texturePosition = topRight
-      , opacityAndUserId = Shaders.opaque
+      , opacityAndUserId = Sprite.opaque
       , primaryColor = colorVec
       , secondaryColor = 0
       }
@@ -88,7 +89,7 @@ flagMesh position scale color frame =
       , y = y2 + height * scale2
       , z = 0
       , texturePosition = bottomRight
-      , opacityAndUserId = Shaders.opaque
+      , opacityAndUserId = Sprite.opaque
       , primaryColor = colorVec
       , secondaryColor = 0
       }
@@ -96,7 +97,7 @@ flagMesh position scale color frame =
       , y = y2 + height * scale2
       , z = 0
       , texturePosition = bottomLeft
-      , opacityAndUserId = Shaders.opaque
+      , opacityAndUserId = Sprite.opaque
       , primaryColor = colorVec
       , secondaryColor = 0
       }

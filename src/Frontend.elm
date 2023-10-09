@@ -8,7 +8,7 @@ import Audio exposing (Audio, AudioCmd, AudioData)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
-import Change exposing (AreTrainsDisabled(..), Change(..), TimeOfDay(..), UserStatus(..))
+import Change exposing (AreTrainsDisabled(..), Change(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
@@ -65,12 +65,13 @@ import Ports
 import Quantity exposing (Quantity(..))
 import Random
 import Route
-import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData, Vertex)
+import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData)
 import Sound exposing (Sound(..))
-import Sprite
+import Sprite exposing (Vertex)
 import TextInput exposing (OutMsg(..))
 import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Time
+import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Status(..), Train)
@@ -581,7 +582,7 @@ update audioData msg model =
                                 getNightFactor newModel
 
                             newModel2 =
-                                if (oldNightFactor > 0.5) /= (newNightFactor > 0.5) then
+                                if TimeOfDay.isDayTime oldNightFactor /= TimeOfDay.isDayTime newNightFactor then
                                     { newModel | lightsSwitched = Just newModel.time }
 
                                 else
@@ -4276,34 +4277,7 @@ getNightFactor model =
                 NotLoggedIn notLoggedIn ->
                     notLoggedIn.timeOfDay
     in
-    case timeOfDay of
-        Automatic ->
-            let
-                hour =
-                    toFloat (Time.toHour Time.utc model.time)
-                        + (toFloat (Time.toMinute Time.utc model.time) / 60)
-                        + (toFloat (Time.toSecond Time.utc model.time) / (60 * 60))
-            in
-            if hour < 5 then
-                1
-
-            else if hour < 8 then
-                (8 - hour) / 3
-
-            else if hour < 18 then
-                0
-
-            else if hour < 21 then
-                (hour - 18) / 3
-
-            else
-                1
-
-        AlwaysDay ->
-            0
-
-        AlwaysNight ->
-            1
+    TimeOfDay.nightFactor timeOfDay model.time
 
 
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
@@ -4340,8 +4314,8 @@ canvasView audioData model =
                 showMousePointer =
                     cursorSprite hoverAt2 model
 
-                shaderTime2 =
-                    shaderTime model
+                staticViewMatrix =
+                    Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
 
                 renderData : RenderData
                 renderData =
@@ -4349,12 +4323,14 @@ canvasView audioData model =
                     , texture = texture
                     , depth = depth
                     , nightFactor = getNightFactor model
+                    , staticViewMatrix = staticViewMatrix
                     , viewMatrix =
-                        Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                        staticViewMatrix
                             |> Mat4.translate3
                                 (negate <| toFloat <| round (x * toFloat Units.tileWidth))
                                 (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                                 0
+                    , time = shaderTime model
                     }
 
                 textureSize : Vec2
@@ -4391,14 +4367,14 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (Shaders.drawBackground renderData meshes shaderTime2
+                (Shaders.drawBackground renderData meshes
                     ++ drawForeground
                         renderData
                         model.contextMenu
                         model.currentTool
                         hoverAt2
                         meshes
-                        shaderTime2
+                    ++ Shaders.drawWaterReflection renderData model
                     ++ (case
                             ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
                             , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
@@ -4417,6 +4393,8 @@ canvasView audioData model =
                                                 (negate <| toFloat <| round (x * toFloat Units.tileWidth))
                                                 (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                                                 0
+                                    , staticViewMatrix = staticViewMatrix
+                                    , time = shaderTime model
                                     }
                                     (case model.contextMenu of
                                         Just contextMenu ->
@@ -4429,13 +4407,12 @@ canvasView audioData model =
                                     localGrid.mail
                                     model.trains
                                     viewBounds_
-                                    shaderTime2
 
                             _ ->
                                 []
                        )
-                    ++ drawAnimals renderData model shaderTime2
-                    ++ drawFlags renderData model shaderTime2
+                    ++ drawAnimals renderData model
+                    ++ drawFlags renderData model
                     ++ [ Effect.WebGL.entityWith
                             [ Shaders.blend ]
                             Shaders.debrisVertexShader
@@ -4446,19 +4423,19 @@ canvasView audioData model =
                             , lights = lightsTexture
                             , depth = depth
                             , textureSize = textureSize
-                            , time = shaderTime2
-                            , time2 = shaderTime2
+                            , time = renderData.time
+                            , time2 = renderData.time
                             , color = Vec4.vec4 1 1 1 1
                             , night = renderData.nightFactor
                             }
                        , drawReports renderData model.reportsMesh
                        ]
-                    ++ drawOtherCursors renderData model shaderTime2
-                    ++ Train.drawSpeechBubble renderData model.time model.trains shaderTime2
-                    ++ drawTilePlacer renderData audioData model shaderTime2
+                    ++ drawOtherCursors renderData model
+                    ++ Train.drawSpeechBubble renderData model.time model.trains
+                    ++ drawTilePlacer renderData audioData model
                     ++ (case model.page of
                             MailPage _ ->
-                                [ MailEditor.backgroundLayer renderData shaderTime2 ]
+                                [ MailEditor.backgroundLayer renderData ]
 
                             _ ->
                                 []
@@ -4477,7 +4454,7 @@ canvasView audioData model =
                             , textureSize = textureSize
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
-                            , time = shaderTime2
+                            , time = shaderTime model
                             , night = renderData.nightFactor * 0.5
                             }
                        ]
@@ -4502,14 +4479,13 @@ canvasView audioData model =
                                     windowHeight
                                     model
                                     mailEditor
-                                    shaderTime2
 
                             _ ->
                                 []
                        )
                     ++ (case LocalGrid.currentUserId model of
                             Just userId ->
-                                drawCursor renderData showMousePointer userId model shaderTime2
+                                drawCursor renderData showMousePointer userId model
 
                             Nothing ->
                                 []
@@ -4539,8 +4515,8 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
         }
 
 
-drawAnimals : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawAnimals { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
+drawAnimals : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -4580,8 +4556,8 @@ drawAnimals { nightFactor, lights, texture, viewMatrix, depth } model shaderTime
                             , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
-                            , time = shaderTime2
-                            , opacityAndUserId0 = Shaders.opaque
+                            , time = time
+                            , opacityAndUserId0 = Sprite.opaque
                             , position0 =
                                 Vec3.vec3
                                     (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2))
@@ -4608,8 +4584,8 @@ drawAnimals { nightFactor, lights, texture, viewMatrix, depth } model shaderTime
         (IdDict.toList localGrid.animals)
 
 
-drawFlags : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawFlags { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
+drawFlags : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawFlags { nightFactor, lights, texture, viewMatrix, depth, time } model =
     List.filterMap
         (\flag ->
             let
@@ -4647,7 +4623,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
-                        , time = shaderTime2
+                        , time = time
                         , night = nightFactor
                         }
                         |> Just
@@ -4658,8 +4634,8 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 
         (getFlags model)
 
 
-drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth } audioData model shaderTime2 =
+drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioData model =
     let
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -4686,16 +4662,16 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth } audioData mod
                 offsetX : Float
                 offsetX =
                     case model.lastTilePlaced of
-                        Just { tile, time } ->
+                        Just lastPlacedTile ->
                             let
                                 timeElapsed =
-                                    Duration.from time model.time
+                                    Duration.from lastPlacedTile.time model.time
                             in
                             if
                                 (timeElapsed
                                     |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
                                 )
-                                    && (tile == EmptyTile)
+                                    && (lastPlacedTile.tile == EmptyTile)
                             then
                                 timeElapsed
                                     |> Duration.inSeconds
@@ -4747,7 +4723,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth } audioData mod
                     else
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
-                , time = shaderTime2
+                , time = time
                 , night = nightFactor
                 }
             ]
@@ -4786,7 +4762,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth } audioData mod
                     else
                         Vec4.vec4 1 0 0 0.5
                 , userId = Shaders.noUserIdSelected
-                , time = shaderTime2
+                , time = time
                 , night = nightFactor
                 }
             ]
@@ -4960,8 +4936,8 @@ lastPlacementOffset audioData model =
             0
 
 
-drawOtherCursors : RenderData -> FrontendLoaded -> Float -> List Effect.WebGL.Entity
-drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth } model shaderTime2 =
+drawOtherCursors : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time } model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -5022,7 +4998,7 @@ drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth } model shade
                             , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
-                            , time = shaderTime2
+                            , time = time
                             , night = nightFactor
                             }
                             |> Just
@@ -5037,9 +5013,8 @@ drawCursor :
     -> { cursorType : CursorType, scale : Int }
     -> Id UserId
     -> FrontendLoaded
-    -> Float
     -> List Effect.WebGL.Entity
-drawCursor { nightFactor, lights, texture, viewMatrix, depth } showMousePointer userId model shaderTime2 =
+drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePointer userId model =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -5079,7 +5054,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth } showMousePointer 
                                 , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , color = Vec4.vec4 1 1 1 1
                                 , userId = Shaders.noUserIdSelected
-                                , time = shaderTime2
+                                , time = time
                                 , night = nightFactor
                                 }
                             ]
@@ -5195,15 +5170,14 @@ drawForeground :
     -> Tool
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
-    -> Float
     -> List Effect.WebGL.Entity
-drawForeground { nightFactor, lights, viewMatrix, texture, depth } maybeContextMenu currentTool2 hoverAt2 meshes shaderTime2 =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth, time } maybeContextMenu currentTool2 hoverAt2 meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
                 Effect.WebGL.entityWith
                     [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
-                    , Effect.WebGL.Settings.DepthTest.lessOrEqual { write = True, near = 0, far = 1 }
+                    , Shaders.depthTest
                     , Shaders.blend
                     ]
                     Shaders.vertexShader
@@ -5237,7 +5211,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth } maybeContextM
 
                                     _ ->
                                         -3
-                    , time = shaderTime2
+                    , time = time
                     , night = nightFactor
                     }
             )

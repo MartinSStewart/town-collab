@@ -10,7 +10,6 @@ module Change exposing
     , Report
     , ServerChange(..)
     , TileHotkey(..)
-    , TimeOfDay(..)
     , UserStatus(..)
     , tileHotkeyDict
     )
@@ -33,6 +32,7 @@ import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (BackendMail, MailStatus)
 import Point2d exposing (Point2d)
 import Tile exposing (TileGroup)
+import TimeOfDay exposing (TimeOfDay)
 import Train exposing (TrainDiff)
 import Units exposing (CellUnit, WorldUnit)
 import User exposing (FrontendUser)
@@ -176,12 +176,6 @@ type alias LoggedIn_ =
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict TileHotkey TileGroup
     }
-
-
-type TimeOfDay
-    = Automatic
-    | AlwaysDay
-    | AlwaysNight
 
 
 type alias Report =

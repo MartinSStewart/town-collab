@@ -3,7 +3,7 @@ module Backend exposing (app, app_)
 import Animal exposing (Animal)
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), LocalChange(..), ServerChange(..), TimeOfDay(..), UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -35,6 +35,7 @@ import Quantity
 import Route exposing (LoginOrInviteToken(..), Route(..))
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..))
+import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
 import Undo

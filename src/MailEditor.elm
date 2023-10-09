@@ -57,9 +57,9 @@ import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
-import Shaders exposing (RenderData, Vertex)
+import Shaders exposing (RenderData)
 import Sound exposing (Sound(..))
-import Sprite
+import Sprite exposing (Vertex)
 import Tile exposing (DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import Time exposing (Month(..))
 import Ui exposing (BorderAndFill(..), UiEvent)
@@ -1344,8 +1344,8 @@ scaleForScreenToWorld windowSize =
     1 / toFloat (mailZoomFactor windowSize) |> Quantity
 
 
-backgroundLayer : RenderData -> Float -> Effect.WebGL.Entity
-backgroundLayer { lights, nightFactor, texture, depth } shaderTime =
+backgroundLayer : RenderData -> Effect.WebGL.Entity
+backgroundLayer { lights, nightFactor, texture, depth, time } =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -1357,7 +1357,7 @@ backgroundLayer { lights, nightFactor, texture, depth } shaderTime =
         , lights = lights
         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , userId = Shaders.noUserIdSelected
-        , time = shaderTime
+        , time = time
         , night = nightFactor
         , depth = depth
         }
@@ -1372,9 +1372,8 @@ drawMail :
     -> Int
     -> { a | windowSize : Coord Pixels, time : Effect.Time.Posix, zoomFactor : Int }
     -> Model
-    -> Float
     -> List Effect.WebGL.Entity
-drawMail { lights, nightFactor, texture, depth } mailPosition mailSize2 mousePosition windowWidth windowHeight config model shaderTime2 =
+drawMail { lights, nightFactor, texture, depth, time } mailPosition mailSize2 mousePosition windowWidth windowHeight config model =
     let
         zoomFactor : Float
         zoomFactor =
@@ -1441,7 +1440,7 @@ drawMail { lights, nightFactor, texture, depth } mailPosition mailSize2 mousePos
                         (toFloat tileY |> round |> toFloat)
                         0
             , userId = Shaders.noUserIdSelected
-            , time = shaderTime2
+            , time = time
             , night = nightFactor
             , depth = depth
             }
@@ -1547,7 +1546,7 @@ tileMesh tile position scale colors =
             Tile.getData tile
     in
     Grid.tileMeshHelper2
-        Shaders.opaque
+        Sprite.opaque
         colors
         position
         (case tile of

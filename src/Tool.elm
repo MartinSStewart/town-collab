@@ -4,7 +4,7 @@ import Coord exposing (Coord)
 import Cursor
 import Effect.WebGL as WebGL
 import Quantity exposing (Quantity)
-import Shaders exposing (Vertex)
+import Sprite exposing (Vertex)
 import Tile exposing (TileGroup(..))
 import Units exposing (WorldUnit)
 

@@ -51,8 +51,8 @@ import List.Extra as List
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
-import Shaders exposing (Vertex)
-import Sprite
+import Shaders
+import Sprite exposing (Vertex)
 import Terrain exposing (TerrainType(..), TerrainValue)
 import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit, TileLocalUnit, WorldUnit)
@@ -740,7 +740,7 @@ tileMesh tile position scale colors =
 
     else
         tileMeshHelper2
-            Shaders.opaque
+            Sprite.opaque
             colors
             position
             (case tile of

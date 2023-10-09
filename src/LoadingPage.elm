@@ -60,9 +60,9 @@ import Ports
 import Quantity exposing (Quantity)
 import Random
 import Set exposing (Set)
-import Shaders exposing (Vertex)
+import Shaders
 import Sound
-import Sprite
+import Sprite exposing (Vertex)
 import Terrain
 import TextInput
 import Tile exposing (Category(..), Tile, TileGroup(..))

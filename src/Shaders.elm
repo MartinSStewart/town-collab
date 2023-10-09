@@ -3,18 +3,17 @@ module Shaders exposing
     , InstancedVertex
     , MapOverlayVertex
     , RenderData
-    , Vertex
     , blend
     , debrisVertexShader
+    , depthTest
     , drawBackground
+    , drawWaterReflection
     , fragmentShader
-    , indexedTriangles
     , instancedVertexShader
     , mapSize
     , mapSquare
     , noUserIdSelected
     , opacityAndUserId
-    , opaque
     , triangleFan
     , vertexShader
     , worldGenUserId
@@ -25,33 +24,25 @@ module Shaders exposing
     )
 
 import Bitwise
-import Coord
+import Color
+import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Effect.WebGL exposing (Shader)
 import Effect.WebGL.Settings exposing (Setting)
 import Effect.WebGL.Settings.Blend as Blend
 import Effect.WebGL.Settings.DepthTest
 import Id exposing (Id, UserId)
-import Math.Matrix4 exposing (Mat4)
+import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Math.Vector4 as Vec4 exposing (Vec4)
+import Pixels exposing (Pixels)
 import Quantity exposing (Quantity)
+import Random
+import Sprite exposing (Vertex)
+import TimeOfDay
 import Units exposing (TerrainUnit)
 import WebGL.Texture
-
-
-type alias Vertex =
-    { x : Float
-    , y : Float
-    , z : Float
-    , texturePosition : Float
-    , -- bits 0-3 is opacity
-      -- bits 4-31 is userId
-      opacityAndUserId : Float
-    , primaryColor : Float
-    , secondaryColor : Float
-    }
 
 
 type alias InstancedVertex =
@@ -65,14 +56,10 @@ type alias RenderData =
     , texture : WebGL.Texture.Texture
     , lights : WebGL.Texture.Texture
     , depth : WebGL.Texture.Texture
+    , staticViewMatrix : Mat4
     , viewMatrix : Mat4
+    , time : Float
     }
-
-
-opaque : number
-opaque =
-    --0b1111
-    15
 
 
 noUserIdSelected : number
@@ -88,19 +75,10 @@ worldGenUserId =
 opacityAndUserId : Float -> Id UserId -> Float
 opacityAndUserId opacity userId =
     opacity
-        * opaque
+        * Sprite.opaque
         |> round
         |> toFloat
         |> (+) (Id.toInt userId |> Bitwise.shiftLeftBy 4 |> toFloat)
-
-
-indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Effect.WebGL.Mesh attributes
-indexedTriangles vertices indices =
-    --let
-    --    _ =
-    --        Debug.log "new indexedTriangles" ""
-    --in
-    Effect.WebGL.indexedTriangles vertices indices
 
 
 triangleFan : List attributes -> Effect.WebGL.Mesh attributes
@@ -149,12 +127,75 @@ mapSquare =
         ]
 
 
+reflectionDepth =
+    0.05
+
+
+sunMesh : Effect.WebGL.Mesh Vertex
+sunMesh =
+    Sprite.spriteWithZ
+        1
+        Color.black
+        Color.black
+        (Coord.xy -24 -24)
+        reflectionDepth
+        (Coord.xy 48 48)
+        (Coord.xy 639 24)
+        (Coord.xy 48 48)
+        |> Sprite.toMesh
+
+
+moonMesh : Effect.WebGL.Mesh Vertex
+moonMesh =
+    Sprite.spriteWithZ
+        1
+        Color.black
+        Color.black
+        (Coord.xy -21 -21)
+        reflectionDepth
+        (Coord.xy 42 42)
+        (Coord.xy 591 144)
+        (Coord.xy 42 42)
+        |> Sprite.toMesh
+
+
+starColor =
+    Color.rgb255 200 200 255
+
+
+randomStars : Random.Generator (List (List Vertex))
+randomStars =
+    Random.map4
+        (\x y opacity star ->
+            Sprite.textWithZAndOpacityAndUserId
+                (opacityAndUserId opacity (Id.fromInt 0))
+                starColor
+                1
+                star
+                0
+                (Coord.xy x y)
+                reflectionDepth
+        )
+        (Random.int -4000 4000)
+        (Random.int -4000 4000)
+        (Random.float 0.1 1)
+        (Random.weighted ( 0.5, "." ) [ ( 0.1, "¤" ), ( 0.1, "*" ), ( 0.1, "´" ), ( 0.1, "`" ), ( 0.1, "×" ) ])
+        |> Random.list 2500
+
+
+starsMesh : Effect.WebGL.Mesh Vertex
+starsMesh =
+    Random.step randomStars (Random.initialSeed 123)
+        |> Tuple.first
+        |> List.concat
+        |> Sprite.toMesh
+
+
 drawBackground :
     RenderData
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
-    -> Float
     -> List Effect.WebGL.Entity
-drawBackground { nightFactor, viewMatrix, texture, lights, depth } meshes time =
+drawBackground { nightFactor, viewMatrix, texture, lights, depth, time } meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -177,6 +218,56 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth } meshes time =
                     , depth = depth
                     }
             )
+
+
+depthTest =
+    Effect.WebGL.Settings.DepthTest.lessOrEqual { write = True, near = 0, far = 1 }
+
+
+drawWaterReflection : RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
+drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, time } model =
+    [ Effect.WebGL.entityWith
+        [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
+        , depthTest
+        , blend
+        ]
+        vertexShader
+        fragmentShader
+        starsMesh
+        { view = staticViewMatrix
+        , texture = texture
+        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , color = Vec4.vec4 2 2 2 nightFactor
+        , userId = noUserIdSelected
+        , time = time
+        , night = nightFactor
+        , lights = lights
+        , depth = depth
+        }
+    , Effect.WebGL.entityWith
+        [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
+        , depthTest
+        , blend
+        ]
+        vertexShader
+        fragmentShader
+        (if TimeOfDay.isDayTime nightFactor then
+            sunMesh
+
+         else
+            moonMesh
+        )
+        { view = Coord.translateMat4 (TimeOfDay.sunMoonPosition model nightFactor) staticViewMatrix
+        , texture = texture
+        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , color = Vec4.vec4 1 1 1 1
+        , userId = noUserIdSelected
+        , time = time
+        , night = nightFactor
+        , lights = lights
+        , depth = depth
+        }
+    ]
 
 
 vertexShader :
@@ -495,14 +586,16 @@ void main () {
                             ? vec4(secondaryColor2 * 0.8, opacity)
                             : vec4(textureColor.xyz, opacity);
 
-    vec3 nightColor = vec3(1.0, 1.0, 1.0) * (1.0 - night) + vec3(0.314, 0.396, 0.745) * night;
+    vec3 nightColor = vec3(1.0, 1.0, 1.0) * (1.0 - night) + vec3(0.33, 0.4, 0.645) * night;
+
+    float lightHdrAdjustment = (1.0 / 0.95) * (night - 0.05);
 
     vec3 light =
         night > 0.5
-            ? texture2D(lights, vcoord).xyz * vec3(2.0, 2.0, 1.5) + 1.0
+            ? (texture2D(lights, vcoord).xyz * vec3(2.0, 2.0, 1.5) + 1.0) * lightHdrAdjustment
             : vec3(1.0, 1.0, 1.0);
 
-    gl_FragColor = textureColor2 * vec4(nightColor, 1.0) * vec4(light, 1.0) * color + 0.6 * isSelected * highlight;
+    gl_FragColor = textureColor2 * vec4(nightColor, 1.0) * vec4(max(light, vec3(1.0, 1.0, 1.0)), 1.0) * color + 0.6 * isSelected * highlight;
 }|]
 
 

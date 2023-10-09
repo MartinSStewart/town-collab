@@ -4,8 +4,7 @@ import Color
 import Coord exposing (Coord)
 import Keyboard
 import Quantity exposing (Quantity(..))
-import Shaders exposing (Vertex)
-import Sprite
+import Sprite exposing (Vertex)
 
 
 type alias Model =

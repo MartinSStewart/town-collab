@@ -57,8 +57,8 @@ import Math.Vector4 as Vec4
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
-import Shaders exposing (InstancedVertex, RenderData, Vertex)
-import Sprite
+import Shaders exposing (InstancedVertex, RenderData)
+import Sprite exposing (Vertex)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 import WebGL.Texture
@@ -1029,9 +1029,8 @@ draw :
     -> IdDict MailId FrontendMail
     -> IdDict TrainId Train
     -> BoundingBox2d WorldUnit WorldUnit
-    -> Float
     -> List Effect.WebGL.Entity
-draw renderData maybeSelectedUserId time mail trains viewBounds shaderTime =
+draw renderData maybeSelectedUserId time mail trains viewBounds =
     let
         trainViewBounds =
             BoundingBox2d.expandBy (Coord.maxComponent trainSize |> Quantity.toFloatQuantity) viewBounds
@@ -1204,7 +1203,7 @@ draw renderData maybeSelectedUserId time mail trains viewBounds shaderTime =
                    )
         )
         (IdDict.toList trains)
-        |> List.map (trainEntity renderData maybeSelectedUserId shaderTime)
+        |> List.map (trainEntity renderData maybeSelectedUserId)
 
 
 startTeleportingHome : Effect.Time.Posix -> Train -> Train
@@ -1263,8 +1262,8 @@ type alias TrainEntity =
     }
 
 
-trainEntity : RenderData -> Maybe (Id UserId) -> Float -> TrainEntity -> Effect.WebGL.Entity
-trainEntity { nightFactor, viewMatrix, texture, lights, depth } maybeUserId shaderTime trainData =
+trainEntity : RenderData -> Maybe (Id UserId) -> TrainEntity -> Effect.WebGL.Entity
+trainEntity { nightFactor, viewMatrix, texture, lights, depth, time } maybeUserId trainData =
     let
         ( tileW, tileH ) =
             Coord.toTuple Units.tileSize
@@ -1311,7 +1310,7 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth } maybeUserId shad
 
                 Nothing ->
                     -3
-        , time = shaderTime
+        , time = time
         , opacityAndUserId0 = Shaders.opacityAndUserId 1 trainData.userId
         , position0 =
             Vec3.vec3
@@ -1582,9 +1581,8 @@ drawSpeechBubble :
     RenderData
     -> Effect.Time.Posix
     -> IdDict TrainId Train
-    -> Float
     -> List Effect.WebGL.Entity
-drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix } time trains shaderTime2 =
+drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time } time2 trains =
     List.filterMap
         (\{ position, isRadio } ->
             let
@@ -1607,7 +1605,7 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix } time trains
             in
             case
                 Array.get
-                    (Effect.Time.posixToMillis time
+                    (Effect.Time.posixToMillis time2
                         |> toFloat
                         |> (*) 0.01
                         |> round
@@ -1633,7 +1631,7 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix } time trains
                         , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
-                        , time = shaderTime2
+                        , time = time
                         , night = nightFactor
                         }
                         |> Just
@@ -1641,4 +1639,4 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix } time trains
                 Nothing ->
                     Nothing
         )
-        (getSpeechBubbles time trains)
+        (getSpeechBubbles time2 trains)

@@ -58,8 +58,7 @@ import Keyboard
 import List.Extra as List
 import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
-import Shaders exposing (Vertex)
-import Sprite
+import Sprite exposing (Vertex)
 import TextInput
 import WebGL
 

@@ -1,9 +1,11 @@
 module Sprite exposing
-    ( asciiChars
+    ( Vertex
+    , asciiChars
     , charSize
     , charTexturePosition
     , charToInt
     , nineSlice
+    , opaque
     , outlinedText
     , rectangle
     , rectangleWithOpacity
@@ -24,11 +26,24 @@ module Sprite exposing
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
+import Effect.WebGL
 import List.Nonempty exposing (Nonempty(..))
 import Quantity exposing (Quantity(..))
 import Random
-import Shaders exposing (Vertex)
 import WebGL
+
+
+type alias Vertex =
+    { x : Float
+    , y : Float
+    , z : Float
+    , texturePosition : Float
+    , -- bits 0-3 is opacity
+      -- bits 4-31 is userId
+      opacityAndUserId : Float
+    , primaryColor : Float
+    , secondaryColor : Float
+    }
 
 
 nineSlice :
@@ -148,6 +163,12 @@ textureWidth =
     1024
 
 
+opaque : number
+opaque =
+    --0b1111
+    15
+
+
 spriteWithZ : Float -> Color -> Color -> Coord unit -> Float -> Coord unit -> Coord b -> Coord b -> List Vertex
 spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Quantity width, Quantity height ) texturePosition textureSize =
     let
@@ -164,7 +185,7 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
             Color.toInt secondaryColor |> toFloat
 
         opacity2 =
-            opacity * Shaders.opaque |> round |> toFloat
+            opacity * opaque |> round |> toFloat
     in
     [ { x = toFloat x
       , y = toFloat y
@@ -253,7 +274,7 @@ spriteWithZAndOpacityAndUserId opacityAndUserId primaryColor secondaryColor ( Qu
 
 toMesh : List a -> WebGL.Mesh a
 toMesh vertices =
-    Shaders.indexedTriangles vertices (getQuadIndices vertices 0 [] |> List.reverse)
+    Effect.WebGL.indexedTriangles vertices (getQuadIndices vertices 0 [] |> List.reverse)
 
 
 getQuadIndices : List a -> Int -> List ( Int, Int, Int ) -> List ( Int, Int, Int )

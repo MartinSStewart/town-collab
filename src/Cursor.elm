@@ -32,8 +32,7 @@ import Html.Attributes
 import Id exposing (AnimalId, Id, UserId)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Shaders exposing (Vertex)
-import Sprite
+import Sprite exposing (Vertex)
 import Ui
 import Units exposing (WorldUnit)
 import WebGL

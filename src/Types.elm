@@ -40,7 +40,7 @@ import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsDisabled, BackendReport, Change, TimeOfDay, UserStatus)
+import Change exposing (AreTrainsDisabled, BackendReport, Change, UserStatus)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -70,11 +70,13 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
 import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
-import Shaders exposing (DebrisVertex, Vertex)
+import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
+import Sprite exposing (Vertex)
 import TextInput
 import Tile exposing (Category, Tile, TileGroup)
 import Time
+import TimeOfDay exposing (TimeOfDay)
 import Tool exposing (Tool)
 import Train exposing (Train)
 import Ui

@@ -12,7 +12,7 @@ module Toolbar exposing
 
 import AdminPage
 import AssocList
-import Change exposing (AdminData, AreTrainsDisabled(..), LoggedIn_, TimeOfDay(..), UserStatus(..))
+import Change exposing (AdminData, AreTrainsDisabled(..), LoggedIn_, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
@@ -37,6 +37,7 @@ import Sprite
 import String.Nonempty
 import TextInput
 import Tile exposing (Category(..), DefaultColor(..), Tile(..), TileData, TileGroup(..))
+import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Train
 import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
