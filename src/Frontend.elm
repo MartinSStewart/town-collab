@@ -4560,8 +4560,8 @@ drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
                             , opacityAndUserId0 = Sprite.opaque
                             , position0 =
                                 Vec3.vec3
-                                    (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2))
-                                    (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2))
+                                    (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2) |> round |> toFloat)
+                                    (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2) |> round |> toFloat)
                                     0
                             , primaryColor0 = Color.toInt Color.white |> toFloat
                             , secondaryColor0 = Color.toInt Color.black |> toFloat
