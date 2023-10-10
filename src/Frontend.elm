@@ -29,7 +29,6 @@ import Effect.Task
 import Effect.Time
 import Effect.WebGL exposing (Mesh)
 import Effect.WebGL.Settings
-import Effect.WebGL.Settings.DepthTest
 import Effect.WebGL.Texture
 import EmailAddress
 import Env
@@ -725,7 +724,12 @@ updateLoaded audioData msg model =
                                     ( { model | hideUi = not model.hideUi }, Command.none )
 
                                 ( Just id, _ ) ->
-                                    uiUpdate audioData id (Ui.KeyDown rawKey key) model
+                                    case model.currentTool of
+                                        TextTool (Just _) ->
+                                            keyMsgCanvasUpdate audioData rawKey key model
+
+                                        _ ->
+                                            uiUpdate audioData id (Ui.KeyDown rawKey key) model
 
                                 _ ->
                                     keyMsgCanvasUpdate audioData rawKey key model
@@ -3649,16 +3653,6 @@ createDebrisMeshHelper position texturePosition ( Quantity textureW, Quantity te
                 (List.range 0 (textureH - 1))
         )
         (List.range 0 (textureW - 1))
-
-
-getUiHover : Hover -> Maybe UiHover
-getUiHover hover =
-    case hover of
-        UiHover id _ ->
-            Just id
-
-        _ ->
-            Nothing
 
 
 updateFromBackend : ToFrontend -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_ )
