@@ -69,7 +69,7 @@ import Tile exposing (Category(..), Tile, TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
-import Types exposing (ChangesSinceStatus(..), CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
+import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
 import Ui
 import Units exposing (CellUnit, WorldUnit)
 import WebGL.Texture
@@ -394,7 +394,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lightsSwitched = Nothing
             , selectedTileCategory = Buildings
             , lastHotkeyChange = Nothing
-            , latestChanges = NoChangesSinceRequest
             }
                 |> setCurrentTool HandToolButton
     in

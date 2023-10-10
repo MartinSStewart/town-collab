@@ -540,6 +540,9 @@ updateLocalChange localChange model =
         SetTileHotkey tileHotkey tileGroup ->
             updateLoggedIn model (setTileHotkey tileHotkey tileGroup)
 
+        ShowNotifications showNotifications ->
+            updateLoggedIn model (\loggedIn -> { loggedIn | showNotifications = showNotifications })
+
 
 setTileHotkey :
     TileHotkey

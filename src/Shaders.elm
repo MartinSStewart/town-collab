@@ -4,6 +4,7 @@ module Shaders exposing
     , MapOverlayVertex
     , RenderData
     , blend
+    , clearDepth
     , debrisVertexShader
     , depthTest
     , drawBackground
@@ -189,6 +190,54 @@ starsMesh =
         |> Tuple.first
         |> List.concat
         |> Sprite.toMesh
+
+
+clearDepth : Effect.WebGL.Entity
+clearDepth =
+    Effect.WebGL.entityWith
+        [ Effect.WebGL.Settings.DepthTest.always { write = True, near = 0, far = 1 }
+        , blend
+        ]
+        fillVertexShader
+        fillFragmentShader
+        viewportSquare
+        { color = Vec4.vec4 0 0 0 0 }
+
+
+viewportSquare : Effect.WebGL.Mesh { x : Float, y : Float }
+viewportSquare =
+    Effect.WebGL.triangleFan
+        [ { x = -1, y = -1 }
+        , { x = 1, y = -1 }
+        , { x = 1, y = 1 }
+        , { x = -1, y = 1 }
+        ]
+
+
+fillVertexShader : Shader { x : Float, y : Float } u {}
+fillVertexShader =
+    [glsl|
+
+attribute float x;
+attribute float y;
+
+void main () {
+  gl_Position = vec4(vec2(x, y), 1.0, 1.0);
+}
+
+|]
+
+
+fillFragmentShader : Shader {} { u | color : Vec4 } {}
+fillFragmentShader =
+    [glsl|
+precision mediump float;
+uniform vec4 color;
+
+void main () {
+    gl_FragColor = color;
+}
+    |]
 
 
 drawBackground :

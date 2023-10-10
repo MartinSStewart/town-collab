@@ -20,12 +20,12 @@ module Grid exposing
     , getCell2
     , getPostOffice
     , getTile
+    , latestChanges
     , localChangeToChange
     , localTileCoordPlusWorld
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
     , localTilePointPlusWorldCoord
-    , modifiedSince
     , moveUndoPoint
     , region
     , removeUser
@@ -196,12 +196,12 @@ localChangeToChange userId change_ =
     }
 
 
-modifiedSince : Effect.Time.Posix -> Grid -> List (Coord CellUnit)
-modifiedSince time (Grid grid) =
+latestChanges : Effect.Time.Posix -> Id UserId -> Grid -> List (Coord CellUnit)
+latestChanges time currentUser (Grid grid) =
     Dict.toList grid
         |> List.filterMap
             (\( coord, cell ) ->
-                case GridCell.latestChange cell of
+                case GridCell.latestChange currentUser cell of
                     Just latestChange ->
                         if Duration.from time latestChange.time |> Quantity.greaterThanZero then
                             Just (Coord.tuple coord)

@@ -27,6 +27,7 @@ import Coord exposing (Coord)
 import Effect.Time
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
+import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Quantity exposing (Quantity(..))
@@ -266,9 +267,14 @@ type alias Value =
     { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, colors : Colors, time : Effect.Time.Posix }
 
 
-latestChange : Cell -> Maybe Value
-latestChange (Cell cell) =
-    List.head cell.history
+latestChange : Id UserId -> Cell -> Maybe Value
+latestChange currentUser (Cell cell) =
+    List.find
+        (\value ->
+            (value.userId /= currentUser)
+                && (Coord.clamp Coord.origin (Coord.xy Units.cellSize Units.cellSize) value.position == value.position)
+        )
+        cell.history
 
 
 getPostOffices : Cell -> List { position : Coord CellLocalUnit, userId : Id UserId }

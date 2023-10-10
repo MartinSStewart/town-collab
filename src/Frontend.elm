@@ -1120,47 +1120,14 @@ updateLoaded audioData msg model =
                                         EmailAddressTextInputHover ->
                                             False
 
-                                        SendEmailButtonHover ->
-                                            True
-
                                         PrimaryColorInput ->
                                             False
 
                                         SecondaryColorInput ->
                                             False
 
-                                        ToolButtonHover _ ->
-                                            True
-
-                                        ShowInviteUser ->
-                                            True
-
-                                        CloseInviteUser ->
-                                            True
-
-                                        SubmitInviteUser ->
-                                            True
-
                                         InviteEmailAddressTextInput ->
                                             False
-
-                                        LowerMusicVolume ->
-                                            True
-
-                                        RaiseMusicVolume ->
-                                            True
-
-                                        LowerSoundEffectVolume ->
-                                            True
-
-                                        RaiseSoundEffectVolume ->
-                                            True
-
-                                        SettingsButton ->
-                                            True
-
-                                        CloseSettings ->
-                                            True
 
                                         DisplayNameTextInput ->
                                             False
@@ -1168,52 +1135,7 @@ updateLoaded audioData msg model =
                                         MailEditorHover _ ->
                                             False
 
-                                        YouGotMailButton ->
-                                            True
-
-                                        ShowMapButton ->
-                                            True
-
-                                        AllowEmailNotificationsCheckbox ->
-                                            True
-
-                                        UsersOnlineButton ->
-                                            True
-
-                                        CopyPositionUrlButton ->
-                                            True
-
-                                        ReportUserButton ->
-                                            True
-
-                                        ZoomInButton ->
-                                            True
-
-                                        ZoomOutButton ->
-                                            True
-
-                                        RotateLeftButton ->
-                                            True
-
-                                        RotateRightButton ->
-                                            True
-
-                                        AutomaticTimeOfDayButton ->
-                                            True
-
-                                        AlwaysDayTimeOfDayButton ->
-                                            True
-
-                                        AlwaysNightTimeOfDayButton ->
-                                            True
-
-                                        ShowAdminPage ->
-                                            True
-
-                                        AdminHover _ ->
-                                            True
-
-                                        CategoryButton _ ->
+                                        _ ->
                                             True
 
                                 Nothing ->
@@ -3093,6 +3015,18 @@ uiUpdate audioData id event model =
         CategoryButton category ->
             onPress audioData event (\() -> ( { model | selectedTileCategory = category }, Command.none )) model
 
+        NotificationsButton ->
+            onPress audioData
+                event
+                (\() -> updateLocalModel (Change.ShowNotifications True) model |> handleOutMsg False)
+                model
+
+        CloseNotifications ->
+            onPress audioData
+                event
+                (\() -> updateLocalModel (Change.ShowNotifications False) model |> handleOutMsg False)
+                model
+
 
 textInputUpdate :
     UiHover
@@ -3996,9 +3930,6 @@ updateLoadedFromBackend msg model =
         CheckConnectionBroadcast ->
             ( { model | lastCheckConnection = model.time }, Command.none )
 
-        ChangesSinceResponse since changes ->
-            ( { model | latestChanges = GotChangesSinceRequest { since = since, changes = changes } }, Command.none )
-
 
 actualTime : FrontendLoaded -> Effect.Time.Posix
 actualTime model =
@@ -4042,7 +3973,9 @@ view audioData model =
 
 viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewBoundingBox model =
-    BoundingBox2d.from (Toolbar.screenToWorld model Point2d.origin) (Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize))
+    BoundingBox2d.from
+        (Toolbar.screenToWorld model Point2d.origin)
+        (Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
 cursorSprite : Hover -> FrontendLoaded -> { cursorType : CursorType, scale : Int }
@@ -4302,10 +4235,6 @@ canvasView audioData model =
                 { x, y } =
                     Point2d.unwrap (Toolbar.actualViewPoint model)
 
-                localGrid : LocalGrid_
-                localGrid =
-                    LocalGrid.localModel model.localModel
-
                 hoverAt2 : Hover
                 hoverAt2 =
                     hoverAt model (LoadingPage.mouseScreenPosition model)
@@ -4335,21 +4264,6 @@ canvasView audioData model =
                 textureSize : Vec2
                 textureSize =
                     WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-
-                gridViewBounds : BoundingBox2d WorldUnit WorldUnit
-                gridViewBounds =
-                    LoadingPage.viewLoadingBoundingBox model
-
-                meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
-                meshes =
-                    Dict.filter
-                        (\key _ ->
-                            Coord.tuple key
-                                |> Units.cellToTile
-                                |> Coord.toPoint2d
-                                |> (\p -> BoundingBox2d.contains p gridViewBounds)
-                        )
-                        model.meshes
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4366,71 +4280,7 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (Shaders.drawBackground renderData meshes
-                    ++ drawForeground
-                        renderData
-                        model.contextMenu
-                        model.currentTool
-                        hoverAt2
-                        meshes
-                    ++ Shaders.drawWaterReflection renderData model
-                    ++ (case
-                            ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
-                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
-                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainDepthTexture
-                            )
-                        of
-                            ( Just trainTexture, Just trainLights, Just trainDepth ) ->
-                                Train.draw
-                                    { lights = trainLights
-                                    , texture = trainTexture
-                                    , depth = trainDepth
-                                    , nightFactor = getNightFactor model
-                                    , viewMatrix =
-                                        Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
-                                            |> Mat4.translate3
-                                                (negate <| toFloat <| round (x * toFloat Units.tileWidth))
-                                                (negate <| toFloat <| round (y * toFloat Units.tileHeight))
-                                                0
-                                    , staticViewMatrix = staticViewMatrix
-                                    , time = shaderTime model
-                                    }
-                                    (case model.contextMenu of
-                                        Just contextMenu ->
-                                            contextMenu.userId
-
-                                        Nothing ->
-                                            Nothing
-                                    )
-                                    model.time
-                                    localGrid.mail
-                                    model.trains
-                                    viewBounds_
-
-                            _ ->
-                                []
-                       )
-                    ++ drawAnimals renderData model
-                    ++ drawFlags renderData model
-                    ++ [ Effect.WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.debrisVertexShader
-                            Shaders.fragmentShader
-                            model.debrisMesh
-                            { view = renderData.viewMatrix
-                            , texture = texture
-                            , lights = lightsTexture
-                            , depth = depth
-                            , textureSize = textureSize
-                            , time = renderData.time
-                            , time2 = renderData.time
-                            , color = Vec4.vec4 1 1 1 1
-                            , night = renderData.nightFactor
-                            }
-                       , drawReports renderData model.reportsMesh
-                       ]
-                    ++ drawOtherCursors renderData model
-                    ++ Train.drawSpeechBubble renderData model.time model.trains
+                (drawWorld True renderData windowWidth windowHeight hoverAt2 viewBounds_ model
                     ++ drawTilePlacer renderData audioData model
                     ++ (case model.page of
                             MailPage _ ->
@@ -4457,6 +4307,14 @@ canvasView audioData model =
                             , night = renderData.nightFactor * 0.5
                             }
                        ]
+                    ++ drawWorld
+                        False
+                        renderData
+                        windowWidth
+                        windowHeight
+                        hoverAt2
+                        (BoundingBox2d.from Point2d.origin (Point2d.xy (Units.tileUnit 10) (Units.tileUnit 10)))
+                        model
                     ++ drawMap model
                     ++ (case model.page of
                             MailPage mailEditor ->
@@ -4493,6 +4351,123 @@ canvasView audioData model =
 
         _ ->
             Html.text ""
+
+
+drawWorld :
+    Bool
+    -> RenderData
+    -> Int
+    -> Int
+    -> Hover
+    -> BoundingBox2d WorldUnit WorldUnit
+    -> FrontendLoaded
+    -> List Effect.WebGL.Entity
+drawWorld isFirstDraw renderData windowWidth windowHeight hoverAt2 viewBounds_ model =
+    let
+        { x, y } =
+            Point2d.unwrap (Toolbar.actualViewPoint model)
+
+        localGrid : LocalGrid_
+        localGrid =
+            LocalGrid.localModel model.localModel
+
+        textureSize : Vec2
+        textureSize =
+            WebGL.Texture.size renderData.texture |> Coord.tuple |> Coord.toVec2
+
+        viewBounds3 =
+            BoundingBox2d.extrema viewBounds_
+
+        ( minXOffset, minYOffset ) =
+            Coord.tuple ( -2, -2 ) |> Units.cellToTile |> Tuple.mapBoth Quantity.toFloatQuantity Quantity.toFloatQuantity
+
+        gridViewBounds : BoundingBox2d WorldUnit WorldUnit
+        gridViewBounds =
+            BoundingBox2d.fromExtrema
+                { minX = viewBounds3.minX |> Quantity.plus minXOffset
+                , minY = viewBounds3.minY |> Quantity.plus minYOffset
+                , maxX = viewBounds3.maxX
+                , maxY = viewBounds3.maxY
+                }
+
+        --LoadingPage.viewLoadingBoundingBox model
+        meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
+        meshes =
+            Dict.filter
+                (\key _ ->
+                    Coord.tuple key
+                        |> Units.cellToTile
+                        |> Coord.toPoint2d
+                        |> (\p -> BoundingBox2d.contains p gridViewBounds)
+                )
+                model.meshes
+    in
+    (if isFirstDraw then
+        []
+
+     else
+        [ Shaders.clearDepth ]
+    )
+        ++ Shaders.drawBackground renderData meshes
+        ++ drawForeground renderData model.contextMenu model.currentTool hoverAt2 meshes
+        ++ Shaders.drawWaterReflection renderData model
+        ++ (case
+                ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
+                , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
+                , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainDepthTexture
+                )
+            of
+                ( Just trainTexture, Just trainLights, Just trainDepth ) ->
+                    Train.draw
+                        { lights = trainLights
+                        , texture = trainTexture
+                        , depth = trainDepth
+                        , nightFactor = getNightFactor model
+                        , viewMatrix =
+                            Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                                |> Mat4.translate3
+                                    (negate <| toFloat <| round (x * toFloat Units.tileWidth))
+                                    (negate <| toFloat <| round (y * toFloat Units.tileHeight))
+                                    0
+                        , staticViewMatrix = renderData.staticViewMatrix
+                        , time = shaderTime model
+                        }
+                        (case model.contextMenu of
+                            Just contextMenu ->
+                                contextMenu.userId
+
+                            Nothing ->
+                                Nothing
+                        )
+                        model.time
+                        localGrid.mail
+                        model.trains
+                        viewBounds_
+
+                _ ->
+                    []
+           )
+        ++ drawAnimals renderData model
+        ++ drawFlags renderData model
+        ++ [ Effect.WebGL.entityWith
+                [ Shaders.blend ]
+                Shaders.debrisVertexShader
+                Shaders.fragmentShader
+                model.debrisMesh
+                { view = renderData.viewMatrix
+                , texture = renderData.texture
+                , lights = renderData.lights
+                , depth = renderData.depth
+                , textureSize = textureSize
+                , time = renderData.time
+                , time2 = renderData.time
+                , color = Vec4.vec4 1 1 1 1
+                , night = renderData.nightFactor
+                }
+           , drawReports renderData model.reportsMesh
+           ]
+        ++ drawOtherCursors renderData model
+        ++ Train.drawSpeechBubble renderData model.time model.trains
 
 
 drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity

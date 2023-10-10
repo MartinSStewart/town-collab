@@ -930,18 +930,6 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                     )
                 )
 
-        ChangesSinceRequest since ->
-            asUser
-                sessionId
-                model
-                (\_ _ model2 ->
-                    ( model2
-                    , Grid.modifiedSince since model.grid
-                        |> ChangesSinceResponse since
-                        |> Effect.Lamdera.sendToFrontend clientId
-                    )
-                )
-
 
 {-| Allow a client to say when something happened but restrict how far it can be away from the current time.
 -}
@@ -1439,6 +1427,18 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
             , BroadcastToNoOne
             )
 
+        ShowNotifications showNotifications ->
+            ( { model
+                | users =
+                    IdDict.insert
+                        userId
+                        { user | showNotifications = showNotifications }
+                        model.users
+              }
+            , originalChange
+            , BroadcastToNoOne
+            )
+
 
 generateVisibleRegion :
     Maybe (Bounds CellUnit)
@@ -1621,6 +1621,8 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , isGridReadOnly = model.isGridReadOnly
                         , timeOfDay = user.timeOfDay
                         , tileHotkeys = user.tileHotkeys
+                        , showNotifications = user.showNotifications
+                        , notifications = Grid.latestChanges (Effect.Time.millisToPosix 0) userId model.grid
                         }
 
                 Nothing ->
@@ -1651,6 +1653,9 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , isGridReadOnly = model.isGridReadOnly
                                             , timeOfDay = user.timeOfDay
                                             , tileHotkeys = user.tileHotkeys
+                                            , showNotifications = user.showNotifications
+                                            , notifications =
+                                                Grid.latestChanges (Effect.Time.millisToPosix 0) data.userId model.grid
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , case data.requestedBy of
@@ -1698,6 +1703,8 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                 , isGridReadOnly = model.isGridReadOnly
                                 , timeOfDay = Automatic
                                 , tileHotkeys = newUser.tileHotkeys
+                                , showNotifications = newUser.showNotifications
+                                , notifications = []
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites
@@ -1888,6 +1895,7 @@ createUser userId emailAddress model =
             , allowEmailNotifications = True
             , timeOfDay = Automatic
             , tileHotkeys = AssocList.empty
+            , showNotifications = False
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

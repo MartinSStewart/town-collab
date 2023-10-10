@@ -68,6 +68,7 @@ type LocalChange
     | RemoveReport (Coord WorldUnit)
     | SetTimeOfDay TimeOfDay
     | SetTileHotkey TileHotkey TileGroup
+    | ShowNotifications Bool
 
 
 tileHotkeyDict : Dict String TileHotkey
@@ -175,6 +176,8 @@ type alias LoggedIn_ =
     , isGridReadOnly : Bool
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict TileHotkey TileGroup
+    , showNotifications : Bool
+    , notifications : List (Coord CellUnit)
     }
 
 

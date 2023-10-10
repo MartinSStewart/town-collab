@@ -31,6 +31,7 @@ import MailEditor exposing (MailStatus(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
+import Route
 import Shaders
 import Sound
 import Sprite
@@ -208,7 +209,21 @@ normalView model =
                         )
                 , Ui.row
                     { padding = Ui.noPadding, spacing = 4 }
-                    [ case model.topMenuOpened of
+                    [ case localModel.userStatus of
+                        LoggedIn loggedIn ->
+                            if loggedIn.showNotifications then
+                                notificationsView loggedIn
+
+                            else
+                                Ui.button
+                                    { id = NotificationsButton
+                                    , padding = Ui.paddingXY 10 4
+                                    }
+                                    (Ui.text "Notifications")
+
+                        NotLoggedIn _ ->
+                            Ui.none
+                    , case model.topMenuOpened of
                         Just (SettingsMenu nameTextInput) ->
                             case localModel.userStatus of
                                 LoggedIn loggedIn ->
@@ -224,7 +239,7 @@ normalView model =
 
                         Just LoggedOutSettingsMenu ->
                             case localModel.userStatus of
-                                LoggedIn loggedIn ->
+                                LoggedIn _ ->
                                     Ui.none
 
                                 NotLoggedIn notLoggedIn ->
@@ -313,6 +328,42 @@ normalView model =
                    )
         }
         toolbarElement
+
+
+notificationsView : LoggedIn_ -> Ui.Element UiHover
+notificationsView loggedIn =
+    Ui.el
+        { padding = Ui.paddingXY 8 8
+        , inFront = []
+        , borderAndFill = Ui.defaultElBorderAndFill
+        }
+        (Ui.column
+            { spacing = 16
+            , padding = Ui.noPadding
+            }
+            [ Ui.button { id = CloseNotifications, padding = Ui.paddingXY 10 4 } (Ui.text "Close")
+            , Ui.text "Changes in the last 6 hours"
+            , Ui.column
+                { spacing = 8
+                , padding = Ui.noPadding
+                }
+                (List.map
+                    (\coord ->
+                        let
+                            ( x, y ) =
+                                Units.cellToTile coord |> Coord.toTuple
+                        in
+                        "Map changed at "
+                            ++ "x="
+                            ++ String.fromInt x
+                            ++ "&y="
+                            ++ String.fromInt y
+                            |> Ui.text
+                    )
+                    loggedIn.notifications
+                )
+            ]
+        )
 
 
 contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover
