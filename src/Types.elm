@@ -334,6 +334,7 @@ type UiHover
     | CategoryButton Category
     | NotificationsButton
     | CloseNotifications
+    | MapChangeNotification (Coord WorldUnit)
 
 
 type alias BackendModel =

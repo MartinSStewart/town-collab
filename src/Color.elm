@@ -13,6 +13,7 @@ module Color exposing
     , getGreen
     , getRed
     , highlightColor
+    , linkColor
     , localReportColor
     , outlineColor
     , rgb255
@@ -111,6 +112,11 @@ fillColor3 =
 highlightColor : Color
 highlightColor =
     rgb255 251 241 233
+
+
+linkColor : Color
+linkColor =
+    rgb255 20 100 255
 
 
 toInt : Color -> Int

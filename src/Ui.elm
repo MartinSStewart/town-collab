@@ -44,6 +44,7 @@ module Ui exposing
     , topLeft
     , topLeft2
     , topRight
+    , underlinedColorText
     , underlinedText
     , view
     , visuallyEqual
@@ -224,6 +225,18 @@ underlinedText text2 =
     Text
         { outline = Nothing
         , color = Color.black
+        , scale = defaultCharScale
+        , text = text2
+        , underlined = True
+        , cachedSize = Sprite.textSize defaultCharScale text2
+        }
+
+
+underlinedColorText : Color -> String -> Element id
+underlinedColorText color text2 =
+    Text
+        { outline = Nothing
+        , color = color
         , scale = defaultCharScale
         , text = text2
         , underlined = True

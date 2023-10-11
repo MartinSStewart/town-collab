@@ -4,6 +4,7 @@ module Toolbar exposing
     , getTileGroupTile
     , isDisconnected
     , mapSize
+    , notificationsViewWidth
     , offsetViewPoint
     , screenToWorld
     , validateInviteEmailAddress
@@ -333,7 +334,7 @@ normalView model =
 notificationsView : LoggedIn_ -> Ui.Element UiHover
 notificationsView loggedIn =
     Ui.el
-        { padding = Ui.paddingXY 8 8
+        { padding = Ui.paddingXY 0 8
         , inFront = []
         , borderAndFill = Ui.defaultElBorderAndFill
         }
@@ -341,10 +342,15 @@ notificationsView loggedIn =
             { spacing = 16
             , padding = Ui.noPadding
             }
-            [ Ui.button { id = CloseNotifications, padding = Ui.paddingXY 10 4 } (Ui.text "Close")
-            , Ui.text "Changes in the last 6 hours"
+            [ Ui.el
+                { padding = Ui.paddingXY 8 0
+                , inFront = []
+                , borderAndFill = NoBorderOrFill
+                }
+                (Ui.button { id = CloseNotifications, padding = Ui.paddingXY 10 4 } (Ui.text "Close"))
+            , notificationsHeader
             , Ui.column
-                { spacing = 8
+                { spacing = 0
                 , padding = Ui.noPadding
                 }
                 (List.map
@@ -353,17 +359,37 @@ notificationsView loggedIn =
                             ( x, y ) =
                                 Units.cellToTile coord |> Coord.toTuple
                         in
-                        "Map changed at "
+                        "Change at "
                             ++ "x="
                             ++ String.fromInt x
                             ++ "&y="
                             ++ String.fromInt y
-                            |> Ui.text
+                            |> Ui.underlinedColorText Color.linkColor
+                            |> Ui.customButton
+                                { id = MapChangeNotification (Units.cellToTile coord)
+                                , padding = Ui.paddingXY 16 4
+                                , inFront = []
+                                , borderAndFill = NoBorderOrFill
+                                , borderAndFillFocus = FillOnly Color.fillColor2
+                                }
+                            |> Ui.el { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
                     )
                     loggedIn.notifications
                 )
             ]
         )
+
+
+notificationsHeader : Ui.Element id
+notificationsHeader =
+    Ui.el
+        { padding = Ui.paddingXY 16 0, inFront = [], borderAndFill = NoBorderOrFill }
+        (Ui.text "Changes in the last 6 hours")
+
+
+notificationsViewWidth : Int
+notificationsViewWidth =
+    Ui.size notificationsHeader |> Coord.xRaw
 
 
 contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover

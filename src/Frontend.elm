@@ -80,7 +80,7 @@ import Units exposing (WorldUnit)
 import Untrusted
 import Url exposing (Url)
 import Url.Parser
-import Vector2d
+import Vector2d exposing (Vector2d)
 import WebGL.Texture
 
 
@@ -3027,6 +3027,13 @@ uiUpdate audioData id event model =
                 (\() -> updateLocalModel (Change.ShowNotifications False) model |> handleOutMsg False)
                 model
 
+        MapChangeNotification coord ->
+            onPress
+                audioData
+                event
+                (\() -> ( { model | viewPoint = NormalViewPoint (Coord.toPoint2d coord) }, Command.none ))
+                model
+
 
 textInputUpdate :
     UiHover
@@ -4234,20 +4241,31 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
         staticViewMatrix2 =
             staticMatrix windowWidth windowHeight viewZoom
                 |> Mat4.translate3
-                    (toFloat (Coord.xRaw viewportPosition - windowWidth // 2)
+                    (toFloat ((Coord.xRaw viewportPosition + Coord.xRaw viewportSize // 2) - windowWidth // 2)
                         |> round
                         |> toFloat
                         |> (*) (1 / toFloat viewZoom)
                     )
-                    (toFloat (Coord.yRaw viewportPosition - windowHeight // 2)
+                    (toFloat ((Coord.yRaw viewportPosition + Coord.yRaw viewportSize // 2) - windowHeight // 2)
                         |> round
                         |> toFloat
                         |> (*) (1 / toFloat viewZoom)
                     )
                     0
 
+        viewPoint : { x : Float, y : Float }
         viewPoint =
             Point2d.unwrap viewPosition
+
+        offset : Vector2d WorldUnit WorldUnit
+        offset =
+            Units.pixelToTile viewportSize |> Coord.toVector2d |> Vector2d.scaleBy 0.5
+
+        viewBounds : BoundingBox2d WorldUnit WorldUnit
+        viewBounds =
+            BoundingBox2d.from
+                (viewPosition |> Point2d.translateBy (Vector2d.reverse offset))
+                (viewPosition |> Point2d.translateBy offset)
     in
     drawWorld
         False
@@ -4273,7 +4291,7 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
         windowWidth
         windowHeight
         MapHover
-        (BoundingBox2d.from Point2d.origin (Point2d.xy (Units.tileUnit 10) (Units.tileUnit 10)))
+        viewBounds
         model
 
 
@@ -4373,14 +4391,26 @@ canvasView audioData model =
                             , night = renderData.nightFactor * 0.5
                             }
                        ]
-                    ++ drawWorldPreview
-                        (Coord.xy 100 20)
-                        (Coord.xy 300 300)
-                        (Point2d.xy (Units.tileUnit 0) (Units.tileUnit 0))
-                        1
-                        renderData
-                        1
-                        model
+                    ++ (case hoverAt2 of
+                            UiHover id data ->
+                                case id of
+                                    MapChangeNotification changeAt ->
+                                        drawWorldPreview
+                                            (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
+                                            (Coord.xy 2 2 |> Units.cellToTile |> Units.tileToPixel)
+                                            (Coord.toPoint2d changeAt)
+                                            1
+                                            renderData
+                                            0
+                                            --renderData.nightFactor
+                                            model
+
+                                    _ ->
+                                        []
+
+                            _ ->
+                                []
+                       )
                     ++ drawMap model
                     ++ (case model.page of
                             MailPage mailEditor ->

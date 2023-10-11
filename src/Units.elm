@@ -9,9 +9,11 @@ module Units exposing
     , cellToTile
     , cellUnit
     , localUnit
+    , pixelToTile
     , screenFrame
     , tileHeight
     , tileSize
+    , tileToPixel
     , tileUnit
     , tileWidth
     )
@@ -70,6 +72,16 @@ cellSize =
 cellToTile : Coord CellUnit -> Coord WorldUnit
 cellToTile coord =
     Coord.multiplyTuple ( cellSize, cellSize ) coord |> Coord.toTuple |> Coord.tuple
+
+
+tileToPixel : Coord WorldUnit -> Coord Pixels
+tileToPixel coord =
+    Coord.multiply tileSize coord |> Coord.toTuple |> Coord.tuple
+
+
+pixelToTile : Coord Pixels -> Coord WorldUnit
+pixelToTile coord =
+    coord |> Coord.divide tileSize |> Coord.toTuple |> Coord.tuple
 
 
 tileSize : Coord unit
