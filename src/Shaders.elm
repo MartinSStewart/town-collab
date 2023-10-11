@@ -15,6 +15,7 @@ module Shaders exposing
     , mapSquare
     , noUserIdSelected
     , opacityAndUserId
+    , scissorBox
     , triangleFan
     , vertexShader
     , worldGenUserId
@@ -60,6 +61,7 @@ type alias RenderData =
     , staticViewMatrix : Mat4
     , viewMatrix : Mat4
     , time : Float
+    , scissors : ScissorBox
     }
 
 
@@ -244,7 +246,7 @@ drawBackground :
     RenderData
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawBackground { nightFactor, viewMatrix, texture, lights, depth, time } meshes =
+drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors } meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -252,6 +254,7 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth, time } meshes 
                     [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
                     , Effect.WebGL.Settings.DepthTest.default
                     , blend
+                    , scissorBox scissors
                     ]
                     vertexShader
                     fragmentShader
@@ -273,12 +276,22 @@ depthTest =
     Effect.WebGL.Settings.DepthTest.lessOrEqual { write = True, near = 0, far = 1 }
 
 
+type alias ScissorBox =
+    { left : Int, bottom : Int, width : Int, height : Int }
+
+
+scissorBox : ScissorBox -> Setting
+scissorBox { left, bottom, width, height } =
+    Effect.WebGL.Settings.scissor left bottom width height
+
+
 drawWaterReflection : RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
-drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, time } model =
+drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors } model =
     [ Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
         , depthTest
         , blend
+        , scissorBox scissors
         ]
         vertexShader
         fragmentShader
@@ -297,6 +310,7 @@ drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, tim
         [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
         , depthTest
         , blend
+        , scissorBox scissors
         ]
         vertexShader
         fragmentShader

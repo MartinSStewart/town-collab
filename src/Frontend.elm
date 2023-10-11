@@ -4212,6 +4212,71 @@ getNightFactor model =
     TimeOfDay.nightFactor timeOfDay model.time
 
 
+staticMatrix windowWidth windowHeight zoom =
+    Mat4.makeScale3 (toFloat zoom * 2 / toFloat windowWidth) (toFloat zoom * -2 / toFloat windowHeight) 1
+
+
+drawWorldPreview :
+    Coord Pixels
+    -> Coord Pixels
+    -> Point2d WorldUnit WorldUnit
+    -> Int
+    -> RenderData
+    -> Float
+    -> FrontendLoaded
+    -> List Effect.WebGL.Entity
+drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData nightFactor model =
+    let
+        ( windowWidth, windowHeight ) =
+            Coord.toTuple model.windowSize
+
+        staticViewMatrix2 : Mat4
+        staticViewMatrix2 =
+            staticMatrix windowWidth windowHeight viewZoom
+                |> Mat4.translate3
+                    (toFloat (Coord.xRaw viewportPosition - windowWidth // 2)
+                        |> round
+                        |> toFloat
+                        |> (*) (1 / toFloat viewZoom)
+                    )
+                    (toFloat (Coord.yRaw viewportPosition - windowHeight // 2)
+                        |> round
+                        |> toFloat
+                        |> (*) (1 / toFloat viewZoom)
+                    )
+                    0
+
+        viewPoint =
+            Point2d.unwrap viewPosition
+    in
+    drawWorld
+        False
+        { lights = renderData.lights
+        , texture = renderData.texture
+        , depth = renderData.depth
+        , nightFactor = nightFactor
+        , staticViewMatrix = staticViewMatrix2
+        , viewMatrix =
+            staticViewMatrix2
+                |> Mat4.translate3
+                    (toFloat <| round (-viewPoint.x * toFloat Units.tileWidth))
+                    (toFloat <| round (-viewPoint.y * toFloat Units.tileHeight))
+                    0
+        , time = renderData.time
+        , scissors =
+            { left = Coord.xRaw viewportPosition
+            , bottom = (windowHeight - Coord.yRaw viewportPosition) - Coord.yRaw viewportSize
+            , width = Coord.xRaw viewportSize
+            , height = Coord.yRaw viewportSize
+            }
+        }
+        windowWidth
+        windowHeight
+        MapHover
+        (BoundingBox2d.from Point2d.origin (Point2d.xy (Units.tileUnit 10) (Units.tileUnit 10)))
+        model
+
+
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
     case
@@ -4243,7 +4308,7 @@ canvasView audioData model =
                     cursorSprite hoverAt2 model
 
                 staticViewMatrix =
-                    Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                    staticMatrix windowWidth windowHeight model.zoomFactor
 
                 renderData : RenderData
                 renderData =
@@ -4259,6 +4324,7 @@ canvasView audioData model =
                                 (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                                 0
                     , time = shaderTime model
+                    , scissors = { left = 0, bottom = 0, width = windowWidth, height = windowHeight }
                     }
 
                 textureSize : Vec2
@@ -4307,13 +4373,13 @@ canvasView audioData model =
                             , night = renderData.nightFactor * 0.5
                             }
                        ]
-                    ++ drawWorld
-                        False
+                    ++ drawWorldPreview
+                        (Coord.xy 100 20)
+                        (Coord.xy 300 300)
+                        (Point2d.xy (Units.tileUnit 0) (Units.tileUnit 0))
+                        1
                         renderData
-                        windowWidth
-                        windowHeight
-                        hoverAt2
-                        (BoundingBox2d.from Point2d.origin (Point2d.xy (Units.tileUnit 10) (Units.tileUnit 10)))
+                        1
                         model
                     ++ drawMap model
                     ++ (case model.page of
@@ -4390,7 +4456,6 @@ drawWorld isFirstDraw renderData windowWidth windowHeight hoverAt2 viewBounds_ m
                 , maxY = viewBounds3.maxY
                 }
 
-        --LoadingPage.viewLoadingBoundingBox model
         meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
         meshes =
             Dict.filter
@@ -4431,6 +4496,7 @@ drawWorld isFirstDraw renderData windowWidth windowHeight hoverAt2 viewBounds_ m
                                     0
                         , staticViewMatrix = renderData.staticViewMatrix
                         , time = shaderTime model
+                        , scissors = renderData.scissors
                         }
                         (case model.contextMenu of
                             Just contextMenu ->
@@ -4450,7 +4516,7 @@ drawWorld isFirstDraw renderData windowWidth windowHeight hoverAt2 viewBounds_ m
         ++ drawAnimals renderData model
         ++ drawFlags renderData model
         ++ [ Effect.WebGL.entityWith
-                [ Shaders.blend ]
+                [ Shaders.blend, Shaders.scissorBox renderData.scissors ]
                 Shaders.debrisVertexShader
                 Shaders.fragmentShader
                 model.debrisMesh
@@ -4490,7 +4556,7 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
 
 
 drawAnimals : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
+drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -4519,7 +4585,7 @@ drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
                                 Animal.getData animal.animalType
                         in
                         Effect.WebGL.entityWith
-                            [ Shaders.blend ]
+                            [ Shaders.blend, Shaders.scissorBox scissors ]
                             Shaders.instancedVertexShader
                             Shaders.fragmentShader
                             Train.instancedMesh
@@ -4559,7 +4625,7 @@ drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
 
 
 drawFlags : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawFlags { nightFactor, lights, texture, viewMatrix, depth, time } model =
+drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     List.filterMap
         (\flag ->
             let
@@ -4581,7 +4647,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time } model =
                             Point2d.unwrap flag.position
                     in
                     Effect.WebGL.entityWith
-                        [ Shaders.blend ]
+                        [ Shaders.blend, Shaders.scissorBox scissors ]
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         flagMesh_
@@ -4913,7 +4979,7 @@ lastPlacementOffset audioData model =
 
 
 drawOtherCursors : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time } model =
+drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -4943,7 +5009,7 @@ drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time } model
                 case ( BoundingBox2d.contains cursorPosition2 viewBounds_, IdDict.get userId model.handMeshes ) of
                     ( True, Just mesh ) ->
                         Effect.WebGL.entityWith
-                            [ Shaders.blend ]
+                            [ Shaders.blend, Shaders.scissorBox scissors ]
                             Shaders.vertexShader
                             Shaders.fragmentShader
                             (Cursor.getSpriteMesh
@@ -5147,7 +5213,7 @@ drawForeground :
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawForeground { nightFactor, lights, viewMatrix, texture, depth, time } maybeContextMenu currentTool2 hoverAt2 meshes =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors } maybeContextMenu currentTool2 hoverAt2 meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5155,6 +5221,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time } maybeCo
                     [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
                     , Shaders.depthTest
                     , Shaders.blend
+                    , Shaders.scissorBox scissors
                     ]
                     Shaders.vertexShader
                     Shaders.fragmentShader

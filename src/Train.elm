@@ -1263,7 +1263,7 @@ type alias TrainEntity =
 
 
 trainEntity : RenderData -> Maybe (Id UserId) -> TrainEntity -> Effect.WebGL.Entity
-trainEntity { nightFactor, viewMatrix, texture, lights, depth, time } maybeUserId trainData =
+trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors } maybeUserId trainData =
     let
         ( tileW, tileH ) =
             Coord.toTuple Units.tileSize
@@ -1293,7 +1293,7 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth, time } maybeUserI
                 * trainW
     in
     Effect.WebGL.entityWith
-        [ Effect.WebGL.Settings.DepthTest.default, Shaders.blend ]
+        [ Effect.WebGL.Settings.DepthTest.default, Shaders.blend, Shaders.scissorBox scissors ]
         Shaders.instancedVertexShader
         Shaders.fragmentShader
         instancedMesh
@@ -1582,7 +1582,7 @@ drawSpeechBubble :
     -> Effect.Time.Posix
     -> IdDict TrainId Train
     -> List Effect.WebGL.Entity
-drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time } time2 trains =
+drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scissors } time2 trains =
     List.filterMap
         (\{ position, isRadio } ->
             let
@@ -1615,7 +1615,7 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time } time2
             of
                 Just mesh ->
                     Effect.WebGL.entityWith
-                        [ Shaders.blend ]
+                        [ Shaders.blend, Shaders.scissorBox scissors ]
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         mesh
