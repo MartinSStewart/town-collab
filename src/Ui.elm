@@ -27,6 +27,7 @@ module Ui exposing
     , ignoreInputs
     , noPadding
     , none
+    , outlinedScaledText
     , outlinedText
     , paddingXY
     , paddingXY2
@@ -289,6 +290,18 @@ outlinedText data =
         , text = data.text
         , underlined = False
         , cachedSize = Sprite.textSize defaultCharScale data.text
+        }
+
+
+outlinedScaledText : { outline : Color, color : Color, scale : Int, text : String } -> Element id
+outlinedScaledText data =
+    Text
+        { outline = Just data.outline
+        , color = data.color
+        , scale = defaultCharScale
+        , text = data.text
+        , underlined = False
+        , cachedSize = Sprite.textSize data.scale data.text
         }
 
 

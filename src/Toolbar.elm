@@ -45,6 +45,7 @@ import Train
 import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
+import Unsafe
 import User
 import Vector2d exposing (Vector2d)
 
@@ -99,6 +100,7 @@ normalView model =
         localModel =
             LocalGrid.localModel model.localModel
 
+        toolbarElement : Ui.Element UiHover
         toolbarElement =
             if model.hideUi then
                 Ui.none
@@ -141,9 +143,15 @@ normalView model =
                         NotLoggedIn _ ->
                             loginToolbarUi model.pressedSubmitEmail model.loginTextInput
                     )
+
+        ( cssWindowWidth, cssWindowHeight ) =
+            Coord.toTuple model.cssWindowSize
     in
     Ui.bottomCenter
-        { size = model.windowSize
+        { size =
+            Coord.xy
+                (round (toFloat cssWindowWidth * model.devicePixelRatio))
+                (round (toFloat cssWindowHeight * model.devicePixelRatio))
         , inFront =
             (if model.hideUi then
                 []
@@ -160,7 +168,17 @@ normalView model =
                         { size = model.windowSize }
                         (Ui.el
                             { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
-                            (User.drawInviteTree localModel.users localModel.inviteTree)
+                            (User.drawInviteTree
+                                (case localModel.userStatus of
+                                    LoggedIn loggedIn ->
+                                        Just loggedIn.userId
+
+                                    NotLoggedIn _ ->
+                                        Nothing
+                                )
+                                localModel.users
+                                localModel.inviteTree
+                            )
                         )
 
                   else
@@ -252,16 +270,6 @@ normalView model =
                                 , padding = Ui.paddingXY 10 4
                                 }
                                 (Ui.text "Settings")
-                    , case localModel.userStatus of
-                        LoggedIn loggedIn ->
-                            inviteView
-                                (model.topMenuOpened == Just InviteMenu)
-                                loggedIn.emailAddress
-                                model.inviteTextInput
-                                model.inviteSubmitStatus
-
-                        NotLoggedIn _ ->
-                            Ui.none
                     , case localModel.userStatus of
                         LoggedIn loggedIn ->
                             let
@@ -731,90 +739,79 @@ validateInviteEmailAddress emailAddress inviteEmailAddressText =
             Err "Invalid email"
 
 
-inviteView : Bool -> EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
-inviteView showInvite emailAddress inviteTextInput inviteSubmitStatus =
-    if showInvite then
-        let
-            inviteForm : Ui.Element UiHover
-            inviteForm =
-                Ui.column
-                    { spacing = 8, padding = Ui.noPadding }
-                    [ Ui.button
-                        { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
-                        (Ui.text "Cancel")
-                    , content
-                    ]
+inviteView : EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
+inviteView emailAddress inviteTextInput inviteSubmitStatus =
+    let
+        inviteForm : Ui.Element UiHover
+        inviteForm =
+            Ui.column
+                { spacing = 8, padding = Ui.paddingXY 16 16 }
+                [ Ui.button
+                    { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
+                    (Ui.text "Cancel")
+                , content
+                ]
 
-            content : Ui.Element UiHover
-            content =
-                Ui.column
+        content : Ui.Element UiHover
+        content =
+            Ui.column
+                { spacing = 0, padding = Ui.noPadding }
+                [ Ui.column
                     { spacing = 0, padding = Ui.noPadding }
-                    [ Ui.column
-                        { spacing = 0, padding = Ui.noPadding }
-                        [ Ui.text "Enter email address to send an invite to"
-                        , Ui.textInput
-                            { id = InviteEmailAddressTextInput
-                            , width = 800
-                            , isValid = True
-                            , state = inviteTextInput.current
-                            }
-                        ]
-                    , Ui.row
-                        { spacing = 4, padding = { topLeft = Coord.xy 0 8, bottomRight = Coord.origin } }
-                        [ Ui.button
-                            { id = SubmitInviteUser, padding = Ui.paddingXY 10 4 }
-                            (case inviteSubmitStatus of
-                                NotSubmitted _ ->
-                                    Ui.text "Send invite"
-
-                                Submitting ->
-                                    Ui.text "Submitting "
-
-                                Submitted _ ->
-                                    Ui.text "Submitting "
-                            )
-                        , case
-                            ( pressedSubmit inviteSubmitStatus
-                            , validateInviteEmailAddress emailAddress inviteTextInput.current.text
-                            )
-                          of
-                            ( True, Err error ) ->
-                                Ui.el
-                                    { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
-                                    (Ui.colorText Color.errorColor error)
-
-                            _ ->
-                                Ui.none
-                        ]
+                    [ Ui.text "Enter email address to send an invite to"
+                    , Ui.textInput
+                        { id = InviteEmailAddressTextInput
+                        , width = Coord.xRaw toolbarUiSize |> (+) (-16 * 2)
+                        , isValid = True
+                        , state = inviteTextInput.current
+                        }
                     ]
-        in
-        Ui.el
-            { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = Ui.defaultElBorderAndFill }
-            (case inviteSubmitStatus of
-                Submitted inviteEmailAddress ->
-                    Ui.column
-                        { spacing = 0, padding = Ui.noPadding }
-                        [ Ui.button
-                            { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
-                            (Ui.text "Close")
-                        , Ui.center
-                            { size = Ui.size content }
-                            (Ui.wrappedText
-                                (Ui.size content |> Coord.xRaw |> (+) -16)
-                                ("An invite email as been sent to " ++ EmailAddress.toString inviteEmailAddress)
-                            )
-                        ]
+                , Ui.row
+                    { spacing = 4, padding = { topLeft = Coord.xy 0 8, bottomRight = Coord.origin } }
+                    [ Ui.button
+                        { id = SubmitInviteUser, padding = Ui.paddingXY 10 4 }
+                        (case inviteSubmitStatus of
+                            NotSubmitted _ ->
+                                Ui.text "Send invite"
 
-                _ ->
-                    inviteForm
-            )
+                            Submitting ->
+                                Ui.text "Submitting "
 
-    else
-        Ui.button
-            { id = ShowInviteUser
-            , padding = Ui.paddingXY 10 4
-            }
-            (Ui.text "Invite")
+                            Submitted _ ->
+                                Ui.text "Submitting "
+                        )
+                    , case
+                        ( pressedSubmit inviteSubmitStatus
+                        , validateInviteEmailAddress emailAddress inviteTextInput.current.text
+                        )
+                      of
+                        ( True, Err error ) ->
+                            Ui.el
+                                { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
+                                (Ui.colorText Color.errorColor error)
+
+                        _ ->
+                            Ui.none
+                    ]
+                ]
+    in
+    case inviteSubmitStatus of
+        Submitted inviteEmailAddress ->
+            Ui.column
+                { spacing = 0, padding = Ui.paddingXY 16 16 }
+                [ Ui.button
+                    { id = CloseInviteUser, padding = Ui.paddingXY 10 4 }
+                    (Ui.text "Close")
+                , Ui.center
+                    { size = Ui.size content }
+                    (Ui.wrappedText
+                        (Ui.size content |> Coord.xRaw |> (+) -16)
+                        ("An invite email as been sent to " ++ EmailAddress.toString inviteEmailAddress)
+                    )
+                ]
+
+        _ ->
+            inviteForm
 
 
 pressedSubmit : SubmitStatus a -> Bool
@@ -901,149 +898,207 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
             loginUi
 
 
-toolbarUi : Colors -> LoggedIn_ -> FrontendLoaded -> ToolButton -> Ui.Element UiHover
+dummyEmail =
+    Unsafe.emailAddress "a@a.se"
+
+
+toolbarUiSize : Coord Pixels
+toolbarUiSize =
+    toolbarUi
+        { primaryColor = Color.black, secondaryColor = Color.black }
+        { tileHotkeys = AssocList.empty, emailAddress = dummyEmail }
+        { page = WorldPage { showMap = False, showInvite = False }
+        , hasCmdKey = False
+        , tileColors = AssocList.empty
+        , selectedTileCategory = Scenery
+        , primaryColorTextInput = TextInput.init
+        , secondaryColorTextInput = TextInput.init
+        , inviteTextInput = TextInput.init
+        , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
+        }
+        HandToolButton
+        |> Ui.size
+
+
+toolbarUi :
+    Colors
+    -> { a | tileHotkeys : AssocList.Dict Change.TileHotkey TileGroup, emailAddress : EmailAddress }
+    ->
+        { b
+            | page : Page
+            , hasCmdKey : Bool
+            , tileColors : AssocList.Dict TileGroup Colors
+            , selectedTileCategory : Category
+            , primaryColorTextInput : TextInput.Model
+            , secondaryColorTextInput : TextInput.Model
+            , inviteTextInput : TextInput.Model
+            , inviteSubmitStatus : SubmitStatus EmailAddress
+        }
+    -> ToolButton
+    -> Ui.Element UiHover
 toolbarUi handColor loggedIn model currentToolButton =
-    Ui.row
-        { spacing = 2, padding = Ui.noPadding }
-        [ Ui.column
-            { spacing = 2, padding = Ui.noPadding }
-            [ Ui.row
-                { spacing = 2, padding = Ui.noPadding }
-                [ Ui.button { id = ZoomInButton, padding = smallToolButtonPadding } zoomInSprite
-                , Ui.button { id = ZoomOutButton, padding = smallToolButtonPadding } zoomOutSprite
-                ]
-            , Ui.row
-                { spacing = 2, padding = Ui.noPadding }
-                [ Ui.customButton
-                    { id = RotateLeftButton
-                    , padding = smallToolButtonPadding
-                    , inFront = hotkeyTextOverlay (Coord.xy 56 56) "q"
-                    , borderAndFill = Ui.defaultButtonBorderAndFill
-                    , borderAndFillFocus = Ui.defaultButtonBorderAndFillFocus
-                    }
-                    rotateLeftSprite
-                , Ui.customButton
-                    { id = RotateRightButton
-                    , padding = smallToolButtonPadding
-                    , inFront = hotkeyTextOverlay (Coord.xy 56 56) "w"
-                    , borderAndFill = Ui.defaultButtonBorderAndFill
-                    , borderAndFillFocus = Ui.defaultButtonBorderAndFillFocus
-                    }
-                    rotateRightSprite
-                ]
-            , Ui.row
-                { spacing = 2, padding = Ui.noPadding }
-                [ Ui.customButton
-                    { id = ShowMapButton
-                    , padding = smallToolButtonPadding
-                    , inFront = hotkeyTextOverlay (Coord.xy 56 56) "m"
-                    , borderAndFill =
-                        BorderAndFill
-                            { borderWidth = 2
-                            , borderColor = Color.outlineColor
-                            , fillColor =
-                                case model.page of
-                                    WorldPage worldPage ->
-                                        if worldPage.showMap then
-                                            Color.highlightColor
+    let
+        showInvite =
+            case model.page of
+                WorldPage worldPage ->
+                    worldPage.showInvite
 
-                                        else
-                                            Color.fillColor2
+                _ ->
+                    False
+    in
+    if showInvite then
+        inviteView loggedIn.emailAddress model.inviteTextInput model.inviteSubmitStatus
 
-                                    _ ->
-                                        Color.fillColor2
-                            }
-                    , borderAndFillFocus =
-                        BorderAndFill
-                            { borderWidth = 2
-                            , borderColor = Color.focusedUiColor
-                            , fillColor =
-                                case model.page of
-                                    WorldPage worldPage ->
-                                        if worldPage.showMap then
-                                            Color.highlightColor
-
-                                        else
-                                            Color.fillColor2
-
-                                    _ ->
-                                        Color.fillColor2
-                            }
-                    }
-                    mapSprite
-                , Ui.selectableButton
-                    { id = ToolButtonHover ReportToolButton
-                    , padding = smallToolButtonPadding
-                    }
-                    (currentToolButton == ReportToolButton)
-                    Cursor.gavelCursor2
-                ]
-            ]
-        , List.map
-            (toolButtonUi model.hasCmdKey handColor model.tileColors loggedIn.tileHotkeys currentToolButton)
-            [ HandToolButton
-            , TilePickerToolButton
-            , TextToolButton
-            , TilePlacerToolButton EmptyTileGroup
-            ]
-            |> List.greedyGroupsOf toolbarRowCount
-            |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
-            |> Ui.row { spacing = 2, padding = Ui.noPadding }
-        , Ui.column
-            { spacing = -2
-            , padding = { topLeft = Coord.xy 0 -38, bottomRight = Coord.xy 0 0 }
-            }
-            [ List.map
-                (\category ->
-                    let
-                        text =
-                            Tile.categoryToString category
-                    in
-                    Ui.selectableButton
-                        { id = CategoryButton category
-                        , padding = Ui.paddingXY 6 2
+    else
+        Ui.row
+            { spacing = 4, padding = Ui.noPadding }
+            [ Ui.column
+                { spacing = 4, padding = Ui.noPadding }
+                [ Ui.row
+                    { spacing = 4, padding = Ui.noPadding }
+                    [ Ui.button { id = ZoomInButton, padding = smallToolButtonPadding } zoomInSprite
+                    , Ui.button { id = ZoomOutButton, padding = smallToolButtonPadding } zoomOutSprite
+                    ]
+                , Ui.row
+                    { spacing = 4, padding = Ui.noPadding }
+                    [ Ui.customButton
+                        { id = RotateLeftButton
+                        , padding = smallToolButtonPadding
+                        , inFront = hotkeyTextOverlay (Coord.xy 56 56) "q"
+                        , borderAndFill = Ui.defaultButtonBorderAndFill
+                        , borderAndFillFocus = Ui.defaultButtonBorderAndFillFocus
                         }
-                        (model.selectedTileCategory == category)
-                        (Ui.row
-                            { spacing = 0, padding = Ui.noPadding }
-                            [ Ui.underlinedText (String.fromChar (String.Nonempty.head text))
-                            , Ui.text (String.Nonempty.tail text)
-                            ]
-                        )
-                )
-                Tile.allCategories
-                |> Ui.row { spacing = 4, padding = Ui.noPadding }
-            , (case model.selectedTileCategory of
-                Buildings ->
-                    Tile.buildingCategory
+                        rotateLeftSprite
+                    , Ui.customButton
+                        { id = RotateRightButton
+                        , padding = smallToolButtonPadding
+                        , inFront = hotkeyTextOverlay (Coord.xy 56 56) "w"
+                        , borderAndFill = Ui.defaultButtonBorderAndFill
+                        , borderAndFillFocus = Ui.defaultButtonBorderAndFillFocus
+                        }
+                        rotateRightSprite
+                    ]
+                , Ui.row
+                    { spacing = 4, padding = Ui.noPadding }
+                    [ Ui.customButton
+                        { id = ShowMapButton
+                        , padding = smallToolButtonPadding
+                        , inFront = hotkeyTextOverlay (Coord.xy 56 56) "m"
+                        , borderAndFill =
+                            BorderAndFill
+                                { borderWidth = 2
+                                , borderColor = Color.outlineColor
+                                , fillColor =
+                                    case model.page of
+                                        WorldPage worldPage ->
+                                            if worldPage.showMap then
+                                                Color.highlightColor
 
-                Scenery ->
-                    Tile.sceneryCategory
+                                            else
+                                                Color.fillColor2
 
-                Rail ->
-                    Tile.railCategory
+                                        _ ->
+                                            Color.fillColor2
+                                }
+                        , borderAndFillFocus =
+                            BorderAndFill
+                                { borderWidth = 2
+                                , borderColor = Color.focusedUiColor
+                                , fillColor =
+                                    case model.page of
+                                        WorldPage worldPage ->
+                                            if worldPage.showMap then
+                                                Color.highlightColor
 
-                Road ->
-                    Tile.roadCategory
-              )
-                |> List.map
-                    (\a ->
-                        TilePlacerToolButton a
-                            |> toolButtonUi model.hasCmdKey handColor model.tileColors loggedIn.tileHotkeys currentToolButton
-                    )
+                                            else
+                                                Color.fillColor2
+
+                                        _ ->
+                                            Color.fillColor2
+                                }
+                        }
+                        mapSprite
+                    , Ui.selectableButton
+                        { id = ToolButtonHover ReportToolButton
+                        , padding = smallToolButtonPadding
+                        }
+                        (currentToolButton == ReportToolButton)
+                        Cursor.gavelCursor2
+                    ]
+                , Ui.row
+                    { spacing = 4, padding = Ui.noPadding }
+                    [ Ui.button
+                        { id = ShowInviteUser
+                        , padding = smallToolButtonPadding
+                        }
+                        inviteUserSprite
+                    ]
+                ]
+            , List.map
+                (toolButtonUi model.hasCmdKey handColor model.tileColors loggedIn.tileHotkeys currentToolButton)
+                [ HandToolButton
+                , TilePickerToolButton
+                , TextToolButton
+                , TilePlacerToolButton EmptyTileGroup
+                ]
                 |> List.greedyGroupsOf toolbarRowCount
                 |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
                 |> Ui.row { spacing = 2, padding = Ui.noPadding }
-            ]
+            , Ui.column
+                { spacing = -2
+                , padding = { topLeft = Coord.xy 0 -38, bottomRight = Coord.xy 0 0 }
+                }
+                [ List.map
+                    (\category ->
+                        let
+                            text =
+                                Tile.categoryToString category
+                        in
+                        Ui.selectableButton
+                            { id = CategoryButton category
+                            , padding = Ui.paddingXY 6 2
+                            }
+                            (model.selectedTileCategory == category)
+                            (Ui.row
+                                { spacing = 0, padding = Ui.noPadding }
+                                [ Ui.underlinedText (String.fromChar (String.Nonempty.head text))
+                                , Ui.text (String.Nonempty.tail text)
+                                ]
+                            )
+                    )
+                    Tile.allCategories
+                    |> Ui.row { spacing = 4, padding = Ui.noPadding }
+                , (case model.selectedTileCategory of
+                    Buildings ->
+                        Tile.buildingCategory
 
-        --List.map
-        --    (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
-        --    buttonTiles
-        --    |> List.greedyGroupsOf toolbarRowCount
-        --    |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
-        --    |> Ui.row { spacing = 2, padding = Ui.noPadding }
-        , selectedToolView handColor model.primaryColorTextInput model.secondaryColorTextInput model.tileColors currentToolButton
-        ]
+                    Scenery ->
+                        Tile.sceneryCategory
+
+                    Rail ->
+                        Tile.railCategory
+
+                    Road ->
+                        Tile.roadCategory
+                  )
+                    |> List.map
+                        (\a ->
+                            TilePlacerToolButton a
+                                |> toolButtonUi model.hasCmdKey handColor model.tileColors loggedIn.tileHotkeys currentToolButton
+                        )
+                    |> List.greedyGroupsOf toolbarRowCount
+                    |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
+                    |> Ui.row { spacing = 2, padding = Ui.noPadding }
+                ]
+
+            --List.map
+            --    (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
+            --    buttonTiles
+            --    |> List.greedyGroupsOf toolbarRowCount
+            --    |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
+            --    |> Ui.row { spacing = 2, padding = Ui.noPadding }
+            , selectedToolView handColor model.primaryColorTextInput model.secondaryColorTextInput model.tileColors currentToolButton
+            ]
 
 
 smallToolButtonPadding =
@@ -1073,6 +1128,16 @@ rotateLeftSprite =
 rotateRightSprite : Ui.Element id
 rotateRightSprite =
     Ui.sprite { size = Coord.xy 42 42, texturePosition = Coord.xy 525 124, textureSize = Coord.xy 21 21 }
+
+
+inviteUserSprite : Ui.Element id
+inviteUserSprite =
+    Ui.colorSprite
+        { colors = { primaryColor = Color.rgb255 200 200 220, secondaryColor = Color.rgb255 134 253 98 }
+        , size = Coord.xy 42 42
+        , texturePosition = Coord.xy 525 145
+        , textureSize = Coord.xy 21 21
+        }
 
 
 selectedToolView :

@@ -29,8 +29,12 @@ charScale =
     2
 
 
-drawInviteTree : IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
-drawInviteTree dict (InviteTree tree) =
+currentUserTextColor =
+    Color.rgb255 0 255 0
+
+
+drawInviteTree : Maybe (Id UserId) -> IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
+drawInviteTree currentUserId dict (InviteTree tree) =
     let
         childNodes : List (Ui.Element id)
         childNodes =
@@ -38,7 +42,9 @@ drawInviteTree dict (InviteTree tree) =
                 (\child ->
                     Ui.row
                         { spacing = 2, padding = Ui.noPadding }
-                        [ Ui.colorScaledText Color.outlineColor charScale "─", drawInviteTree dict child ]
+                        [ Ui.colorScaledText Color.outlineColor charScale "─"
+                        , drawInviteTree currentUserId dict child
+                        ]
                 )
                 tree.invited
     in
@@ -48,7 +54,18 @@ drawInviteTree dict (InviteTree tree) =
             Just user ->
                 Ui.row
                     { spacing = 4 * charScale, padding = Ui.noPadding }
-                    [ Ui.scaledText charScale (DisplayName.nameAndId user.name tree.userId)
+                    [ Ui.colorScaledText
+                        (if currentUserId == Just tree.userId then
+                            currentUserTextColor
+
+                         else if user.cursor == Nothing then
+                            Color.black
+
+                         else
+                            Color.white
+                        )
+                        charScale
+                        (DisplayName.nameAndId user.name tree.userId)
                     , Ui.center
                         { size = Coord.xy 30 (charScale * Coord.yRaw Sprite.charSize) }
                         (Ui.colorSprite

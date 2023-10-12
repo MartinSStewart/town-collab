@@ -700,7 +700,7 @@ updateLoaded audioData msg model =
 
                                 Nothing ->
                                     ( { model
-                                        | page = WorldPage { showMap = False }
+                                        | page = WorldPage LoadingPage.initWorldPage
                                         , lastMailEditorToggle = Just model.time
                                       }
                                     , Command.none
@@ -2549,10 +2549,40 @@ uiUpdate : AudioData -> UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded
 uiUpdate audioData id event model =
     case id of
         CloseInviteUser ->
-            onPress audioData event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+            onPress audioData
+                event
+                (\() ->
+                    ( { model
+                        | page =
+                            case model.page of
+                                WorldPage worldPage ->
+                                    WorldPage { worldPage | showInvite = False }
+
+                                _ ->
+                                    model.page
+                      }
+                    , Command.none
+                    )
+                )
+                model
 
         ShowInviteUser ->
-            onPress audioData event (\() -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
+            onPress audioData
+                event
+                (\() ->
+                    ( { model
+                        | page =
+                            case model.page of
+                                WorldPage worldPage ->
+                                    WorldPage { worldPage | showInvite = True }
+
+                                _ ->
+                                    model.page
+                      }
+                    , Command.none
+                    )
+                )
+                model
 
         SubmitInviteUser ->
             onPress audioData event (\() -> sendInvite model) model
@@ -2822,7 +2852,7 @@ uiUpdate audioData id event model =
                                             MailPage a
 
                                         Nothing ->
-                                            WorldPage { showMap = False }
+                                            WorldPage LoadingPage.initWorldPage
                                 , lastMailEditorToggle =
                                     if newMailEditor == Nothing then
                                         Just model.time
@@ -3001,7 +3031,7 @@ uiUpdate audioData id event model =
                             ( { model | page = AdminPage adminPage2 }, Command.none )
 
                         AdminPage.AdminPageClosed ->
-                            ( { model | page = WorldPage { showMap = False } }, Command.none )
+                            ( { model | page = WorldPage LoadingPage.initWorldPage }, Command.none )
 
                         AdminPage.OutMsgAdminChange adminChange ->
                             updateLocalModel

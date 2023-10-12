@@ -7,6 +7,7 @@ module LoadingPage exposing
     , getHandColor
     , getReports
     , getTileColor
+    , initWorldPage
     , loadingCanvasView
     , loadingCellBounds
     , mouseListeners
@@ -69,7 +70,7 @@ import Tile exposing (Category(..), Tile, TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
-import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
+import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..), WorldPage2)
 import Ui
 import Units exposing (CellUnit, WorldUnit)
 import WebGL.Texture
@@ -240,6 +241,11 @@ tryLoading frontendLoading =
                 frontendLoading.simplexNoiseLookup
 
 
+initWorldPage : WorldPage2
+initWorldPage =
+    { showMap = False, showInvite = False }
+
+
 loadedInit :
     Time.Posix
     -> FrontendLoading
@@ -279,7 +285,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , windowSize = loading.windowSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , page = WorldPage { showMap = False }
+            , page = WorldPage initWorldPage
             , viewPoint = viewpoint
             , trains = loadedLocalModel.trains
             , time = time
@@ -328,7 +334,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
                         MailEditor.init Nothing |> MailPage
 
                     _ ->
-                        WorldPage { showMap = False }
+                        WorldPage initWorldPage
             , lastMailEditorToggle = Nothing
             , currentTool = currentTool2
             , lastTileRotation = []

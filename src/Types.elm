@@ -233,7 +233,9 @@ type Page
 
 
 type alias WorldPage2 =
-    { showMap : Bool }
+    { showMap : Bool
+    , showInvite : Bool
+    }
 
 
 type alias UpdateMeshesData =
@@ -260,8 +262,7 @@ type alias ContextMenu =
 
 
 type TopMenu
-    = InviteMenu
-    | SettingsMenu TextInput.Model
+    = SettingsMenu TextInput.Model
     | LoggedOutSettingsMenu
 
 
