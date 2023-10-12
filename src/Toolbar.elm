@@ -130,6 +130,22 @@ normalView windowSize model =
         maybeCurrentUserId =
             LocalGrid.currentUserId model
 
+        onlineUsers =
+            List.filterMap
+                (\( userId, user ) ->
+                    if maybeCurrentUserId == Just userId then
+                        Nothing
+
+                    else
+                        case user.cursor of
+                            Just _ ->
+                                User.nameAndHand maybeCurrentUserId userId user |> Just
+
+                            Nothing ->
+                                Nothing
+                )
+                (IdDict.toList localModel.users)
+
         otherUsersOnline =
             case localModel.userStatus of
                 LoggedIn { userId } ->
@@ -236,25 +252,20 @@ normalView windowSize model =
                                     (Ui.el
                                         { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = Ui.defaultElBorderAndFill }
                                         (Ui.column
-                                            { spacing = 8, padding = Ui.noPadding }
+                                            { spacing = 16, padding = Ui.noPadding }
                                             [ onlineUsersButton otherUsersOnline model
-                                            , Ui.column
-                                                { spacing = 8, padding = Ui.noPadding }
-                                                (List.filterMap
-                                                    (\( userId, user ) ->
-                                                        if maybeCurrentUserId == Just userId then
-                                                            Nothing
+                                            , if List.isEmpty onlineUsers then
+                                                Ui.el
+                                                    { padding = Ui.paddingXY 8 0
+                                                    , inFront = []
+                                                    , borderAndFill = NoBorderOrFill
+                                                    }
+                                                    (Ui.text "Nobody is here")
 
-                                                        else
-                                                            case user.cursor of
-                                                                Just _ ->
-                                                                    User.nameAndHand maybeCurrentUserId userId user |> Just
-
-                                                                Nothing ->
-                                                                    Nothing
-                                                    )
-                                                    (IdDict.toList localModel.users)
-                                                )
+                                              else
+                                                Ui.column
+                                                    { spacing = 8, padding = Ui.noPadding }
+                                                    onlineUsers
                                             , Ui.button
                                                 { id = ShowInviteTreeButton
                                                 , padding = Ui.paddingXY 10 4
