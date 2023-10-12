@@ -196,7 +196,7 @@ localChangeToChange userId change_ =
     }
 
 
-latestChanges : Effect.Time.Posix -> Id UserId -> Grid -> List (Coord CellUnit)
+latestChanges : Effect.Time.Posix -> Id UserId -> Grid -> List (Coord WorldUnit)
 latestChanges time currentUser (Grid grid) =
     Dict.toList grid
         |> List.filterMap
@@ -204,7 +204,7 @@ latestChanges time currentUser (Grid grid) =
                 case GridCell.latestChange currentUser cell of
                     Just latestChange ->
                         if Duration.from time latestChange.time |> Quantity.greaterThanZero then
-                            Just (Coord.tuple coord)
+                            Just (cellAndLocalCoordToWorld ( Coord.tuple coord, latestChange.position ))
 
                         else
                             Nothing

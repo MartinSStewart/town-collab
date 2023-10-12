@@ -355,18 +355,14 @@ notificationsView loggedIn =
                 }
                 (List.map
                     (\coord ->
-                        let
-                            ( x, y ) =
-                                Units.cellToTile coord |> Coord.toTuple
-                        in
                         "Change at "
                             ++ "x="
-                            ++ String.fromInt x
+                            ++ String.fromInt (Coord.xRaw coord)
                             ++ "&y="
-                            ++ String.fromInt y
+                            ++ String.fromInt (Coord.yRaw coord)
                             |> Ui.underlinedColorText Color.linkColor
                             |> Ui.customButton
-                                { id = MapChangeNotification (Units.cellToTile coord)
+                                { id = MapChangeNotification coord
                                 , padding = Ui.paddingXY 16 4
                                 , inFront = []
                                 , borderAndFill = NoBorderOrFill

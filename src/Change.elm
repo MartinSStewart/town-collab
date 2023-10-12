@@ -177,7 +177,7 @@ type alias LoggedIn_ =
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict TileHotkey TileGroup
     , showNotifications : Bool
-    , notifications : List (Coord CellUnit)
+    , notifications : List (Coord WorldUnit)
     }
 
 

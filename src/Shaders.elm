@@ -194,11 +194,12 @@ starsMesh =
         |> Sprite.toMesh
 
 
-clearDepth : Effect.WebGL.Entity
-clearDepth =
+clearDepth : ScissorBox -> Effect.WebGL.Entity
+clearDepth scissors =
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.DepthTest.always { write = True, near = 0, far = 1 }
         , blend
+        , scissorBox scissors
         ]
         fillVertexShader
         fillFragmentShader

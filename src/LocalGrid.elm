@@ -2,6 +2,7 @@ module LocalGrid exposing
     ( LocalGrid
     , LocalGrid_
     , OutMsg(..)
+    , addNotification
     , addReported
     , ctrlOrMeta
     , currentTool
@@ -12,6 +13,7 @@ module LocalGrid exposing
     , init
     , keyDown
     , localModel
+    , notificationViewportHalfSize
     , removeReported
     , restoreMail
     , setTileHotkey
@@ -488,7 +490,9 @@ updateLocalChange localChange model =
                     )
 
                 AdminSetGridReadOnly isGridReadOnly ->
-                    updateLoggedIn model (\loggedIn -> { loggedIn | isGridReadOnly = isGridReadOnly })
+                    ( updateLoggedIn model (\loggedIn -> { loggedIn | isGridReadOnly = isGridReadOnly })
+                    , NoOutMsg
+                    )
 
                 AdminSetTrainsDisabled trainsDisabled ->
                     ( { model | trainsDisabled = trainsDisabled }, NoOutMsg )
@@ -538,10 +542,14 @@ updateLocalChange localChange model =
             )
 
         SetTileHotkey tileHotkey tileGroup ->
-            updateLoggedIn model (setTileHotkey tileHotkey tileGroup)
+            ( updateLoggedIn model (setTileHotkey tileHotkey tileGroup)
+            , NoOutMsg
+            )
 
         ShowNotifications showNotifications ->
-            updateLoggedIn model (\loggedIn -> { loggedIn | showNotifications = showNotifications })
+            ( updateLoggedIn model (\loggedIn -> { loggedIn | showNotifications = showNotifications })
+            , NoOutMsg
+            )
 
 
 setTileHotkey :
@@ -557,9 +565,9 @@ setTileHotkey hotkey tileGroup user =
     }
 
 
-updateLoggedIn : LocalGrid_ -> (Change.LoggedIn_ -> Change.LoggedIn_) -> ( LocalGrid_, OutMsg )
+updateLoggedIn : LocalGrid_ -> (Change.LoggedIn_ -> Change.LoggedIn_) -> LocalGrid_
 updateLoggedIn model updateFunc =
-    ( case model.userStatus of
+    case model.userStatus of
         LoggedIn loggedIn ->
             { model
                 | userStatus =
@@ -568,8 +576,6 @@ updateLoggedIn model updateFunc =
 
         NotLoggedIn _ ->
             model
-    , NoOutMsg
-    )
 
 
 viewMail :
@@ -677,13 +683,44 @@ deleteMail mailId time model =
     }
 
 
+notificationViewportHalfSize : Coord WorldUnit
+notificationViewportHalfSize =
+    Coord.xy 16 16
+
+
+addNotification : Coord WorldUnit -> List (Coord WorldUnit) -> List (Coord WorldUnit)
+addNotification position notifications =
+    let
+        bounds =
+            Bounds.fromCoordAndSize
+                (position |> Coord.minus notificationViewportHalfSize)
+                (Coord.scalar 2 notificationViewportHalfSize)
+    in
+    if
+        List.any
+            (\coord -> Bounds.contains coord bounds)
+            notifications
+    then
+        notifications
+
+    else
+        position :: notifications
+
+
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
         ServerGridChange { gridChange, newCows } ->
             let
+                model2 : LocalGrid_
                 model2 =
-                    { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
+                    updateLoggedIn
+                        { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
+                        (\loggedIn ->
+                            { loggedIn
+                                | notifications = addNotification gridChange.position loggedIn.notifications
+                            }
+                        )
             in
             ( if
                 Bounds.contains

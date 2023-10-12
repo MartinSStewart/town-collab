@@ -1622,7 +1622,9 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         , timeOfDay = user.timeOfDay
                         , tileHotkeys = user.tileHotkeys
                         , showNotifications = user.showNotifications
-                        , notifications = Grid.latestChanges (Effect.Time.millisToPosix 0) userId model.grid
+                        , notifications =
+                            Grid.latestChanges (Effect.Time.millisToPosix 0) userId model.grid
+                                |> List.foldl LocalGrid.addNotification []
                         }
 
                 Nothing ->
@@ -1656,6 +1658,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                                             , showNotifications = user.showNotifications
                                             , notifications =
                                                 Grid.latestChanges (Effect.Time.millisToPosix 0) data.userId model.grid
+                                                    |> List.foldl LocalGrid.addNotification []
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , case data.requestedBy of

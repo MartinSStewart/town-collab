@@ -3031,7 +3031,11 @@ uiUpdate audioData id event model =
             onPress
                 audioData
                 event
-                (\() -> ( { model | viewPoint = NormalViewPoint (Coord.toPoint2d coord) }, Command.none ))
+                (\() ->
+                    ( model
+                    , Effect.Browser.Navigation.pushUrl model.key (Route.encode (Route.internalRoute coord))
+                    )
+                )
                 model
 
 
@@ -4397,12 +4401,11 @@ canvasView audioData model =
                                     MapChangeNotification changeAt ->
                                         drawWorldPreview
                                             (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
-                                            (Coord.xy 2 2 |> Units.cellToTile |> Units.tileToPixel)
+                                            (Coord.scalar 2 LocalGrid.notificationViewportHalfSize |> Units.tileToPixel)
                                             (Coord.toPoint2d changeAt)
                                             1
                                             renderData
-                                            0
-                                            --renderData.nightFactor
+                                            renderData.nightFactor
                                             model
 
                                     _ ->
@@ -4501,7 +4504,7 @@ drawWorld isFirstDraw renderData windowWidth windowHeight hoverAt2 viewBounds_ m
         []
 
      else
-        [ Shaders.clearDepth ]
+        [ Shaders.clearDepth renderData.scissors ]
     )
         ++ Shaders.drawBackground renderData meshes
         ++ drawForeground renderData model.contextMenu model.currentTool hoverAt2 meshes
