@@ -193,6 +193,9 @@ audioLoaded audioData model =
                     ( _, AdminPage _ ) ->
                         0
 
+                    ( _, InviteTreePage ) ->
+                        0
+
                     ( Nothing, _ ) ->
                         1
                 )
@@ -835,6 +838,9 @@ updateLoaded audioData msg model =
 
                                 AdminPage _ ->
                                     model.viewPoint
+
+                                InviteTreePage ->
+                                    model.viewPoint
                       }
                     , Command.none
                     )
@@ -914,6 +920,9 @@ updateLoaded audioData msg model =
                         worldZoom ()
 
                     AdminPage _ ->
+                        model
+
+                    InviteTreePage ->
                         model
 
               else
@@ -2300,6 +2309,9 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
                         AdminPage _ ->
                             model.viewPoint
+
+                        InviteTreePage ->
+                            model.viewPoint
             }
                 |> (\m ->
                         case sameUiHover of
@@ -2908,7 +2920,7 @@ uiUpdate audioData id event model =
             onPress
                 audioData
                 event
-                (\_ -> ( { model | showInviteTree = not model.showInviteTree }, Command.none ))
+                (\_ -> ( { model | showOnlineUsers = not model.showOnlineUsers }, Command.none ))
                 model
 
         CopyPositionUrlButton ->
@@ -3066,6 +3078,20 @@ uiUpdate audioData id event model =
                     , Effect.Browser.Navigation.pushUrl model.key (Route.encode (Route.internalRoute coord))
                     )
                 )
+                model
+
+        ShowInviteTreeButton ->
+            onPress
+                audioData
+                event
+                (\() -> ( { model | page = InviteTreePage }, Command.none ))
+                model
+
+        CloseInviteTreeButton ->
+            onPress
+                audioData
+                event
+                (\() -> ( { model | page = WorldPage LoadingPage.initWorldPage }, Command.none ))
                 model
 
 
@@ -4156,6 +4182,17 @@ cursorSprite hover model =
 
                                                 UiHover _ _ ->
                                                     PointerCursor
+                            , scale = 1
+                            }
+
+                        InviteTreePage ->
+                            { cursorType =
+                                case hover of
+                                    UiHover _ _ ->
+                                        PointerCursor
+
+                                    _ ->
+                                        DefaultCursor
                             , scale = 1
                             }
             in

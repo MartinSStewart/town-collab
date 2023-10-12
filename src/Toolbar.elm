@@ -22,7 +22,6 @@ import DisplayName
 import Duration
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
-import Env
 import Id
 import IdDict exposing (IdDict)
 import List.Extra as List
@@ -32,7 +31,6 @@ import MailEditor exposing (MailStatus(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
-import Route
 import Shaders
 import Sound
 import Sprite
@@ -56,12 +54,20 @@ view model =
         localModel : LocalGrid.LocalGrid_
         localModel =
             LocalGrid.localModel model.localModel
+
+        ( cssWindowWidth, cssWindowHeight ) =
+            Coord.toTuple model.cssWindowSize
+
+        windowSize =
+            Coord.xy
+                (round (toFloat cssWindowWidth * model.devicePixelRatio))
+                (round (toFloat cssWindowHeight * model.devicePixelRatio))
     in
     case ( localModel.userStatus, model.page ) of
         ( LoggedIn loggedIn, MailPage mailEditor ) ->
             MailEditor.ui
                 (isDisconnected model)
-                model.windowSize
+                windowSize
                 MailEditorHover
                 localModel.users
                 loggedIn.inbox
@@ -72,22 +78,58 @@ view model =
                 Just adminData ->
                     AdminPage.adminView
                         AdminHover
-                        model.windowSize
+                        windowSize
                         loggedIn.isGridReadOnly
                         adminData
                         adminPage
                         localModel
 
                 Nothing ->
-                    normalView model
+                    normalView windowSize model
+
+        ( _, InviteTreePage ) ->
+            Ui.el
+                { padding = Ui.noPadding
+                , borderAndFill = Ui.defaultElBorderAndFill
+                , inFront =
+                    [ Ui.bottomLeft
+                        { size = windowSize }
+                        (Ui.el
+                            { padding = Ui.paddingXY 16 16, inFront = [], borderAndFill = NoBorderOrFill }
+                            (Ui.button
+                                { id = CloseInviteTreeButton
+                                , padding = Ui.paddingXY 10 4
+                                }
+                                (Ui.text "Close")
+                            )
+                        )
+                    ]
+                }
+                (Ui.center
+                    { size = windowSize }
+                    (User.drawInviteTree
+                        (case localModel.userStatus of
+                            LoggedIn loggedIn ->
+                                Just loggedIn.userId
+
+                            NotLoggedIn _ ->
+                                Nothing
+                        )
+                        localModel.users
+                        localModel.inviteTree
+                    )
+                )
 
         _ ->
-            normalView model
+            normalView windowSize model
 
 
-normalView : FrontendLoaded -> Ui.Element UiHover
-normalView model =
+normalView : Coord Pixels -> FrontendLoaded -> Ui.Element UiHover
+normalView windowSize model =
     let
+        maybeCurrentUserId =
+            LocalGrid.currentUserId model
+
         otherUsersOnline =
             case localModel.userStatus of
                 LoggedIn { userId } ->
@@ -143,15 +185,9 @@ normalView model =
                         NotLoggedIn _ ->
                             loginToolbarUi model.pressedSubmitEmail model.loginTextInput
                     )
-
-        ( cssWindowWidth, cssWindowHeight ) =
-            Coord.toTuple model.cssWindowSize
     in
     Ui.bottomCenter
-        { size =
-            Coord.xy
-                (round (toFloat cssWindowWidth * model.devicePixelRatio))
-                (round (toFloat cssWindowHeight * model.devicePixelRatio))
+        { size = windowSize
         , inFront =
             (if model.hideUi then
                 []
@@ -163,26 +199,6 @@ normalView model =
 
                     Nothing ->
                         Ui.none
-                , if model.showInviteTree then
-                    Ui.topRight
-                        { size = model.windowSize }
-                        (Ui.el
-                            { padding = Ui.paddingXY 16 50, inFront = [], borderAndFill = NoBorderOrFill }
-                            (User.drawInviteTree
-                                (case localModel.userStatus of
-                                    LoggedIn loggedIn ->
-                                        Just loggedIn.userId
-
-                                    NotLoggedIn _ ->
-                                        Nothing
-                                )
-                                localModel.users
-                                localModel.inviteTree
-                            )
-                        )
-
-                  else
-                    Ui.none
                 , if isDisconnected model then
                     MailEditor.disconnectWarning model.windowSize
 
@@ -214,16 +230,42 @@ normalView model =
 
                                 NotLoggedIn _ ->
                                     Ui.none
-                            , Ui.button
-                                { id = UsersOnlineButton
-                                , padding = Ui.paddingXY 10 4
-                                }
-                                (if otherUsersOnline == 1 then
-                                    Ui.text "1 user online"
+                            , if model.showOnlineUsers then
+                                Ui.topRight
+                                    { size = model.windowSize }
+                                    (Ui.el
+                                        { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = Ui.defaultElBorderAndFill }
+                                        (Ui.column
+                                            { spacing = 8, padding = Ui.noPadding }
+                                            [ onlineUsersButton otherUsersOnline model
+                                            , Ui.column
+                                                { spacing = 8, padding = Ui.noPadding }
+                                                (List.filterMap
+                                                    (\( userId, user ) ->
+                                                        if maybeCurrentUserId == Just userId then
+                                                            Nothing
 
-                                 else
-                                    Ui.text (String.fromInt otherUsersOnline ++ " users online")
-                                )
+                                                        else
+                                                            case user.cursor of
+                                                                Just _ ->
+                                                                    User.nameAndHand maybeCurrentUserId userId user |> Just
+
+                                                                Nothing ->
+                                                                    Nothing
+                                                    )
+                                                    (IdDict.toList localModel.users)
+                                                )
+                                            , Ui.button
+                                                { id = ShowInviteTreeButton
+                                                , padding = Ui.paddingXY 10 4
+                                                }
+                                                (Ui.text "Show all")
+                                            ]
+                                        )
+                                    )
+
+                              else
+                                onlineUsersButton otherUsersOnline model
                             ]
                         )
                 , Ui.row
@@ -337,6 +379,20 @@ normalView model =
                    )
         }
         toolbarElement
+
+
+onlineUsersButton otherUsersOnline model =
+    Ui.selectableButton
+        { id = UsersOnlineButton
+        , padding = Ui.paddingXY 10 4
+        }
+        model.showOnlineUsers
+        (if otherUsersOnline == 1 then
+            Ui.text "1 user online"
+
+         else
+            Ui.text (String.fromInt otherUsersOnline ++ " users online")
+        )
 
 
 notificationsView : LoggedIn_ -> Ui.Element UiHover

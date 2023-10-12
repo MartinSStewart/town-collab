@@ -387,7 +387,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastReceivedMail = Nothing
             , isReconnecting = False
             , lastCheckConnection = time
-            , showInviteTree = False
+            , showOnlineUsers = False
             , contextMenu = Nothing
             , previousUpdateMeshData = previousUpdateMeshData
             , reportsMesh =

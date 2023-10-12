@@ -1,4 +1,4 @@
-module User exposing (FrontendUser, InviteTree(..), drawInviteTree)
+module User exposing (FrontendUser, InviteTree(..), drawInviteTree, nameAndHand)
 
 import Color exposing (Colors)
 import Coord
@@ -29,8 +29,54 @@ charScale =
     2
 
 
-currentUserTextColor =
-    Color.rgb255 0 255 0
+onlineColor =
+    Color.rgb255 80 255 100
+
+
+dotSize =
+    Coord.xy 8 8
+
+
+onlineIcon : Ui.Element id
+onlineIcon =
+    Ui.quads
+        { size = Coord.scalar charScale Sprite.charSize
+        , vertices =
+            Sprite.rectangle onlineColor
+                (Coord.scalar charScale Sprite.charSize |> Coord.minus dotSize |> Coord.divide (Coord.xy 2 2))
+                dotSize
+        }
+
+
+nameAndHand : Maybe (Id UserId) -> Id UserId -> FrontendUser -> Ui.Element id
+nameAndHand currentUserId userId user =
+    Ui.row
+        { spacing = 4 * charScale, padding = Ui.noPadding }
+        [ Ui.row
+            { spacing = 0, padding = Ui.noPadding }
+            [ case user.cursor of
+                Just _ ->
+                    onlineIcon
+
+                Nothing ->
+                    Ui.none
+            , Ui.colorScaledText Color.black charScale (DisplayName.nameAndId user.name userId)
+            ]
+        , Ui.center
+            { size = Coord.xy 30 (charScale * Coord.yRaw Sprite.charSize) }
+            (Ui.colorSprite
+                { colors = user.handColor
+                , size = Coord.xy 30 23
+                , texturePosition = Coord.xy 533 28
+                , textureSize = Coord.xy 30 23
+                }
+            )
+        , if currentUserId == Just userId then
+            Ui.text "(You)"
+
+          else
+            Ui.none
+        ]
 
 
 drawInviteTree : Maybe (Id UserId) -> IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
@@ -52,30 +98,7 @@ drawInviteTree currentUserId dict (InviteTree tree) =
         { spacing = 0, padding = Ui.noPadding }
         [ case IdDict.get tree.userId dict of
             Just user ->
-                Ui.row
-                    { spacing = 4 * charScale, padding = Ui.noPadding }
-                    [ Ui.colorScaledText
-                        (if currentUserId == Just tree.userId then
-                            currentUserTextColor
-
-                         else if user.cursor == Nothing then
-                            Color.black
-
-                         else
-                            Color.white
-                        )
-                        charScale
-                        (DisplayName.nameAndId user.name tree.userId)
-                    , Ui.center
-                        { size = Coord.xy 30 (charScale * Coord.yRaw Sprite.charSize) }
-                        (Ui.colorSprite
-                            { colors = user.handColor
-                            , size = Coord.xy 30 23
-                            , texturePosition = Coord.xy 533 28
-                            , textureSize = Coord.xy 30 23
-                            }
-                        )
-                    ]
+                nameAndHand currentUserId tree.userId user
 
             Nothing ->
                 Ui.colorScaledText Color.errorColor charScale "Not found"

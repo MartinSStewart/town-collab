@@ -212,7 +212,7 @@ type alias FrontendLoaded =
     , lastReceivedMail : Maybe Time.Posix
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
-    , showInviteTree : Bool
+    , showOnlineUsers : Bool
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
     , reportsMesh : WebGL.Mesh Vertex
@@ -230,6 +230,7 @@ type Page
     = MailPage MailEditor.Model
     | AdminPage AdminPage.Model
     | WorldPage WorldPage2
+    | InviteTreePage
 
 
 type alias WorldPage2 =
@@ -336,6 +337,8 @@ type UiHover
     | NotificationsButton
     | CloseNotifications
     | MapChangeNotification (Coord WorldUnit)
+    | ShowInviteTreeButton
+    | CloseInviteTreeButton
 
 
 type alias BackendModel =
