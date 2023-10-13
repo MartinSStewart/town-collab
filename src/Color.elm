@@ -20,12 +20,14 @@ module Color exposing
     , toHexCode
     , toInt
     , toVec3
+    , toVec4
     , white
     )
 
 import Bitwise
 import Hex
 import Math.Vector3 as Vec3 exposing (Vec3)
+import Math.Vector4 as Vec4 exposing (Vec4)
 
 
 type alias Colors =
@@ -130,6 +132,15 @@ toVec3 color =
         (getRed color |> toFloat |> (*) (1 / 255))
         (getGreen color |> toFloat |> (*) (1 / 255))
         (getBlue color |> toFloat |> (*) (1 / 255))
+
+
+toVec4 : Color -> Vec4
+toVec4 color =
+    Vec4.vec4
+        (getRed color |> toFloat |> (*) (1 / 255))
+        (getGreen color |> toFloat |> (*) (1 / 255))
+        (getBlue color |> toFloat |> (*) (1 / 255))
+        1
 
 
 fromHexCode : String -> Maybe Color

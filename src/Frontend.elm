@@ -4300,6 +4300,10 @@ getNightFactor model =
     TimeOfDay.nightFactor timeOfDay model.time
 
 
+uiNightFactorScaling =
+    0.5
+
+
 staticMatrix windowWidth windowHeight zoom =
     Mat4.makeScale3 (toFloat zoom * 2 / toFloat windowWidth) (toFloat zoom * -2 / toFloat windowHeight) 1
 
@@ -4347,33 +4351,42 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
             BoundingBox2d.from
                 (viewPosition |> Point2d.translateBy (Vector2d.reverse offset))
                 (viewPosition |> Point2d.translateBy offset)
-    in
-    drawWorld
-        False
-        { lights = renderData.lights
-        , texture = renderData.texture
-        , depth = renderData.depth
-        , nightFactor = nightFactor
-        , staticViewMatrix = staticViewMatrix2
-        , viewMatrix =
-            staticViewMatrix2
-                |> Mat4.translate3
-                    (toFloat <| round (-viewPoint.x * toFloat Units.tileWidth))
-                    (toFloat <| round (-viewPoint.y * toFloat Units.tileHeight))
-                    0
-        , time = renderData.time
-        , scissors =
+
+        scissors =
             { left = Coord.xRaw viewportPosition
             , bottom = (windowHeight - Coord.yRaw viewportPosition) - Coord.yRaw viewportSize
             , width = Coord.xRaw viewportSize
             , height = Coord.yRaw viewportSize
             }
+    in
+    Shaders.clearDepth
+        (nightFactor * uiNightFactorScaling)
+        (Color.toVec4 Color.outlineColor)
+        { left = scissors.left - 2
+        , bottom = scissors.bottom - 2
+        , width = scissors.width + 4
+        , height = scissors.height + 4
         }
-        windowWidth
-        windowHeight
-        MapHover
-        viewBounds
-        model
+        :: drawWorld
+            { lights = renderData.lights
+            , texture = renderData.texture
+            , depth = renderData.depth
+            , nightFactor = nightFactor
+            , staticViewMatrix = staticViewMatrix2
+            , viewMatrix =
+                staticViewMatrix2
+                    |> Mat4.translate3
+                        (toFloat <| round (-viewPoint.x * toFloat Units.tileWidth))
+                        (toFloat <| round (-viewPoint.y * toFloat Units.tileHeight))
+                        0
+            , time = renderData.time
+            , scissors = scissors
+            }
+            windowWidth
+            windowHeight
+            MapHover
+            viewBounds
+            model
 
 
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
@@ -4445,7 +4458,7 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (drawWorld True renderData windowWidth windowHeight hoverAt2 viewBounds_ model
+                (drawWorld renderData windowWidth windowHeight hoverAt2 viewBounds_ model
                     ++ drawTilePlacer renderData audioData model
                     ++ (case model.page of
                             MailPage _ ->
@@ -4469,7 +4482,7 @@ canvasView audioData model =
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime model
-                            , night = renderData.nightFactor * 0.5
+                            , night = renderData.nightFactor * uiNightFactorScaling
                             }
                        ]
                     ++ (case hoverAt2 of
@@ -4530,15 +4543,14 @@ canvasView audioData model =
 
 
 drawWorld :
-    Bool
-    -> RenderData
+    RenderData
     -> Int
     -> Int
     -> Hover
     -> BoundingBox2d WorldUnit WorldUnit
     -> FrontendLoaded
     -> List Effect.WebGL.Entity
-drawWorld isFirstDraw renderData windowWidth windowHeight hoverAt2 viewBounds_ model =
+drawWorld renderData windowWidth windowHeight hoverAt2 viewBounds_ model =
     let
         { x, y } =
             Point2d.unwrap (Toolbar.actualViewPoint model)
@@ -4577,13 +4589,7 @@ drawWorld isFirstDraw renderData windowWidth windowHeight hoverAt2 viewBounds_ m
                 )
                 model.meshes
     in
-    (if isFirstDraw then
-        []
-
-     else
-        [ Shaders.clearDepth renderData.scissors ]
-    )
-        ++ Shaders.drawBackground renderData meshes
+    Shaders.drawBackground renderData meshes
         ++ drawForeground renderData model.contextMenu model.currentTool hoverAt2 meshes
         ++ Shaders.drawWaterReflection renderData model
         ++ (case

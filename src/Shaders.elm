@@ -194,8 +194,8 @@ starsMesh =
         |> Sprite.toMesh
 
 
-clearDepth : ScissorBox -> Effect.WebGL.Entity
-clearDepth scissors =
+clearDepth : Float -> Vec4 -> ScissorBox -> Effect.WebGL.Entity
+clearDepth nightFactor color scissors =
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.DepthTest.always { write = True, near = 0, far = 1 }
         , blend
@@ -204,7 +204,7 @@ clearDepth scissors =
         fillVertexShader
         fillFragmentShader
         viewportSquare
-        { color = Vec4.vec4 0 0 0 0 }
+        { color = color, night = nightFactor }
 
 
 viewportSquare : Effect.WebGL.Mesh { x : Float, y : Float }
@@ -231,14 +231,17 @@ void main () {
 |]
 
 
-fillFragmentShader : Shader {} { u | color : Vec4 } {}
+fillFragmentShader : Shader {} { u | color : Vec4, night : Float } {}
 fillFragmentShader =
     [glsl|
 precision mediump float;
 uniform vec4 color;
+uniform float night;
 
 void main () {
-    gl_FragColor = color;
+    vec3 nightColor = vec3(1.0, 1.0, 1.0) * (1.0 - night) + vec3(0.33, 0.4, 0.645) * night;
+    
+    gl_FragColor = color * vec4(nightColor, 1.0);
 }
     |]
 
