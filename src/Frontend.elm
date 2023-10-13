@@ -760,6 +760,7 @@ updateLoaded audioData msg model =
                             , current = mousePosition
                             , hover = hover
                             }
+                    , focus = Nothing
                 }
                     |> (\model2 ->
                             case hover of
@@ -798,7 +799,7 @@ updateLoaded audioData msg model =
                                         audioData
                                         id
                                         (Ui.MouseDown { elementPosition = data.position })
-                                        model2
+                                        { model2 | focus = Just id }
 
                                 _ ->
                                     ( model2, Command.none )
