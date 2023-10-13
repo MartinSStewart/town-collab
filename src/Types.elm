@@ -69,7 +69,7 @@ import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
-import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
+import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, PageRoute, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
 import Sprite exposing (Vertex)
@@ -105,7 +105,7 @@ type alias FrontendLoading =
     , zoomFactor : Int
     , time : Maybe Effect.Time.Posix
     , viewPoint : Coord WorldUnit
-    , showInbox : Bool
+    , route : PageRoute
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , musicVolume : Int

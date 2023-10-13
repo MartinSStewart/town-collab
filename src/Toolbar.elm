@@ -105,18 +105,23 @@ view model =
                         )
                     ]
                 }
-                (Ui.center
+                (Ui.topLeft
                     { size = windowSize }
-                    (User.drawInviteTree
-                        (case localModel.userStatus of
-                            LoggedIn loggedIn ->
-                                Just loggedIn.userId
+                    (Ui.column
+                        { spacing = 12, padding = Ui.paddingXY 16 16 }
+                        [ Ui.scaledText 3 "All users"
+                        , User.drawInviteTree
+                            (case localModel.userStatus of
+                                LoggedIn loggedIn ->
+                                    Just loggedIn.userId
 
-                            NotLoggedIn _ ->
-                                Nothing
-                        )
-                        localModel.users
-                        localModel.inviteTree
+                                NotLoggedIn _ ->
+                                    Nothing
+                            )
+                            localModel.cursors
+                            localModel.users
+                            localModel.inviteTree
+                        ]
                     )
                 )
 
@@ -130,21 +135,22 @@ normalView windowSize model =
         maybeCurrentUserId =
             LocalGrid.currentUserId model
 
+        onlineUsers : List (Ui.Element UiHover)
         onlineUsers =
             List.filterMap
-                (\( userId, user ) ->
+                (\( userId, _ ) ->
                     if maybeCurrentUserId == Just userId then
                         Nothing
 
                     else
-                        case user.cursor of
-                            Just _ ->
-                                User.nameAndHand maybeCurrentUserId userId user |> Just
+                        case IdDict.get userId localModel.users of
+                            Just user ->
+                                User.nameAndHand True maybeCurrentUserId userId user |> Just
 
                             Nothing ->
                                 Nothing
                 )
-                (IdDict.toList localModel.users)
+                (IdDict.toList localModel.cursors)
 
         otherUsersOnline =
             case localModel.userStatus of

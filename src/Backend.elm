@@ -32,7 +32,7 @@ import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..), MailStatus2(..))
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity
-import Route exposing (LoginOrInviteToken(..), Route(..))
+import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..))
 import TimeOfDay exposing (TimeOfDay(..))
@@ -427,7 +427,7 @@ handleWorldUpdate isProduction oldTime time model =
                                                             { viewPoint =
                                                                 Grid.getPostOffice mail.to state.model.grid
                                                                     |> Maybe.withDefault Coord.origin
-                                                            , showInbox = True
+                                                            , page = MailEditorRoute
                                                             , loginOrInviteToken = LoginToken2 loginToken |> Just
                                                             }
                                                         )
@@ -785,7 +785,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                 ++ Route.encode
                                     (InternalRoute
                                         { loginOrInviteToken = Just (LoginToken2 loginToken)
-                                        , showInbox = False
+                                        , page = WorldRoute
                                         , viewPoint = Route.startPointAt
                                         }
                                     )
@@ -869,7 +869,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                                             ++ Route.encode
                                                 (InternalRoute
                                                     { viewPoint = Route.startPointAt
-                                                    , showInbox = False
+                                                    , page = WorldRoute
                                                     , loginOrInviteToken = Just (InviteToken2 inviteToken)
                                                     }
                                                 )
@@ -1765,6 +1765,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
             , trainsDisabled = model.trainsDisabled
             }
 
+        frontendUser : FrontendUser
         frontendUser =
             case userStatus of
                 LoggedIn loggedIn ->
@@ -1775,13 +1776,11 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                         Nothing ->
                             { handColor = Cursor.defaultColors
                             , name = DisplayName.default
-                            , cursor = Nothing
                             }
 
                 NotLoggedIn _ ->
                     { handColor = Cursor.defaultColors
                     , name = DisplayName.default
-                    , cursor = Nothing
                     }
     in
     ( model3
@@ -1841,7 +1840,6 @@ backendUserToFrontend : BackendUserData -> FrontendUser
 backendUserToFrontend user =
     { name = user.name
     , handColor = user.handColor
-    , cursor = user.cursor
     }
 
 

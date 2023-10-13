@@ -63,7 +63,7 @@ import Point2d exposing (Point2d)
 import Ports
 import Quantity exposing (Quantity(..))
 import Random
-import Route
+import Route exposing (PageRoute(..))
 import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData)
 import Sound exposing (Sound(..))
 import Sprite exposing (Vertex)
@@ -424,7 +424,7 @@ audioLoaded audioData model =
             Audio.silence
     , case model.lastHotkeyChange of
         Just time ->
-            playSound PopSound time |> Audio.scaleVolume 0.8
+            playSound PopSound time |> Audio.scaleVolume 0.4
 
         Nothing ->
             Audio.silence
@@ -499,11 +499,11 @@ init url key =
                     , cmd =
                         Effect.Browser.Navigation.replaceUrl
                             key
-                            (Route.encode (Route.InternalRoute { a | showInbox = False, loginOrInviteToken = Nothing }))
+                            (Route.encode (Route.InternalRoute { a | page = WorldRoute, loginOrInviteToken = Nothing }))
                     }
 
                 Nothing ->
-                    { data = { viewPoint = Route.startPointAt, showInbox = False, loginOrInviteToken = Nothing }
+                    { data = { viewPoint = Route.startPointAt, page = WorldRoute, loginOrInviteToken = Nothing }
                     , cmd = Effect.Browser.Navigation.replaceUrl key (Route.encode defaultRoute)
                     }
 
@@ -527,8 +527,8 @@ init url key =
         , devicePixelRatio = 1
         , zoomFactor = 1
         , time = Nothing
+        , route = data.page
         , viewPoint = data.viewPoint
-        , showInbox = data.showInbox
         , mousePosition = Point2d.origin
         , sounds = AssocList.empty
         , musicVolume = 0
@@ -665,7 +665,7 @@ updateLoaded audioData msg model =
 
               else
                 case Url.Parser.parse Route.urlParser url of
-                    Just (Route.InternalRoute { viewPoint }) ->
+                    Just (Route.InternalRoute { viewPoint, page }) ->
                         { model | viewPoint = Coord.toPoint2d viewPoint |> NormalViewPoint }
 
                     _ ->

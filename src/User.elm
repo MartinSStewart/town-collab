@@ -14,7 +14,6 @@ import Ui exposing (BorderAndFill(..))
 type alias FrontendUser =
     { name : DisplayName
     , handColor : Colors
-    , cursor : Maybe Cursor
     }
 
 
@@ -48,19 +47,21 @@ onlineIcon =
         }
 
 
-nameAndHand : Maybe (Id UserId) -> Id UserId -> FrontendUser -> Ui.Element id
-nameAndHand currentUserId userId user =
+nameAndHand : Bool -> Maybe (Id UserId) -> Id UserId -> FrontendUser -> Ui.Element id
+nameAndHand isOnline currentUserId userId user =
     Ui.row
         { spacing = 4 * charScale, padding = Ui.noPadding }
         [ Ui.row
             { spacing = 0, padding = Ui.noPadding }
-            [ case user.cursor of
-                Just _ ->
-                    onlineIcon
+            [ if isOnline then
+                onlineIcon
 
-                Nothing ->
-                    Ui.none
-            , Ui.colorScaledText Color.black charScale (DisplayName.nameAndId user.name userId)
+              else
+                Ui.none
+            , Ui.colorScaledText
+                Color.black
+                charScale
+                (DisplayName.nameAndId user.name userId)
             ]
         , Ui.center
             { size = Coord.xy 30 (charScale * Coord.yRaw Sprite.charSize) }
@@ -79,8 +80,8 @@ nameAndHand currentUserId userId user =
         ]
 
 
-drawInviteTree : Maybe (Id UserId) -> IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
-drawInviteTree currentUserId dict (InviteTree tree) =
+drawInviteTree : Maybe (Id UserId) -> IdDict UserId Cursor -> IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
+drawInviteTree currentUserId cursors dict (InviteTree tree) =
     let
         childNodes : List (Ui.Element id)
         childNodes =
@@ -89,7 +90,7 @@ drawInviteTree currentUserId dict (InviteTree tree) =
                     Ui.row
                         { spacing = 2, padding = Ui.noPadding }
                         [ Ui.colorScaledText Color.outlineColor charScale "─"
-                        , drawInviteTree currentUserId dict child
+                        , drawInviteTree currentUserId cursors dict child
                         ]
                 )
                 tree.invited
@@ -98,7 +99,7 @@ drawInviteTree currentUserId dict (InviteTree tree) =
         { spacing = 0, padding = Ui.noPadding }
         [ case IdDict.get tree.userId dict of
             Just user ->
-                nameAndHand currentUserId tree.userId user
+                nameAndHand (IdDict.member tree.userId cursors) currentUserId tree.userId user
 
             Nothing ->
                 Ui.colorScaledText Color.errorColor charScale "Not found"

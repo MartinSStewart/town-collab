@@ -22,6 +22,7 @@ module LoadingPage exposing
     , windowResizedUpdate
     )
 
+import AdminPage
 import Array
 import AssocList
 import Audio exposing (AudioCmd)
@@ -60,6 +61,7 @@ import Point2d exposing (Point2d)
 import Ports
 import Quantity exposing (Quantity)
 import Random
+import Route exposing (PageRoute(..))
 import Set exposing (Set)
 import Shaders
 import Sound
@@ -329,9 +331,20 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
             , page =
-                case ( loading.showInbox, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
-                    ( True, LoggedIn _ ) ->
+                case ( loading.route, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
+                    ( MailEditorRoute, LoggedIn _ ) ->
                         MailEditor.init Nothing |> MailPage
+
+                    ( AdminRoute, LoggedIn loggedIn ) ->
+                        case loggedIn.adminData of
+                            Just _ ->
+                                AdminPage.init |> AdminPage
+
+                            Nothing ->
+                                WorldPage initWorldPage
+
+                    ( InviteTreeRoute, _ ) ->
+                        InviteTreePage
 
                     _ ->
                         WorldPage initWorldPage
