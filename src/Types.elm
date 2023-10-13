@@ -339,6 +339,7 @@ type UiHover
     | MapChangeNotification (Coord WorldUnit)
     | ShowInviteTreeButton
     | CloseInviteTreeButton
+    | LogoutButton
 
 
 type alias BackendModel =

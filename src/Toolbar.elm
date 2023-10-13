@@ -702,6 +702,12 @@ settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
                         Nothing ->
                             []
                    )
+                ++ [ Ui.button
+                        { id = LogoutButton
+                        , padding = Ui.paddingXY 10 4
+                        }
+                        (Ui.text "Logout")
+                   ]
             )
         )
 

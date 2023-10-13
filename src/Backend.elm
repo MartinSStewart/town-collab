@@ -561,16 +561,17 @@ asUser sessionId model updateFunc =
 broadcastLocalChange :
     Bool
     -> Effect.Time.Posix
+    -> SessionId
     -> ClientId
     -> Nonempty ( Id EventId, Change.LocalChange )
     -> Id UserId
     -> BackendUserData
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-broadcastLocalChange isProduction time clientId changes userId user model =
+broadcastLocalChange isProduction time sessionId clientId changes userId user model =
     let
         ( model2, ( eventId, originalChange ), firstMsg ) =
-            updateLocalChange time userId user (Nonempty.head changes) model
+            updateLocalChange sessionId time userId user (Nonempty.head changes) model
 
         ( model3, originalChanges2, serverChanges ) =
             Nonempty.tail changes
@@ -580,7 +581,7 @@ broadcastLocalChange isProduction time clientId changes userId user model =
                             Just user2 ->
                                 let
                                     ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
-                                        updateLocalChange time userId user2 change model_
+                                        updateLocalChange sessionId time userId user2 change model_
                                 in
                                 ( newModel
                                 , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
@@ -657,6 +658,16 @@ broadcastLocalChange isProduction time clientId changes userId user model =
 
                                     BroadcastToNoOne ->
                                         Nothing
+
+                                    BroadcastToRestOfSessionAndEveryoneElse sessionId2 restOfSession everyoneElse ->
+                                        (if sessionId_ == sessionId2 then
+                                            restOfSession
+
+                                         else
+                                            everyoneElse
+                                        )
+                                            |> Change.ServerChange
+                                            |> Just
                             )
                         |> Nonempty.fromList
                         |> Maybe.map ChangeBroadcast
@@ -708,7 +719,7 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
             asUser
                 sessionId
                 model
-                (broadcastLocalChange isProduction currentTime clientId changes)
+                (broadcastLocalChange isProduction currentTime sessionId clientId changes)
 
         ChangeViewBounds bounds ->
             case
@@ -946,16 +957,18 @@ type BroadcastTo
     = BroadcastToEveryoneElse ServerChange
     | BroadcastToAdmin ServerChange
     | BroadcastToNoOne
+    | BroadcastToRestOfSessionAndEveryoneElse SessionId ServerChange ServerChange
 
 
 updateLocalChange :
-    Effect.Time.Posix
+    SessionId
+    -> Effect.Time.Posix
     -> Id UserId
     -> BackendUserData
     -> ( Id EventId, Change.LocalChange )
     -> BackendModel
     -> ( BackendModel, ( Id EventId, Change.LocalChange ), BroadcastTo )
-updateLocalChange time userId user (( eventId, change ) as originalChange) model =
+updateLocalChange sessionId time userId user (( eventId, change ) as originalChange) model =
     let
         invalidChange =
             ( eventId, Change.InvalidChange )
@@ -1437,6 +1450,19 @@ updateLocalChange time userId user (( eventId, change ) as originalChange) model
               }
             , originalChange
             , BroadcastToNoOne
+            )
+
+        Logout ->
+            ( { model
+                | userSessions =
+                    Dict.update
+                        (Effect.Lamdera.sessionIdToString sessionId)
+                        (Maybe.map (\session -> { session | userId = Nothing }))
+                        model.userSessions
+                , users = IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
+              }
+            , originalChange
+            , BroadcastToRestOfSessionAndEveryoneElse sessionId ServerLogout (ServerUserDisconnected userId)
             )
 
 

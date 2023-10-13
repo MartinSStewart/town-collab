@@ -3094,6 +3094,15 @@ uiUpdate audioData id event model =
                 (\() -> ( { model | page = WorldPage LoadingPage.initWorldPage }, Command.none ))
                 model
 
+        LogoutButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    updateLocalModel Change.Logout model |> handleOutMsg False
+                )
+                model
+
 
 textInputUpdate :
     UiHover

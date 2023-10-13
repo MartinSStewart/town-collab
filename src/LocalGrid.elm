@@ -551,6 +551,9 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
+        Logout ->
+            logout model
+
 
 setTileHotkey :
     TileHotkey
@@ -1073,6 +1076,24 @@ updateServerChange serverChange model =
 
         ServerSetTrainsDisabled areTrainsDisabled ->
             ( { model | trainsDisabled = areTrainsDisabled }, NoOutMsg )
+
+        ServerLogout ->
+            logout model
+
+
+logout : LocalGrid_ -> ( LocalGrid_, OutMsg )
+logout model =
+    case model.userStatus of
+        LoggedIn loggedIn ->
+            ( { model
+                | userStatus = NotLoggedIn { timeOfDay = loggedIn.timeOfDay }
+                , cursors = IdDict.remove loggedIn.userId model.cursors
+              }
+            , NoOutMsg
+            )
+
+        NotLoggedIn _ ->
+            ( model, NoOutMsg )
 
 
 addReported :

@@ -69,6 +69,7 @@ type LocalChange
     | SetTimeOfDay TimeOfDay
     | SetTileHotkey TileHotkey TileGroup
     | ShowNotifications Bool
+    | Logout
 
 
 tileHotkeyDict : Dict String TileHotkey
@@ -151,6 +152,7 @@ type ServerChange
     | ServerVandalismReportedToAdmin (Id UserId) BackendReport
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
     | ServerSetTrainsDisabled AreTrainsDisabled
+    | ServerLogout
 
 
 type UserStatus
