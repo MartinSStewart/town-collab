@@ -1,12 +1,17 @@
 module LoadingPage exposing
-    ( canPlaceTile
+    ( animalActualPosition
+    , canPlaceTile
     , createReportsMesh
+    , cursorActualPosition
     , cursorPosition
     , devicePixelRatioChanged
     , getAdminReports
     , getHandColor
     , getReports
     , getTileColor
+    , handleOutMsg
+    , hoverAt
+    , initWorldPage
     , loadingCanvasView
     , loadingCellBounds
     , mouseListeners
@@ -14,25 +19,33 @@ module LoadingPage exposing
     , mouseWorldPosition
     , setCurrentTool
     , setCurrentToolWithColors
+    , shortDelayDuration
+    , showWorldPreview
     , update
+    , updateLocalModel
     , updateMeshes
     , viewBoundsUpdate
     , viewLoadingBoundingBox
     , windowResizedUpdate
     )
 
+import AdminPage
+import Animal exposing (Animal)
 import Array
 import AssocList
 import Audio exposing (AudioCmd)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Change exposing (BackendReport, Change(..), Report, UserStatus(..))
+import Codec
 import Color exposing (Colors)
 import Coord exposing (Coord)
-import Cursor
+import Cursor exposing (Cursor)
 import Dict exposing (Dict)
-import Duration
+import Duration exposing (Duration)
 import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.File.Download
+import Effect.File.Select
 import Effect.Lamdera
 import Effect.Task
 import Effect.Time as Time
@@ -43,12 +56,12 @@ import GridCell
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
-import Id exposing (Id, TrainId, UserId)
+import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Image
 import Keyboard
 import List.Extra as List
-import List.Nonempty exposing (Nonempty)
+import List.Nonempty exposing (Nonempty(..))
 import LocalGrid exposing (LocalGrid, LocalGrid_)
 import LocalModel exposing (LocalModel)
 import MailEditor
@@ -59,6 +72,7 @@ import Point2d exposing (Point2d)
 import Ports
 import Quantity exposing (Quantity)
 import Random
+import Route exposing (PageRoute(..))
 import Set exposing (Set)
 import Shaders
 import Sound
@@ -69,9 +83,10 @@ import Tile exposing (Category(..), Tile, TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
-import Types exposing (ChangesSinceStatus(..), CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UpdateMeshesData, ViewPoint(..))
+import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UiHover(..), UpdateMeshesData, ViewPoint(..), WorldPage2)
 import Ui
 import Units exposing (CellUnit, WorldUnit)
+import Vector2d exposing (Vector2d)
 import WebGL.Texture
 
 
@@ -240,6 +255,11 @@ tryLoading frontendLoading =
                 frontendLoading.simplexNoiseLookup
 
 
+initWorldPage : WorldPage2
+initWorldPage =
+    { showMap = False, showInvite = False }
+
+
 loadedInit :
     Time.Posix
     -> FrontendLoading
@@ -279,7 +299,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , windowSize = loading.windowSize
             , devicePixelRatio = loading.devicePixelRatio
             , zoomFactor = loading.zoomFactor
-            , page = WorldPage { showMap = False }
+            , page = WorldPage initWorldPage
             , viewPoint = viewpoint
             , trains = loadedLocalModel.trains
             , time = time
@@ -323,12 +343,23 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
             , page =
-                case ( loading.showInbox, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
-                    ( True, LoggedIn _ ) ->
+                case ( loading.route, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
+                    ( MailEditorRoute, LoggedIn _ ) ->
                         MailEditor.init Nothing |> MailPage
 
+                    ( AdminRoute, LoggedIn loggedIn ) ->
+                        case loggedIn.adminData of
+                            Just _ ->
+                                AdminPage.init |> AdminPage
+
+                            Nothing ->
+                                WorldPage initWorldPage
+
+                    ( InviteTreeRoute, _ ) ->
+                        InviteTreePage
+
                     _ ->
-                        WorldPage { showMap = False }
+                        WorldPage initWorldPage
             , lastMailEditorToggle = Nothing
             , currentTool = currentTool2
             , lastTileRotation = []
@@ -381,7 +412,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastReceivedMail = Nothing
             , isReconnecting = False
             , lastCheckConnection = time
-            , showInviteTree = False
+            , showOnlineUsers = False
             , contextMenu = Nothing
             , previousUpdateMeshData = previousUpdateMeshData
             , reportsMesh =
@@ -394,7 +425,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lightsSwitched = Nothing
             , selectedTileCategory = Buildings
             , lastHotkeyChange = Nothing
-            , latestChanges = NoChangesSinceRequest
             }
                 |> setCurrentTool HandToolButton
     in
@@ -805,25 +835,435 @@ getAdminReports localModel =
             IdDict.empty
 
 
+updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
+updateLocalModel msg model =
+    let
+        ( newLocalModel, outMsg ) =
+            LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
+    in
+    ( { model
+        | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
+        , localModel = newLocalModel
+        , eventIdCounter = Id.increment model.eventIdCounter
+      }
+    , outMsg
+    )
+
+
 viewBoundsUpdate : ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ) -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 viewBoundsUpdate ( model, cmd ) =
     let
         bounds =
             loadingCellBounds model
+
+        localModel =
+            LocalGrid.localModel model.localModel
+
+        newBoundsContained =
+            Bounds.containsBounds bounds localModel.viewBounds
+
+        mousePosition =
+            case model.mouseLeft of
+                MouseButtonDown { current } ->
+                    current
+
+                MouseButtonUp { current } ->
+                    current
+
+        getPreviewBounds viewPosition =
+            Nonempty
+                (viewPosition
+                    |> Coord.minus LocalGrid.notificationViewportHalfSize
+                    |> Grid.worldToCellAndLocalCoord
+                    |> Tuple.first
+                )
+                [ viewPosition
+                    |> Coord.plus LocalGrid.notificationViewportHalfSize
+                    |> Grid.worldToCellAndLocalCoord
+                    |> Tuple.first
+                ]
+                |> Bounds.fromCoords
+
+        newPreview =
+            case ( showWorldPreview (hoverAt model mousePosition), localModel.previewBounds ) of
+                ( Just ( position, _ ), Just oldPreviewBounds ) ->
+                    let
+                        previewBounds =
+                            getPreviewBounds position
+                    in
+                    if
+                        Bounds.containsBounds previewBounds oldPreviewBounds
+                            || Bounds.containsBounds previewBounds localModel.viewBounds
+                    then
+                        Nothing
+
+                    else
+                        Just previewBounds
+
+                ( Nothing, _ ) ->
+                    Nothing
+
+                ( Just ( position, _ ), Nothing ) ->
+                    let
+                        previewBounds =
+                            getPreviewBounds position
+                    in
+                    if Bounds.containsBounds previewBounds localModel.viewBounds then
+                        Nothing
+
+                    else
+                        Just previewBounds
     in
-    if LocalGrid.localModel model.localModel |> .viewBounds |> Bounds.containsBounds bounds then
+    if newBoundsContained && newPreview == Nothing then
         ( model, cmd )
 
     else
-        ( { model
-            | localModel =
-                LocalGrid.update
-                    (ClientChange (Change.ViewBoundsChange bounds [] []))
-                    model.localModel
-                    |> Tuple.first
-          }
-        , Command.batch [ cmd, Effect.Lamdera.sendToBackend (ChangeViewBounds bounds) ]
-        )
+        updateLocalModel
+            (Change.ViewBoundsChange
+                { viewBounds = bounds
+                , previewBounds = newPreview
+                , newCells = []
+                , newCows = []
+                }
+            )
+            model
+            |> handleOutMsg False
+            |> Tuple.mapSecond (\cmd2 -> Command.batch [ cmd, cmd2 ])
+
+
+hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
+hoverAt model mousePosition =
+    let
+        mousePosition2 : Coord Pixels
+        mousePosition2 =
+            mousePosition
+                |> Coord.roundPoint
+    in
+    case Ui.hover mousePosition2 model.ui of
+        Ui.InputHover data ->
+            UiHover data.id { position = data.position }
+
+        Ui.BackgroundHover ->
+            UiBackgroundHover
+
+        Ui.NoHover ->
+            let
+                mouseWorldPosition_ : Point2d WorldUnit WorldUnit
+                mouseWorldPosition_ =
+                    Toolbar.screenToWorld model mousePosition
+
+                tileHover : Maybe Hover
+                tileHover =
+                    let
+                        localModel : LocalGrid_
+                        localModel =
+                            LocalGrid.localModel model.localModel
+                    in
+                    case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
+                        Just tile ->
+                            case model.currentTool of
+                                HandTool ->
+                                    TileHover tile |> Just
+
+                                TilePickerTool ->
+                                    TileHover tile |> Just
+
+                                TilePlacerTool _ ->
+                                    if LocalGrid.ctrlOrMeta model then
+                                        TileHover tile |> Just
+
+                                    else
+                                        Nothing
+
+                                TextTool _ ->
+                                    if LocalGrid.ctrlOrMeta model then
+                                        TileHover tile |> Just
+
+                                    else
+                                        Nothing
+
+                                ReportTool ->
+                                    TileHover tile |> Just
+
+                        Nothing ->
+                            Nothing
+
+                trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
+                trainHovers =
+                    case model.currentTool of
+                        TilePlacerTool _ ->
+                            Nothing
+
+                        TilePickerTool ->
+                            Nothing
+
+                        HandTool ->
+                            IdDict.toList model.trains
+                                |> List.filterMap
+                                    (\( trainId, train ) ->
+                                        let
+                                            distance =
+                                                Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
+                                        in
+                                        if distance |> Quantity.lessThan (Quantity.unsafe 0.9) then
+                                            Just ( { trainId = trainId, train = train }, distance )
+
+                                        else
+                                            Nothing
+                                    )
+                                |> Quantity.minimumBy Tuple.second
+
+                        TextTool _ ->
+                            Nothing
+
+                        ReportTool ->
+                            Nothing
+
+                localGrid : LocalGrid_
+                localGrid =
+                    LocalGrid.localModel model.localModel
+
+                animalHovers : Maybe ( Id AnimalId, Animal )
+                animalHovers =
+                    case model.currentTool of
+                        TilePlacerTool _ ->
+                            Nothing
+
+                        TilePickerTool ->
+                            Nothing
+
+                        HandTool ->
+                            IdDict.toList localGrid.animals
+                                |> List.filter
+                                    (\( animalId, animal ) ->
+                                        case animalActualPosition animalId model of
+                                            Just a ->
+                                                if a.isHeld then
+                                                    False
+
+                                                else
+                                                    Animal.inside mouseWorldPosition_ { animal | position = a.position }
+
+                                            Nothing ->
+                                                False
+                                    )
+                                |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+
+                        TextTool _ ->
+                            Nothing
+
+                        ReportTool ->
+                            Nothing
+            in
+            case trainHovers of
+                Just ( train, _ ) ->
+                    TrainHover train
+
+                Nothing ->
+                    case animalHovers of
+                        Just ( cowId, cow ) ->
+                            CowHover { cowId = cowId, cow = cow }
+
+                        Nothing ->
+                            case tileHover of
+                                Just hover ->
+                                    hover
+
+                                Nothing ->
+                                    MapHover
+
+
+animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
+animalActualPosition animalId model =
+    let
+        localGrid =
+            LocalGrid.localModel model.localModel
+    in
+    case
+        IdDict.toList localGrid.cursors
+            |> List.find (\( _, cursor ) -> Just animalId == Maybe.map .cowId cursor.holdingCow)
+    of
+        Just ( userId, cursor ) ->
+            { position =
+                cursorActualPosition (Just userId == LocalGrid.currentUserId model) userId cursor model
+                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 })
+            , isHeld = True
+            }
+                |> Just
+
+        Nothing ->
+            case IdDict.get animalId localGrid.animals of
+                Just animal ->
+                    Just { position = animal.position, isHeld = False }
+
+                Nothing ->
+                    Nothing
+
+
+cursorActualPosition : Bool -> Id UserId -> Cursor -> FrontendLoaded -> Point2d WorldUnit WorldUnit
+cursorActualPosition isCurrentUser userId cursor model =
+    if isCurrentUser then
+        cursor.position
+
+    else
+        case ( cursor.currentTool, IdDict.get userId model.previousCursorPositions ) of
+            ( Cursor.TextTool (Just textTool), _ ) ->
+                Coord.toPoint2d textTool.cursorPosition
+                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.5 })
+
+            ( _, Just previous ) ->
+                Point2d.interpolateFrom
+                    previous.position
+                    cursor.position
+                    (Quantity.ratio
+                        (Duration.from previous.time model.time)
+                        shortDelayDuration
+                        |> clamp 0 1
+                    )
+
+            _ ->
+                cursor.position
+
+
+shortDelayDuration : Duration
+shortDelayDuration =
+    Duration.milliseconds 100
+
+
+showWorldPreview : Hover -> Maybe ( Coord WorldUnit, { position : Coord Pixels } )
+showWorldPreview hoverAt2 =
+    case hoverAt2 of
+        UiHover id data ->
+            case id of
+                MapChangeNotification changeAt ->
+                    Just ( changeAt, data )
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+handleOutMsg :
+    Bool
+    -> ( FrontendLoaded, LocalGrid.OutMsg )
+    -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
+handleOutMsg isFromBackend ( model, outMsg ) =
+    case outMsg of
+        LocalGrid.NoOutMsg ->
+            ( model, Command.none )
+
+        LocalGrid.TilesRemoved _ ->
+            ( model, Command.none )
+
+        LocalGrid.OtherUserCursorMoved { userId, previousPosition } ->
+            ( { model
+                | previousCursorPositions =
+                    case previousPosition of
+                        Just previousPosition2 ->
+                            IdDict.insert
+                                userId
+                                { position = previousPosition2, time = model.time }
+                                model.previousCursorPositions
+
+                        Nothing ->
+                            IdDict.remove userId model.previousCursorPositions
+              }
+            , Command.none
+            )
+
+        LocalGrid.HandColorOrNameChanged userId ->
+            ( case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
+                Just user ->
+                    { model
+                        | handMeshes =
+                            IdDict.insert
+                                userId
+                                (Cursor.meshes
+                                    (if Just userId == LocalGrid.currentUserId model then
+                                        Nothing
+
+                                     else
+                                        Just ( userId, user.name )
+                                    )
+                                    user.handColor
+                                )
+                                model.handMeshes
+                    }
+
+                Nothing ->
+                    model
+            , Command.none
+            )
+
+        LocalGrid.RailToggledByAnother position ->
+            ( handleRailToggleSound position model, Command.none )
+
+        LocalGrid.RailToggledBySelf position ->
+            ( if isFromBackend then
+                model
+
+              else
+                handleRailToggleSound position model
+            , Command.none
+            )
+
+        LocalGrid.TeleportTrainHome trainId ->
+            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome model.time) model.trains }
+            , Command.none
+            )
+
+        LocalGrid.TrainLeaveHome trainId ->
+            ( { model | trains = IdDict.update2 trainId (Train.leaveHome model.time) model.trains }
+            , Command.none
+            )
+
+        LocalGrid.TrainsUpdated diff ->
+            ( { model
+                | trains =
+                    IdDict.toList diff
+                        |> List.filterMap
+                            (\( trainId, diff_ ) ->
+                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
+                                    Just newTrain ->
+                                        Just ( trainId, newTrain )
+
+                                    Nothing ->
+                                        Nothing
+                            )
+                        |> IdDict.fromList
+              }
+            , Command.none
+            )
+
+        LocalGrid.ReceivedMail ->
+            ( { model | lastReceivedMail = Just model.time }, Command.none )
+
+        LocalGrid.ExportMail content ->
+            ( model
+            , Effect.File.Download.string
+                "letter.json"
+                "application/json"
+                (Codec.encodeToString 2 (Codec.list MailEditor.contentCodec) content)
+            )
+
+        LocalGrid.ImportMail ->
+            ( model, Effect.File.Select.file [ "application/json" ] ImportedMail )
+
+
+handleRailToggleSound : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
+handleRailToggleSound position model =
+    { model
+        | railToggles =
+            ( model.time, position )
+                :: List.filter
+                    (\( time, _ ) ->
+                        Duration.from time model.time
+                            |> Quantity.lessThan Duration.second
+                    )
+                    model.railToggles
+    }
 
 
 loadingCellBounds : FrontendLoaded -> Bounds CellUnit

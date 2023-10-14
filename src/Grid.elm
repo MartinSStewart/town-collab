@@ -20,14 +20,13 @@ module Grid exposing
     , getCell2
     , getPostOffice
     , getTile
+    , latestChanges
     , localChangeToChange
     , localTileCoordPlusWorld
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
     , localTilePointPlusWorldCoord
-    , modifiedSince
     , moveUndoPoint
-    , region
     , removeUser
     , tileMesh
     , tileMeshHelper2
@@ -196,15 +195,17 @@ localChangeToChange userId change_ =
     }
 
 
-modifiedSince : Effect.Time.Posix -> Grid -> List (Coord CellUnit)
-modifiedSince time (Grid grid) =
+latestChanges : Effect.Time.Posix -> Id UserId -> Grid -> List (Coord WorldUnit)
+latestChanges time currentUser (Grid grid) =
     Dict.toList grid
         |> List.filterMap
             (\( coord, cell ) ->
-                case GridCell.latestChange cell of
+                case GridCell.latestChange currentUser cell of
                     Just latestChange ->
                         if Duration.from time latestChange.time |> Quantity.greaterThanZero then
-                            Just (Coord.tuple coord)
+                            cellAndLocalCoordToWorld ( Coord.tuple coord, latestChange.position )
+                                |> Coord.plus (Coord.divide (Coord.xy 2 2) (Tile.getData latestChange.value).size)
+                                |> Just
 
                         else
                             Nothing
@@ -473,13 +474,6 @@ maxTileSize =
 allCellsDict : Grid -> Dict ( Int, Int ) Cell
 allCellsDict (Grid grid) =
     grid
-
-
-region : Bounds CellUnit -> Grid -> GridData
-region bounds (Grid grid) =
-    Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds) grid
-        |> Dict.map (\_ cell -> GridCell.cellToData cell)
-        |> GridData
 
 
 getCell : Coord CellUnit -> Grid -> Maybe Cell

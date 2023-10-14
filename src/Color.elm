@@ -13,18 +13,21 @@ module Color exposing
     , getGreen
     , getRed
     , highlightColor
+    , linkColor
     , localReportColor
     , outlineColor
     , rgb255
     , toHexCode
     , toInt
     , toVec3
+    , toVec4
     , white
     )
 
 import Bitwise
 import Hex
 import Math.Vector3 as Vec3 exposing (Vec3)
+import Math.Vector4 as Vec4 exposing (Vec4)
 
 
 type alias Colors =
@@ -113,6 +116,11 @@ highlightColor =
     rgb255 251 241 233
 
 
+linkColor : Color
+linkColor =
+    rgb255 20 100 255
+
+
 toInt : Color -> Int
 toInt (Color color) =
     color
@@ -124,6 +132,15 @@ toVec3 color =
         (getRed color |> toFloat |> (*) (1 / 255))
         (getGreen color |> toFloat |> (*) (1 / 255))
         (getBlue color |> toFloat |> (*) (1 / 255))
+
+
+toVec4 : Color -> Vec4
+toVec4 color =
+    Vec4.vec4
+        (getRed color |> toFloat |> (*) (1 / 255))
+        (getGreen color |> toFloat |> (*) (1 / 255))
+        (getBlue color |> toFloat |> (*) (1 / 255))
+        1
 
 
 fromHexCode : String -> Maybe Color

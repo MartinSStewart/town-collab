@@ -3,7 +3,6 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
-    , ChangesSinceStatus(..)
     , ContextMenu
     , CssPixels
     , EmailEvent(..)
@@ -70,7 +69,7 @@ import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
-import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, UnsubscribeEmailKey)
+import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, PageRoute, UnsubscribeEmailKey)
 import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
 import Sprite exposing (Vertex)
@@ -106,7 +105,7 @@ type alias FrontendLoading =
     , zoomFactor : Int
     , time : Maybe Effect.Time.Posix
     , viewPoint : Coord WorldUnit
-    , showInbox : Bool
+    , route : PageRoute
     , mousePosition : Point2d Pixels Pixels
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)
     , musicVolume : Int
@@ -213,7 +212,7 @@ type alias FrontendLoaded =
     , lastReceivedMail : Maybe Time.Posix
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
-    , showInviteTree : Bool
+    , showOnlineUsers : Bool
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
     , reportsMesh : WebGL.Mesh Vertex
@@ -224,24 +223,20 @@ type alias FrontendLoaded =
     , page : Page
     , selectedTileCategory : Category
     , lastHotkeyChange : Maybe Time.Posix
-    , latestChanges : ChangesSinceStatus
     }
-
-
-type ChangesSinceStatus
-    = NoChangesSinceRequest
-    | PendingChangesSinceRequest
-    | GotChangesSinceRequest { since : Effect.Time.Posix, changes : List (Coord CellUnit) }
 
 
 type Page
     = MailPage MailEditor.Model
     | AdminPage AdminPage.Model
     | WorldPage WorldPage2
+    | InviteTreePage
 
 
 type alias WorldPage2 =
-    { showMap : Bool }
+    { showMap : Bool
+    , showInvite : Bool
+    }
 
 
 type alias UpdateMeshesData =
@@ -268,8 +263,7 @@ type alias ContextMenu =
 
 
 type TopMenu
-    = InviteMenu
-    | SettingsMenu TextInput.Model
+    = SettingsMenu TextInput.Model
     | LoggedOutSettingsMenu
 
 
@@ -340,6 +334,13 @@ type UiHover
     | ShowAdminPage
     | AdminHover AdminPage.Hover
     | CategoryButton Category
+    | NotificationsButton
+    | CloseNotifications
+    | MapChangeNotification (Coord WorldUnit)
+    | ShowInviteTreeButton
+    | CloseInviteTreeButton
+    | LogoutButton
+    | ClearNotificationsButton
 
 
 type alias BackendModel =
@@ -347,7 +348,7 @@ type alias BackendModel =
     , userSessions :
         Dict
             Lamdera.SessionId
-            { clientIds : AssocList.Dict ClientId (Bounds CellUnit)
+            { clientIds : AssocList.Dict ClientId (List (Bounds CellUnit))
             , userId : Maybe (Id UserId)
             }
     , users : IdDict UserId BackendUserData
@@ -411,6 +412,8 @@ type alias BackendUserData =
     , allowEmailNotifications : Bool
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict Change.TileHotkey TileGroup
+    , showNotifications : Bool
+    , notificationsClearedAt : Effect.Time.Posix
     }
 
 
@@ -458,12 +461,10 @@ type FrontendMsg_
 type ToBackend
     = ConnectToBackend (Bounds CellUnit) (Maybe LoginOrInviteToken)
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
-    | ChangeViewBounds (Bounds CellUnit)
     | PingRequest
     | SendLoginEmailRequest (Untrusted EmailAddress)
     | SendInviteEmailRequest (Untrusted EmailAddress)
     | PostOfficePositionRequest
-    | ChangesSinceRequest Effect.Time.Posix
 
 
 type BackendMsg
@@ -491,7 +492,6 @@ type ToFrontend
     | PostOfficePositionResponse (Maybe (Coord WorldUnit))
     | ClientConnected
     | CheckConnectionBroadcast
-    | ChangesSinceResponse Effect.Time.Posix (List (Coord CellUnit))
 
 
 type EmailEvent

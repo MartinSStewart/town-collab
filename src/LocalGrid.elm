@@ -2,6 +2,7 @@ module LocalGrid exposing
     ( LocalGrid
     , LocalGrid_
     , OutMsg(..)
+    , addNotification
     , addReported
     , ctrlOrMeta
     , currentTool
@@ -12,6 +13,8 @@ module LocalGrid exposing
     , init
     , keyDown
     , localModel
+    , notificationViewportHalfSize
+    , notificationViewportSize
     , removeReported
     , restoreMail
     , setTileHotkey
@@ -22,7 +25,7 @@ module LocalGrid exposing
 import Animal exposing (Animal, AnimalType(..))
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -36,6 +39,7 @@ import Keyboard
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
+import Maybe.Extra as Maybe
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -56,6 +60,7 @@ type alias LocalGrid_ =
     { grid : Grid
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
+    , previewBounds : Maybe (Bounds CellUnit)
     , animals : IdDict AnimalId Animal
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
@@ -126,6 +131,7 @@ init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, tra
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
         , viewBounds = viewBounds
+        , previewBounds = Nothing
         , animals = cows
         , cursors = cursors
         , users = users
@@ -204,7 +210,11 @@ updateLocalChange localChange model =
                             }
                                 |> LoggedIn
                         , grid =
-                            if Bounds.contains cellPosition model.viewBounds then
+                            if
+                                List.any
+                                    (Bounds.contains cellPosition)
+                                    (model.viewBounds :: Maybe.toList model.previewBounds)
+                            then
                                 change.grid
 
                             else
@@ -488,7 +498,9 @@ updateLocalChange localChange model =
                     )
 
                 AdminSetGridReadOnly isGridReadOnly ->
-                    updateLoggedIn model (\loggedIn -> { loggedIn | isGridReadOnly = isGridReadOnly })
+                    ( updateLoggedIn model (\loggedIn -> { loggedIn | isGridReadOnly = isGridReadOnly })
+                    , NoOutMsg
+                    )
 
                 AdminSetTrainsDisabled trainsDisabled ->
                     ( { model | trainsDisabled = trainsDisabled }, NoOutMsg )
@@ -538,7 +550,47 @@ updateLocalChange localChange model =
             )
 
         SetTileHotkey tileHotkey tileGroup ->
-            updateLoggedIn model (setTileHotkey tileHotkey tileGroup)
+            ( updateLoggedIn model (setTileHotkey tileHotkey tileGroup)
+            , NoOutMsg
+            )
+
+        ShowNotifications showNotifications ->
+            ( updateLoggedIn model (\loggedIn -> { loggedIn | showNotifications = showNotifications })
+            , NoOutMsg
+            )
+
+        Logout ->
+            logout model
+
+        ViewBoundsChange { viewBounds, previewBounds, newCells, newCows } ->
+            let
+                newCells2 : Dict ( Int, Int ) GridCell.Cell
+                newCells2 =
+                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
+                        |> Dict.fromList
+            in
+            ( { model
+                | grid =
+                    Grid.allCellsDict model.grid
+                        |> Dict.filter
+                            (\coord _ ->
+                                List.any
+                                    (Bounds.contains (Coord.tuple coord))
+                                    (viewBounds :: Maybe.toList model.previewBounds)
+                            )
+                        |> Dict.union newCells2
+                        |> Grid.from
+                , animals = IdDict.fromList newCows |> IdDict.union model.animals
+                , viewBounds = viewBounds
+                , previewBounds = previewBounds
+              }
+            , NoOutMsg
+            )
+
+        ClearNotifications time ->
+            ( updateLoggedIn model (\loggedIn -> { loggedIn | notifications = [], notificationsClearedAt = time })
+            , NoOutMsg
+            )
 
 
 setTileHotkey :
@@ -554,9 +606,9 @@ setTileHotkey hotkey tileGroup user =
     }
 
 
-updateLoggedIn : LocalGrid_ -> (Change.LoggedIn_ -> Change.LoggedIn_) -> ( LocalGrid_, OutMsg )
+updateLoggedIn : LocalGrid_ -> (Change.LoggedIn_ -> Change.LoggedIn_) -> LocalGrid_
 updateLoggedIn model updateFunc =
-    ( case model.userStatus of
+    case model.userStatus of
         LoggedIn loggedIn ->
             { model
                 | userStatus =
@@ -565,8 +617,6 @@ updateLoggedIn model updateFunc =
 
         NotLoggedIn _ ->
             model
-    , NoOutMsg
-    )
 
 
 viewMail :
@@ -674,18 +724,60 @@ deleteMail mailId time model =
     }
 
 
+notificationViewportHalfSize : Coord WorldUnit
+notificationViewportHalfSize =
+    Coord.xy 16 16
+
+
+notificationViewportSize : Coord WorldUnit
+notificationViewportSize =
+    Coord.scalar 2 notificationViewportHalfSize
+
+
+addNotification : Coord WorldUnit -> List (Coord WorldUnit) -> List (Coord WorldUnit)
+addNotification position notifications =
+    let
+        bounds =
+            Bounds.fromCoordAndSize
+                (position |> Coord.minus notificationViewportHalfSize)
+                notificationViewportSize
+    in
+    if
+        List.any
+            (\coord -> Bounds.contains coord bounds)
+            notifications
+    then
+        notifications
+
+    else
+        position :: notifications
+
+
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
         ServerGridChange { gridChange, newCows } ->
             let
+                model2 : LocalGrid_
                 model2 =
-                    { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
+                    updateLoggedIn
+                        { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
+                        (\loggedIn ->
+                            { loggedIn
+                                | notifications =
+                                    addNotification
+                                        (Coord.plus
+                                            (Coord.divide (Coord.xy 2 2) (Tile.getData gridChange.change).size)
+                                            gridChange.position
+                                        )
+                                        loggedIn.notifications
+                            }
+                        )
             in
             ( if
-                Bounds.contains
-                    (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first)
-                    model2.viewBounds
+                List.any
+                    (Bounds.contains (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first))
+                    (model2.viewBounds :: Maybe.toList model.previewBounds)
               then
                 { model2 | grid = Grid.addChange gridChange model2.grid |> .grid }
 
@@ -1034,6 +1126,24 @@ updateServerChange serverChange model =
         ServerSetTrainsDisabled areTrainsDisabled ->
             ( { model | trainsDisabled = areTrainsDisabled }, NoOutMsg )
 
+        ServerLogout ->
+            logout model
+
+
+logout : LocalGrid_ -> ( LocalGrid_, OutMsg )
+logout model =
+    case model.userStatus of
+        LoggedIn loggedIn ->
+            ( { model
+                | userStatus = NotLoggedIn { timeOfDay = loggedIn.timeOfDay }
+                , cursors = IdDict.remove loggedIn.userId model.cursors
+              }
+            , NoOutMsg
+            )
+
+        NotLoggedIn _ ->
+            ( model, NoOutMsg )
+
 
 addReported :
     Id UserId
@@ -1145,34 +1255,12 @@ update_ msg model =
         ServerChange serverChange ->
             updateServerChange serverChange model
 
-        ClientChange (ViewBoundsChange bounds newCells newCows) ->
-            let
-                newCells2 : Dict ( Int, Int ) GridCell.Cell
-                newCells2 =
-                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
-                        |> Dict.fromList
-            in
-            ( { model
-                | grid =
-                    Grid.allCellsDict model.grid
-                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
-                        |> Dict.union newCells2
-                        |> Grid.from
-                , animals = IdDict.fromList newCows |> IdDict.union model.animals
-                , viewBounds = bounds
-              }
-            , NoOutMsg
-            )
-
 
 config : LocalModel.Config Change LocalGrid OutMsg
 config =
     { msgEqual =
         \msg0 msg1 ->
             case ( msg0, msg1 ) of
-                ( ClientChange (ViewBoundsChange bounds0 _ _), ClientChange (ViewBoundsChange bounds1 _ _) ) ->
-                    bounds0 == bounds1
-
                 ( LocalChange eventId0 _, LocalChange eventId1 _ ) ->
                     eventId0 == eventId1
 

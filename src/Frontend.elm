@@ -21,8 +21,6 @@ import Effect.Browser.Events
 import Effect.Browser.Navigation
 import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.File
-import Effect.File.Download
-import Effect.File.Select
 import Effect.Lamdera
 import Effect.Subscription as Subscription exposing (Subscription)
 import Effect.Task
@@ -63,7 +61,7 @@ import Point2d exposing (Point2d)
 import Ports
 import Quantity exposing (Quantity(..))
 import Random
-import Route
+import Route exposing (PageRoute(..))
 import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData)
 import Sound exposing (Sound(..))
 import Sprite exposing (Vertex)
@@ -80,7 +78,7 @@ import Units exposing (WorldUnit)
 import Untrusted
 import Url exposing (Url)
 import Url.Parser
-import Vector2d
+import Vector2d exposing (Vector2d)
 import WebGL.Texture
 
 
@@ -191,6 +189,9 @@ audioLoaded audioData model =
                         1 - Quantity.ratio (Duration.from time model.time) MailEditor.openAnimationLength
 
                     ( _, AdminPage _ ) ->
+                        0
+
+                    ( _, InviteTreePage ) ->
                         0
 
                     ( Nothing, _ ) ->
@@ -421,7 +422,7 @@ audioLoaded audioData model =
             Audio.silence
     , case model.lastHotkeyChange of
         Just time ->
-            playSound PopSound time |> Audio.scaleVolume 0.8
+            playSound PopSound time |> Audio.scaleVolume 0.4
 
         Nothing ->
             Audio.silence
@@ -496,11 +497,11 @@ init url key =
                     , cmd =
                         Effect.Browser.Navigation.replaceUrl
                             key
-                            (Route.encode (Route.InternalRoute { a | showInbox = False, loginOrInviteToken = Nothing }))
+                            (Route.encode (Route.InternalRoute { a | page = WorldRoute, loginOrInviteToken = Nothing }))
                     }
 
                 Nothing ->
-                    { data = { viewPoint = Route.startPointAt, showInbox = False, loginOrInviteToken = Nothing }
+                    { data = { viewPoint = Route.startPointAt, page = WorldRoute, loginOrInviteToken = Nothing }
                     , cmd = Effect.Browser.Navigation.replaceUrl key (Route.encode defaultRoute)
                     }
 
@@ -524,8 +525,8 @@ init url key =
         , devicePixelRatio = 1
         , zoomFactor = 1
         , time = Nothing
+        , route = data.page
         , viewPoint = data.viewPoint
-        , showInbox = data.showInbox
         , mousePosition = Point2d.origin
         , sounds = AssocList.empty
         , musicVolume = 0
@@ -565,7 +566,7 @@ update audioData msg model =
 
                           else
                             removeLastCursorMove newModel
-                                |> updateLocalModel (Change.MoveCursor (LoadingPage.mouseWorldPosition newModel))
+                                |> LoadingPage.updateLocalModel (Change.MoveCursor (LoadingPage.mouseWorldPosition newModel))
                                 |> Tuple.first
                         , cmd
                         )
@@ -595,7 +596,7 @@ update audioData msg model =
                             newModel2
 
                           else
-                            updateLocalModel (Change.ChangeTool newTool) newModel2 |> Tuple.first
+                            LoadingPage.updateLocalModel (Change.ChangeTool newTool) newModel2 |> Tuple.first
                         , cmd
                         )
                    )
@@ -662,7 +663,7 @@ updateLoaded audioData msg model =
 
               else
                 case Url.Parser.parse Route.urlParser url of
-                    Just (Route.InternalRoute { viewPoint }) ->
+                    Just (Route.InternalRoute { viewPoint, page }) ->
                         { model | viewPoint = Coord.toPoint2d viewPoint |> NormalViewPoint }
 
                     _ ->
@@ -700,7 +701,7 @@ updateLoaded audioData msg model =
 
                                 Nothing ->
                                     ( { model
-                                        | page = WorldPage { showMap = False }
+                                        | page = WorldPage LoadingPage.initWorldPage
                                         , lastMailEditorToggle = Just model.time
                                       }
                                     , Command.none
@@ -746,7 +747,7 @@ updateLoaded audioData msg model =
         MouseDown button mousePosition ->
             let
                 hover =
-                    hoverAt model mousePosition
+                    LoadingPage.hoverAt model mousePosition
             in
             if button == MainButton then
                 { model
@@ -757,6 +758,7 @@ updateLoaded audioData msg model =
                             , current = mousePosition
                             , hover = hover
                             }
+                    , focus = Nothing
                 }
                     |> (\model2 ->
                             case hover of
@@ -795,7 +797,7 @@ updateLoaded audioData msg model =
                                         audioData
                                         id
                                         (Ui.MouseDown { elementPosition = data.position })
-                                        model2
+                                        { model2 | focus = Just id }
 
                                 _ ->
                                     ( model2, Command.none )
@@ -834,6 +836,9 @@ updateLoaded audioData msg model =
                                     Toolbar.offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
 
                                 AdminPage _ ->
+                                    model.viewPoint
+
+                                InviteTreePage ->
                                     model.viewPoint
                       }
                     , Command.none
@@ -916,6 +921,9 @@ updateLoaded audioData msg model =
                     AdminPage _ ->
                         model
 
+                    InviteTreePage ->
+                        model
+
               else
                 { model | scrollThreshold = scrollThreshold }
             , Command.none
@@ -933,7 +941,7 @@ updateLoaded audioData msg model =
             let
                 tileHover_ : Maybe TileGroup
                 tileHover_ =
-                    case hoverAt model mousePosition of
+                    case LoadingPage.hoverAt model mousePosition of
                         UiHover (ToolButtonHover (TilePlacerToolButton tile)) _ ->
                             Just tile
 
@@ -1120,47 +1128,14 @@ updateLoaded audioData msg model =
                                         EmailAddressTextInputHover ->
                                             False
 
-                                        SendEmailButtonHover ->
-                                            True
-
                                         PrimaryColorInput ->
                                             False
 
                                         SecondaryColorInput ->
                                             False
 
-                                        ToolButtonHover _ ->
-                                            True
-
-                                        ShowInviteUser ->
-                                            True
-
-                                        CloseInviteUser ->
-                                            True
-
-                                        SubmitInviteUser ->
-                                            True
-
                                         InviteEmailAddressTextInput ->
                                             False
-
-                                        LowerMusicVolume ->
-                                            True
-
-                                        RaiseMusicVolume ->
-                                            True
-
-                                        LowerSoundEffectVolume ->
-                                            True
-
-                                        RaiseSoundEffectVolume ->
-                                            True
-
-                                        SettingsButton ->
-                                            True
-
-                                        CloseSettings ->
-                                            True
 
                                         DisplayNameTextInput ->
                                             False
@@ -1168,52 +1143,7 @@ updateLoaded audioData msg model =
                                         MailEditorHover _ ->
                                             False
 
-                                        YouGotMailButton ->
-                                            True
-
-                                        ShowMapButton ->
-                                            True
-
-                                        AllowEmailNotificationsCheckbox ->
-                                            True
-
-                                        UsersOnlineButton ->
-                                            True
-
-                                        CopyPositionUrlButton ->
-                                            True
-
-                                        ReportUserButton ->
-                                            True
-
-                                        ZoomInButton ->
-                                            True
-
-                                        ZoomOutButton ->
-                                            True
-
-                                        RotateLeftButton ->
-                                            True
-
-                                        RotateRightButton ->
-                                            True
-
-                                        AutomaticTimeOfDayButton ->
-                                            True
-
-                                        AlwaysDayTimeOfDayButton ->
-                                            True
-
-                                        AlwaysNightTimeOfDayButton ->
-                                            True
-
-                                        ShowAdminPage ->
-                                            True
-
-                                        AdminHover _ ->
-                                            True
-
-                                        CategoryButton _ ->
+                                        _ ->
                                             True
 
                                 Nothing ->
@@ -1539,10 +1469,10 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
         HandTool ->
             case maybeNewColor of
                 Just color ->
-                    updateLocalModel
+                    LoadingPage.updateLocalModel
                         (updateColor color (LoadingPage.getHandColor userId model) |> Change.ChangeHandColor)
                         model
-                        |> handleOutMsg False
+                        |> LoadingPage.handleOutMsg False
 
                 Nothing ->
                     ( model, Command.none )
@@ -1620,148 +1550,6 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
             )
 
 
-hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
-hoverAt model mousePosition =
-    let
-        mousePosition2 : Coord Pixels
-        mousePosition2 =
-            mousePosition
-                |> Coord.roundPoint
-    in
-    case Ui.hover mousePosition2 model.ui of
-        Ui.InputHover data ->
-            UiHover data.id { position = data.position }
-
-        Ui.BackgroundHover ->
-            UiBackgroundHover
-
-        Ui.NoHover ->
-            let
-                mouseWorldPosition_ : Point2d WorldUnit WorldUnit
-                mouseWorldPosition_ =
-                    Toolbar.screenToWorld model mousePosition
-
-                tileHover : Maybe Hover
-                tileHover =
-                    let
-                        localModel : LocalGrid_
-                        localModel =
-                            LocalGrid.localModel model.localModel
-                    in
-                    case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
-                        Just tile ->
-                            case model.currentTool of
-                                HandTool ->
-                                    TileHover tile |> Just
-
-                                TilePickerTool ->
-                                    TileHover tile |> Just
-
-                                TilePlacerTool _ ->
-                                    if LocalGrid.ctrlOrMeta model then
-                                        TileHover tile |> Just
-
-                                    else
-                                        Nothing
-
-                                TextTool _ ->
-                                    if LocalGrid.ctrlOrMeta model then
-                                        TileHover tile |> Just
-
-                                    else
-                                        Nothing
-
-                                ReportTool ->
-                                    TileHover tile |> Just
-
-                        Nothing ->
-                            Nothing
-
-                trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
-                trainHovers =
-                    case model.currentTool of
-                        TilePlacerTool _ ->
-                            Nothing
-
-                        TilePickerTool ->
-                            Nothing
-
-                        HandTool ->
-                            IdDict.toList model.trains
-                                |> List.filterMap
-                                    (\( trainId, train ) ->
-                                        let
-                                            distance =
-                                                Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                        in
-                                        if distance |> Quantity.lessThan (Quantity 0.9) then
-                                            Just ( { trainId = trainId, train = train }, distance )
-
-                                        else
-                                            Nothing
-                                    )
-                                |> Quantity.minimumBy Tuple.second
-
-                        TextTool _ ->
-                            Nothing
-
-                        ReportTool ->
-                            Nothing
-
-                localGrid : LocalGrid_
-                localGrid =
-                    LocalGrid.localModel model.localModel
-
-                animalHovers : Maybe ( Id AnimalId, Animal )
-                animalHovers =
-                    case model.currentTool of
-                        TilePlacerTool _ ->
-                            Nothing
-
-                        TilePickerTool ->
-                            Nothing
-
-                        HandTool ->
-                            IdDict.toList localGrid.animals
-                                |> List.filter
-                                    (\( animalId, animal ) ->
-                                        case animalActualPosition animalId model of
-                                            Just a ->
-                                                if a.isHeld then
-                                                    False
-
-                                                else
-                                                    Animal.inside mouseWorldPosition_ { animal | position = a.position }
-
-                                            Nothing ->
-                                                False
-                                    )
-                                |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
-
-                        TextTool _ ->
-                            Nothing
-
-                        ReportTool ->
-                            Nothing
-            in
-            case trainHovers of
-                Just ( train, _ ) ->
-                    TrainHover train
-
-                Nothing ->
-                    case animalHovers of
-                        Just ( cowId, cow ) ->
-                            CowHover { cowId = cowId, cow = cow }
-
-                        Nothing ->
-                            case tileHover of
-                                Just hover ->
-                                    hover
-
-                                Nothing ->
-                                    MapHover
-
-
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 replaceUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Effect.Browser.Navigation.replaceUrl model.key url )
@@ -1776,7 +1564,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                     ( model, Command.none )
 
                 _ ->
-                    updateLocalModel Change.LocalUndo model |> handleOutMsg False
+                    LoadingPage.updateLocalModel Change.LocalUndo model |> LoadingPage.handleOutMsg False
 
         ( Keyboard.Character "Z", True ) ->
             case model.currentTool of
@@ -1784,7 +1572,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                     ( model, Command.none )
 
                 _ ->
-                    updateLocalModel Change.LocalRedo model |> handleOutMsg False
+                    LoadingPage.updateLocalModel Change.LocalRedo model |> LoadingPage.handleOutMsg False
 
         ( Keyboard.Character "y", True ) ->
             case model.currentTool of
@@ -1792,7 +1580,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                     ( model, Command.none )
 
                 _ ->
-                    updateLocalModel Change.LocalRedo model |> handleOutMsg False
+                    LoadingPage.updateLocalModel Change.LocalRedo model |> LoadingPage.handleOutMsg False
 
         ( Keyboard.Escape, _ ) ->
             if model.contextMenu /= Nothing then
@@ -1815,7 +1603,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                                 HandTool ->
                                     case isHoldingCow model of
                                         Just { cowId } ->
-                                            updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
+                                            LoadingPage.updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
                                                 |> Tuple.first
 
                                         Nothing ->
@@ -2073,10 +1861,10 @@ setHokeyForTile hotkeyText model =
                 ( model, Command.none )
 
             else
-                updateLocalModel
+                LoadingPage.updateLocalModel
                     (Change.SetTileHotkey hotkey tileGroup)
                     { model | lastHotkeyChange = Just model.time }
-                    |> handleOutMsg False
+                    |> LoadingPage.handleOutMsg False
 
         _ ->
             ( model, Command.none )
@@ -2163,7 +1951,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                     Nothing
 
         handleRailSplit =
-            Just (\() -> updateLocalModel (Change.ToggleRailSplit position) model |> handleOutMsg False)
+            Just (\() -> LoadingPage.updateLocalModel (Change.ToggleRailSplit position) model |> LoadingPage.handleOutMsg False)
     in
     case tile of
         PostOffice ->
@@ -2302,7 +2090,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
         hoverAt2 : Hover
         hoverAt2 =
-            hoverAt model mousePosition
+            LoadingPage.hoverAt model mousePosition
 
         sameUiHover : Maybe UiHover
         sameUiHover =
@@ -2378,6 +2166,9 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
                         AdminPage _ ->
                             model.viewPoint
+
+                        InviteTreePage ->
+                            model.viewPoint
             }
                 |> (\m ->
                         case sameUiHover of
@@ -2393,7 +2184,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
             if isSmallDistance2 then
                 let
                     ( model3, _ ) =
-                        updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                        LoadingPage.updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                 in
                 ( model3, Command.none )
 
@@ -2459,12 +2250,12 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                                 LoadingPage.mouseWorldPosition model2 |> Coord.floorPoint
                                         in
                                         (if List.any (\report -> report.position == position) (LoadingPage.getReports model2.localModel) then
-                                            updateLocalModel
+                                            LoadingPage.updateLocalModel
                                                 (Change.RemoveReport position)
                                                 { model2 | lastReportTileRemoved = Just model2.time }
 
                                          else
-                                            updateLocalModel
+                                            LoadingPage.updateLocalModel
                                                 (Change.ReportVandalism
                                                     { position = position
                                                     , reportedUser = data.userId
@@ -2472,7 +2263,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                                 )
                                                 { model2 | lastReportTilePlaced = Just model2.time }
                                         )
-                                            |> handleOutMsg False
+                                            |> LoadingPage.handleOutMsg False
 
                             Nothing ->
                                 ( model2, Command.none )
@@ -2519,10 +2310,10 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                         LoadingPage.mouseWorldPosition model2 |> Coord.floorPoint
                                 in
                                 if List.any (\report -> report.position == position) (LoadingPage.getReports model2.localModel) then
-                                    updateLocalModel
+                                    LoadingPage.updateLocalModel
                                         (Change.RemoveReport position)
                                         { model2 | lastReportTileRemoved = Just model2.time }
-                                        |> handleOutMsg False
+                                        |> LoadingPage.handleOutMsg False
 
                                 else
                                     ( model2, Command.none )
@@ -2544,7 +2335,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     if isSmallDistance2 then
                         let
                             ( model3, _ ) =
-                                updateLocalModel (Change.PickupCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                                LoadingPage.updateLocalModel (Change.PickupCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                         in
                         ( model3, Command.none )
 
@@ -2574,13 +2365,13 @@ handleMailEditorOutMsg outMsg model =
             ( model, LocalGrid.NoOutMsg )
 
         MailEditor.SubmitMail submitMail ->
-            updateLocalModel (Change.SubmitMail submitMail) model
+            LoadingPage.updateLocalModel (Change.SubmitMail submitMail) model
 
         MailEditor.UpdateDraft updateDraft ->
-            updateLocalModel (Change.UpdateDraft updateDraft) model
+            LoadingPage.updateLocalModel (Change.UpdateDraft updateDraft) model
 
         MailEditor.ViewedMail mailId ->
-            updateLocalModel (Change.ViewedMail mailId) model
+            LoadingPage.updateLocalModel (Change.ViewedMail mailId) model
 
         MailEditor.ExportMail content ->
             ( model, LocalGrid.ExportMail content )
@@ -2588,7 +2379,7 @@ handleMailEditorOutMsg outMsg model =
         MailEditor.ImportMail ->
             ( model, LocalGrid.ImportMail )
     )
-        |> handleOutMsg False
+        |> LoadingPage.handleOutMsg False
 
 
 sendInvite : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend msg )
@@ -2627,10 +2418,40 @@ uiUpdate : AudioData -> UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded
 uiUpdate audioData id event model =
     case id of
         CloseInviteUser ->
-            onPress audioData event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+            onPress audioData
+                event
+                (\() ->
+                    ( { model
+                        | page =
+                            case model.page of
+                                WorldPage worldPage ->
+                                    WorldPage { worldPage | showInvite = False }
+
+                                _ ->
+                                    model.page
+                      }
+                    , Command.none
+                    )
+                )
+                model
 
         ShowInviteUser ->
-            onPress audioData event (\() -> ( { model | topMenuOpened = Just InviteMenu }, Command.none )) model
+            onPress audioData
+                event
+                (\() ->
+                    ( { model
+                        | page =
+                            case model.page of
+                                WorldPage worldPage ->
+                                    WorldPage { worldPage | showInvite = True }
+
+                                _ ->
+                                    model.page
+                      }
+                    , Command.none
+                    )
+                )
+                model
 
         SubmitInviteUser ->
             onPress audioData event (\() -> sendInvite model) model
@@ -2861,15 +2682,15 @@ uiUpdate audioData id event model =
                                                 ( model3, LocalGrid.NoOutMsg )
 
                                             else
-                                                updateLocalModel (Change.ChangeDisplayName new) model3
+                                                LoadingPage.updateLocalModel (Change.ChangeDisplayName new) model3
 
                                         ( Err _, Ok new ) ->
-                                            updateLocalModel (Change.ChangeDisplayName new) model3
+                                            LoadingPage.updateLocalModel (Change.ChangeDisplayName new) model3
 
                                         _ ->
                                             ( model3, LocalGrid.NoOutMsg )
                             in
-                            handleOutMsg False ( model2, outMsg2 ) |> Tuple.first
+                            LoadingPage.handleOutMsg False ( model2, outMsg2 ) |> Tuple.first
                         )
                         (\() -> ( model, Command.none ))
                         nameTextInput
@@ -2900,7 +2721,7 @@ uiUpdate audioData id event model =
                                             MailPage a
 
                                         Nothing ->
-                                            WorldPage { showMap = False }
+                                            WorldPage LoadingPage.initWorldPage
                                 , lastMailEditorToggle =
                                     if newMailEditor == Nothing then
                                         Just model.time
@@ -2942,10 +2763,10 @@ uiUpdate audioData id event model =
                 (\() ->
                     case LocalGrid.localModel model.localModel |> .userStatus of
                         LoggedIn loggedIn ->
-                            updateLocalModel
+                            LoadingPage.updateLocalModel
                                 (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
                                 model
-                                |> handleOutMsg False
+                                |> LoadingPage.handleOutMsg False
 
                         NotLoggedIn _ ->
                             ( model, Command.none )
@@ -2956,7 +2777,7 @@ uiUpdate audioData id event model =
             onPress
                 audioData
                 event
-                (\_ -> ( { model | showInviteTree = not model.showInviteTree }, Command.none ))
+                (\_ -> ( { model | showOnlineUsers = not model.showOnlineUsers }, Command.none ))
                 model
 
         CopyPositionUrlButton ->
@@ -2984,10 +2805,10 @@ uiUpdate audioData id event model =
                         Just contextMenu ->
                             case contextMenu.userId of
                                 Just userId ->
-                                    updateLocalModel
+                                    LoadingPage.updateLocalModel
                                         (Change.ReportVandalism { reportedUser = userId, position = contextMenu.position })
                                         model
-                                        |> handleOutMsg False
+                                        |> LoadingPage.handleOutMsg False
 
                                 Nothing ->
                                     ( model, Command.none )
@@ -3047,21 +2868,21 @@ uiUpdate audioData id event model =
             onPress
                 audioData
                 event
-                (\() -> updateLocalModel (Change.SetTimeOfDay Automatic) model |> handleOutMsg False)
+                (\() -> LoadingPage.updateLocalModel (Change.SetTimeOfDay Automatic) model |> LoadingPage.handleOutMsg False)
                 model
 
         AlwaysDayTimeOfDayButton ->
             onPress
                 audioData
                 event
-                (\() -> updateLocalModel (Change.SetTimeOfDay AlwaysDay) model |> handleOutMsg False)
+                (\() -> LoadingPage.updateLocalModel (Change.SetTimeOfDay AlwaysDay) model |> LoadingPage.handleOutMsg False)
                 model
 
         AlwaysNightTimeOfDayButton ->
             onPress
                 audioData
                 event
-                (\() -> updateLocalModel (Change.SetTimeOfDay AlwaysNight) model |> handleOutMsg False)
+                (\() -> LoadingPage.updateLocalModel (Change.SetTimeOfDay AlwaysNight) model |> LoadingPage.handleOutMsg False)
                 model
 
         ShowAdminPage ->
@@ -3079,19 +2900,75 @@ uiUpdate audioData id event model =
                             ( { model | page = AdminPage adminPage2 }, Command.none )
 
                         AdminPage.AdminPageClosed ->
-                            ( { model | page = WorldPage { showMap = False } }, Command.none )
+                            ( { model | page = WorldPage LoadingPage.initWorldPage }, Command.none )
 
                         AdminPage.OutMsgAdminChange adminChange ->
-                            updateLocalModel
+                            LoadingPage.updateLocalModel
                                 (Change.AdminChange adminChange)
                                 { model | page = AdminPage adminPage2 }
-                                |> handleOutMsg False
+                                |> LoadingPage.handleOutMsg False
 
                 _ ->
                     ( model, Command.none )
 
         CategoryButton category ->
             onPress audioData event (\() -> ( { model | selectedTileCategory = category }, Command.none )) model
+
+        NotificationsButton ->
+            onPress audioData
+                event
+                (\() -> LoadingPage.updateLocalModel (Change.ShowNotifications True) model |> LoadingPage.handleOutMsg False)
+                model
+
+        CloseNotifications ->
+            onPress audioData
+                event
+                (\() -> LoadingPage.updateLocalModel (Change.ShowNotifications False) model |> LoadingPage.handleOutMsg False)
+                model
+
+        MapChangeNotification coord ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    ( model
+                    , Effect.Browser.Navigation.pushUrl model.key (Route.encode (Route.internalRoute coord))
+                    )
+                )
+                model
+
+        ShowInviteTreeButton ->
+            onPress
+                audioData
+                event
+                (\() -> ( { model | page = InviteTreePage }, Command.none ))
+                model
+
+        CloseInviteTreeButton ->
+            onPress
+                audioData
+                event
+                (\() -> ( { model | page = WorldPage LoadingPage.initWorldPage }, Command.none ))
+                model
+
+        LogoutButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    LoadingPage.updateLocalModel Change.Logout model |> LoadingPage.handleOutMsg False
+                )
+                model
+
+        ClearNotificationsButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    LoadingPage.updateLocalModel (Change.ClearNotifications model.time) model
+                        |> LoadingPage.handleOutMsg False
+                )
+                model
 
 
 textInputUpdate :
@@ -3296,14 +3173,14 @@ setFocus newFocus model =
 
 clickLeaveHomeTrain : Id TrainId -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
 clickLeaveHomeTrain trainId model =
-    updateLocalModel (Change.LeaveHomeTrainRequest trainId model.time) model
-        |> handleOutMsg False
+    LoadingPage.updateLocalModel (Change.LeaveHomeTrainRequest trainId model.time) model
+        |> LoadingPage.handleOutMsg False
 
 
 clickTeleportHomeTrain : Id TrainId -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
 clickTeleportHomeTrain trainId model =
-    updateLocalModel (Change.TeleportHomeTrainRequest trainId model.time) model
-        |> handleOutMsg False
+    LoadingPage.updateLocalModel (Change.TeleportHomeTrainRequest trainId model.time) model
+        |> LoadingPage.handleOutMsg False
 
 
 setTrainViewPoint : Id TrainId -> FrontendLoaded -> FrontendLoaded
@@ -3326,33 +3203,6 @@ canOpenMailEditor model =
 
         _ ->
             Nothing
-
-
-updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
-updateLocalModel msg model =
-    let
-        ( newLocalModel, outMsg ) =
-            LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
-    in
-    case LocalGrid.localModel model.localModel |> .userStatus of
-        LoggedIn _ ->
-            ( { model
-                | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
-                , localModel = newLocalModel
-                , eventIdCounter = Id.increment model.eventIdCounter
-              }
-            , outMsg
-            )
-
-        NotLoggedIn _ ->
-            ( { model
-                | localModel =
-                    -- If we are not logged in then we don't send any msgs to the server and therefore don't want to keep all of the msgs in the localMsgs list
-                    LocalModel.unwrap newLocalModel
-                        |> (\a -> LocalModel.unsafe { a | localMsgs = [], model = a.localModel })
-              }
-            , LocalGrid.NoOutMsg
-            )
 
 
 placeTile : Bool -> TileGroup -> Int -> FrontendLoaded -> FrontendLoaded
@@ -3446,13 +3296,13 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                 let
                     model2 =
                         if Duration.from model.undoAddLast model.time |> Quantity.greaterThan (Duration.seconds 0.5) then
-                            updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time } |> Tuple.first
+                            LoadingPage.updateLocalModel Change.LocalAddUndo { model | undoAddLast = model.time } |> Tuple.first
 
                         else
                             model
 
                     ( model3, outMsg ) =
-                        updateLocalModel
+                        LoadingPage.updateLocalModel
                             (Change.LocalGridChange
                                 { position = cursorPosition_
                                 , change = tile
@@ -3714,127 +3564,6 @@ updateFromBackend msg model =
             ( model, Command.none )
 
 
-handleOutMsg :
-    Bool
-    -> ( FrontendLoaded, LocalGrid.OutMsg )
-    -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
-handleOutMsg isFromBackend ( model, outMsg ) =
-    case outMsg of
-        LocalGrid.NoOutMsg ->
-            ( model, Command.none )
-
-        LocalGrid.TilesRemoved _ ->
-            ( model, Command.none )
-
-        LocalGrid.OtherUserCursorMoved { userId, previousPosition } ->
-            ( { model
-                | previousCursorPositions =
-                    case previousPosition of
-                        Just previousPosition2 ->
-                            IdDict.insert
-                                userId
-                                { position = previousPosition2, time = model.time }
-                                model.previousCursorPositions
-
-                        Nothing ->
-                            IdDict.remove userId model.previousCursorPositions
-              }
-            , Command.none
-            )
-
-        LocalGrid.HandColorOrNameChanged userId ->
-            ( case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
-                Just user ->
-                    { model
-                        | handMeshes =
-                            IdDict.insert
-                                userId
-                                (Cursor.meshes
-                                    (if Just userId == LocalGrid.currentUserId model then
-                                        Nothing
-
-                                     else
-                                        Just ( userId, user.name )
-                                    )
-                                    user.handColor
-                                )
-                                model.handMeshes
-                    }
-
-                Nothing ->
-                    model
-            , Command.none
-            )
-
-        LocalGrid.RailToggledByAnother position ->
-            ( handleRailToggleSound position model, Command.none )
-
-        LocalGrid.RailToggledBySelf position ->
-            ( if isFromBackend then
-                model
-
-              else
-                handleRailToggleSound position model
-            , Command.none
-            )
-
-        LocalGrid.TeleportTrainHome trainId ->
-            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome model.time) model.trains }
-            , Command.none
-            )
-
-        LocalGrid.TrainLeaveHome trainId ->
-            ( { model | trains = IdDict.update2 trainId (Train.leaveHome model.time) model.trains }
-            , Command.none
-            )
-
-        LocalGrid.TrainsUpdated diff ->
-            ( { model
-                | trains =
-                    IdDict.toList diff
-                        |> List.filterMap
-                            (\( trainId, diff_ ) ->
-                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
-                                    Just newTrain ->
-                                        Just ( trainId, newTrain )
-
-                                    Nothing ->
-                                        Nothing
-                            )
-                        |> IdDict.fromList
-              }
-            , Command.none
-            )
-
-        LocalGrid.ReceivedMail ->
-            ( { model | lastReceivedMail = Just model.time }, Command.none )
-
-        LocalGrid.ExportMail content ->
-            ( model
-            , Effect.File.Download.string
-                "letter.json"
-                "application/json"
-                (Codec.encodeToString 2 (Codec.list MailEditor.contentCodec) content)
-            )
-
-        LocalGrid.ImportMail ->
-            ( model, Effect.File.Select.file [ "application/json" ] ImportedMail )
-
-
-handleRailToggleSound : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
-handleRailToggleSound position model =
-    { model
-        | railToggles =
-            ( model.time, position )
-                :: List.filter
-                    (\( time, _ ) ->
-                        Duration.from time model.time
-                            |> Quantity.lessThan Duration.second
-                    )
-                    model.railToggles
-    }
-
-
 updateLoadedFromBackend : ToFrontend -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 updateLoadedFromBackend msg model =
     case msg of
@@ -3857,7 +3586,7 @@ updateLoadedFromBackend msg model =
                 (\outMsg ( state, cmd ) ->
                     let
                         ( model2, cmd2 ) =
-                            handleOutMsg True ( state, outMsg )
+                            LoadingPage.handleOutMsg True ( state, outMsg )
                     in
                     ( model2, Command.batch [ cmd, cmd2 ] )
                 )
@@ -3996,9 +3725,6 @@ updateLoadedFromBackend msg model =
         CheckConnectionBroadcast ->
             ( { model | lastCheckConnection = model.time }, Command.none )
 
-        ChangesSinceResponse since changes ->
-            ( { model | latestChanges = GotChangesSinceRequest { since = since, changes = changes } }, Command.none )
-
 
 actualTime : FrontendLoaded -> Effect.Time.Posix
 actualTime model =
@@ -4042,7 +3768,9 @@ view audioData model =
 
 viewBoundingBox : FrontendLoaded -> BoundingBox2d WorldUnit WorldUnit
 viewBoundingBox model =
-    BoundingBox2d.from (Toolbar.screenToWorld model Point2d.origin) (Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize))
+    BoundingBox2d.from
+        (Toolbar.screenToWorld model Point2d.origin)
+        (Toolbar.screenToWorld model (Coord.toPoint2d model.windowSize))
 
 
 cursorSprite : Hover -> FrontendLoaded -> { cursorType : CursorType, scale : Int }
@@ -4184,6 +3912,17 @@ cursorSprite hover model =
                                                     PointerCursor
                             , scale = 1
                             }
+
+                        InviteTreePage ->
+                            { cursorType =
+                                case hover of
+                                    UiHover _ _ ->
+                                        PointerCursor
+
+                                    _ ->
+                                        DefaultCursor
+                            , scale = 1
+                            }
             in
             case isDraggingView hover model of
                 Just mouse ->
@@ -4279,6 +4018,94 @@ getNightFactor model =
     TimeOfDay.nightFactor timeOfDay model.time
 
 
+uiNightFactorScaling =
+    0.5
+
+
+staticMatrix windowWidth windowHeight zoom =
+    Mat4.makeScale3 (toFloat zoom * 2 / toFloat windowWidth) (toFloat zoom * -2 / toFloat windowHeight) 1
+
+
+drawWorldPreview :
+    Coord Pixels
+    -> Coord Pixels
+    -> Point2d WorldUnit WorldUnit
+    -> Int
+    -> RenderData
+    -> Float
+    -> FrontendLoaded
+    -> List Effect.WebGL.Entity
+drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData nightFactor model =
+    let
+        ( windowWidth, windowHeight ) =
+            Coord.toTuple model.windowSize
+
+        staticViewMatrix2 : Mat4
+        staticViewMatrix2 =
+            staticMatrix windowWidth windowHeight viewZoom
+                |> Mat4.translate3
+                    (toFloat ((Coord.xRaw viewportPosition + Coord.xRaw viewportSize // 2) - windowWidth // 2)
+                        |> round
+                        |> toFloat
+                        |> (*) (1 / toFloat viewZoom)
+                    )
+                    (toFloat ((Coord.yRaw viewportPosition + Coord.yRaw viewportSize // 2) - windowHeight // 2)
+                        |> round
+                        |> toFloat
+                        |> (*) (1 / toFloat viewZoom)
+                    )
+                    0
+
+        viewPoint : { x : Float, y : Float }
+        viewPoint =
+            Point2d.unwrap viewPosition
+
+        offset : Vector2d WorldUnit WorldUnit
+        offset =
+            Units.pixelToTile viewportSize |> Coord.toVector2d |> Vector2d.scaleBy 0.5
+
+        viewBounds : BoundingBox2d WorldUnit WorldUnit
+        viewBounds =
+            BoundingBox2d.from
+                (viewPosition |> Point2d.translateBy (Vector2d.reverse offset))
+                (viewPosition |> Point2d.translateBy offset)
+
+        scissors =
+            { left = Coord.xRaw viewportPosition
+            , bottom = (windowHeight - Coord.yRaw viewportPosition) - Coord.yRaw viewportSize
+            , width = Coord.xRaw viewportSize
+            , height = Coord.yRaw viewportSize
+            }
+    in
+    Shaders.clearDepth
+        (nightFactor * uiNightFactorScaling)
+        (Color.toVec4 Color.outlineColor)
+        { left = scissors.left - 2
+        , bottom = scissors.bottom - 2
+        , width = scissors.width + 4
+        , height = scissors.height + 4
+        }
+        :: drawWorld
+            False
+            { lights = renderData.lights
+            , texture = renderData.texture
+            , depth = renderData.depth
+            , nightFactor = nightFactor
+            , staticViewMatrix = staticViewMatrix2
+            , viewMatrix =
+                staticViewMatrix2
+                    |> Mat4.translate3
+                        (toFloat <| round (-viewPoint.x * toFloat Units.tileWidth))
+                        (toFloat <| round (-viewPoint.y * toFloat Units.tileHeight))
+                        0
+            , time = renderData.time
+            , scissors = scissors
+            }
+            MapHover
+            viewBounds
+            model
+
+
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
     case
@@ -4302,19 +4129,15 @@ canvasView audioData model =
                 { x, y } =
                     Point2d.unwrap (Toolbar.actualViewPoint model)
 
-                localGrid : LocalGrid_
-                localGrid =
-                    LocalGrid.localModel model.localModel
-
                 hoverAt2 : Hover
                 hoverAt2 =
-                    hoverAt model (LoadingPage.mouseScreenPosition model)
+                    LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
 
                 showMousePointer =
                     cursorSprite hoverAt2 model
 
                 staticViewMatrix =
-                    Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
+                    staticMatrix windowWidth windowHeight model.zoomFactor
 
                 renderData : RenderData
                 renderData =
@@ -4330,26 +4153,12 @@ canvasView audioData model =
                                 (negate <| toFloat <| round (y * toFloat Units.tileHeight))
                                 0
                     , time = shaderTime model
+                    , scissors = { left = 0, bottom = 0, width = windowWidth, height = windowHeight }
                     }
 
                 textureSize : Vec2
                 textureSize =
                     WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-
-                gridViewBounds : BoundingBox2d WorldUnit WorldUnit
-                gridViewBounds =
-                    LoadingPage.viewLoadingBoundingBox model
-
-                meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
-                meshes =
-                    Dict.filter
-                        (\key _ ->
-                            Coord.tuple key
-                                |> Units.cellToTile
-                                |> Coord.toPoint2d
-                                |> (\p -> BoundingBox2d.contains p gridViewBounds)
-                        )
-                        model.meshes
             in
             Effect.WebGL.toHtmlWith
                 [ Effect.WebGL.alpha False
@@ -4366,71 +4175,7 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (Shaders.drawBackground renderData meshes
-                    ++ drawForeground
-                        renderData
-                        model.contextMenu
-                        model.currentTool
-                        hoverAt2
-                        meshes
-                    ++ Shaders.drawWaterReflection renderData model
-                    ++ (case
-                            ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
-                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
-                            , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainDepthTexture
-                            )
-                        of
-                            ( Just trainTexture, Just trainLights, Just trainDepth ) ->
-                                Train.draw
-                                    { lights = trainLights
-                                    , texture = trainTexture
-                                    , depth = trainDepth
-                                    , nightFactor = getNightFactor model
-                                    , viewMatrix =
-                                        Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
-                                            |> Mat4.translate3
-                                                (negate <| toFloat <| round (x * toFloat Units.tileWidth))
-                                                (negate <| toFloat <| round (y * toFloat Units.tileHeight))
-                                                0
-                                    , staticViewMatrix = staticViewMatrix
-                                    , time = shaderTime model
-                                    }
-                                    (case model.contextMenu of
-                                        Just contextMenu ->
-                                            contextMenu.userId
-
-                                        Nothing ->
-                                            Nothing
-                                    )
-                                    model.time
-                                    localGrid.mail
-                                    model.trains
-                                    viewBounds_
-
-                            _ ->
-                                []
-                       )
-                    ++ drawAnimals renderData model
-                    ++ drawFlags renderData model
-                    ++ [ Effect.WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.debrisVertexShader
-                            Shaders.fragmentShader
-                            model.debrisMesh
-                            { view = renderData.viewMatrix
-                            , texture = texture
-                            , lights = lightsTexture
-                            , depth = depth
-                            , textureSize = textureSize
-                            , time = renderData.time
-                            , time2 = renderData.time
-                            , color = Vec4.vec4 1 1 1 1
-                            , night = renderData.nightFactor
-                            }
-                       , drawReports renderData model.reportsMesh
-                       ]
-                    ++ drawOtherCursors renderData model
-                    ++ Train.drawSpeechBubble renderData model.time model.trains
+                (drawWorld True renderData hoverAt2 viewBounds_ model
                     ++ drawTilePlacer renderData audioData model
                     ++ (case model.page of
                             MailPage _ ->
@@ -4454,9 +4199,23 @@ canvasView audioData model =
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime model
-                            , night = renderData.nightFactor * 0.5
+                            , night = renderData.nightFactor * uiNightFactorScaling
                             }
                        ]
+                    ++ (case LoadingPage.showWorldPreview hoverAt2 of
+                            Just ( changeAt, data ) ->
+                                drawWorldPreview
+                                    (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
+                                    (LocalGrid.notificationViewportSize |> Units.tileToPixel)
+                                    (Coord.toPoint2d changeAt)
+                                    1
+                                    renderData
+                                    renderData.nightFactor
+                                    model
+
+                            Nothing ->
+                                []
+                       )
                     ++ drawMap model
                     ++ (case model.page of
                             MailPage mailEditor ->
@@ -4495,6 +4254,104 @@ canvasView audioData model =
             Html.text ""
 
 
+drawWorld : Bool -> RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
+drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
+    let
+        { x, y } =
+            Point2d.unwrap (Toolbar.actualViewPoint model)
+
+        localGrid : LocalGrid_
+        localGrid =
+            LocalGrid.localModel model.localModel
+
+        textureSize : Vec2
+        textureSize =
+            WebGL.Texture.size renderData.texture |> Coord.tuple |> Coord.toVec2
+
+        viewBounds3 =
+            BoundingBox2d.extrema viewBounds_
+
+        ( minXOffset, minYOffset ) =
+            Coord.tuple ( -2, -2 ) |> Units.cellToTile |> Tuple.mapBoth Quantity.toFloatQuantity Quantity.toFloatQuantity
+
+        gridViewBounds : BoundingBox2d WorldUnit WorldUnit
+        gridViewBounds =
+            BoundingBox2d.fromExtrema
+                { minX = viewBounds3.minX |> Quantity.plus minXOffset
+                , minY = viewBounds3.minY |> Quantity.plus minYOffset
+                , maxX = viewBounds3.maxX
+                , maxY = viewBounds3.maxY
+                }
+
+        meshes : Dict ( Int, Int ) { foreground : Mesh Vertex, background : Mesh Vertex }
+        meshes =
+            Dict.filter
+                (\key _ ->
+                    Coord.tuple key
+                        |> Units.cellToTile
+                        |> Coord.toPoint2d
+                        |> (\p -> BoundingBox2d.contains p gridViewBounds)
+                )
+                model.meshes
+    in
+    Shaders.drawBackground renderData meshes
+        ++ drawForeground renderData model.contextMenu model.currentTool hoverAt2 meshes
+        ++ Shaders.drawWaterReflection includeSunOrMoon renderData model
+        ++ (case
+                ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
+                , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
+                , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainDepthTexture
+                )
+            of
+                ( Just trainTexture, Just trainLights, Just trainDepth ) ->
+                    Train.draw
+                        { lights = trainLights
+                        , texture = trainTexture
+                        , depth = trainDepth
+                        , nightFactor = renderData.nightFactor
+                        , viewMatrix = renderData.viewMatrix
+                        , staticViewMatrix = renderData.staticViewMatrix
+                        , time = renderData.time
+                        , scissors = renderData.scissors
+                        }
+                        (case model.contextMenu of
+                            Just contextMenu ->
+                                contextMenu.userId
+
+                            Nothing ->
+                                Nothing
+                        )
+                        model.time
+                        localGrid.mail
+                        model.trains
+                        viewBounds_
+
+                _ ->
+                    []
+           )
+        ++ drawAnimals gridViewBounds renderData model
+        ++ drawFlags renderData model
+        ++ [ Effect.WebGL.entityWith
+                [ Shaders.blend, Shaders.scissorBox renderData.scissors ]
+                Shaders.debrisVertexShader
+                Shaders.fragmentShader
+                model.debrisMesh
+                { view = renderData.viewMatrix
+                , texture = renderData.texture
+                , lights = renderData.lights
+                , depth = renderData.depth
+                , textureSize = textureSize
+                , time = renderData.time
+                , time2 = renderData.time
+                , color = Vec4.vec4 1 1 1 1
+                , night = renderData.nightFactor
+                }
+           , drawReports renderData model.reportsMesh
+           ]
+        ++ drawOtherCursors gridViewBounds renderData model
+        ++ Train.drawSpeechBubble renderData model.time model.trains
+
+
 drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
 drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
     Effect.WebGL.entityWith
@@ -4514,23 +4371,19 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
         }
 
 
-drawAnimals : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
+drawAnimals : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid : LocalGrid_
         localGrid =
             LocalGrid.localModel model.localModel
-
-        viewBounds_ : BoundingBox2d WorldUnit WorldUnit
-        viewBounds_ =
-            viewBoundingBox model
 
         ( textureW, textureH ) =
             WebGL.Texture.size texture
     in
     List.filterMap
         (\( cowId, animal ) ->
-            case animalActualPosition cowId model of
+            case LoadingPage.animalActualPosition cowId model of
                 Just { position } ->
                     if BoundingBox2d.contains position viewBounds_ then
                         let
@@ -4544,7 +4397,7 @@ drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
                                 Animal.getData animal.animalType
                         in
                         Effect.WebGL.entityWith
-                            [ Shaders.blend ]
+                            [ Shaders.blend, Shaders.scissorBox scissors ]
                             Shaders.instancedVertexShader
                             Shaders.fragmentShader
                             Train.instancedMesh
@@ -4584,7 +4437,7 @@ drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time } model =
 
 
 drawFlags : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawFlags { nightFactor, lights, texture, viewMatrix, depth, time } model =
+drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     List.filterMap
         (\flag ->
             let
@@ -4606,7 +4459,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time } model =
                             Point2d.unwrap flag.position
                     in
                     Effect.WebGL.entityWith
-                        [ Shaders.blend ]
+                        [ Shaders.blend, Shaders.scissorBox scissors ]
                         Shaders.vertexShader
                         Shaders.fragmentShader
                         flagMesh_
@@ -4639,7 +4492,12 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
     in
-    case ( hoverAt model (LoadingPage.mouseScreenPosition model), LocalGrid.currentTool model, LocalGrid.currentUserId model ) of
+    case
+        ( LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
+        , LocalGrid.currentTool model
+        , LocalGrid.currentUserId model
+        )
+    of
         ( MapHover, TilePlacerTool currentTile, Just userId ) ->
             let
                 currentTile2 : Tile
@@ -4937,15 +4795,11 @@ lastPlacementOffset audioData model =
             0
 
 
-drawOtherCursors : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time } model =
+drawOtherCursors : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
-
-        viewBounds_ : BoundingBox2d WorldUnit WorldUnit
-        viewBounds_ =
-            viewBoundingBox model |> BoundingBox2d.expandBy (Units.tileUnit 2)
     in
     (case LocalGrid.currentUserId model of
         Just userId ->
@@ -4959,7 +4813,7 @@ drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time } model
             (\( userId, cursor ) ->
                 let
                     cursorPosition2 =
-                        cursorActualPosition False userId cursor model
+                        LoadingPage.cursorActualPosition False userId cursor model
 
                     point : { x : Float, y : Float }
                     point =
@@ -4968,7 +4822,7 @@ drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time } model
                 case ( BoundingBox2d.contains cursorPosition2 viewBounds_, IdDict.get userId model.handMeshes ) of
                     ( True, Just mesh ) ->
                         Effect.WebGL.entityWith
-                            [ Shaders.blend ]
+                            [ Shaders.blend, Shaders.scissorBox scissors ]
                             Shaders.vertexShader
                             Shaders.fragmentShader
                             (Cursor.getSpriteMesh
@@ -5022,7 +4876,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                 CursorSprite mousePointer ->
                     let
                         point =
-                            cursorActualPosition True userId cursor model
+                            LoadingPage.cursorActualPosition True userId cursor model
                                 |> Point2d.unwrap
                     in
                     case IdDict.get userId model.handMeshes of
@@ -5068,31 +4922,6 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
 
         Nothing ->
             []
-
-
-cursorActualPosition : Bool -> Id UserId -> Cursor -> FrontendLoaded -> Point2d WorldUnit WorldUnit
-cursorActualPosition isCurrentUser userId cursor model =
-    if isCurrentUser then
-        cursor.position
-
-    else
-        case ( cursor.currentTool, IdDict.get userId model.previousCursorPositions ) of
-            ( Cursor.TextTool (Just textTool), _ ) ->
-                Coord.toPoint2d textTool.cursorPosition
-                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.5 })
-
-            ( _, Just previous ) ->
-                Point2d.interpolateFrom
-                    previous.position
-                    cursor.position
-                    (Quantity.ratio
-                        (Duration.from previous.time model.time)
-                        shortDelayDuration
-                        |> clamp 0 1
-                    )
-
-            _ ->
-                cursor.position
 
 
 getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
@@ -5172,7 +5001,7 @@ drawForeground :
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawForeground { nightFactor, lights, viewMatrix, texture, depth, time } maybeContextMenu currentTool2 hoverAt2 meshes =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors } maybeContextMenu currentTool2 hoverAt2 meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5180,6 +5009,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time } maybeCo
                     [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
                     , Shaders.depthTest
                     , Shaders.blend
+                    , Shaders.scissorBox scissors
                     ]
                     Shaders.vertexShader
                     Shaders.fragmentShader
@@ -5218,11 +5048,6 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time } maybeCo
             )
 
 
-shortDelayDuration : Duration
-shortDelayDuration =
-    Duration.milliseconds 100
-
-
 subscriptions : AudioData -> FrontendModel_ -> Subscription FrontendOnly FrontendMsg_
 subscriptions _ model =
     Subscription.batch
@@ -5249,37 +5074,10 @@ subscriptions _ model =
                 Subscription.batch
                     [ Subscription.map KeyMsg Keyboard.subscriptions
                     , Effect.Time.every
-                        shortDelayDuration
+                        LoadingPage.shortDelayDuration
                         (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Effect.Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         , Subscription.fromJs "mouse_leave" Ports.mouse_leave (\_ -> MouseLeave)
         , Ports.gotLocalStorage LoadedUserSettings
         ]
-
-
-animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
-animalActualPosition animalId model =
-    let
-        localGrid =
-            LocalGrid.localModel model.localModel
-    in
-    case
-        IdDict.toList localGrid.cursors
-            |> List.find (\( _, cursor ) -> Just animalId == Maybe.map .cowId cursor.holdingCow)
-    of
-        Just ( userId, cursor ) ->
-            { position =
-                cursorActualPosition (Just userId == LocalGrid.currentUserId model) userId cursor model
-                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 })
-            , isHeld = True
-            }
-                |> Just
-
-        Nothing ->
-            case IdDict.get animalId localGrid.animals of
-                Just animal ->
-                    Just { position = animal.position, isHeld = False }
-
-                Nothing ->
-                    Nothing

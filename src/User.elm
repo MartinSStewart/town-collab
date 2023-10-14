@@ -1,4 +1,4 @@
-module User exposing (FrontendUser, InviteTree(..), drawInviteTree)
+module User exposing (FrontendUser, InviteTree(..), drawInviteTree, nameAndHand)
 
 import Color exposing (Colors)
 import Coord
@@ -14,7 +14,6 @@ import Ui exposing (BorderAndFill(..))
 type alias FrontendUser =
     { name : DisplayName
     , handColor : Colors
-    , cursor : Maybe Cursor
     }
 
 
@@ -29,8 +28,60 @@ charScale =
     2
 
 
-drawInviteTree : IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
-drawInviteTree dict (InviteTree tree) =
+onlineColor =
+    Color.rgb255 80 255 100
+
+
+dotSize =
+    Coord.xy 8 8
+
+
+onlineIcon : Ui.Element id
+onlineIcon =
+    Ui.quads
+        { size = Coord.scalar charScale Sprite.charSize
+        , vertices =
+            Sprite.rectangle onlineColor
+                (Coord.scalar charScale Sprite.charSize |> Coord.minus dotSize |> Coord.divide (Coord.xy 2 2))
+                dotSize
+        }
+
+
+nameAndHand : Bool -> Maybe (Id UserId) -> Id UserId -> FrontendUser -> Ui.Element id
+nameAndHand isOnline currentUserId userId user =
+    Ui.row
+        { spacing = 4 * charScale, padding = Ui.noPadding }
+        [ Ui.row
+            { spacing = 0, padding = Ui.noPadding }
+            [ if isOnline then
+                onlineIcon
+
+              else
+                Ui.none
+            , Ui.colorScaledText
+                Color.black
+                charScale
+                (DisplayName.nameAndId user.name userId)
+            ]
+        , Ui.center
+            { size = Coord.xy 30 (charScale * Coord.yRaw Sprite.charSize) }
+            (Ui.colorSprite
+                { colors = user.handColor
+                , size = Coord.xy 30 23
+                , texturePosition = Coord.xy 533 28
+                , textureSize = Coord.xy 30 23
+                }
+            )
+        , if currentUserId == Just userId then
+            Ui.text "(You)"
+
+          else
+            Ui.none
+        ]
+
+
+drawInviteTree : Maybe (Id UserId) -> IdDict UserId Cursor -> IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
+drawInviteTree currentUserId cursors dict (InviteTree tree) =
     let
         childNodes : List (Ui.Element id)
         childNodes =
@@ -38,7 +89,9 @@ drawInviteTree dict (InviteTree tree) =
                 (\child ->
                     Ui.row
                         { spacing = 2, padding = Ui.noPadding }
-                        [ Ui.colorScaledText Color.outlineColor charScale "─", drawInviteTree dict child ]
+                        [ Ui.colorScaledText Color.outlineColor charScale "─"
+                        , drawInviteTree currentUserId cursors dict child
+                        ]
                 )
                 tree.invited
     in
@@ -46,19 +99,7 @@ drawInviteTree dict (InviteTree tree) =
         { spacing = 0, padding = Ui.noPadding }
         [ case IdDict.get tree.userId dict of
             Just user ->
-                Ui.row
-                    { spacing = 4 * charScale, padding = Ui.noPadding }
-                    [ Ui.scaledText charScale (DisplayName.nameAndId user.name tree.userId)
-                    , Ui.center
-                        { size = Coord.xy 30 (charScale * Coord.yRaw Sprite.charSize) }
-                        (Ui.colorSprite
-                            { colors = user.handColor
-                            , size = Coord.xy 30 23
-                            , texturePosition = Coord.xy 533 28
-                            , textureSize = Coord.xy 30 23
-                            }
-                        )
-                    ]
+                nameAndHand (IdDict.member tree.userId cursors) currentUserId tree.userId user
 
             Nothing ->
                 Ui.colorScaledText Color.errorColor charScale "Not found"

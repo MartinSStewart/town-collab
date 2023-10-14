@@ -4,6 +4,7 @@ module Shaders exposing
     , MapOverlayVertex
     , RenderData
     , blend
+    , clearDepth
     , debrisVertexShader
     , depthTest
     , drawBackground
@@ -14,6 +15,7 @@ module Shaders exposing
     , mapSquare
     , noUserIdSelected
     , opacityAndUserId
+    , scissorBox
     , triangleFan
     , vertexShader
     , worldGenUserId
@@ -59,6 +61,7 @@ type alias RenderData =
     , staticViewMatrix : Mat4
     , viewMatrix : Mat4
     , time : Float
+    , scissors : ScissorBox
     }
 
 
@@ -191,11 +194,63 @@ starsMesh =
         |> Sprite.toMesh
 
 
+clearDepth : Float -> Vec4 -> ScissorBox -> Effect.WebGL.Entity
+clearDepth nightFactor color scissors =
+    Effect.WebGL.entityWith
+        [ Effect.WebGL.Settings.DepthTest.always { write = True, near = 0, far = 1 }
+        , blend
+        , scissorBox scissors
+        ]
+        fillVertexShader
+        fillFragmentShader
+        viewportSquare
+        { color = color, night = nightFactor }
+
+
+viewportSquare : Effect.WebGL.Mesh { x : Float, y : Float }
+viewportSquare =
+    Effect.WebGL.triangleFan
+        [ { x = -1, y = -1 }
+        , { x = 1, y = -1 }
+        , { x = 1, y = 1 }
+        , { x = -1, y = 1 }
+        ]
+
+
+fillVertexShader : Shader { x : Float, y : Float } u {}
+fillVertexShader =
+    [glsl|
+
+attribute float x;
+attribute float y;
+
+void main () {
+  gl_Position = vec4(vec2(x, y), 1.0, 1.0);
+}
+
+|]
+
+
+fillFragmentShader : Shader {} { u | color : Vec4, night : Float } {}
+fillFragmentShader =
+    [glsl|
+precision mediump float;
+uniform vec4 color;
+uniform float night;
+
+void main () {
+    vec3 nightColor = vec3(1.0, 1.0, 1.0) * (1.0 - night) + vec3(0.33, 0.4, 0.645) * night;
+    
+    gl_FragColor = color * vec4(nightColor, 1.0);
+}
+    |]
+
+
 drawBackground :
     RenderData
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawBackground { nightFactor, viewMatrix, texture, lights, depth, time } meshes =
+drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors } meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -203,6 +258,7 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth, time } meshes 
                     [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
                     , Effect.WebGL.Settings.DepthTest.default
                     , blend
+                    , scissorBox scissors
                     ]
                     vertexShader
                     fragmentShader
@@ -224,12 +280,22 @@ depthTest =
     Effect.WebGL.Settings.DepthTest.lessOrEqual { write = True, near = 0, far = 1 }
 
 
-drawWaterReflection : RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
-drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, time } model =
-    [ Effect.WebGL.entityWith
+type alias ScissorBox =
+    { left : Int, bottom : Int, width : Int, height : Int }
+
+
+scissorBox : ScissorBox -> Setting
+scissorBox { left, bottom, width, height } =
+    Effect.WebGL.Settings.scissor left bottom width height
+
+
+drawWaterReflection : Bool -> RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
+drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors } model =
+    Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
         , depthTest
         , blend
+        , scissorBox scissors
         ]
         vertexShader
         fragmentShader
@@ -244,30 +310,36 @@ drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, tim
         , lights = lights
         , depth = depth
         }
-    , Effect.WebGL.entityWith
-        [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
-        , depthTest
-        , blend
-        ]
-        vertexShader
-        fragmentShader
-        (if TimeOfDay.isDayTime nightFactor then
-            sunMesh
+        :: (if includeSunOrMoon then
+                [ Effect.WebGL.entityWith
+                    [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
+                    , depthTest
+                    , blend
+                    , scissorBox scissors
+                    ]
+                    vertexShader
+                    fragmentShader
+                    (if TimeOfDay.isDayTime nightFactor then
+                        sunMesh
 
-         else
-            moonMesh
-        )
-        { view = Coord.translateMat4 (TimeOfDay.sunMoonPosition model nightFactor) staticViewMatrix
-        , texture = texture
-        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-        , color = Vec4.vec4 1 1 1 1
-        , userId = noUserIdSelected
-        , time = time
-        , night = nightFactor
-        , lights = lights
-        , depth = depth
-        }
-    ]
+                     else
+                        moonMesh
+                    )
+                    { view = Coord.translateMat4 (TimeOfDay.sunMoonPosition model nightFactor) staticViewMatrix
+                    , texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , color = Vec4.vec4 1 1 1 1
+                    , userId = noUserIdSelected
+                    , time = time
+                    , night = nightFactor
+                    , lights = lights
+                    , depth = depth
+                    }
+                ]
+
+            else
+                []
+           )
 
 
 vertexShader :

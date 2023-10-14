@@ -3,6 +3,7 @@ module Route exposing
     , InviteToken(..)
     , LoginOrInviteToken(..)
     , LoginToken(..)
+    , PageRoute(..)
     , Route(..)
     , UnsubscribeEmailKey(..)
     , decode
@@ -14,6 +15,7 @@ module Route exposing
 
 import Coord exposing (Coord)
 import Id exposing (SecretId)
+import List.Extra as List
 import Units exposing (WorldUnit)
 import Url exposing (Url)
 import Url.Builder
@@ -34,6 +36,13 @@ type LoginOrInviteToken
     | InviteToken2 (SecretId InviteToken)
 
 
+type PageRoute
+    = WorldRoute
+    | MailEditorRoute
+    | AdminRoute
+    | InviteTreeRoute
+
+
 startPointAt : Coord WorldUnit
 startPointAt =
     Coord.tuple ( 183, 54 )
@@ -42,19 +51,19 @@ startPointAt =
 coordQueryParser : Url.Parser.Query.Parser Route
 coordQueryParser =
     Url.Parser.Query.map5
-        (\maybeX maybeY showInbox2 loginToken2 inviteToken2 ->
+        (\maybeX maybeY maybePage loginToken2 inviteToken2 ->
             InternalRoute
                 { viewPoint =
                     ( Maybe.withDefault (Tuple.first startPointAt) (Maybe.map Units.tileUnit maybeX)
                     , Maybe.withDefault (Tuple.second startPointAt) (Maybe.map Units.tileUnit maybeY)
                     )
-                , showInbox =
-                    case showInbox2 of
-                        Just "true" ->
-                            True
+                , page =
+                    case List.find (\( _, name ) -> Just name == maybePage) pages of
+                        Just ( page, _ ) ->
+                            page
 
-                        _ ->
-                            False
+                        Nothing ->
+                            WorldRoute
                 , loginOrInviteToken =
                     case ( loginToken2, inviteToken2 ) of
                         ( _, Just inviteToken3 ) ->
@@ -69,7 +78,7 @@ coordQueryParser =
         )
         (Url.Parser.Query.int "x")
         (Url.Parser.Query.int "y")
-        (Url.Parser.Query.string showInbox)
+        (Url.Parser.Query.string pageParameter)
         (Url.Parser.Query.string loginToken)
         (Url.Parser.Query.string inviteToken)
 
@@ -106,21 +115,30 @@ encode route =
                             Nothing ->
                                 []
                        )
-                    ++ (if internalRoute_.showInbox then
-                            [ Url.Builder.string showInbox "true" ]
+                    ++ (case List.find (\( page, _ ) -> page == internalRoute_.page) pages of
+                            Just ( _, name ) ->
+                                [ Url.Builder.string "page" name ]
 
-                        else
-                            []
+                            Nothing ->
+                                []
                        )
                 )
+
+
+pages : List ( PageRoute, String )
+pages =
+    [ ( MailEditorRoute, "mail" )
+    , ( AdminRoute, "admin" )
+    , ( InviteTreeRoute, "users" )
+    ]
 
 
 loginToken =
     "login-token"
 
 
-showInbox =
-    "show-inbox"
+pageParameter =
+    "page"
 
 
 inviteToken =
@@ -128,7 +146,11 @@ inviteToken =
 
 
 type Route
-    = InternalRoute { viewPoint : Coord WorldUnit, showInbox : Bool, loginOrInviteToken : Maybe LoginOrInviteToken }
+    = InternalRoute
+        { viewPoint : Coord WorldUnit
+        , page : PageRoute
+        , loginOrInviteToken : Maybe LoginOrInviteToken
+        }
 
 
 type ConfirmEmailKey
@@ -141,4 +163,4 @@ type UnsubscribeEmailKey
 
 internalRoute : Coord WorldUnit -> Route
 internalRoute viewPoint =
-    InternalRoute { viewPoint = viewPoint, showInbox = False, loginOrInviteToken = Nothing }
+    InternalRoute { viewPoint = viewPoint, page = WorldRoute, loginOrInviteToken = Nothing }

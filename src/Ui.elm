@@ -27,6 +27,7 @@ module Ui exposing
     , ignoreInputs
     , noPadding
     , none
+    , outlinedScaledText
     , outlinedText
     , paddingXY
     , paddingXY2
@@ -44,6 +45,7 @@ module Ui exposing
     , topLeft
     , topLeft2
     , topRight
+    , underlinedColorText
     , underlinedText
     , view
     , visuallyEqual
@@ -231,6 +233,18 @@ underlinedText text2 =
         }
 
 
+underlinedColorText : Color -> String -> Element id
+underlinedColorText color text2 =
+    Text
+        { outline = Nothing
+        , color = color
+        , scale = defaultCharScale
+        , text = text2
+        , underlined = True
+        , cachedSize = Sprite.textSize defaultCharScale text2
+        }
+
+
 scaledText : Int -> String -> Element id
 scaledText scale text2 =
     Text
@@ -276,6 +290,18 @@ outlinedText data =
         , text = data.text
         , underlined = False
         , cachedSize = Sprite.textSize defaultCharScale data.text
+        }
+
+
+outlinedScaledText : { outline : Color, color : Color, scale : Int, text : String } -> Element id
+outlinedScaledText data =
+    Text
+        { outline = Just data.outline
+        , color = data.color
+        , scale = defaultCharScale
+        , text = data.text
+        , underlined = False
+        , cachedSize = Sprite.textSize data.scale data.text
         }
 
 

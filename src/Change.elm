@@ -4,13 +4,13 @@ module Change exposing
     , AreTrainsDisabled(..)
     , BackendReport
     , Change(..)
-    , ClientChange(..)
     , LocalChange(..)
     , LoggedIn_
     , Report
     , ServerChange(..)
     , TileHotkey(..)
     , UserStatus(..)
+    , ViewBoundsChange2
     , tileHotkeyDict
     )
 
@@ -41,7 +41,6 @@ import User exposing (FrontendUser)
 type Change
     = LocalChange (Id EventId) LocalChange
     | ServerChange ServerChange
-    | ClientChange ClientChange
 
 
 type LocalChange
@@ -68,6 +67,18 @@ type LocalChange
     | RemoveReport (Coord WorldUnit)
     | SetTimeOfDay TimeOfDay
     | SetTileHotkey TileHotkey TileGroup
+    | ShowNotifications Bool
+    | Logout
+    | ViewBoundsChange ViewBoundsChange2
+    | ClearNotifications Effect.Time.Posix
+
+
+type alias ViewBoundsChange2 =
+    { viewBounds : Bounds CellUnit
+    , previewBounds : Maybe (Bounds CellUnit)
+    , newCells : List ( Coord CellUnit, GridCell.CellData )
+    , newCows : List ( Id AnimalId, Animal )
+    }
 
 
 tileHotkeyDict : Dict String TileHotkey
@@ -112,10 +123,6 @@ type AreTrainsDisabled
     | TrainsEnabled
 
 
-type ClientChange
-    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData )) (List ( Id AnimalId, Animal ))
-
-
 type ServerChange
     = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit), newCows : List ( Id AnimalId, Animal ) }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
@@ -150,6 +157,7 @@ type ServerChange
     | ServerVandalismReportedToAdmin (Id UserId) BackendReport
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
     | ServerSetTrainsDisabled AreTrainsDisabled
+    | ServerLogout
 
 
 type UserStatus
@@ -175,6 +183,9 @@ type alias LoggedIn_ =
     , isGridReadOnly : Bool
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict TileHotkey TileGroup
+    , showNotifications : Bool
+    , notifications : List (Coord WorldUnit)
+    , notificationsClearedAt : Effect.Time.Posix
     }
 
 
