@@ -27,7 +27,6 @@ module Grid exposing
     , localTilePointPlusWorld
     , localTilePointPlusWorldCoord
     , moveUndoPoint
-    , region
     , removeUser
     , tileMesh
     , tileMeshHelper2
@@ -475,13 +474,6 @@ maxTileSize =
 allCellsDict : Grid -> Dict ( Int, Int ) Cell
 allCellsDict (Grid grid) =
     grid
-
-
-region : Bounds CellUnit -> Grid -> GridData
-region bounds (Grid grid) =
-    Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds) grid
-        |> Dict.map (\_ cell -> GridCell.cellToData cell)
-        |> GridData
 
 
 getCell : Coord CellUnit -> Grid -> Maybe Cell

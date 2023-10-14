@@ -1479,6 +1479,15 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
         ViewBoundsChange data ->
             viewBoundsChange eventId data sessionId clientId model
 
+        ClearNotifications clearedAt ->
+            asUser2
+                (\userId user ->
+                    ( { model | users = IdDict.insert userId { user | notificationsClearedAt = clearedAt } model.users }
+                    , originalChange
+                    , BroadcastToNoOne
+                    )
+                )
+
 
 viewBoundsChange :
     Id EventId
@@ -1738,8 +1747,9 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                         , tileHotkeys = user.tileHotkeys
                         , showNotifications = user.showNotifications
                         , notifications =
-                            Grid.latestChanges (Effect.Time.millisToPosix 0) userId model.grid
+                            Grid.latestChanges user.notificationsClearedAt userId model.grid
                                 |> List.foldl LocalGrid.addNotification []
+                        , notificationsClearedAt = user.notificationsClearedAt
                         }
 
                 Nothing ->
@@ -1772,8 +1782,9 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                             , tileHotkeys = user.tileHotkeys
                                             , showNotifications = user.showNotifications
                                             , notifications =
-                                                Grid.latestChanges (Effect.Time.millisToPosix 0) data.userId model.grid
+                                                Grid.latestChanges user.notificationsClearedAt data.userId model.grid
                                                     |> List.foldl LocalGrid.addNotification []
+                                            , notificationsClearedAt = user.notificationsClearedAt
                                             }
                                         , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                         , case data.requestedBy of
@@ -1823,6 +1834,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                 , tileHotkeys = newUser.tileHotkeys
                                 , showNotifications = newUser.showNotifications
                                 , notifications = []
+                                , notificationsClearedAt = newUser.notificationsClearedAt
                                 }
                             , { model4
                                 | invites = AssocList.remove inviteToken model.invites
@@ -2012,6 +2024,7 @@ createUser userId emailAddress model =
             , timeOfDay = Automatic
             , tileHotkeys = AssocList.empty
             , showNotifications = False
+            , notificationsClearedAt = Effect.Time.millisToPosix 0
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

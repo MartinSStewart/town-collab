@@ -423,45 +423,57 @@ notificationsView loggedIn =
             { spacing = 16
             , padding = Ui.noPadding
             }
-            [ Ui.el
-                { padding = Ui.paddingXY 8 0
-                , inFront = []
-                , borderAndFill = NoBorderOrFill
-                }
-                (Ui.button { id = CloseNotifications, padding = Ui.paddingXY 10 4 } (Ui.text "Close"))
-            , notificationsHeader
-            , Ui.column
-                { spacing = 0
-                , padding = Ui.noPadding
-                }
-                (List.map
-                    (\coord ->
-                        "Change at "
-                            ++ "x="
-                            ++ String.fromInt (Coord.xRaw coord)
-                            ++ "&y="
-                            ++ String.fromInt (Coord.yRaw coord)
-                            |> Ui.underlinedColorText Color.linkColor
-                            |> Ui.customButton
-                                { id = MapChangeNotification coord
-                                , padding = Ui.paddingXY 16 4
-                                , inFront = []
-                                , borderAndFill = NoBorderOrFill
-                                , borderAndFillFocus = FillOnly Color.fillColor2
-                                }
-                            |> Ui.el { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
-                    )
-                    loggedIn.notifications
+            [ notificationsHeader
+            , Ui.el
+                { padding = Ui.paddingXY 8 0, inFront = [], borderAndFill = NoBorderOrFill }
+                (Ui.button
+                    { id = ClearNotificationsButton
+                    , padding = Ui.paddingXY 10 4
+                    }
+                    (Ui.text "Clear all")
                 )
+            , if List.isEmpty loggedIn.notifications then
+                Ui.el
+                    { padding = Ui.paddingXY 12 0, inFront = [], borderAndFill = NoBorderOrFill }
+                    (Ui.text "No notifications")
+
+              else
+                Ui.column
+                    { spacing = 0
+                    , padding = Ui.noPadding
+                    }
+                    (List.map
+                        (\coord ->
+                            "Change at "
+                                ++ "x="
+                                ++ String.fromInt (Coord.xRaw coord)
+                                ++ "&y="
+                                ++ String.fromInt (Coord.yRaw coord)
+                                |> Ui.underlinedColorText Color.linkColor
+                                |> Ui.customButton
+                                    { id = MapChangeNotification coord
+                                    , padding = Ui.paddingXY 8 4
+                                    , inFront = []
+                                    , borderAndFill = NoBorderOrFill
+                                    , borderAndFillFocus = FillOnly Color.fillColor2
+                                    }
+                                |> Ui.el { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
+                        )
+                        loggedIn.notifications
+                    )
             ]
         )
 
 
-notificationsHeader : Ui.Element id
+notificationsHeader : Ui.Element UiHover
 notificationsHeader =
-    Ui.el
-        { padding = Ui.paddingXY 16 0, inFront = [], borderAndFill = NoBorderOrFill }
-        (Ui.text "Changes in the last 6 hours")
+    Ui.row
+        { padding = Ui.paddingXY 8 0, spacing = 8 }
+        [ Ui.button { id = CloseNotifications, padding = Ui.paddingXY 10 4 } (Ui.text "Close")
+        , Ui.el
+            { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
+            (Ui.text "Recent notifications")
+        ]
 
 
 notificationsViewWidth : Int

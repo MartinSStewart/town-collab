@@ -340,6 +340,7 @@ type UiHover
     | ShowInviteTreeButton
     | CloseInviteTreeButton
     | LogoutButton
+    | ClearNotificationsButton
 
 
 type alias BackendModel =
@@ -412,6 +413,7 @@ type alias BackendUserData =
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict Change.TileHotkey TileGroup
     , showNotifications : Bool
+    , notificationsClearedAt : Effect.Time.Posix
     }
 
 

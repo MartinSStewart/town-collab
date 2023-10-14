@@ -2960,6 +2960,16 @@ uiUpdate audioData id event model =
                 )
                 model
 
+        ClearNotificationsButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    LoadingPage.updateLocalModel (Change.ClearNotifications model.time) model
+                        |> LoadingPage.handleOutMsg False
+                )
+                model
+
 
 textInputUpdate :
     UiHover

@@ -70,6 +70,7 @@ type LocalChange
     | ShowNotifications Bool
     | Logout
     | ViewBoundsChange ViewBoundsChange2
+    | ClearNotifications Effect.Time.Posix
 
 
 type alias ViewBoundsChange2 =
@@ -184,6 +185,7 @@ type alias LoggedIn_ =
     , tileHotkeys : AssocList.Dict TileHotkey TileGroup
     , showNotifications : Bool
     , notifications : List (Coord WorldUnit)
+    , notificationsClearedAt : Effect.Time.Posix
     }
 
 

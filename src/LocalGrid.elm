@@ -587,6 +587,11 @@ updateLocalChange localChange model =
             , NoOutMsg
             )
 
+        ClearNotifications time ->
+            ( updateLoggedIn model (\loggedIn -> { loggedIn | notifications = [], notificationsClearedAt = time })
+            , NoOutMsg
+            )
+
 
 setTileHotkey :
     TileHotkey
