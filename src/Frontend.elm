@@ -4076,6 +4076,7 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
         , height = scissors.height + 4
         }
         :: drawWorld
+            False
             { lights = renderData.lights
             , texture = renderData.texture
             , depth = renderData.depth
@@ -4164,7 +4165,7 @@ canvasView audioData model =
                  ]
                     ++ LoadingPage.mouseListeners model
                 )
-                (drawWorld renderData hoverAt2 viewBounds_ model
+                (drawWorld True renderData hoverAt2 viewBounds_ model
                     ++ drawTilePlacer renderData audioData model
                     ++ (case model.page of
                             MailPage _ ->
@@ -4243,8 +4244,8 @@ canvasView audioData model =
             Html.text ""
 
 
-drawWorld : RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
-drawWorld renderData hoverAt2 viewBounds_ model =
+drawWorld : Bool -> RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
+drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
     let
         { x, y } =
             Point2d.unwrap (Toolbar.actualViewPoint model)
@@ -4285,7 +4286,7 @@ drawWorld renderData hoverAt2 viewBounds_ model =
     in
     Shaders.drawBackground renderData meshes
         ++ drawForeground renderData model.contextMenu model.currentTool hoverAt2 meshes
-        ++ Shaders.drawWaterReflection renderData model
+        ++ Shaders.drawWaterReflection includeSunOrMoon renderData model
         ++ (case
                 ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
                 , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture

@@ -289,9 +289,9 @@ scissorBox { left, bottom, width, height } =
     Effect.WebGL.Settings.scissor left bottom width height
 
 
-drawWaterReflection : RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
-drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors } model =
-    [ Effect.WebGL.entityWith
+drawWaterReflection : Bool -> RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
+drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors } model =
+    Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
         , depthTest
         , blend
@@ -310,31 +310,36 @@ drawWaterReflection { staticViewMatrix, nightFactor, texture, lights, depth, tim
         , lights = lights
         , depth = depth
         }
-    , Effect.WebGL.entityWith
-        [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
-        , depthTest
-        , blend
-        , scissorBox scissors
-        ]
-        vertexShader
-        fragmentShader
-        (if TimeOfDay.isDayTime nightFactor then
-            sunMesh
+        :: (if includeSunOrMoon then
+                [ Effect.WebGL.entityWith
+                    [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
+                    , depthTest
+                    , blend
+                    , scissorBox scissors
+                    ]
+                    vertexShader
+                    fragmentShader
+                    (if TimeOfDay.isDayTime nightFactor then
+                        sunMesh
 
-         else
-            moonMesh
-        )
-        { view = Coord.translateMat4 (TimeOfDay.sunMoonPosition model nightFactor) staticViewMatrix
-        , texture = texture
-        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-        , color = Vec4.vec4 1 1 1 1
-        , userId = noUserIdSelected
-        , time = time
-        , night = nightFactor
-        , lights = lights
-        , depth = depth
-        }
-    ]
+                     else
+                        moonMesh
+                    )
+                    { view = Coord.translateMat4 (TimeOfDay.sunMoonPosition model nightFactor) staticViewMatrix
+                    , texture = texture
+                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , color = Vec4.vec4 1 1 1 1
+                    , userId = noUserIdSelected
+                    , time = time
+                    , night = nightFactor
+                    , lights = lights
+                    , depth = depth
+                    }
+                ]
+
+            else
+                []
+           )
 
 
 vertexShader :
