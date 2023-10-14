@@ -30,9 +30,11 @@ import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..), MailStatus2(..))
+import Maybe.Extra as Maybe
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity
 import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
+import Set exposing (Set)
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..))
 import TimeOfDay exposing (TimeOfDay(..))
@@ -713,7 +715,7 @@ updateFromFrontend :
 updateFromFrontend isProduction currentTime sessionId clientId msg model =
     case msg of
         ConnectToBackend requestData maybeToken ->
-            requestDataUpdate currentTime sessionId clientId requestData maybeToken model
+            connectToBackend currentTime sessionId clientId requestData maybeToken model
 
         GridChange changes ->
             asUser
@@ -1407,7 +1409,7 @@ updateLocalChange sessionId clientId time userId user (( eventId, change ) as or
             , BroadcastToRestOfSessionAndEveryoneElse sessionId ServerLogout (ServerUserDisconnected userId)
             )
 
-        ViewBoundsChange bounds _ _ ->
+        ViewBoundsChange { viewBounds, previewBounds } ->
             case
                 Dict.get (Effect.Lamdera.sessionIdToString sessionId) model.userSessions
                     |> Maybe.andThen (\{ clientIds } -> AssocList.get clientId clientIds)
@@ -1415,7 +1417,7 @@ updateLocalChange sessionId clientId time userId user (( eventId, change ) as or
                 Just oldBounds ->
                     let
                         ( newGrid, cells, newCows ) =
-                            generateVisibleRegion (Just oldBounds) bounds model
+                            generateVisibleRegion oldBounds (viewBounds :: Maybe.toList previewBounds) model
 
                         model2 =
                             { model
@@ -1428,7 +1430,7 @@ updateLocalChange sessionId clientId time userId user (( eventId, change ) as or
                                                     | clientIds =
                                                         AssocList.update
                                                             clientId
-                                                            (\_ -> Just bounds)
+                                                            (\_ -> Just (viewBounds :: Maybe.toList previewBounds))
                                                             session.clientIds
                                                 }
                                             )
@@ -1439,7 +1441,14 @@ updateLocalChange sessionId clientId time userId user (( eventId, change ) as or
                             }
                     in
                     ( model2
-                    , ( eventId, ViewBoundsChange bounds cells newCows )
+                    , ( eventId
+                      , ViewBoundsChange
+                            { viewBounds = viewBounds
+                            , previewBounds = previewBounds
+                            , newCells = cells
+                            , newCows = newCows
+                            }
+                      )
                     , case Nonempty.fromList newCows of
                         Just nonempty ->
                             ServerNewCows nonempty |> BroadcastToEveryoneElse
@@ -1453,19 +1462,35 @@ updateLocalChange sessionId clientId time userId user (( eventId, change ) as or
 
 
 generateVisibleRegion :
-    Maybe (Bounds CellUnit)
-    -> Bounds CellUnit
+    List (Bounds CellUnit)
+    -> List (Bounds CellUnit)
     -> BackendModel
     -> ( Grid, List ( Coord CellUnit, GridCell.CellData ), List ( Id d, Animal ) )
-generateVisibleRegion maybeOldBounds bounds model =
+generateVisibleRegion oldBounds bounds model =
     let
         nextCowId =
             IdDict.nextId model.cows |> Id.toInt
 
+        coords : List (Coord CellUnit)
+        coords =
+            List.foldl
+                (\bound set ->
+                    Bounds.coordRangeFold
+                        (\coord set2 -> Set.insert (Coord.toTuple coord) set2)
+                        identity
+                        bound
+                        set
+                )
+                Set.empty
+                bounds
+                |> Set.toList
+                |> List.map Coord.tuple
+                |> Debug.log "abc"
+
         newCells =
-            Bounds.coordRangeFold
+            List.foldl
                 (\coord state ->
-                    if maybeOldBounds |> Maybe.map (Bounds.contains coord) |> Maybe.withDefault False then
+                    if List.any (Bounds.contains coord) oldBounds then
                         state
 
                     else
@@ -1486,9 +1511,8 @@ generateVisibleRegion maybeOldBounds bounds model =
                         , cells = ( coord, GridCell.cellToData data.cell ) :: state.cells
                         }
                 )
-                identity
-                bounds
                 { grid = model.grid, cows = [], cells = [] }
+                coords
     in
     ( newCells.grid
     , newCells.cells
@@ -1606,7 +1630,7 @@ getUserReports userId model =
             []
 
 
-requestDataUpdate :
+connectToBackend :
     Effect.Time.Posix
     -> SessionId
     -> ClientId
@@ -1614,7 +1638,7 @@ requestDataUpdate :
     -> Maybe LoginOrInviteToken
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
+connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
     let
         checkLogin () =
             ( case getUserFromSessionId sessionId model of
@@ -1739,7 +1763,7 @@ requestDataUpdate currentTime sessionId clientId viewBounds maybeToken model =
                     checkLogin ()
 
         ( newGrid, cells, newCows ) =
-            generateVisibleRegion Nothing viewBounds model2
+            generateVisibleRegion [] [ viewBounds ] model2
 
         model3 : BackendModel
         model3 =
@@ -1864,7 +1888,7 @@ addSession sessionId clientId viewBounds userStatus model =
                 (\maybeSession ->
                     (case maybeSession of
                         Just session ->
-                            { clientIds = AssocList.insert clientId viewBounds session.clientIds
+                            { clientIds = AssocList.insert clientId [ viewBounds ] session.clientIds
                             , userId =
                                 case userStatus of
                                     LoggedIn loggedIn ->
@@ -1875,7 +1899,7 @@ addSession sessionId clientId viewBounds userStatus model =
                             }
 
                         Nothing ->
-                            { clientIds = AssocList.singleton clientId viewBounds
+                            { clientIds = AssocList.singleton clientId [ viewBounds ]
                             , userId =
                                 case userStatus of
                                     LoggedIn loggedIn ->

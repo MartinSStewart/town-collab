@@ -14,6 +14,7 @@ module LocalGrid exposing
     , keyDown
     , localModel
     , notificationViewportHalfSize
+    , notificationViewportSize
     , removeReported
     , restoreMail
     , setTileHotkey
@@ -38,6 +39,7 @@ import Keyboard
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
+import Maybe.Extra as Maybe
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -58,6 +60,7 @@ type alias LocalGrid_ =
     { grid : Grid
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
+    , previewBounds : Maybe (Bounds CellUnit)
     , animals : IdDict AnimalId Animal
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
@@ -128,6 +131,7 @@ init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, tra
         { grid = Grid.dataToGrid grid
         , userStatus = userStatus
         , viewBounds = viewBounds
+        , previewBounds = Nothing
         , animals = cows
         , cursors = cursors
         , users = users
@@ -206,7 +210,11 @@ updateLocalChange localChange model =
                             }
                                 |> LoggedIn
                         , grid =
-                            if Bounds.contains cellPosition model.viewBounds then
+                            if
+                                List.any
+                                    (Bounds.contains cellPosition)
+                                    (model.viewBounds :: Maybe.toList model.previewBounds)
+                            then
                                 change.grid
 
                             else
@@ -554,7 +562,7 @@ updateLocalChange localChange model =
         Logout ->
             logout model
 
-        ViewBoundsChange bounds newCells newCows ->
+        ViewBoundsChange { viewBounds, previewBounds, newCells, newCows } ->
             let
                 newCells2 : Dict ( Int, Int ) GridCell.Cell
                 newCells2 =
@@ -564,11 +572,17 @@ updateLocalChange localChange model =
             ( { model
                 | grid =
                     Grid.allCellsDict model.grid
-                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
+                        |> Dict.filter
+                            (\coord _ ->
+                                List.any
+                                    (Bounds.contains (Coord.tuple coord))
+                                    (viewBounds :: Maybe.toList model.previewBounds)
+                            )
                         |> Dict.union newCells2
                         |> Grid.from
                 , animals = IdDict.fromList newCows |> IdDict.union model.animals
-                , viewBounds = bounds
+                , viewBounds = viewBounds
+                , previewBounds = previewBounds
               }
             , NoOutMsg
             )
@@ -710,13 +724,18 @@ notificationViewportHalfSize =
     Coord.xy 16 16
 
 
+notificationViewportSize : Coord WorldUnit
+notificationViewportSize =
+    Coord.scalar 2 notificationViewportHalfSize
+
+
 addNotification : Coord WorldUnit -> List (Coord WorldUnit) -> List (Coord WorldUnit)
 addNotification position notifications =
     let
         bounds =
             Bounds.fromCoordAndSize
                 (position |> Coord.minus notificationViewportHalfSize)
-                (Coord.scalar 2 notificationViewportHalfSize)
+                notificationViewportSize
     in
     if
         List.any
@@ -751,9 +770,9 @@ updateServerChange serverChange model =
                         )
             in
             ( if
-                Bounds.contains
-                    (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first)
-                    model2.viewBounds
+                List.any
+                    (Bounds.contains (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first))
+                    (model2.viewBounds :: Maybe.toList model.previewBounds)
               then
                 { model2 | grid = Grid.addChange gridChange model2.grid |> .grid }
 

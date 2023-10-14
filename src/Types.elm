@@ -347,7 +347,7 @@ type alias BackendModel =
     , userSessions :
         Dict
             Lamdera.SessionId
-            { clientIds : AssocList.Dict ClientId (Bounds CellUnit)
+            { clientIds : AssocList.Dict ClientId (List (Bounds CellUnit))
             , userId : Maybe (Id UserId)
             }
     , users : IdDict UserId BackendUserData

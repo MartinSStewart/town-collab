@@ -747,7 +747,7 @@ updateLoaded audioData msg model =
         MouseDown button mousePosition ->
             let
                 hover =
-                    hoverAt model mousePosition
+                    LoadingPage.hoverAt model mousePosition
             in
             if button == MainButton then
                 { model
@@ -941,7 +941,7 @@ updateLoaded audioData msg model =
             let
                 tileHover_ : Maybe TileGroup
                 tileHover_ =
-                    case hoverAt model mousePosition of
+                    case LoadingPage.hoverAt model mousePosition of
                         UiHover (ToolButtonHover (TilePlacerToolButton tile)) _ ->
                             Just tile
 
@@ -1550,148 +1550,6 @@ handleKeyDownColorInputHelper userId setTextInputModel updateColor tool model ne
             )
 
 
-hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
-hoverAt model mousePosition =
-    let
-        mousePosition2 : Coord Pixels
-        mousePosition2 =
-            mousePosition
-                |> Coord.roundPoint
-    in
-    case Ui.hover mousePosition2 model.ui of
-        Ui.InputHover data ->
-            UiHover data.id { position = data.position }
-
-        Ui.BackgroundHover ->
-            UiBackgroundHover
-
-        Ui.NoHover ->
-            let
-                mouseWorldPosition_ : Point2d WorldUnit WorldUnit
-                mouseWorldPosition_ =
-                    Toolbar.screenToWorld model mousePosition
-
-                tileHover : Maybe Hover
-                tileHover =
-                    let
-                        localModel : LocalGrid_
-                        localModel =
-                            LocalGrid.localModel model.localModel
-                    in
-                    case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
-                        Just tile ->
-                            case model.currentTool of
-                                HandTool ->
-                                    TileHover tile |> Just
-
-                                TilePickerTool ->
-                                    TileHover tile |> Just
-
-                                TilePlacerTool _ ->
-                                    if LocalGrid.ctrlOrMeta model then
-                                        TileHover tile |> Just
-
-                                    else
-                                        Nothing
-
-                                TextTool _ ->
-                                    if LocalGrid.ctrlOrMeta model then
-                                        TileHover tile |> Just
-
-                                    else
-                                        Nothing
-
-                                ReportTool ->
-                                    TileHover tile |> Just
-
-                        Nothing ->
-                            Nothing
-
-                trainHovers : Maybe ( { trainId : Id TrainId, train : Train }, Quantity Float WorldUnit )
-                trainHovers =
-                    case model.currentTool of
-                        TilePlacerTool _ ->
-                            Nothing
-
-                        TilePickerTool ->
-                            Nothing
-
-                        HandTool ->
-                            IdDict.toList model.trains
-                                |> List.filterMap
-                                    (\( trainId, train ) ->
-                                        let
-                                            distance =
-                                                Train.trainPosition model.time train |> Point2d.distanceFrom mouseWorldPosition_
-                                        in
-                                        if distance |> Quantity.lessThan (Quantity 0.9) then
-                                            Just ( { trainId = trainId, train = train }, distance )
-
-                                        else
-                                            Nothing
-                                    )
-                                |> Quantity.minimumBy Tuple.second
-
-                        TextTool _ ->
-                            Nothing
-
-                        ReportTool ->
-                            Nothing
-
-                localGrid : LocalGrid_
-                localGrid =
-                    LocalGrid.localModel model.localModel
-
-                animalHovers : Maybe ( Id AnimalId, Animal )
-                animalHovers =
-                    case model.currentTool of
-                        TilePlacerTool _ ->
-                            Nothing
-
-                        TilePickerTool ->
-                            Nothing
-
-                        HandTool ->
-                            IdDict.toList localGrid.animals
-                                |> List.filter
-                                    (\( animalId, animal ) ->
-                                        case animalActualPosition animalId model of
-                                            Just a ->
-                                                if a.isHeld then
-                                                    False
-
-                                                else
-                                                    Animal.inside mouseWorldPosition_ { animal | position = a.position }
-
-                                            Nothing ->
-                                                False
-                                    )
-                                |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
-
-                        TextTool _ ->
-                            Nothing
-
-                        ReportTool ->
-                            Nothing
-            in
-            case trainHovers of
-                Just ( train, _ ) ->
-                    TrainHover train
-
-                Nothing ->
-                    case animalHovers of
-                        Just ( cowId, cow ) ->
-                            CowHover { cowId = cowId, cow = cow }
-
-                        Nothing ->
-                            case tileHover of
-                                Just hover ->
-                                    hover
-
-                                Nothing ->
-                                    MapHover
-
-
 replaceUrl : String -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 replaceUrl url model =
     ( { model | ignoreNextUrlChanged = True }, Effect.Browser.Navigation.replaceUrl model.key url )
@@ -2232,7 +2090,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
         hoverAt2 : Hover
         hoverAt2 =
-            hoverAt model mousePosition
+            LoadingPage.hoverAt model mousePosition
 
         sameUiHover : Maybe UiHover
         sameUiHover =
@@ -4262,7 +4120,7 @@ canvasView audioData model =
 
                 hoverAt2 : Hover
                 hoverAt2 =
-                    hoverAt model (LoadingPage.mouseScreenPosition model)
+                    LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
 
                 showMousePointer =
                     cursorSprite hoverAt2 model
@@ -4333,23 +4191,18 @@ canvasView audioData model =
                             , night = renderData.nightFactor * uiNightFactorScaling
                             }
                        ]
-                    ++ (case hoverAt2 of
-                            UiHover id data ->
-                                case id of
-                                    MapChangeNotification changeAt ->
-                                        drawWorldPreview
-                                            (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
-                                            (Coord.scalar 2 LocalGrid.notificationViewportHalfSize |> Units.tileToPixel)
-                                            (Coord.toPoint2d changeAt)
-                                            1
-                                            renderData
-                                            renderData.nightFactor
-                                            model
+                    ++ (case LoadingPage.showWorldPreview hoverAt2 of
+                            Just ( changeAt, data ) ->
+                                drawWorldPreview
+                                    (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
+                                    (LocalGrid.notificationViewportSize |> Units.tileToPixel)
+                                    (Coord.toPoint2d changeAt)
+                                    1
+                                    renderData
+                                    renderData.nightFactor
+                                    model
 
-                                    _ ->
-                                        []
-
-                            _ ->
+                            Nothing ->
                                 []
                        )
                     ++ drawMap model
@@ -4390,12 +4243,7 @@ canvasView audioData model =
             Html.text ""
 
 
-drawWorld :
-    RenderData
-    -> Hover
-    -> BoundingBox2d WorldUnit WorldUnit
-    -> FrontendLoaded
-    -> List Effect.WebGL.Entity
+drawWorld : RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
 drawWorld renderData hoverAt2 viewBounds_ model =
     let
         { x, y } =
@@ -4470,7 +4318,7 @@ drawWorld renderData hoverAt2 viewBounds_ model =
                 _ ->
                     []
            )
-        ++ drawAnimals renderData model
+        ++ drawAnimals gridViewBounds renderData model
         ++ drawFlags renderData model
         ++ [ Effect.WebGL.entityWith
                 [ Shaders.blend, Shaders.scissorBox renderData.scissors ]
@@ -4489,7 +4337,7 @@ drawWorld renderData hoverAt2 viewBounds_ model =
                 }
            , drawReports renderData model.reportsMesh
            ]
-        ++ drawOtherCursors renderData model
+        ++ drawOtherCursors gridViewBounds renderData model
         ++ Train.drawSpeechBubble renderData model.time model.trains
 
 
@@ -4512,23 +4360,19 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
         }
 
 
-drawAnimals : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawAnimals { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
+drawAnimals : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid : LocalGrid_
         localGrid =
             LocalGrid.localModel model.localModel
-
-        viewBounds_ : BoundingBox2d WorldUnit WorldUnit
-        viewBounds_ =
-            viewBoundingBox model
 
         ( textureW, textureH ) =
             WebGL.Texture.size texture
     in
     List.filterMap
         (\( cowId, animal ) ->
-            case animalActualPosition cowId model of
+            case LoadingPage.animalActualPosition cowId model of
                 Just { position } ->
                     if BoundingBox2d.contains position viewBounds_ then
                         let
@@ -4637,7 +4481,12 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
     in
-    case ( hoverAt model (LoadingPage.mouseScreenPosition model), LocalGrid.currentTool model, LocalGrid.currentUserId model ) of
+    case
+        ( LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
+        , LocalGrid.currentTool model
+        , LocalGrid.currentUserId model
+        )
+    of
         ( MapHover, TilePlacerTool currentTile, Just userId ) ->
             let
                 currentTile2 : Tile
@@ -4935,15 +4784,11 @@ lastPlacementOffset audioData model =
             0
 
 
-drawOtherCursors : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
+drawOtherCursors : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
-
-        viewBounds_ : BoundingBox2d WorldUnit WorldUnit
-        viewBounds_ =
-            viewBoundingBox model |> BoundingBox2d.expandBy (Units.tileUnit 2)
     in
     (case LocalGrid.currentUserId model of
         Just userId ->
@@ -4957,7 +4802,7 @@ drawOtherCursors { nightFactor, lights, texture, viewMatrix, depth, time, scisso
             (\( userId, cursor ) ->
                 let
                     cursorPosition2 =
-                        cursorActualPosition False userId cursor model
+                        LoadingPage.cursorActualPosition False userId cursor model
 
                     point : { x : Float, y : Float }
                     point =
@@ -5020,7 +4865,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                 CursorSprite mousePointer ->
                     let
                         point =
-                            cursorActualPosition True userId cursor model
+                            LoadingPage.cursorActualPosition True userId cursor model
                                 |> Point2d.unwrap
                     in
                     case IdDict.get userId model.handMeshes of
@@ -5066,31 +4911,6 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
 
         Nothing ->
             []
-
-
-cursorActualPosition : Bool -> Id UserId -> Cursor -> FrontendLoaded -> Point2d WorldUnit WorldUnit
-cursorActualPosition isCurrentUser userId cursor model =
-    if isCurrentUser then
-        cursor.position
-
-    else
-        case ( cursor.currentTool, IdDict.get userId model.previousCursorPositions ) of
-            ( Cursor.TextTool (Just textTool), _ ) ->
-                Coord.toPoint2d textTool.cursorPosition
-                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.5 })
-
-            ( _, Just previous ) ->
-                Point2d.interpolateFrom
-                    previous.position
-                    cursor.position
-                    (Quantity.ratio
-                        (Duration.from previous.time model.time)
-                        shortDelayDuration
-                        |> clamp 0 1
-                    )
-
-            _ ->
-                cursor.position
 
 
 getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isReceived : Bool }
@@ -5217,11 +5037,6 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
             )
 
 
-shortDelayDuration : Duration
-shortDelayDuration =
-    Duration.milliseconds 100
-
-
 subscriptions : AudioData -> FrontendModel_ -> Subscription FrontendOnly FrontendMsg_
 subscriptions _ model =
     Subscription.batch
@@ -5248,37 +5063,10 @@ subscriptions _ model =
                 Subscription.batch
                     [ Subscription.map KeyMsg Keyboard.subscriptions
                     , Effect.Time.every
-                        shortDelayDuration
+                        LoadingPage.shortDelayDuration
                         (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Effect.Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)
                     ]
         , Subscription.fromJs "mouse_leave" Ports.mouse_leave (\_ -> MouseLeave)
         , Ports.gotLocalStorage LoadedUserSettings
         ]
-
-
-animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
-animalActualPosition animalId model =
-    let
-        localGrid =
-            LocalGrid.localModel model.localModel
-    in
-    case
-        IdDict.toList localGrid.cursors
-            |> List.find (\( _, cursor ) -> Just animalId == Maybe.map .cowId cursor.holdingCow)
-    of
-        Just ( userId, cursor ) ->
-            { position =
-                cursorActualPosition (Just userId == LocalGrid.currentUserId model) userId cursor model
-                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 })
-            , isHeld = True
-            }
-                |> Just
-
-        Nothing ->
-            case IdDict.get animalId localGrid.animals of
-                Just animal ->
-                    Just { position = animal.position, isHeld = False }
-
-                Nothing ->
-                    Nothing

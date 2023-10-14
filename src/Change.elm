@@ -68,7 +68,12 @@ type LocalChange
     | SetTileHotkey TileHotkey TileGroup
     | ShowNotifications Bool
     | Logout
-    | ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData )) (List ( Id AnimalId, Animal ))
+    | ViewBoundsChange
+        { viewBounds : Bounds CellUnit
+        , previewBounds : Maybe (Bounds CellUnit)
+        , newCells : List ( Coord CellUnit, GridCell.CellData )
+        , newCows : List ( Id AnimalId, Animal )
+        }
 
 
 tileHotkeyDict : Dict String TileHotkey
