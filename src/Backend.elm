@@ -1476,7 +1476,13 @@ generateVisibleRegion oldBounds bounds model =
             List.foldl
                 (\bound set ->
                     Bounds.coordRangeFold
-                        (\coord set2 -> Set.insert (Coord.toTuple coord) set2)
+                        (\coord set2 ->
+                            if List.any (Bounds.contains coord) oldBounds then
+                                set2
+
+                            else
+                                Set.insert (Coord.toTuple coord) set2
+                        )
                         identity
                         bound
                         set
@@ -1485,31 +1491,26 @@ generateVisibleRegion oldBounds bounds model =
                 bounds
                 |> Set.toList
                 |> List.map Coord.tuple
-                |> Debug.log "abc"
 
         newCells =
             List.foldl
                 (\coord state ->
-                    if List.any (Bounds.contains coord) oldBounds then
-                        state
+                    let
+                        data =
+                            Grid.getCell2 coord state.grid
 
-                    else
-                        let
-                            data =
-                                Grid.getCell2 coord state.grid
+                        newCows : List Animal
+                        newCows =
+                            if data.isNew then
+                                LocalGrid.getCowsForCell coord
 
-                            newCows : List Animal
-                            newCows =
-                                if data.isNew then
-                                    LocalGrid.getCowsForCell coord
-
-                                else
-                                    []
-                        in
-                        { grid = data.grid
-                        , cows = newCows ++ state.cows
-                        , cells = ( coord, GridCell.cellToData data.cell ) :: state.cells
-                        }
+                            else
+                                []
+                    in
+                    { grid = data.grid
+                    , cows = newCows ++ state.cows
+                    , cells = ( coord, GridCell.cellToData data.cell ) :: state.cells
+                    }
                 )
                 { grid = model.grid, cows = [], cells = [] }
                 coords

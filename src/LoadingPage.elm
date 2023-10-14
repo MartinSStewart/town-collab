@@ -932,7 +932,7 @@ viewBoundsUpdate ( model, cmd ) =
     else
         updateLocalModel
             (Change.ViewBoundsChange
-                { viewBounds = bounds |> Debug.log "b"
+                { viewBounds = bounds
                 , previewBounds = newPreview
                 , newCells = []
                 , newCows = []
