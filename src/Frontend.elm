@@ -4603,15 +4603,10 @@ drawWorld renderData windowWidth windowHeight hoverAt2 viewBounds_ model =
                         { lights = trainLights
                         , texture = trainTexture
                         , depth = trainDepth
-                        , nightFactor = getNightFactor model
-                        , viewMatrix =
-                            Mat4.makeScale3 (toFloat model.zoomFactor * 2 / toFloat windowWidth) (toFloat model.zoomFactor * -2 / toFloat windowHeight) 1
-                                |> Mat4.translate3
-                                    (negate <| toFloat <| round (x * toFloat Units.tileWidth))
-                                    (negate <| toFloat <| round (y * toFloat Units.tileHeight))
-                                    0
+                        , nightFactor = renderData.nightFactor
+                        , viewMatrix = renderData.viewMatrix
                         , staticViewMatrix = renderData.staticViewMatrix
-                        , time = shaderTime model
+                        , time = renderData.time
                         , scissors = renderData.scissors
                         }
                         (case model.contextMenu of

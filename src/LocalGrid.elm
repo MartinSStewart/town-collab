@@ -721,7 +721,13 @@ updateServerChange serverChange model =
                         { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
                         (\loggedIn ->
                             { loggedIn
-                                | notifications = addNotification gridChange.position loggedIn.notifications
+                                | notifications =
+                                    addNotification
+                                        (Coord.plus
+                                            (Coord.divide (Coord.xy 2 2) (Tile.getData gridChange.change).size)
+                                            gridChange.position
+                                        )
+                                        loggedIn.notifications
                             }
                         )
             in

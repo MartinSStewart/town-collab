@@ -204,7 +204,9 @@ latestChanges time currentUser (Grid grid) =
                 case GridCell.latestChange currentUser cell of
                     Just latestChange ->
                         if Duration.from time latestChange.time |> Quantity.greaterThanZero then
-                            Just (cellAndLocalCoordToWorld ( Coord.tuple coord, latestChange.position ))
+                            cellAndLocalCoordToWorld ( Coord.tuple coord, latestChange.position )
+                                |> Coord.plus (Coord.divide (Coord.xy 2 2) (Tile.getData latestChange.value).size)
+                                |> Just
 
                         else
                             Nothing
