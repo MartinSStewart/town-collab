@@ -1,6 +1,6 @@
 module GridCell exposing
     ( Cell(..)
-    , CellData
+    , CellData(..)
     , Value
     , addValue
     , cellToData

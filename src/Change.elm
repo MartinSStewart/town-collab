@@ -6,6 +6,7 @@ module Change exposing
     , Change(..)
     , LocalChange(..)
     , LoggedIn_
+    , NotLoggedIn_
     , Report
     , ServerChange(..)
     , TileHotkey(..)

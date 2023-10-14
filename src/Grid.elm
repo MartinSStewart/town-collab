@@ -1,7 +1,7 @@
 module Grid exposing
     ( Grid(..)
     , GridChange
-    , GridData
+    , GridData(..)
     , LocalGridChange
     , addChange
     , allCellsDict
