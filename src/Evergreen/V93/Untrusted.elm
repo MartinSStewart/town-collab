@@ -1,0 +1,5 @@
+module Evergreen.V93.Untrusted exposing (..)
+
+
+type Untrusted a
+    = Untrusted a
