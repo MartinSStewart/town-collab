@@ -10,6 +10,7 @@ module Change exposing
     , ServerChange(..)
     , TileHotkey(..)
     , UserStatus(..)
+    , ViewBoundsChange2
     , tileHotkeyDict
     )
 
@@ -68,12 +69,15 @@ type LocalChange
     | SetTileHotkey TileHotkey TileGroup
     | ShowNotifications Bool
     | Logout
-    | ViewBoundsChange
-        { viewBounds : Bounds CellUnit
-        , previewBounds : Maybe (Bounds CellUnit)
-        , newCells : List ( Coord CellUnit, GridCell.CellData )
-        , newCows : List ( Id AnimalId, Animal )
-        }
+    | ViewBoundsChange ViewBoundsChange2
+
+
+type alias ViewBoundsChange2 =
+    { viewBounds : Bounds CellUnit
+    , previewBounds : Maybe (Bounds CellUnit)
+    , newCells : List ( Coord CellUnit, GridCell.CellData )
+    , newCows : List ( Id AnimalId, Animal )
+    }
 
 
 tileHotkeyDict : Dict String TileHotkey

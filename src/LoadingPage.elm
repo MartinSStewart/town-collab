@@ -841,25 +841,13 @@ updateLocalModel msg model =
         ( newLocalModel, outMsg ) =
             LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
     in
-    case LocalGrid.localModel model.localModel |> .userStatus of
-        LoggedIn _ ->
-            ( { model
-                | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
-                , localModel = newLocalModel
-                , eventIdCounter = Id.increment model.eventIdCounter
-              }
-            , outMsg
-            )
-
-        NotLoggedIn _ ->
-            ( { model
-                | localModel =
-                    -- If we are not logged in then we don't send any msgs to the server and therefore don't want to keep all of the msgs in the localMsgs list
-                    LocalModel.unwrap newLocalModel
-                        |> (\a -> LocalModel.unsafe { a | localMsgs = [], model = a.localModel })
-              }
-            , LocalGrid.NoOutMsg
-            )
+    ( { model
+        | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
+        , localModel = newLocalModel
+        , eventIdCounter = Id.increment model.eventIdCounter
+      }
+    , outMsg
+    )
 
 
 viewBoundsUpdate : ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ) -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
