@@ -7,6 +7,7 @@ module LoadingPage exposing
     , getHandColor
     , getReports
     , getTileColor
+    , handleOutMsg
     , initWorldPage
     , loadingCanvasView
     , loadingCellBounds
@@ -16,6 +17,7 @@ module LoadingPage exposing
     , setCurrentTool
     , setCurrentToolWithColors
     , update
+    , updateLocalModel
     , updateMeshes
     , viewBoundsUpdate
     , viewLoadingBoundingBox
@@ -29,12 +31,15 @@ import Audio exposing (AudioCmd)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Change exposing (BackendReport, Change(..), Report, UserStatus(..))
+import Codec
 import Color exposing (Colors)
 import Coord exposing (Coord)
 import Cursor
 import Dict exposing (Dict)
 import Duration
 import Effect.Command as Command exposing (Command, FrontendOnly)
+import Effect.File.Download
+import Effect.File.Select
 import Effect.Lamdera
 import Effect.Task
 import Effect.Time as Time
@@ -823,6 +828,33 @@ getAdminReports localModel =
             IdDict.empty
 
 
+updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
+updateLocalModel msg model =
+    let
+        ( newLocalModel, outMsg ) =
+            LocalGrid.update (LocalChange model.eventIdCounter msg) model.localModel
+    in
+    case LocalGrid.localModel model.localModel |> .userStatus of
+        LoggedIn _ ->
+            ( { model
+                | pendingChanges = ( model.eventIdCounter, msg ) :: model.pendingChanges
+                , localModel = newLocalModel
+                , eventIdCounter = Id.increment model.eventIdCounter
+              }
+            , outMsg
+            )
+
+        NotLoggedIn _ ->
+            ( { model
+                | localModel =
+                    -- If we are not logged in then we don't send any msgs to the server and therefore don't want to keep all of the msgs in the localMsgs list
+                    LocalModel.unwrap newLocalModel
+                        |> (\a -> LocalModel.unsafe { a | localMsgs = [], model = a.localModel })
+              }
+            , LocalGrid.NoOutMsg
+            )
+
+
 viewBoundsUpdate : ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ) -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 viewBoundsUpdate ( model, cmd ) =
     let
@@ -833,15 +865,130 @@ viewBoundsUpdate ( model, cmd ) =
         ( model, cmd )
 
     else
-        ( { model
-            | localModel =
-                LocalGrid.update
-                    (ClientChange (Change.ViewBoundsChange bounds [] []))
-                    model.localModel
-                    |> Tuple.first
-          }
-        , Command.batch [ cmd, Effect.Lamdera.sendToBackend (ChangeViewBounds bounds) ]
-        )
+        updateLocalModel (Change.ViewBoundsChange bounds [] []) model
+            |> handleOutMsg False
+            |> Tuple.mapSecond (\cmd2 -> Command.batch [ cmd, cmd2 ])
+
+
+handleOutMsg :
+    Bool
+    -> ( FrontendLoaded, LocalGrid.OutMsg )
+    -> ( FrontendLoaded, Command FrontendOnly toMsg FrontendMsg_ )
+handleOutMsg isFromBackend ( model, outMsg ) =
+    case outMsg of
+        LocalGrid.NoOutMsg ->
+            ( model, Command.none )
+
+        LocalGrid.TilesRemoved _ ->
+            ( model, Command.none )
+
+        LocalGrid.OtherUserCursorMoved { userId, previousPosition } ->
+            ( { model
+                | previousCursorPositions =
+                    case previousPosition of
+                        Just previousPosition2 ->
+                            IdDict.insert
+                                userId
+                                { position = previousPosition2, time = model.time }
+                                model.previousCursorPositions
+
+                        Nothing ->
+                            IdDict.remove userId model.previousCursorPositions
+              }
+            , Command.none
+            )
+
+        LocalGrid.HandColorOrNameChanged userId ->
+            ( case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
+                Just user ->
+                    { model
+                        | handMeshes =
+                            IdDict.insert
+                                userId
+                                (Cursor.meshes
+                                    (if Just userId == LocalGrid.currentUserId model then
+                                        Nothing
+
+                                     else
+                                        Just ( userId, user.name )
+                                    )
+                                    user.handColor
+                                )
+                                model.handMeshes
+                    }
+
+                Nothing ->
+                    model
+            , Command.none
+            )
+
+        LocalGrid.RailToggledByAnother position ->
+            ( handleRailToggleSound position model, Command.none )
+
+        LocalGrid.RailToggledBySelf position ->
+            ( if isFromBackend then
+                model
+
+              else
+                handleRailToggleSound position model
+            , Command.none
+            )
+
+        LocalGrid.TeleportTrainHome trainId ->
+            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome model.time) model.trains }
+            , Command.none
+            )
+
+        LocalGrid.TrainLeaveHome trainId ->
+            ( { model | trains = IdDict.update2 trainId (Train.leaveHome model.time) model.trains }
+            , Command.none
+            )
+
+        LocalGrid.TrainsUpdated diff ->
+            ( { model
+                | trains =
+                    IdDict.toList diff
+                        |> List.filterMap
+                            (\( trainId, diff_ ) ->
+                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
+                                    Just newTrain ->
+                                        Just ( trainId, newTrain )
+
+                                    Nothing ->
+                                        Nothing
+                            )
+                        |> IdDict.fromList
+              }
+            , Command.none
+            )
+
+        LocalGrid.ReceivedMail ->
+            ( { model | lastReceivedMail = Just model.time }, Command.none )
+
+        LocalGrid.ExportMail content ->
+            ( model
+            , Effect.File.Download.string
+                "letter.json"
+                "application/json"
+                (Codec.encodeToString 2 (Codec.list MailEditor.contentCodec) content)
+            )
+
+        LocalGrid.ImportMail ->
+            ( model, Effect.File.Select.file [ "application/json" ] ImportedMail )
+
+
+handleRailToggleSound : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded
+handleRailToggleSound position model =
+    { model
+        | railToggles =
+            ( model.time, position )
+                :: List.filter
+                    (\( time, _ ) ->
+                        Duration.from time model.time
+                            |> Quantity.lessThan Duration.second
+                    )
+                    model.railToggles
+    }
 
 
 loadingCellBounds : FrontendLoaded -> Bounds CellUnit

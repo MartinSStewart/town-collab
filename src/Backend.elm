@@ -3,7 +3,7 @@ module Backend exposing (app, app_)
 import Animal exposing (Animal)
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), ClientChange(..), LocalChange(..), ServerChange(..), UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), LocalChange(..), ServerChange(..), UserStatus(..))
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -571,7 +571,7 @@ broadcastLocalChange :
 broadcastLocalChange isProduction time sessionId clientId changes userId user model =
     let
         ( model2, ( eventId, originalChange ), firstMsg ) =
-            updateLocalChange sessionId time userId user (Nonempty.head changes) model
+            updateLocalChange sessionId clientId time userId user (Nonempty.head changes) model
 
         ( model3, originalChanges2, serverChanges ) =
             Nonempty.tail changes
@@ -581,7 +581,7 @@ broadcastLocalChange isProduction time sessionId clientId changes userId user mo
                             Just user2 ->
                                 let
                                     ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
-                                        updateLocalChange sessionId time userId user2 change model_
+                                        updateLocalChange sessionId clientId time userId user2 change model_
                                 in
                                 ( newModel
                                 , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
@@ -720,65 +720,6 @@ updateFromFrontend isProduction currentTime sessionId clientId msg model =
                 sessionId
                 model
                 (broadcastLocalChange isProduction currentTime sessionId clientId changes)
-
-        ChangeViewBounds bounds ->
-            case
-                Dict.get (Effect.Lamdera.sessionIdToString sessionId) model.userSessions
-                    |> Maybe.andThen (\{ clientIds } -> AssocList.get clientId clientIds)
-            of
-                Just oldBounds ->
-                    let
-                        ( newGrid, cells, newCows ) =
-                            generateVisibleRegion (Just oldBounds) bounds model
-
-                        model2 =
-                            { model
-                                | userSessions =
-                                    Dict.update
-                                        (Effect.Lamdera.sessionIdToString sessionId)
-                                        (Maybe.map
-                                            (\session ->
-                                                { session
-                                                    | clientIds =
-                                                        AssocList.update
-                                                            clientId
-                                                            (\_ -> Just bounds)
-                                                            session.clientIds
-                                                }
-                                            )
-                                        )
-                                        model.userSessions
-                                , cows = IdDict.fromList newCows |> IdDict.union model.cows
-                                , grid = newGrid
-                            }
-                    in
-                    ( model2
-                    , broadcast
-                        (\_ clientId2 ->
-                            if clientId2 == clientId then
-                                ViewBoundsChange bounds cells newCows
-                                    |> Change.ClientChange
-                                    |> Nonempty.fromElement
-                                    |> ChangeBroadcast
-                                    |> Just
-
-                            else
-                                case Nonempty.fromList newCows of
-                                    Just nonempty ->
-                                        ServerNewCows nonempty
-                                            |> Change.ServerChange
-                                            |> Nonempty.fromElement
-                                            |> ChangeBroadcast
-                                            |> Just
-
-                                    Nothing ->
-                                        Nothing
-                        )
-                        model2
-                    )
-
-                Nothing ->
-                    ( model, Command.none )
 
         PingRequest ->
             ( model, PingResponse currentTime |> Effect.Lamdera.sendToFrontend clientId )
@@ -962,13 +903,14 @@ type BroadcastTo
 
 updateLocalChange :
     SessionId
+    -> ClientId
     -> Effect.Time.Posix
     -> Id UserId
     -> BackendUserData
     -> ( Id EventId, Change.LocalChange )
     -> BackendModel
     -> ( BackendModel, ( Id EventId, Change.LocalChange ), BroadcastTo )
-updateLocalChange sessionId time userId user (( eventId, change ) as originalChange) model =
+updateLocalChange sessionId clientId time userId user (( eventId, change ) as originalChange) model =
     let
         invalidChange =
             ( eventId, Change.InvalidChange )
@@ -1464,6 +1406,50 @@ updateLocalChange sessionId time userId user (( eventId, change ) as originalCha
             , originalChange
             , BroadcastToRestOfSessionAndEveryoneElse sessionId ServerLogout (ServerUserDisconnected userId)
             )
+
+        ViewBoundsChange bounds _ _ ->
+            case
+                Dict.get (Effect.Lamdera.sessionIdToString sessionId) model.userSessions
+                    |> Maybe.andThen (\{ clientIds } -> AssocList.get clientId clientIds)
+            of
+                Just oldBounds ->
+                    let
+                        ( newGrid, cells, newCows ) =
+                            generateVisibleRegion (Just oldBounds) bounds model
+
+                        model2 =
+                            { model
+                                | userSessions =
+                                    Dict.update
+                                        (Effect.Lamdera.sessionIdToString sessionId)
+                                        (Maybe.map
+                                            (\session ->
+                                                { session
+                                                    | clientIds =
+                                                        AssocList.update
+                                                            clientId
+                                                            (\_ -> Just bounds)
+                                                            session.clientIds
+                                                }
+                                            )
+                                        )
+                                        model.userSessions
+                                , cows = IdDict.fromList newCows |> IdDict.union model.cows
+                                , grid = newGrid
+                            }
+                    in
+                    ( model2
+                    , ( eventId, ViewBoundsChange bounds cells newCows )
+                    , case Nonempty.fromList newCows of
+                        Just nonempty ->
+                            ServerNewCows nonempty |> BroadcastToEveryoneElse
+
+                        Nothing ->
+                            BroadcastToNoOne
+                    )
+
+                Nothing ->
+                    ( model, ( eventId, InvalidChange ), BroadcastToNoOne )
 
 
 generateVisibleRegion :

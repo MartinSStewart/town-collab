@@ -459,7 +459,6 @@ type FrontendMsg_
 type ToBackend
     = ConnectToBackend (Bounds CellUnit) (Maybe LoginOrInviteToken)
     | GridChange (Nonempty ( Id EventId, Change.LocalChange ))
-    | ChangeViewBounds (Bounds CellUnit)
     | PingRequest
     | SendLoginEmailRequest (Untrusted EmailAddress)
     | SendInviteEmailRequest (Untrusted EmailAddress)

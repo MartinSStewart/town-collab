@@ -24,7 +24,7 @@ module LocalGrid exposing
 import Animal exposing (Animal, AnimalType(..))
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), ClientChange(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -553,6 +553,25 @@ updateLocalChange localChange model =
 
         Logout ->
             logout model
+
+        ViewBoundsChange bounds newCells newCows ->
+            let
+                newCells2 : Dict ( Int, Int ) GridCell.Cell
+                newCells2 =
+                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
+                        |> Dict.fromList
+            in
+            ( { model
+                | grid =
+                    Grid.allCellsDict model.grid
+                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
+                        |> Dict.union newCells2
+                        |> Grid.from
+                , animals = IdDict.fromList newCows |> IdDict.union model.animals
+                , viewBounds = bounds
+              }
+            , NoOutMsg
+            )
 
 
 setTileHotkey :
@@ -1212,34 +1231,12 @@ update_ msg model =
         ServerChange serverChange ->
             updateServerChange serverChange model
 
-        ClientChange (ViewBoundsChange bounds newCells newCows) ->
-            let
-                newCells2 : Dict ( Int, Int ) GridCell.Cell
-                newCells2 =
-                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
-                        |> Dict.fromList
-            in
-            ( { model
-                | grid =
-                    Grid.allCellsDict model.grid
-                        |> Dict.filter (\coord _ -> Bounds.contains (Coord.tuple coord) bounds)
-                        |> Dict.union newCells2
-                        |> Grid.from
-                , animals = IdDict.fromList newCows |> IdDict.union model.animals
-                , viewBounds = bounds
-              }
-            , NoOutMsg
-            )
-
 
 config : LocalModel.Config Change LocalGrid OutMsg
 config =
     { msgEqual =
         \msg0 msg1 ->
             case ( msg0, msg1 ) of
-                ( ClientChange (ViewBoundsChange bounds0 _ _), ClientChange (ViewBoundsChange bounds1 _ _) ) ->
-                    bounds0 == bounds1
-
                 ( LocalChange eventId0 _, LocalChange eventId1 _ ) ->
                     eventId0 == eventId1
 

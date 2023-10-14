@@ -4,7 +4,6 @@ module Change exposing
     , AreTrainsDisabled(..)
     , BackendReport
     , Change(..)
-    , ClientChange(..)
     , LocalChange(..)
     , LoggedIn_
     , Report
@@ -41,7 +40,6 @@ import User exposing (FrontendUser)
 type Change
     = LocalChange (Id EventId) LocalChange
     | ServerChange ServerChange
-    | ClientChange ClientChange
 
 
 type LocalChange
@@ -70,6 +68,7 @@ type LocalChange
     | SetTileHotkey TileHotkey TileGroup
     | ShowNotifications Bool
     | Logout
+    | ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData )) (List ( Id AnimalId, Animal ))
 
 
 tileHotkeyDict : Dict String TileHotkey
@@ -112,10 +111,6 @@ type AdminChange
 type AreTrainsDisabled
     = TrainsDisabled
     | TrainsEnabled
-
-
-type ClientChange
-    = ViewBoundsChange (Bounds CellUnit) (List ( Coord CellUnit, GridCell.CellData )) (List ( Id AnimalId, Animal ))
 
 
 type ServerChange
