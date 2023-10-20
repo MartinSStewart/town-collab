@@ -1426,13 +1426,15 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                 )
 
         SetTimeOfDay timeOfDay ->
-            asUser2
-                (\userId user ->
+            case getUserFromSessionId sessionId model of
+                Just ( userId, user ) ->
                     ( { model | users = IdDict.insert userId { user | timeOfDay = timeOfDay } model.users }
                     , originalChange
                     , BroadcastToNoOne
                     )
-                )
+
+                Nothing ->
+                    ( model, originalChange, BroadcastToNoOne )
 
         SetTileHotkey tileHotkey tileGroup ->
             asUser2
