@@ -1177,7 +1177,7 @@ texturePositionPixels position textureSize =
 type alias TileData unit =
     { texturePosition : Coord unit
     , size : Coord unit
-    , collisionMask : CollisionMask
+    , tileCollision : CollisionMask
     , railPath : RailPathType
     }
 
@@ -1247,7 +1247,7 @@ hasCollision positionA tileA positionB tileB =
         False
 
     else
-        case ( tileDataA.collisionMask, tileDataB.collisionMask ) of
+        case ( tileDataA.tileCollision, tileDataB.tileCollision ) of
             ( DefaultCollision, DefaultCollision ) ->
                 ((x2 >= x && x2 < x + width) || (x >= x2 && x < x2 + width2))
                     && ((y2 >= y && y2 < y + height) || (y >= y2 && y < y2 + height2))
@@ -1295,7 +1295,7 @@ hasCollisionWithCoord positionA positionB tileB =
         ( Quantity width2, Quantity height2 ) =
             tileB.size
     in
-    case tileB.collisionMask of
+    case tileB.tileCollision of
         DefaultCollision ->
             (x >= x2 && x < x2 + width2) && (y >= y2 && y < y2 + height2)
 
@@ -1828,15 +1828,16 @@ emptyTile : TileData units
 emptyTile =
     { texturePosition = Coord.xy 120 738
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+houseDown : TileData units
 houseDown =
     { texturePosition = Coord.xy 0 5 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 2, 1 )
@@ -1850,10 +1851,11 @@ houseDown =
     }
 
 
+houseRight : TileData units
 houseRight =
     { texturePosition = Coord.xy 11 16 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 0, 2 )
@@ -1867,10 +1869,11 @@ houseRight =
     }
 
 
+houseUp : TileData units
 houseUp =
     { texturePosition = Coord.xy 15 15 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 2, 1 )
@@ -1884,10 +1887,11 @@ houseUp =
     }
 
 
+houseLeft : TileData units
 houseLeft =
     { texturePosition = Coord.xy 11 8 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 0, 2 )
@@ -1901,26 +1905,29 @@ houseLeft =
     }
 
 
+railHorizontal : TileData units
 railHorizontal =
     { texturePosition = Coord.xy 0 0 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
     }
 
 
+railVertical : TileData units
 railVertical =
     { texturePosition = Coord.xy 1 0 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
     }
 
 
+railBottomToRight : TileData units
 railBottomToRight =
     { texturePosition = Coord.xy 3 0 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 0 )
         , ( 2, 0 )
         , ( 3, 0 )
@@ -1939,10 +1946,11 @@ railBottomToRight =
     }
 
 
+railBottomToLeft : TileData units
 railBottomToLeft =
     { texturePosition = Coord.xy 7 0 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -1961,10 +1969,11 @@ railBottomToLeft =
     }
 
 
+railTopToRight : TileData units
 railTopToRight =
     { texturePosition = Coord.xy 3 4 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 0, 1 )
@@ -1983,10 +1992,11 @@ railTopToRight =
     }
 
 
+railTopToLeft : TileData units
 railTopToLeft =
     { texturePosition = Coord.xy 7 4 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 2, 0 )
         , ( 3, 0 )
         , ( 2, 1 )
@@ -2005,10 +2015,11 @@ railTopToLeft =
     }
 
 
+railBottomToRightLarge : TileData units
 railBottomToRightLarge =
     { texturePosition = Coord.xy 0 43 |> Coord.multiply Units.tileSize
     , size = Coord.xy 6 6
-    , collisionMask =
+    , tileCollision =
         [ ( 5, 0 )
         , ( 4, 0 )
         , ( 3, 0 )
@@ -2035,10 +2046,11 @@ railBottomToRightLarge =
     }
 
 
+railBottomToLeftLarge : TileData units
 railBottomToLeftLarge =
     { texturePosition = Coord.xy 6 43 |> Coord.multiply Units.tileSize
     , size = Coord.xy 6 6
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -2065,10 +2077,11 @@ railBottomToLeftLarge =
     }
 
 
+railTopToRightLarge : TileData units
 railTopToRightLarge =
     { texturePosition = Coord.xy 0 49 |> Coord.multiply Units.tileSize
     , size = Coord.xy 6 6
-    , collisionMask =
+    , tileCollision =
         [ ( 5, 5 )
         , ( 4, 5 )
         , ( 3, 5 )
@@ -2095,10 +2108,11 @@ railTopToRightLarge =
     }
 
 
+railTopToLeftLarge : TileData units
 railTopToLeftLarge =
     { texturePosition = Coord.xy 6 49 |> Coord.multiply Units.tileSize
     , size = Coord.xy 6 6
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 5 )
         , ( 1, 5 )
         , ( 2, 5 )
@@ -2125,10 +2139,11 @@ railTopToLeftLarge =
     }
 
 
+railCrossing : TileData units
 railCrossing =
     { texturePosition = Coord.xy 2 0 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath =
         DoubleRailPath
             (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
@@ -2136,10 +2151,11 @@ railCrossing =
     }
 
 
+railStrafeDown : TileData units
 railStrafeDown =
     { texturePosition = Coord.xy 0 8 |> Coord.multiply Units.tileSize
     , size = Coord.xy 5 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -2158,10 +2174,11 @@ railStrafeDown =
     }
 
 
+railStrafeUp : TileData units
 railStrafeUp =
     { texturePosition = Coord.xy 5 8 |> Coord.multiply Units.tileSize
     , size = Coord.xy 5 3
-    , collisionMask =
+    , tileCollision =
         [ ( 2, 0 )
         , ( 3, 0 )
         , ( 4, 0 )
@@ -2180,10 +2197,11 @@ railStrafeUp =
     }
 
 
+railStrafeLeft : TileData units
 railStrafeLeft =
     { texturePosition = Coord.xy 0 11 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 2 )
         , ( 0, 3 )
         , ( 0, 4 )
@@ -2202,10 +2220,11 @@ railStrafeLeft =
     }
 
 
+railStrafeRight : TileData units
 railStrafeRight =
     { texturePosition = Coord.xy 0 16 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 0, 1 )
         , ( 0, 2 )
@@ -2224,10 +2243,11 @@ railStrafeRight =
     }
 
 
+trainHouseRight : TileData units
 trainHouseRight =
     { texturePosition = Coord.xy 3 11 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 2, 1 )
@@ -2247,10 +2267,11 @@ trainHouseRight =
     }
 
 
+trainHouseLeft : TileData units
 trainHouseLeft =
     { texturePosition = Coord.xy 7 11 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 2, 1 )
@@ -2270,66 +2291,74 @@ trainHouseLeft =
     }
 
 
+railStrafeDownSmall : TileData units
 railStrafeDownSmall =
     { texturePosition = Coord.xy 3 15 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 2
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeDownSmall
     }
 
 
+railStrafeUpSmall : TileData units
 railStrafeUpSmall =
     { texturePosition = Coord.xy 7 15 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 2
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeUpSmall
     }
 
 
+railStrafeLeftSmall : TileData units
 railStrafeLeftSmall =
     { texturePosition = Coord.xy 0 21 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 4
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeLeftSmall
     }
 
 
+railStrafeRightSmall : TileData units
 railStrafeRightSmall =
     { texturePosition = Coord.xy 0 25 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 4
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeRightSmall
     }
 
 
+sidewalk : TileData units
 sidewalk =
     { texturePosition = Coord.xy 2 4 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+sidewalkHorizontalRailCrossing : TileData units
 sidewalkHorizontalRailCrossing =
     { texturePosition = Coord.xy 0 4 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
     }
 
 
+sidewalkVerticalRailCrossing : TileData units
 sidewalkVerticalRailCrossing =
     { texturePosition = Coord.xy 1 4 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
     }
 
 
+railBottomToRight_SplitLeft : TileData units
 railBottomToRight_SplitLeft =
     { texturePosition = Coord.xy 3 17 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 0 )
         , ( 2, 0 )
         , ( 3, 0 )
@@ -2353,10 +2382,11 @@ railBottomToRight_SplitLeft =
     }
 
 
+railBottomToLeft_SplitUp : TileData units
 railBottomToLeft_SplitUp =
     { texturePosition = Coord.xy 7 17 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -2380,10 +2410,11 @@ railBottomToLeft_SplitUp =
     }
 
 
+railTopToRight_SplitDown : TileData units
 railTopToRight_SplitDown =
     { texturePosition = Coord.xy 3 21 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 0, 1 )
@@ -2407,10 +2438,11 @@ railTopToRight_SplitDown =
     }
 
 
+railTopToLeft_SplitRight : TileData units
 railTopToLeft_SplitRight =
     { texturePosition = Coord.xy 7 21 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 2, 0 )
         , ( 3, 0 )
         , ( 2, 1 )
@@ -2434,10 +2466,11 @@ railTopToLeft_SplitRight =
     }
 
 
+railBottomToRight_SplitUp : TileData units
 railBottomToRight_SplitUp =
     { texturePosition = Coord.xy 3 25 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 0 )
         , ( 2, 0 )
         , ( 3, 0 )
@@ -2461,10 +2494,11 @@ railBottomToRight_SplitUp =
     }
 
 
+railBottomToLeft_SplitRight : TileData units
 railBottomToLeft_SplitRight =
     { texturePosition = Coord.xy 7 25 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -2488,10 +2522,11 @@ railBottomToLeft_SplitRight =
     }
 
 
+railTopToRight_SplitLeft : TileData units
 railTopToRight_SplitLeft =
     { texturePosition = Coord.xy 3 29 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 0, 1 )
@@ -2515,10 +2550,11 @@ railTopToRight_SplitLeft =
     }
 
 
+railTopToLeft_SplitDown : TileData units
 railTopToLeft_SplitDown =
     { texturePosition = Coord.xy 7 29 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask =
+    , tileCollision =
         [ ( 2, 0 )
         , ( 3, 0 )
         , ( 2, 1 )
@@ -2542,44 +2578,49 @@ railTopToLeft_SplitDown =
     }
 
 
+postOffice : TileData units
 postOffice =
     { texturePosition = Coord.xy 0 33 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 5
-    , collisionMask = postOfficeCollision
+    , tileCollision = collisionRectangle 0 1 4 4
     , railPath =
         SingleRailPath
             (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
     }
 
 
+mowedGrass1 : TileData units
 mowedGrass1 =
     { texturePosition = Coord.xy 11 20 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+mowedGrass4 : TileData units
 mowedGrass4 =
     { texturePosition = Coord.xy 11 20 |> Coord.multiply Units.tileSize
     , size = Coord.xy 4 4
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+pineTree1 : TileData units
 pineTree1 =
     { texturePosition = Coord.xy 11 24 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 2
-    , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
+    , tileCollision = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
     , railPath = NoRailPath
     }
 
 
+pineTree2 : TileData units
 pineTree2 =
     { texturePosition = Coord.xy 12 24 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 2
-    , collisionMask = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
+    , tileCollision = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
     , railPath = NoRailPath
     }
 
@@ -2588,15 +2629,16 @@ bigPineTree : TileData units
 bigPineTree =
     { texturePosition = Coord.xy 640 756
     , size = Coord.xy 3 3
-    , collisionMask = Set.fromList [ ( 1, 2 ) ] |> CustomCollision
+    , tileCollision = Set.fromList [ ( 1, 2 ) ] |> CustomCollision
     , railPath = NoRailPath
     }
 
 
+logCabinDown : TileData units
 logCabinDown =
     { texturePosition = Coord.xy 11 26 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 0, 2 )
@@ -2608,10 +2650,11 @@ logCabinDown =
     }
 
 
+logCabinRight : TileData units
 logCabinRight =
     { texturePosition = Coord.xy 11 29 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 0, 2 )
@@ -2623,10 +2666,11 @@ logCabinRight =
     }
 
 
+logCabinUp : TileData units
 logCabinUp =
     { texturePosition = Coord.xy 11 32 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 0, 2 )
@@ -2638,10 +2682,11 @@ logCabinUp =
     }
 
 
+logCabinLeft : TileData units
 logCabinLeft =
     { texturePosition = Coord.xy 11 35 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 0, 2 )
@@ -2653,146 +2698,164 @@ logCabinLeft =
     }
 
 
+roadHorizontal : TileData units
 roadHorizontal =
     { texturePosition = Coord.xy 15 21 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadVertical : TileData units
 roadVertical =
     { texturePosition = Coord.xy 14 30 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadBottomToLeft : TileData units
 roadBottomToLeft =
     { texturePosition = Coord.xy 16 24 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadTopToLeft : TileData units
 roadTopToLeft =
     { texturePosition = Coord.xy 16 27 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadTopToRight : TileData units
 roadTopToRight =
     { texturePosition = Coord.xy 13 27 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadBottomToRight : TileData units
 roadBottomToRight =
     { texturePosition = Coord.xy 13 24 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+road4Way : TileData units
 road4Way =
     { texturePosition = Coord.xy 16 21 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadSidewalkCrossingHorizontal : TileData units
 roadSidewalkCrossingHorizontal =
     { texturePosition = Coord.xy 15 18 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadSidewalkCrossingVertical : TileData units
 roadSidewalkCrossingVertical =
     { texturePosition = Coord.xy 14 31 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+road3WayDown : TileData units
 road3WayDown =
     { texturePosition = Coord.xy 13 32 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+road3WayLeft : TileData units
 road3WayLeft =
     { texturePosition = Coord.xy 16 32 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+road3WayUp : TileData units
 road3WayUp =
     { texturePosition = Coord.xy 16 35 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+road3WayRight : TileData units
 road3WayRight =
     { texturePosition = Coord.xy 13 35 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadRailCrossingHorizontal : TileData units
 roadRailCrossingHorizontal =
     { texturePosition = Coord.xy 19 27 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = RailPathVertical { offsetX = 0, offsetY = 0, length = 3 } |> SingleRailPath
     }
 
 
+roadRailCrossingVertical : TileData units
 roadRailCrossingVertical =
     { texturePosition = Coord.xy 17 30 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 } |> SingleRailPath
     }
 
 
+fenceHorizontal : TileData units
 fenceHorizontal =
     { texturePosition = Coord.xy 8 33 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+fenceVertical : TileData units
 fenceVertical =
     { texturePosition = Coord.xy 10 33 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 2
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+fenceDiagonal : TileData units
 fenceDiagonal =
     { texturePosition = Coord.xy 8 36 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 0 )
         , ( 0, 1 )
         ]
@@ -2802,10 +2865,11 @@ fenceDiagonal =
     }
 
 
+fenceAntidiagonal : TileData units
 fenceAntidiagonal =
     { texturePosition = Coord.xy 8 34 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 1 )
         ]
@@ -2815,26 +2879,29 @@ fenceAntidiagonal =
     }
 
 
+roadDeadendUp : TileData units
 roadDeadendUp =
     { texturePosition = Coord.xy 10 38 |> Coord.multiply Units.tileSize
     , size = Coord.xy 5 4
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadDeadendDown : TileData units
 roadDeadendDown =
     { texturePosition = Coord.xy 15 38 |> Coord.multiply Units.tileSize
     , size = Coord.xy 5 4
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+busStopDown : TileData units
 busStopDown =
     { texturePosition = Coord.xy 12 44 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         ]
@@ -2844,10 +2911,11 @@ busStopDown =
     }
 
 
+busStopLeft : TileData units
 busStopLeft =
     { texturePosition = Coord.xy 16 42 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 0, 2 )
         ]
@@ -2857,10 +2925,11 @@ busStopLeft =
     }
 
 
+busStopRight : TileData units
 busStopRight =
     { texturePosition = Coord.xy 15 42 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 0, 2 )
         ]
@@ -2870,10 +2939,11 @@ busStopRight =
     }
 
 
+busStopUp : TileData units
 busStopUp =
     { texturePosition = Coord.xy 12 46 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         ]
@@ -2883,10 +2953,11 @@ busStopUp =
     }
 
 
+hospital : TileData units
 hospital =
     { texturePosition = Coord.xy 14 46 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 2 )
         , ( 1, 2 )
         , ( 2, 2 )
@@ -2903,10 +2974,11 @@ hospital =
     }
 
 
+statue : TileData units
 statue =
     { texturePosition = Coord.xy 12 50 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 0, 2 )
@@ -2918,10 +2990,11 @@ statue =
     }
 
 
+hedgeRowDown : TileData units
 hedgeRowDown =
     { texturePosition = Coord.xy 17 46 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -2930,10 +3003,11 @@ hedgeRowDown =
     }
 
 
+hedgeRowLeft : TileData units
 hedgeRowLeft =
     { texturePosition = Coord.xy 17 48 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -2942,10 +3016,11 @@ hedgeRowLeft =
     }
 
 
+hedgeRowRight : TileData units
 hedgeRowRight =
     { texturePosition = Coord.xy 17 50 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -2954,10 +3029,11 @@ hedgeRowRight =
     }
 
 
+hedgeRowUp : TileData units
 hedgeRowUp =
     { texturePosition = Coord.xy 17 52 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -2966,10 +3042,11 @@ hedgeRowUp =
     }
 
 
+hedgeCornerDownLeft : TileData units
 hedgeCornerDownLeft =
     { texturePosition = Coord.xy 14 54 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -2978,10 +3055,11 @@ hedgeCornerDownLeft =
     }
 
 
+hedgeCornerDownRight : TileData units
 hedgeCornerDownRight =
     { texturePosition = Coord.xy 17 54 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -2990,10 +3068,11 @@ hedgeCornerDownRight =
     }
 
 
+hedgeCornerUpLeft : TileData units
 hedgeCornerUpLeft =
     { texturePosition = Coord.xy 7 41 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3002,10 +3081,11 @@ hedgeCornerUpLeft =
     }
 
 
+hedgeCornerUpRight : TileData units
 hedgeCornerUpRight =
     { texturePosition = Coord.xy 14 52 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3014,10 +3094,11 @@ hedgeCornerUpRight =
     }
 
 
+hedgePillarDownLeft : TileData units
 hedgePillarDownLeft =
     { texturePosition = Coord.xy 28 52 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3026,10 +3107,11 @@ hedgePillarDownLeft =
     }
 
 
+hedgePillarDownRight : TileData units
 hedgePillarDownRight =
     { texturePosition = Coord.xy 28 54 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3038,10 +3120,11 @@ hedgePillarDownRight =
     }
 
 
+hedgePillarUpLeft : TileData units
 hedgePillarUpLeft =
     { texturePosition = Coord.xy 31 52 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3050,10 +3133,11 @@ hedgePillarUpLeft =
     }
 
 
+hedgePillarUpRight : TileData units
 hedgePillarUpRight =
     { texturePosition = Coord.xy 31 54 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3062,10 +3146,11 @@ hedgePillarUpRight =
     }
 
 
+apartmentDown : TileData units
 apartmentDown =
     { texturePosition = Coord.xy 28 40 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 3 )
         , ( 1, 3 )
         , ( 0, 4 )
@@ -3077,10 +3162,11 @@ apartmentDown =
     }
 
 
+apartmentLeft : TileData units
 apartmentLeft =
     { texturePosition = Coord.xy 30 45 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 3 )
         , ( 1, 3 )
         , ( 0, 4 )
@@ -3092,10 +3178,11 @@ apartmentLeft =
     }
 
 
+apartmentRight : TileData units
 apartmentRight =
     { texturePosition = Coord.xy 28 45 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 3 )
         , ( 1, 3 )
         , ( 0, 4 )
@@ -3107,10 +3194,11 @@ apartmentRight =
     }
 
 
+apartmentUp : TileData units
 apartmentUp =
     { texturePosition = Coord.xy 30 40 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 3 )
         , ( 1, 3 )
         , ( 0, 4 )
@@ -3122,42 +3210,47 @@ apartmentUp =
     }
 
 
+rockDown : TileData units
 rockDown =
     { texturePosition = Coord.xy 12 48 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+rockLeft : TileData units
 rockLeft =
     { texturePosition = Coord.xy 13 48 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+rockRight : TileData units
 rockRight =
     { texturePosition = Coord.xy 12 49 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+rockUp : TileData units
 rockUp =
     { texturePosition = Coord.xy 13 49 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+flowers1 : TileData units
 flowers1 =
     { texturePosition = Coord.xy 28 50 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3166,10 +3259,11 @@ flowers1 =
     }
 
 
+flowers2 : TileData units
 flowers2 =
     { texturePosition = Coord.xy 31 50 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3178,10 +3272,11 @@ flowers2 =
     }
 
 
+elmTree : TileData units
 elmTree =
     { texturePosition = Coord.xy 32 47 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 3
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 2 )
         ]
             |> Set.fromList
@@ -3190,18 +3285,20 @@ elmTree =
     }
 
 
+dirtPathHorizontal : TileData units
 dirtPathHorizontal =
     { texturePosition = Coord.xy 34 50 |> Coord.multiply Units.tileSize
     , size = Coord.xy 2 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+dirtPathVertical : TileData units
 dirtPathVertical =
     { texturePosition = Coord.xy 34 51 |> Coord.multiply Units.tileSize
     , size = Coord.xy 1 2
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
@@ -3210,70 +3307,77 @@ bigText : Char -> TileData unit
 bigText char =
     { texturePosition = Sprite.charTexturePosition char
     , size = Coord.xy 1 2
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
 hyperlink : TileData unit
+hyperlink : TileData units
 hyperlink =
     { texturePosition = Coord.xy 700 918
     , size = Coord.xy 1 2
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
 benchDown : TileData unit
+benchDown : TileData units
 benchDown =
     { texturePosition = Coord.xy 640 738
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
 benchLeft : TileData unit
+benchLeft : TileData units
 benchLeft =
     { texturePosition = Coord.xy 660 720
     , size = Coord.xy 1 2
-    , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
+    , tileCollision = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
     , railPath = NoRailPath
     }
 
 
 benchRight : TileData unit
+benchRight : TileData units
 benchRight =
     { texturePosition = Coord.xy 680 720
     , size = Coord.xy 1 2
-    , collisionMask = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
+    , tileCollision = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
     , railPath = NoRailPath
     }
 
 
 benchUp : TileData unit
+benchUp : TileData units
 benchUp =
     { texturePosition = Coord.xy 700 738
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
 parkingDown : TileData unit
+parkingDown : TileData units
 parkingDown =
     { texturePosition = Coord.xy 640 666
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
 parkingLeft : TileData unit
+parkingLeft : TileData units
 parkingLeft =
     { texturePosition = Coord.xy 700 720
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
@@ -3282,7 +3386,7 @@ parkingRight : TileData unit
 parkingRight =
     { texturePosition = Coord.xy 640 720
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
@@ -3291,7 +3395,7 @@ parkingUp : TileData unit
 parkingUp =
     { texturePosition = Coord.xy 640 702
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
@@ -3300,7 +3404,7 @@ parkingRoad : TileData unit
 parkingRoad =
     { texturePosition = Coord.xy 640 684
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
@@ -3309,7 +3413,7 @@ parkingRoundabout : TileData unit
 parkingRoundabout =
     { texturePosition = Coord.xy 660 648
     , size = Coord.xy 3 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -3325,10 +3429,11 @@ parkingRoundabout =
     }
 
 
+cornerHouseUpLeft : TileData units
 cornerHouseUpLeft =
     { texturePosition = Coord.xy 660 576
     , size = Coord.xy 3 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 2, 1 )
@@ -3341,10 +3446,11 @@ cornerHouseUpLeft =
     }
 
 
+cornerHouseUpRight : TileData units
 cornerHouseUpRight =
     { texturePosition = Coord.xy 760 576
     , size = Coord.xy 3 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         , ( 2, 1 )
@@ -3357,10 +3463,11 @@ cornerHouseUpRight =
     }
 
 
+cornerHouseDownLeft : TileData units
 cornerHouseDownLeft =
     { texturePosition = Coord.xy 660 504
     , size = Coord.xy 3 4
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 2 )
         , ( 1, 2 )
         , ( 0, 3 )
@@ -3373,10 +3480,11 @@ cornerHouseDownLeft =
     }
 
 
+cornerHouseDownRight : TileData units
 cornerHouseDownRight =
     { texturePosition = Coord.xy 760 504
     , size = Coord.xy 3 4
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 2 )
         , ( 2, 2 )
         , ( 0, 3 )
@@ -3389,10 +3497,11 @@ cornerHouseDownRight =
     }
 
 
+dogHouseDown : TileData units
 dogHouseDown =
     { texturePosition = Coord.xy 360 288
     , size = Coord.xy 1 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         ]
             |> Set.fromList
@@ -3401,10 +3510,11 @@ dogHouseDown =
     }
 
 
+dogHouseUp : TileData units
 dogHouseUp =
     { texturePosition = Coord.xy 380 288
     , size = Coord.xy 1 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         ]
             |> Set.fromList
@@ -3413,10 +3523,11 @@ dogHouseUp =
     }
 
 
+dogHouseLeft : TileData units
 dogHouseLeft =
     { texturePosition = Coord.xy 360 252
     , size = Coord.xy 1 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         ]
             |> Set.fromList
@@ -3425,10 +3536,11 @@ dogHouseLeft =
     }
 
 
+dogHouseRight : TileData units
 dogHouseRight =
     { texturePosition = Coord.xy 380 252
     , size = Coord.xy 1 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         ]
             |> Set.fromList
@@ -3437,34 +3549,38 @@ dogHouseRight =
     }
 
 
+mushroom : TileData units
 mushroom =
     { texturePosition = Coord.xy 740 936
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+treeStump1 : TileData units
 treeStump1 =
     { texturePosition = Coord.xy 720 936
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+treeStump2 : TileData units
 treeStump2 =
     { texturePosition = Coord.xy 720 954
     , size = Coord.xy 1 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+sunflowers : TileData units
 sunflowers =
     { texturePosition = Coord.xy 720 900
     , size = Coord.xy 3 2
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 1 )
         ]
             |> Set.fromList
@@ -3473,10 +3589,11 @@ sunflowers =
     }
 
 
+railDeadEndLeft : TileData units
 railDeadEndLeft =
     { texturePosition = Coord.xy 220 72
     , size = Coord.xy 2 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         ]
@@ -3486,10 +3603,11 @@ railDeadEndLeft =
     }
 
 
+railDeadEndRight : TileData units
 railDeadEndRight =
     { texturePosition = Coord.xy 220 108
     , size = Coord.xy 2 2
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 1 )
         , ( 1, 1 )
         ]
@@ -3499,10 +3617,11 @@ railDeadEndRight =
     }
 
 
+railStrafeLeftToRight_SplitUp : TileData units
 railStrafeLeftToRight_SplitUp =
     { texturePosition = Coord.xy 360 54
     , size = Coord.xy 5 3
-    , collisionMask =
+    , tileCollision =
         [ ( 2, 0 )
         , ( 3, 0 )
         , ( 4, 0 )
@@ -3526,10 +3645,11 @@ railStrafeLeftToRight_SplitUp =
     }
 
 
+railStrafeLeftToRight_SplitDown : TileData units
 railStrafeLeftToRight_SplitDown =
     { texturePosition = Coord.xy 260 108
     , size = Coord.xy 5 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -3553,10 +3673,11 @@ railStrafeLeftToRight_SplitDown =
     }
 
 
+railStrafeRightToLeft_SplitUp : TileData units
 railStrafeRightToLeft_SplitUp =
     { texturePosition = Coord.xy 260 54
     , size = Coord.xy 5 3
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 2, 0 )
@@ -3580,10 +3701,11 @@ railStrafeRightToLeft_SplitUp =
     }
 
 
+railStrafeRightToLeft_SplitDown : TileData units
 railStrafeRightToLeft_SplitDown =
     { texturePosition = Coord.xy 360 108
     , size = Coord.xy 5 3
-    , collisionMask =
+    , tileCollision =
         [ ( 2, 0 )
         , ( 3, 0 )
         , ( 4, 0 )
@@ -3607,10 +3729,11 @@ railStrafeRightToLeft_SplitDown =
     }
 
 
+railStrafeTopToBottom_SplitLeft : TileData units
 railStrafeTopToBottom_SplitLeft =
     { texturePosition = Coord.xy 700 324
     , size = Coord.xy 3 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 0, 1 )
@@ -3634,10 +3757,11 @@ railStrafeTopToBottom_SplitLeft =
     }
 
 
+railStrafeTopToBottom_SplitRight : TileData units
 railStrafeTopToBottom_SplitRight =
     { texturePosition = Coord.xy 640 144
     , size = Coord.xy 3 5
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 0 )
         , ( 2, 0 )
         , ( 1, 1 )
@@ -3661,10 +3785,11 @@ railStrafeTopToBottom_SplitRight =
     }
 
 
+railStrafeBottomToTop_SplitLeft : TileData units
 railStrafeBottomToTop_SplitLeft =
     { texturePosition = Coord.xy 640 234
     , size = Coord.xy 3 5
-    , collisionMask =
+    , tileCollision =
         [ ( 0, 0 )
         , ( 1, 0 )
         , ( 0, 1 )
@@ -3688,10 +3813,11 @@ railStrafeBottomToTop_SplitLeft =
     }
 
 
+railStrafeBottomToTop_SplitRight : TileData units
 railStrafeBottomToTop_SplitRight =
     { texturePosition = Coord.xy 700 414
     , size = Coord.xy 3 5
-    , collisionMask =
+    , tileCollision =
         [ ( 1, 0 )
         , ( 2, 0 )
         , ( 1, 1 )
@@ -3715,41 +3841,40 @@ railStrafeBottomToTop_SplitRight =
     }
 
 
+roadManholeDown : TileData units
 roadManholeDown =
     { texturePosition = Coord.xy 380 378
     , size = Coord.xy 1 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadManholeLeft : TileData units
 roadManholeLeft =
     { texturePosition = Coord.xy 240 756
     , size = Coord.xy 3 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadManholeUp : TileData units
 roadManholeUp =
     { texturePosition = Coord.xy 380 432
     , size = Coord.xy 1 3
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
 
 
+roadManholeRight : TileData units
 roadManholeRight =
     { texturePosition = Coord.xy 340 558
     , size = Coord.xy 3 1
-    , collisionMask = DefaultCollision
+    , tileCollision = DefaultCollision
     , railPath = NoRailPath
     }
-
-
-postOfficeCollision : CollisionMask
-postOfficeCollision =
-    collisionRectangle 0 1 4 4
 
 
 collisionRectangle x y width height =
