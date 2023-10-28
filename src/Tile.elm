@@ -37,6 +37,8 @@ module Tile exposing
 
 import Angle
 import Axis2d
+import BoundingBox2d exposing (BoundingBox2d)
+import Bounds exposing (Bounds)
 import Codec exposing (Codec)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
@@ -49,7 +51,7 @@ import Quantity exposing (Quantity(..))
 import Set exposing (Set)
 import Sprite
 import String.Nonempty exposing (NonemptyString(..))
-import Units exposing (CellLocalUnit, TileLocalUnit)
+import Units exposing (CellLocalUnit, TileLocalUnit, WorldUnit)
 import Vector2d
 
 
@@ -1179,6 +1181,7 @@ type alias TileData unit =
     , size : Coord unit
     , tileCollision : CollisionMask
     , railPath : RailPathType
+    , movementCollision : List (Bounds unit)
     }
 
 
@@ -1830,6 +1833,7 @@ emptyTile =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -1848,6 +1852,7 @@ houseDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 7 6) (Coord.xy 48 24) ]
     }
 
 
@@ -1866,6 +1871,7 @@ houseRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 3 5) (Coord.xy 27 46) ]
     }
 
 
@@ -1884,6 +1890,7 @@ houseUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 6) (Coord.xy 48 27) ]
     }
 
 
@@ -1902,6 +1909,7 @@ houseLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 10 5) (Coord.xy 27 46) ]
     }
 
 
@@ -1911,6 +1919,7 @@ railHorizontal =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
+    , movementCollision = []
     }
 
 
@@ -1920,6 +1929,7 @@ railVertical =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
+    , movementCollision = []
     }
 
 
@@ -1943,6 +1953,7 @@ railBottomToRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathBottomToRight
+    , movementCollision = []
     }
 
 
@@ -1966,6 +1977,7 @@ railBottomToLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathBottomToLeft
+    , movementCollision = []
     }
 
 
@@ -1989,6 +2001,7 @@ railTopToRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathTopToRight
+    , movementCollision = []
     }
 
 
@@ -2012,6 +2025,7 @@ railTopToLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathTopToLeft
+    , movementCollision = []
     }
 
 
@@ -2043,6 +2057,7 @@ railBottomToRightLarge =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathBottomToRightLarge
+    , movementCollision = []
     }
 
 
@@ -2074,6 +2089,7 @@ railBottomToLeftLarge =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathBottomToLeftLarge
+    , movementCollision = []
     }
 
 
@@ -2105,6 +2121,7 @@ railTopToRightLarge =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathTopToRightLarge
+    , movementCollision = []
     }
 
 
@@ -2136,6 +2153,7 @@ railTopToLeftLarge =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathTopToLeftLarge
+    , movementCollision = []
     }
 
 
@@ -2148,6 +2166,7 @@ railCrossing =
         DoubleRailPath
             (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
             (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
+    , movementCollision = []
     }
 
 
@@ -2171,6 +2190,7 @@ railStrafeDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathStrafeDown
+    , movementCollision = []
     }
 
 
@@ -2194,6 +2214,7 @@ railStrafeUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathStrafeUp
+    , movementCollision = []
     }
 
 
@@ -2217,6 +2238,7 @@ railStrafeLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathStrafeLeft
+    , movementCollision = []
     }
 
 
@@ -2240,6 +2262,7 @@ railStrafeRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath RailPathStrafeRight
+    , movementCollision = []
     }
 
 
@@ -2264,6 +2287,7 @@ trainHouseRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath trainHouseRightRailPath
+    , movementCollision = []
     }
 
 
@@ -2288,6 +2312,7 @@ trainHouseLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = SingleRailPath trainHouseLeftRailPath
+    , movementCollision = []
     }
 
 
@@ -2297,6 +2322,7 @@ railStrafeDownSmall =
     , size = Coord.xy 4 2
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeDownSmall
+    , movementCollision = []
     }
 
 
@@ -2306,6 +2332,7 @@ railStrafeUpSmall =
     , size = Coord.xy 4 2
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeUpSmall
+    , movementCollision = []
     }
 
 
@@ -2315,6 +2342,7 @@ railStrafeLeftSmall =
     , size = Coord.xy 2 4
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeLeftSmall
+    , movementCollision = []
     }
 
 
@@ -2324,6 +2352,7 @@ railStrafeRightSmall =
     , size = Coord.xy 2 4
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath RailPathStrafeRightSmall
+    , movementCollision = []
     }
 
 
@@ -2333,6 +2362,7 @@ sidewalk =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2342,6 +2372,7 @@ sidewalkHorizontalRailCrossing =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 })
+    , movementCollision = []
     }
 
 
@@ -2351,6 +2382,7 @@ sidewalkVerticalRailCrossing =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = SingleRailPath (RailPathVertical { offsetX = 0, offsetY = 0, length = 1 })
+    , movementCollision = []
     }
 
 
@@ -2379,6 +2411,7 @@ railBottomToRight_SplitLeft =
             , secondary = RailPathBottomToRight
             , texturePosition = Coord.xy 20 40 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2407,6 +2440,7 @@ railBottomToLeft_SplitUp =
             , secondary = RailPathBottomToLeft
             , texturePosition = Coord.xy 24 40 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2435,6 +2469,7 @@ railTopToRight_SplitDown =
             , secondary = RailPathTopToRight
             , texturePosition = Coord.xy 20 44 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2463,6 +2498,7 @@ railTopToLeft_SplitRight =
             , secondary = RailPathTopToLeft
             , texturePosition = Coord.xy 24 44 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2491,6 +2527,7 @@ railBottomToRight_SplitUp =
             , secondary = RailPathBottomToRight
             , texturePosition = Coord.xy 20 48 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2519,6 +2556,7 @@ railBottomToLeft_SplitRight =
             , secondary = RailPathBottomToLeft
             , texturePosition = Coord.xy 24 48 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2547,6 +2585,7 @@ railTopToRight_SplitLeft =
             , secondary = RailPathTopToRight
             , texturePosition = Coord.xy 20 52 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2575,6 +2614,7 @@ railTopToLeft_SplitDown =
             , secondary = RailPathTopToLeft
             , texturePosition = Coord.xy 24 52 |> Coord.multiply Units.tileSize
             }
+    , movementCollision = []
     }
 
 
@@ -2586,6 +2626,7 @@ postOffice =
     , railPath =
         SingleRailPath
             (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 13 27) (Coord.xy 52 34) ]
     }
 
 
@@ -2595,6 +2636,7 @@ mowedGrass1 =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2604,6 +2646,7 @@ mowedGrass4 =
     , size = Coord.xy 4 4
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2613,6 +2656,7 @@ pineTree1 =
     , size = Coord.xy 1 2
     , tileCollision = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 7) (Coord.xy 12 8) ]
     }
 
 
@@ -2622,6 +2666,7 @@ pineTree2 =
     , size = Coord.xy 1 2
     , tileCollision = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 8) (Coord.xy 12 9) ]
     }
 
 
@@ -2631,6 +2676,7 @@ bigPineTree =
     , size = Coord.xy 3 3
     , tileCollision = Set.fromList [ ( 1, 2 ) ] |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 24 41) (Coord.xy 13 10) ]
     }
 
 
@@ -2647,6 +2693,7 @@ logCabinDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 18) (Coord.xy 36 34) ]
     }
 
 
@@ -2663,6 +2710,7 @@ logCabinRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 18) (Coord.xy 36 34) ]
     }
 
 
@@ -2679,6 +2727,7 @@ logCabinUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 18) (Coord.xy 36 34) ]
     }
 
 
@@ -2695,6 +2744,7 @@ logCabinLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 18) (Coord.xy 36 34) ]
     }
 
 
@@ -2704,6 +2754,7 @@ roadHorizontal =
     , size = Coord.xy 1 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2713,6 +2764,7 @@ roadVertical =
     , size = Coord.xy 3 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2722,6 +2774,7 @@ roadBottomToLeft =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2731,6 +2784,7 @@ roadTopToLeft =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2740,6 +2794,7 @@ roadTopToRight =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2749,6 +2804,7 @@ roadBottomToRight =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2758,6 +2814,7 @@ road4Way =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2767,6 +2824,7 @@ roadSidewalkCrossingHorizontal =
     , size = Coord.xy 1 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2776,6 +2834,7 @@ roadSidewalkCrossingVertical =
     , size = Coord.xy 3 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2785,6 +2844,7 @@ road3WayDown =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2794,6 +2854,7 @@ road3WayLeft =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2803,6 +2864,7 @@ road3WayUp =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2812,6 +2874,7 @@ road3WayRight =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2821,6 +2884,7 @@ roadRailCrossingHorizontal =
     , size = Coord.xy 1 3
     , tileCollision = DefaultCollision
     , railPath = RailPathVertical { offsetX = 0, offsetY = 0, length = 3 } |> SingleRailPath
+    , movementCollision = []
     }
 
 
@@ -2830,6 +2894,7 @@ roadRailCrossingVertical =
     , size = Coord.xy 3 1
     , tileCollision = DefaultCollision
     , railPath = RailPathHorizontal { offsetX = 0, offsetY = 0, length = 3 } |> SingleRailPath
+    , movementCollision = []
     }
 
 
@@ -2839,6 +2904,7 @@ fenceHorizontal =
     , size = Coord.xy 2 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 7) (Coord.xy 24 5) ]
     }
 
 
@@ -2848,6 +2914,7 @@ fenceVertical =
     , size = Coord.xy 1 2
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 7) (Coord.xy 4 23) ]
     }
 
 
@@ -2862,6 +2929,10 @@ fenceDiagonal =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 8 16) (Coord.xy 14 14)
+        , Bounds.fromCoordAndSize (Coord.xy 18 7) (Coord.xy 14 14)
+        ]
     }
 
 
@@ -2876,6 +2947,10 @@ fenceAntidiagonal =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 8 7) (Coord.xy 14 14)
+        , Bounds.fromCoordAndSize (Coord.xy 18 16) (Coord.xy 14 14)
+        ]
     }
 
 
@@ -2885,6 +2960,7 @@ roadDeadendUp =
     , size = Coord.xy 5 4
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2894,6 +2970,7 @@ roadDeadendDown =
     , size = Coord.xy 5 4
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -2908,6 +2985,7 @@ busStopDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 20) (Coord.xy 31 13) ]
     }
 
 
@@ -2922,6 +3000,7 @@ busStopLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 3 4) (Coord.xy 12 29) ]
     }
 
 
@@ -2936,6 +3015,7 @@ busStopRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 4) (Coord.xy 12 29) ]
     }
 
 
@@ -2950,6 +3030,7 @@ busStopUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 0) (Coord.xy 31 13) ]
     }
 
 
@@ -2971,6 +3052,7 @@ hospital =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 54) ]
     }
 
 
@@ -2987,6 +3069,7 @@ statue =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 14 10) (Coord.xy 12 9) ]
     }
 
 
@@ -3000,6 +3083,7 @@ hedgeRowDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 27) (Coord.xy 20 9) ]
     }
 
 
@@ -3013,6 +3097,7 @@ hedgeRowLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 10 18) ]
     }
 
 
@@ -3026,6 +3111,7 @@ hedgeRowRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 30 18) (Coord.xy 10 18) ]
     }
 
 
@@ -3039,6 +3125,7 @@ hedgeRowUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 9) ]
     }
 
 
@@ -3052,6 +3139,10 @@ hedgeCornerDownLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 20 27) (Coord.xy 20 9)
+        , Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 10 18)
+        ]
     }
 
 
@@ -3065,6 +3156,10 @@ hedgeCornerDownRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 30 18) (Coord.xy 10 18)
+        , Bounds.fromCoordAndSize (Coord.xy 20 27) (Coord.xy 20 9)
+        ]
     }
 
 
@@ -3078,6 +3173,10 @@ hedgeCornerUpLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 9)
+        , Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 10 18)
+        ]
     }
 
 
@@ -3091,6 +3190,10 @@ hedgeCornerUpRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 9)
+        , Bounds.fromCoordAndSize (Coord.xy 30 18) (Coord.xy 10 18)
+        ]
     }
 
 
@@ -3104,6 +3207,7 @@ hedgePillarDownLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 27) (Coord.xy 10 9) ]
     }
 
 
@@ -3117,6 +3221,7 @@ hedgePillarDownRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 30 27) (Coord.xy 10 9) ]
     }
 
 
@@ -3130,6 +3235,7 @@ hedgePillarUpLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 10 9) ]
     }
 
 
@@ -3143,6 +3249,7 @@ hedgePillarUpRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 30 18) (Coord.xy 10 9) ]
     }
 
 
@@ -3159,6 +3266,7 @@ apartmentDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 45) (Coord.xy 40 41) ]
     }
 
 
@@ -3175,6 +3283,7 @@ apartmentLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 27) (Coord.xy 35 63) ]
     }
 
 
@@ -3191,6 +3300,7 @@ apartmentRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 27) (Coord.xy 35 63) ]
     }
 
 
@@ -3207,6 +3317,7 @@ apartmentUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 48) (Coord.xy 40 38) ]
     }
 
 
@@ -3216,6 +3327,7 @@ rockDown =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 1 2) (Coord.xy 18 16) ]
     }
 
 
@@ -3225,6 +3337,7 @@ rockLeft =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 1 2) (Coord.xy 18 16) ]
     }
 
 
@@ -3234,6 +3347,7 @@ rockRight =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 1 2) (Coord.xy 18 16) ]
     }
 
 
@@ -3243,6 +3357,7 @@ rockUp =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 1 2) (Coord.xy 18 16) ]
     }
 
 
@@ -3256,6 +3371,7 @@ flowers1 =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 18) ]
     }
 
 
@@ -3269,6 +3385,7 @@ flowers2 =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 18) ]
     }
 
 
@@ -3282,6 +3399,7 @@ elmTree =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 24 44) (Coord.xy 12 8) ]
     }
 
 
@@ -3291,6 +3409,7 @@ dirtPathHorizontal =
     , size = Coord.xy 2 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3300,6 +3419,7 @@ dirtPathVertical =
     , size = Coord.xy 1 2
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3309,76 +3429,77 @@ bigText char =
     , size = Coord.xy 1 2
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
 hyperlink : TileData unit
-hyperlink : TileData units
 hyperlink =
     { texturePosition = Coord.xy 700 918
     , size = Coord.xy 1 2
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
 benchDown : TileData unit
-benchDown : TileData units
 benchDown =
     { texturePosition = Coord.xy 640 738
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 11) (Coord.xy 16 6) ]
     }
 
 
 benchLeft : TileData unit
-benchLeft : TileData units
 benchLeft =
     { texturePosition = Coord.xy 660 720
     , size = Coord.xy 1 2
     , tileCollision = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 1 3) (Coord.xy 7 13) ]
     }
 
 
 benchRight : TileData unit
-benchRight : TileData units
 benchRight =
     { texturePosition = Coord.xy 680 720
     , size = Coord.xy 1 2
     , tileCollision = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 12 3) (Coord.xy 7 13) ]
     }
 
 
 benchUp : TileData unit
-benchUp : TileData units
 benchUp =
     { texturePosition = Coord.xy 700 738
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 0) (Coord.xy 16 8) ]
     }
 
 
 parkingDown : TileData unit
-parkingDown : TileData units
 parkingDown =
     { texturePosition = Coord.xy 640 666
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
 parkingLeft : TileData unit
-parkingLeft : TileData units
 parkingLeft =
     { texturePosition = Coord.xy 700 720
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3388,6 +3509,7 @@ parkingRight =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3397,6 +3519,7 @@ parkingUp =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3406,6 +3529,7 @@ parkingRoad =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3426,6 +3550,7 @@ parkingRoundabout =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3443,6 +3568,10 @@ cornerHouseUpLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 5 11) (Coord.xy 30 43)
+        , Bounds.fromCoordAndSize (Coord.xy 0 11) (Coord.xy 60 25)
+        ]
     }
 
 
@@ -3460,6 +3589,10 @@ cornerHouseUpRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 25 11) (Coord.xy 30 43)
+        , Bounds.fromCoordAndSize (Coord.xy 0 11) (Coord.xy 60 25)
+        ]
     }
 
 
@@ -3477,6 +3610,10 @@ cornerHouseDownLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 5 33) (Coord.xy 30 39)
+        , Bounds.fromCoordAndSize (Coord.xy 0 29) (Coord.xy 60 25)
+        ]
     }
 
 
@@ -3494,6 +3631,10 @@ cornerHouseDownRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 25 33) (Coord.xy 30 39)
+        , Bounds.fromCoordAndSize (Coord.xy 0 29) (Coord.xy 60 25)
+        ]
     }
 
 
@@ -3507,6 +3648,7 @@ dogHouseDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 6 21) (Coord.xy 10 13) ]
     }
 
 
@@ -3520,6 +3662,7 @@ dogHouseUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 6 21) (Coord.xy 10 13) ]
     }
 
 
@@ -3533,6 +3676,7 @@ dogHouseLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 4 8) (Coord.xy 14 9) ]
     }
 
 
@@ -3546,6 +3690,7 @@ dogHouseRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 6) (Coord.xy 14 9) ]
     }
 
 
@@ -3555,6 +3700,7 @@ mushroom =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3564,6 +3710,7 @@ treeStump1 =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3573,6 +3720,7 @@ treeStump2 =
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3586,6 +3734,7 @@ sunflowers =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3600,6 +3749,7 @@ railDeadEndLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 14 18) ]
     }
 
 
@@ -3614,6 +3764,7 @@ railDeadEndRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 6 18) (Coord.xy 14 18) ]
     }
 
 
@@ -3642,6 +3793,7 @@ railStrafeLeftToRight_SplitUp =
             , secondary = RailPathStrafeUp
             , texturePosition = Coord.xy 360 0
             }
+    , movementCollision = []
     }
 
 
@@ -3670,6 +3822,7 @@ railStrafeLeftToRight_SplitDown =
             , secondary = RailPathStrafeDown
             , texturePosition = Coord.xy 260 162
             }
+    , movementCollision = []
     }
 
 
@@ -3698,6 +3851,7 @@ railStrafeRightToLeft_SplitUp =
             , secondary = RailPathStrafeDown
             , texturePosition = Coord.xy 260 0
             }
+    , movementCollision = []
     }
 
 
@@ -3726,6 +3880,7 @@ railStrafeRightToLeft_SplitDown =
             , secondary = RailPathStrafeUp
             , texturePosition = Coord.xy 360 162
             }
+    , movementCollision = []
     }
 
 
@@ -3754,6 +3909,7 @@ railStrafeTopToBottom_SplitLeft =
             , secondary = RailPathStrafeRight
             , texturePosition = Coord.xy 640 324
             }
+    , movementCollision = []
     }
 
 
@@ -3782,6 +3938,7 @@ railStrafeTopToBottom_SplitRight =
             , secondary = RailPathStrafeLeft
             , texturePosition = Coord.xy 700 144
             }
+    , movementCollision = []
     }
 
 
@@ -3810,6 +3967,7 @@ railStrafeBottomToTop_SplitLeft =
             , secondary = RailPathStrafeRight
             , texturePosition = Coord.xy 700 234
             }
+    , movementCollision = []
     }
 
 
@@ -3838,6 +3996,7 @@ railStrafeBottomToTop_SplitRight =
             , secondary = RailPathStrafeLeft
             , texturePosition = Coord.xy 640 414
             }
+    , movementCollision = []
     }
 
 
@@ -3847,6 +4006,7 @@ roadManholeDown =
     , size = Coord.xy 1 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3856,6 +4016,7 @@ roadManholeLeft =
     , size = Coord.xy 3 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3865,6 +4026,7 @@ roadManholeUp =
     , size = Coord.xy 1 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
@@ -3874,6 +4036,7 @@ roadManholeRight =
     , size = Coord.xy 3 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
+    , movementCollision = []
     }
 
 
