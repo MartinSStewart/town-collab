@@ -355,7 +355,7 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Effect.Time.Posix, BackendError )
     , trains : IdDict TrainId Train
-    , cows : IdDict AnimalId Animal
+    , animals : IdDict AnimalId Animal
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : IdDict MailId BackendMail

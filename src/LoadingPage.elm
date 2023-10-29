@@ -1094,7 +1094,7 @@ animalActualPosition animalId model =
         Nothing ->
             case IdDict.get animalId localGrid.animals of
                 Just animal ->
-                    Just { position = animal.position, isHeld = False }
+                    { position = Animal.actualPositionWithoutCursor model.time animal, isHeld = True } |> Just
 
                 Nothing ->
                     Nothing

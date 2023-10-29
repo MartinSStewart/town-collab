@@ -1181,7 +1181,7 @@ type alias TileData unit =
     , size : Coord unit
     , tileCollision : CollisionMask
     , railPath : RailPathType
-    , movementCollision : List (Bounds unit)
+    , movementCollision : List (Bounds Pixels)
     }
 
 

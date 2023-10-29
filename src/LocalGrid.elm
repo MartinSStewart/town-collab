@@ -1129,6 +1129,28 @@ updateServerChange serverChange model =
         ServerLogout ->
             logout model
 
+        ServerAnimalMovement newMovement ->
+            ( { model
+                | animals =
+                    List.Nonempty.foldl
+                        (\( animalId, movement ) dict ->
+                            IdDict.update2
+                                animalId
+                                (\animal ->
+                                    { animal
+                                        | position = animal.endPosition
+                                        , endPosition = movement.endPosition
+                                        , startTime = movement.startTime
+                                    }
+                                )
+                                dict
+                        )
+                        model.animals
+                        newMovement
+              }
+            , NoOutMsg
+            )
+
 
 logout : LocalGrid_ -> ( LocalGrid_, OutMsg )
 logout model =
@@ -1300,7 +1322,17 @@ randomAnimalsHelper worldCoord output list =
 randomAnimal : AnimalType -> Coord WorldUnit -> Random.Generator Animal
 randomAnimal animalType ( Quantity xOffset, Quantity yOffset ) =
     Random.map2
-        (\x y -> { position = Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y }, animalType = animalType })
+        (\x y ->
+            let
+                position =
+                    Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y }
+            in
+            { position = position
+            , endPosition = position
+            , startTime = Effect.Time.millisToPosix 0
+            , animalType = animalType
+            }
+        )
         (Random.float 0 Units.cellSize)
         (Random.float 0 Units.cellSize)
 

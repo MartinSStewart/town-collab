@@ -10,6 +10,7 @@ module Bounds exposing
     , coordRangeFold
     , coordRangeFoldReverse
     , expand
+    , from2Coords
     , fromCoordAndSize
     , fromCoords
     , height
@@ -81,6 +82,11 @@ fromCoords coords =
         { min = ( Nonempty.minimumBy Quantity.unwrap xValues, Nonempty.minimumBy Quantity.unwrap yValues )
         , max = ( Nonempty.maximumBy Quantity.unwrap xValues, Nonempty.maximumBy Quantity.unwrap yValues )
         }
+
+
+from2Coords : Coord unit -> Coord unit -> Bounds unit
+from2Coords first second =
+    fromCoords (Nonempty first [ second ])
 
 
 fromCoordAndSize : Coord unit -> Coord unit -> Bounds unit

@@ -27,6 +27,7 @@ module Grid exposing
     , localTilePointPlusWorld
     , localTilePointPlusWorldCoord
     , moveUndoPoint
+    , rayIntersection
     , removeUser
     , tileMesh
     , tileMeshHelper2
@@ -39,6 +40,8 @@ module Grid exposing
 import Array2D exposing (Array2D)
 import AssocSet
 import Basics.Extra
+import BoundingBox2d exposing (BoundingBox2d)
+import BoundingBox2dExtra as BoundingBox2d
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
@@ -50,6 +53,7 @@ import GridCell exposing (Cell, CellData)
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Extra as List
+import List.Nonempty exposing (Nonempty(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -858,3 +862,68 @@ getPostOffice userId (Grid grid) =
                                 Nothing
                         )
             )
+
+
+type Intersection
+    = NoCollision
+    | TileCollision (Point2d WorldUnit WorldUnit)
+    | WorldEdgeCollision (Point2d WorldUnit WorldUnit)
+
+
+rayIntersection : Point2d WorldUnit WorldUnit -> Point2d WorldUnit WorldUnit -> Grid -> Intersection
+rayIntersection start end grid =
+    let
+        cellBounds : Bounds CellUnit
+        cellBounds =
+            Bounds.from2Coords
+                (worldToCellPoint start |> Coord.floorPoint)
+                (worldToCellPoint end |> Coord.floorPoint)
+
+        walls : List { bounds : BoundingBox2d WorldUnit WorldUnit, isTile : Bool }
+        walls =
+            Bounds.coordRangeFold
+                (\coord list ->
+                    case getCell coord grid of
+                        Just cell ->
+                            GridCell.flatten cell
+                                |> List.concatMap
+                                    (\tile ->
+                                        let
+                                            worldPos =
+                                                cellAndLocalCoordToWorld ( coord, tile.position )
+                                        in
+                                        Tile.getData tile.value
+                                            |> .movementCollision
+                                            |> List.map
+                                                (\a ->
+                                                    { bounds =
+                                                        Bounds.from2Coords
+                                                            (Units.pixelToTile (Bounds.minimum a))
+                                                            (Units.pixelToTile (Bounds.maximum a))
+                                                            |> Bounds.translate worldPos
+                                                            |> Bounds.boundsToBounds2d
+                                                    , isTile = True
+                                                    }
+                                                )
+                                    )
+                                |> (\a -> a ++ list)
+
+                        Nothing ->
+                            { bounds =
+                                Bounds.from2Coords
+                                    (cellAndLocalCoordToWorld ( coord, Coord.xy 0 0 ))
+                                    (cellAndLocalCoordToWorld ( Coord.plus (Coord.xy 1 1) coord, Coord.xy 0 0 ))
+                                    |> Bounds.boundsToBounds2d
+                            , isTile = False
+                            }
+                                :: list
+                )
+                identity
+                cellBounds
+                []
+    in
+    List.filterMap
+        (\{ bounds, isTile } ->
+            BoundingBox2d.lineIntersection
+        )
+        walls

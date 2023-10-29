@@ -2,20 +2,25 @@ module Animal exposing
     ( Animal
     , AnimalData
     , AnimalType(..)
+    , actualPositionWithoutCursor
     , all
     , animalTypeCodec
     , defaultColors
     , getData
     , inside
+    , moveEndTime
     )
 
 import BoundingBox2d
 import Codec exposing (Codec)
 import Color exposing (Colors)
 import Coord exposing (Coord)
+import Duration exposing (Duration, Seconds)
+import Effect.Time
 import List.Nonempty exposing (Nonempty(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
+import Quantity exposing (Quantity, Rate)
 import Sound exposing (Sound(..))
 import Units exposing (WorldUnit)
 import Vector2d
@@ -23,8 +28,38 @@ import Vector2d
 
 type alias Animal =
     { position : Point2d WorldUnit WorldUnit
+    , startTime : Effect.Time.Posix
+    , endPosition : Point2d WorldUnit WorldUnit
     , animalType : AnimalType
     }
+
+
+moveEndTime : Animal -> Effect.Time.Posix
+moveEndTime animal =
+    let
+        travelTime : Duration
+        travelTime =
+            Point2d.distanceFrom animal.position animal.endPosition
+                |> Quantity.at_ (getData animal.animalType).speed
+    in
+    Duration.addTo animal.startTime travelTime
+
+
+actualPositionWithoutCursor : Effect.Time.Posix -> Animal -> Point2d WorldUnit WorldUnit
+actualPositionWithoutCursor time animal =
+    let
+        currentDistance : Quantity Float WorldUnit
+        currentDistance =
+            Duration.from animal.startTime time
+                |> Quantity.at (getData animal.animalType).speed
+
+        distance : Quantity Float WorldUnit
+        distance =
+            Point2d.distanceFrom animal.position animal.endPosition
+    in
+    Quantity.ratio currentDistance distance
+        |> clamp 0 1
+        |> Point2d.interpolateFrom animal.position animal.endPosition
 
 
 type AnimalType
@@ -37,6 +72,7 @@ type alias AnimalData =
     { size : Coord Pixels
     , texturePosition : Coord Pixels
     , sounds : Nonempty ( Float, Sound )
+    , speed : Quantity Float (Rate WorldUnit Seconds)
     }
 
 
@@ -71,18 +107,21 @@ getData animal =
                     , ( 1 / 6, Moo5 )
                     , ( 1 / 6, Moo6 )
                     ]
+            , speed = Quantity.per Duration.second (Units.tileUnit 1)
             }
 
         Hamster ->
             { size = Coord.xy 12 14
             , texturePosition = Coord.xy 141 594
             , sounds = Nonempty ( 1 / 3, Hamster0 ) [ ( 1 / 3, Hamster1 ), ( 1 / 3, Hamster2 ) ]
+            , speed = Quantity.per Duration.second (Units.tileUnit 2)
             }
 
         Sheep ->
             { size = Coord.xy 16 12
             , texturePosition = Coord.xy 99 608
             , sounds = Nonempty ( 0.5, Sheep0 ) [ ( 0.5, Sheep1 ) ]
+            , speed = Quantity.per Duration.second (Units.tileUnit 1.5)
             }
 
 

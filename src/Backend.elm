@@ -1,5 +1,6 @@
 module Backend exposing (app, app_)
 
+import Angle
 import Animal exposing (Animal)
 import AssocList
 import Bounds exposing (Bounds)
@@ -8,6 +9,7 @@ import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
 import Dict
+import Direction2d
 import DisplayName
 import Duration
 import Effect.Command as Command exposing (BackendOnly, Command)
@@ -31,8 +33,10 @@ import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..), MailStatus2(..))
 import Maybe.Extra as Maybe
+import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity
+import Random
 import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import Set exposing (Set)
 import String.Nonempty exposing (NonemptyString(..))
@@ -41,7 +45,7 @@ import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
 import Undo
-import Units exposing (CellUnit)
+import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
 import User exposing (FrontendUser, InviteTree(..))
 
@@ -105,7 +109,7 @@ init =
             , secretLinkCounter = 0
             , errors = []
             , trains = IdDict.empty
-            , cows = IdDict.empty
+            , animals = IdDict.empty
             , lastWorldUpdateTrains = IdDict.empty
             , lastWorldUpdate = Nothing
             , mail = IdDict.empty
@@ -510,15 +514,95 @@ handleWorldUpdate isProduction oldTime time model =
                         |> Just
                 )
                 model3
+
+        newAnimals : IdDict AnimalId Animal
+        newAnimals =
+            IdDict.map
+                (\id animal ->
+                    if
+                        Duration.from (Animal.moveEndTime animal) time
+                            |> Quantity.plus Duration.second
+                            |> Quantity.lessThanZero
+                    then
+                        animal
+
+                    else
+                        let
+                            maybeMove =
+                                Random.step
+                                    (randomMovement animal.position)
+                                    (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis time))
+                                    |> Tuple.first
+                        in
+                        case maybeMove of
+                            Just endPosition ->
+                                { position = animal.position
+                                , startTime = time
+                                , endPosition =
+                                    Grid.rayIntersection animal.position endPosition model.grid
+                                        |> Maybe.withDefault endPosition
+                                , animalType = animal.animalType
+                                }
+
+                            Nothing ->
+                                animal
+                )
+                model.animals
+
+        animalDiff : List ( Id AnimalId, { endPosition : Point2d WorldUnit WorldUnit, startTime : Effect.Time.Posix } )
+        animalDiff =
+            IdDict.merge
+                (\_ _ list -> list)
+                (\id old new list ->
+                    if old.endPosition == new.endPosition then
+                        list
+
+                    else
+                        ( id, { endPosition = new.endPosition, startTime = new.startTime } ) :: list
+                )
+                (\_ _ list -> list)
+                model.animals
+                newAnimals
+                []
     in
     ( { model3
         | lastWorldUpdate = Just time
         , trains = newTrains
         , lastWorldUpdateTrains = model3.trains
         , mail = mergeTrains.mail
+        , animals = newAnimals
       }
-    , Command.batch [ Command.batch emailNotifications.cmds, broadcastChanges ]
+    , Command.batch
+        [ Command.batch emailNotifications.cmds
+        , broadcastChanges
+        , case Nonempty.fromList animalDiff of
+            Just nonempty ->
+                ServerAnimalMovement nonempty
+                    |> Change.ServerChange
+                    |> Nonempty.singleton
+                    |> ChangeBroadcast
+                    |> Effect.Lamdera.broadcast
+
+            Nothing ->
+                Command.none
+        ]
     )
+
+
+randomMovement : Point2d WorldUnit WorldUnit -> Random.Generator (Maybe (Point2d WorldUnit WorldUnit))
+randomMovement position =
+    Random.map3
+        (\shouldMove direction distance ->
+            if shouldMove == 0 then
+                Point2d.translateIn (Direction2d.fromAngle (Angle.degrees direction)) (Units.tileUnit distance) position
+                    |> Just
+
+            else
+                Nothing
+        )
+        (Random.int 0 10)
+        (Random.float 0 360)
+        (Random.float 0 5)
 
 
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -967,10 +1051,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                                     Nothing
                                             )
                             in
-                            ( List.foldl
-                                removeTrain
-                                { model | grid = newGrid }
-                                trainsToRemove
+                            ( List.foldl removeTrain { model | grid = newGrid } trainsToRemove
                                 |> updateUser userId (always newUser)
                             , originalChange
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
@@ -1011,7 +1092,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 Grid.addChange (Grid.localChangeToChange userId localChange2) model.grid
 
                             nextCowId =
-                                IdDict.nextId model.cows |> Id.toInt
+                                IdDict.nextId model.animals |> Id.toInt
 
                             newCows : List ( Id AnimalId, Animal )
                             newCows =
@@ -1034,7 +1115,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
                                                     Nothing ->
                                                         model.trains
-                                            , cows = IdDict.fromList newCows |> IdDict.union model.cows
+                                            , animals = IdDict.fromList newCows |> IdDict.union model.animals
                                         }
                                     |> updateUser
                                         userId
@@ -1162,11 +1243,11 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                                 }
                                             )
                                             { model
-                                                | cows =
+                                                | animals =
                                                     IdDict.update2
                                                         cowId
                                                         (\cow -> { cow | position = position })
-                                                        model.cows
+                                                        model.animals
                                             }
                                         , ( eventId, DropCow cowId position (adjustEventTime time time2) )
                                         , ServerDropCow userId cowId position |> BroadcastToEveryoneElse
@@ -1525,7 +1606,7 @@ viewBoundsChange eventId { viewBounds, previewBounds } sessionId clientId model 
                                     )
                                 )
                                 model.userSessions
-                        , cows = IdDict.fromList newCows |> IdDict.union model.cows
+                        , animals = IdDict.fromList newCows |> IdDict.union model.animals
                         , grid = newGrid
                     }
             in
@@ -1558,7 +1639,7 @@ generateVisibleRegion :
 generateVisibleRegion oldBounds bounds model =
     let
         nextCowId =
-            IdDict.nextId model.cows |> Id.toInt
+            IdDict.nextId model.animals |> Id.toInt
 
         coords : List (Coord CellUnit)
         coords =
@@ -1865,7 +1946,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                 clientId
                 viewBounds
                 userStatus
-                { model2 | grid = newGrid, cows = IdDict.fromList newCows |> IdDict.union model.cows }
+                { model2 | grid = newGrid, animals = IdDict.fromList newCows |> IdDict.union model.animals }
                 |> (case maybeRequestedBy of
                         Just requestedBy ->
                             addSession requestedBy clientId viewBounds userStatus
@@ -1884,7 +1965,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
             , viewBounds = viewBounds
             , trains = model3.trains
             , mail = IdDict.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
-            , cows = model3.cows
+            , cows = model3.animals
             , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
             , users = IdDict.map (\_ a -> backendUserToFrontend a) model3.users
             , inviteTree =

@@ -159,6 +159,7 @@ type ServerChange
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
     | ServerSetTrainsDisabled AreTrainsDisabled
     | ServerLogout
+    | ServerAnimalMovement (Nonempty ( Id AnimalId, { startTime : Effect.Time.Posix, endPosition : Point2d WorldUnit WorldUnit } ))
 
 
 type UserStatus
