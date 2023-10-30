@@ -148,6 +148,7 @@ tests =
                 in
                 Grid.rayIntersection
                     False
+                    Coord.origin
                     (Point2d.xy (Units.tileUnit 0) (Units.tileUnit 1))
                     (Point2d.xy (Units.tileUnit 3) (Units.tileUnit 2))
                     grid

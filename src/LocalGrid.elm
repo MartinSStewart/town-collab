@@ -19,11 +19,14 @@ module LocalGrid exposing
     , restoreMail
     , setTileHotkey
     , update
+    , updateAnimalMovement
     , updateFromBackend
     )
 
 import Animal exposing (Animal, AnimalType(..))
 import AssocList
+import BoundingBox2d
+import BoundingBox2dExtra
 import Bounds exposing (Bounds)
 import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
@@ -36,10 +39,13 @@ import GridCell
 import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
+import LineSegment2d
+import LineSegmentExtra
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
 import Maybe.Extra as Maybe
+import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -219,6 +225,7 @@ updateLocalChange localChange model =
 
                             else
                                 model.grid
+                        , animals = updateAnimalMovement gridChange model.animals
                       }
                         |> addAnimals change.newCells
                     , TilesRemoved change.removed
@@ -593,6 +600,45 @@ updateLocalChange localChange model =
             )
 
 
+updateAnimalMovement :
+    { a | position : Coord WorldUnit, change : Tile, time : Effect.Time.Posix }
+    -> IdDict AnimalId Animal
+    -> IdDict AnimalId Animal
+updateAnimalMovement change animals =
+    IdDict.map
+        (\_ animal ->
+            let
+                size : Coord Pixels
+                size =
+                    Animal.getData animal.animalType |> .size |> Coord.divide (Coord.xy 2 2)
+
+                position : Point2d WorldUnit WorldUnit
+                position =
+                    Animal.actualPositionWithoutCursor change.time animal
+
+                maybeIntersection : Maybe (Point2d WorldUnit WorldUnit)
+                maybeIntersection =
+                    List.concatMap
+                        (\bounds ->
+                            BoundingBox2dExtra.lineIntersection (LineSegment2d.from position animal.endPosition) bounds
+                        )
+                        (Tile.worldMovementBounds size change.change change.position)
+                        |> Quantity.minimumBy (Point2d.distanceFrom position)
+            in
+            case maybeIntersection of
+                Just intersection ->
+                    { animalType = animal.animalType
+                    , position = animal.position
+                    , startTime = animal.startTime
+                    , endPosition = LineSegmentExtra.extendLine position intersection (Units.tileUnit -0.1)
+                    }
+
+                Nothing ->
+                    animal
+        )
+        animals
+
+
 setTileHotkey :
     TileHotkey
     -> TileGroup
@@ -756,12 +802,12 @@ addNotification position notifications =
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
-        ServerGridChange { gridChange, newCows } ->
+        ServerGridChange { gridChange, newAnimals } ->
             let
                 model2 : LocalGrid_
                 model2 =
                     updateLoggedIn
-                        { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
+                        { model | animals = IdDict.fromList newAnimals |> IdDict.union model.animals }
                         (\loggedIn ->
                             { loggedIn
                                 | notifications =
@@ -779,7 +825,10 @@ updateServerChange serverChange model =
                     (Bounds.contains (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first))
                     (model2.viewBounds :: Maybe.toList model.previewBounds)
               then
-                { model2 | grid = Grid.addChange gridChange model2.grid |> .grid }
+                { model2
+                    | grid = Grid.addChange gridChange model2.grid |> .grid
+                    , animals = updateAnimalMovement gridChange model2.animals
+                }
 
               else
                 model2

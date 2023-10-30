@@ -33,6 +33,7 @@ module Tile exposing
     , tileToTileGroup
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
+    , worldMovementBounds
     )
 
 import Angle
@@ -1410,6 +1411,25 @@ defaultBenchColor =
 
 defaultCornerHouseColor =
     TwoDefaultColors { primaryColor = Color.rgb255 101 108 124, secondaryColor = Color.rgb255 103 157 236 }
+
+
+worldMovementBounds : Coord Pixels -> Tile -> Coord WorldUnit -> List (BoundingBox2d WorldUnit WorldUnit)
+worldMovementBounds expandBoundsBy tile worldPos =
+    getData tile
+        |> .movementCollision
+        |> List.map
+            (\a ->
+                BoundingBox2d.from
+                    (Bounds.minimum a
+                        |> Coord.minus expandBoundsBy
+                        |> Units.pixelToTilePoint
+                    )
+                    (Bounds.maximum a
+                        |> Coord.plus expandBoundsBy
+                        |> Units.pixelToTilePoint
+                    )
+                    |> BoundingBox2d.translateBy (Coord.toVector2d worldPos)
+            )
 
 
 getData : Tile -> TileData unit

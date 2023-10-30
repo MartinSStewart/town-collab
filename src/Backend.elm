@@ -28,6 +28,7 @@ import GridCell
 import Id exposing (AnimalId, EventId, Id, MailId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
+import LineSegmentExtra
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
@@ -515,9 +516,6 @@ handleWorldUpdate isProduction oldTime time model =
                 )
                 model3
 
-        _ =
-            Debug.log "animal count" (IdDict.size model.animals)
-
         newAnimals : IdDict AnimalId Animal
         newAnimals =
             IdDict.map
@@ -531,37 +529,28 @@ handleWorldUpdate isProduction oldTime time model =
 
                     else
                         let
+                            start =
+                                animal.endPosition
+
                             maybeMove : Maybe (Point2d WorldUnit WorldUnit)
                             maybeMove =
                                 Random.step
-                                    (randomMovement animal.position)
+                                    (randomMovement start)
                                     (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis time))
                                     |> Tuple.first
                         in
                         case maybeMove of
                             Just endPosition ->
                                 let
-                                    start =
-                                        animal.endPosition
+                                    size =
+                                        Animal.getData animal.animalType |> .size |> Coord.divide (Coord.xy 2 2)
                                 in
                                 { position = start
                                 , startTime = time
                                 , endPosition =
-                                    case Grid.rayIntersection True start endPosition model.grid of
+                                    case Grid.rayIntersection True size start endPosition model.grid of
                                         Just { intersection } ->
-                                            let
-                                                distance : Quantity Float WorldUnit
-                                                distance =
-                                                    Point2d.distanceFrom start intersection
-                                            in
-                                            Point2d.interpolateFrom
-                                                start
-                                                intersection
-                                                (Quantity.ratio
-                                                    (distance |> Quantity.minus (Units.tileUnit 0.1))
-                                                    distance
-                                                    |> max 0
-                                                )
+                                            LineSegmentExtra.extendLine start intersection (Units.tileUnit -0.1)
 
                                         Nothing ->
                                             endPosition
@@ -632,9 +621,9 @@ randomMovement position =
             else
                 Nothing
         )
-        (Random.int 0 0)
+        (Random.int 0 2)
         (Random.float 0 360)
-        (Random.float 0 5)
+        (Random.float 2 10)
 
 
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -1126,8 +1115,8 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                             nextCowId =
                                 IdDict.nextId model.animals |> Id.toInt
 
-                            newCows : List ( Id AnimalId, Animal )
-                            newCows =
+                            newAnimals : List ( Id AnimalId, Animal )
+                            newAnimals =
                                 List.concatMap LocalGrid.getCowsForCell newCells
                                     |> List.indexedMap (\index cow -> ( Id.fromInt (nextCowId + index), cow ))
                         in
@@ -1147,7 +1136,10 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
                                                     Nothing ->
                                                         model.trains
-                                            , animals = IdDict.fromList newCows |> IdDict.union model.animals
+                                            , animals =
+                                                IdDict.union
+                                                    (LocalGrid.updateAnimalMovement localChange model.animals)
+                                                    (IdDict.fromList newAnimals)
                                         }
                                     |> updateUser
                                         userId
@@ -1161,7 +1153,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 , ServerGridChange
                                     { gridChange = Grid.localChangeToChange userId localChange2
                                     , newCells = newCells
-                                    , newCows = newCows
+                                    , newAnimals = newAnimals
                                     }
                                     |> BroadcastToEveryoneElse
                                 )

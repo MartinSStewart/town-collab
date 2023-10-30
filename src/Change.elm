@@ -6,6 +6,7 @@ module Change exposing
     , Change(..)
     , LocalChange(..)
     , LoggedIn_
+    , MovementChange
     , NotLoggedIn_
     , Report
     , ServerChange(..)
@@ -125,7 +126,11 @@ type AreTrainsDisabled
 
 
 type ServerChange
-    = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit), newCows : List ( Id AnimalId, Animal ) }
+    = ServerGridChange
+        { gridChange : Grid.GridChange
+        , newCells : List (Coord CellUnit)
+        , newAnimals : List ( Id AnimalId, Animal )
+        }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
     | ServerPickupCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | ServerDropCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
@@ -159,15 +164,14 @@ type ServerChange
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
     | ServerSetTrainsDisabled AreTrainsDisabled
     | ServerLogout
-    | ServerAnimalMovement
-        (Nonempty
-            ( Id AnimalId
-            , { startTime : Effect.Time.Posix
-              , position : Point2d WorldUnit WorldUnit
-              , endPosition : Point2d WorldUnit WorldUnit
-              }
-            )
-        )
+    | ServerAnimalMovement (Nonempty ( Id AnimalId, MovementChange ))
+
+
+type alias MovementChange =
+    { startTime : Effect.Time.Posix
+    , position : Point2d WorldUnit WorldUnit
+    , endPosition : Point2d WorldUnit WorldUnit
+    }
 
 
 type UserStatus

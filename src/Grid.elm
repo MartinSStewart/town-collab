@@ -874,11 +874,12 @@ type IntersectionType
 
 rayIntersection :
     Bool
+    -> Coord Pixels
     -> Point2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
     -> Grid
     -> Maybe { intersection : Point2d WorldUnit WorldUnit, intersectionType : IntersectionType }
-rayIntersection includeWater start end grid =
+rayIntersection includeWater expandBoundsBy start end grid =
     let
         line : LineSegment2d WorldUnit WorldUnit
         line =
@@ -951,22 +952,9 @@ rayIntersection includeWater start end grid =
                             GridCell.flatten cell
                                 |> List.concatMap
                                     (\tile ->
-                                        let
-                                            worldPos =
-                                                cellAndLocalCoordToWorld ( coord, tile.position )
-                                        in
-                                        Tile.getData tile.value
-                                            |> .movementCollision
-                                            |> List.map
-                                                (\a ->
-                                                    { bounds =
-                                                        BoundingBox2d.from
-                                                            (Units.pixelToTilePoint (Bounds.minimum a))
-                                                            (Units.pixelToTilePoint (Bounds.maximum a))
-                                                            |> BoundingBox2d.translateBy (Coord.toVector2d worldPos)
-                                                    , intersectionType = TileIntersection
-                                                    }
-                                                )
+                                        cellAndLocalCoordToWorld ( coord, tile.position )
+                                            |> Tile.worldMovementBounds expandBoundsBy tile.value
+                                            |> List.map (\a -> { bounds = a, intersectionType = TileIntersection })
                                     )
                                 |> (\a -> a ++ water ++ list)
 
