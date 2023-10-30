@@ -1852,7 +1852,7 @@ houseDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 7 6) (Coord.xy 48 24) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 7 23) (Coord.xy 48 24) ]
     }
 
 
@@ -1871,7 +1871,7 @@ houseRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 3 5) (Coord.xy 27 46) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 3 23) (Coord.xy 27 46) ]
     }
 
 
@@ -1890,7 +1890,7 @@ houseUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 6) (Coord.xy 48 27) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 23) (Coord.xy 48 27) ]
     }
 
 
@@ -1909,7 +1909,7 @@ houseLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 10 5) (Coord.xy 27 46) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 10 23) (Coord.xy 27 46) ]
     }
 
 

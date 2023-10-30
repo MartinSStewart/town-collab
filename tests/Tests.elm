@@ -1,16 +1,19 @@
 module Tests exposing (..)
 
+import Animal exposing (AnimalType(..))
 import Color
 import Coord
 import Effect.Time
 import Expect exposing (Expectation)
-import Grid
+import Grid exposing (IntersectionType(..))
 import GridCell
 import Id
+import Point2d
 import Quantity exposing (Quantity(..))
 import Test exposing (Test, describe, test)
 import Tile exposing (Tile(..))
 import Train exposing (Train(..))
+import Units
 
 
 user0 =
@@ -56,6 +59,7 @@ tests =
                                 , change = RailHorizontal
                                 , userId = user0
                                 , colors = { primaryColor = Color.white, secondaryColor = Color.white }
+                                , time = Effect.Time.millisToPosix 0
                                 }
                             |> .grid
                             |> Grid.getCell (Coord.tuple ( 0, 0 ))
@@ -68,6 +72,7 @@ tests =
                                   , userId = user0
                                   , value = RailHorizontal
                                   , colors = { primaryColor = Color.white, secondaryColor = Color.white }
+                                  , time = Effect.Time.millisToPosix 0
                                   }
                                 ]
 
@@ -84,6 +89,7 @@ tests =
                                 , change = HouseDown
                                 , userId = user0
                                 , colors = { primaryColor = Color.white, secondaryColor = Color.white }
+                                , time = Effect.Time.millisToPosix 0
                                 }
                             |> .grid
                             |> Grid.addChange
@@ -91,6 +97,7 @@ tests =
                                 , change = HouseDown
                                 , userId = user0
                                 , colors = { primaryColor = Color.white, secondaryColor = Color.white }
+                                , time = Effect.Time.millisToPosix 0
                                 }
                             |> .grid
                             |> Grid.getCell (Coord.tuple ( 1, 0 ))
@@ -103,6 +110,7 @@ tests =
                                   , userId = user0
                                   , value = HouseDown
                                   , colors = { primaryColor = Color.white, secondaryColor = Color.white }
+                                  , time = Effect.Time.millisToPosix 0
                                   }
                                 ]
 
@@ -124,289 +132,43 @@ tests =
                     (Coord.tuple ( 1, 0 ))
                     RailBottomToRight
                     |> Expect.equal False
-
-        --, test "Move train" <|
-        --    \_ ->
-        --        let
-        --            grid =
-        --                Grid.empty
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( 0, 0 )
-        --                        , change = TrainHouseLeft
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( -4, 2 )
-        --                        , change = RailBottomToRight
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --        in
-        --        Train.moveTrain
-        --            (Id.fromInt 0)
-        --            Train.defaultMaxSpeed
-        --            (Effect.Time.millisToPosix 0)
-        --            (Effect.Time.millisToPosix 1000)
-        --            { grid = grid, mail = AssocList.empty }
-        --            (Train
-        --                { position = Coord.tuple ( 0, 0 )
-        --                , path = Tile.trainHouseLeftRailPath
-        --                , previousPaths = []
-        --                , t = 0.5
-        --                , speed = Quantity -5
-        --                , home = Coord.origin
-        --                , homePath = Tile.trainHouseLeftRailPath
-        --                , isStuck = Nothing
-        --                , status = Train.Travelling
-        --                , owner = Id.fromInt 123
-        --                }
-        --            )
-        --            |> Expect.equal
-        --                (Train
-        --                    { position = Coord.tuple ( -4, 2 )
-        --                    , path = RailPathBottomToRight
-        --                    , previousPaths =
-        --                        [ { path = RailPathHorizontal { length = 3, offsetX = 0, offsetY = 2 }
-        --                          , position = ( Quantity 0, Quantity 0 )
-        --                          , reversed = False
-        --                          }
-        --                        ]
-        --                    , t = 0.5570423008216338
-        --                    , speed = Quantity 5
-        --                    , home = Coord.origin
-        --                    , homePath = Tile.trainHouseLeftRailPath
-        --                    , isStuck = Nothing
-        --                    , status = Train.Travelling
-        --                    , owner = Id.fromInt 123
-        --                    }
-        --                )
-        --, test "Train coach is correctly placed" <|
-        --    \_ ->
-        --        let
-        --            grid : Grid
-        --            grid =
-        --                Grid.empty
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( 0, 0 )
-        --                        , change = TrainHouseLeft
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( -4, 2 )
-        --                        , change = RailBottomToRight
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --
-        --            train : Train
-        --            train =
-        --                Train.moveTrain
-        --                    Train.defaultMaxSpeed
-        --                    (Effect.Time.millisToPosix 0)
-        --                    (Effect.Time.millisToPosix 1000)
-        --                    { grid = grid, mail = AssocList.empty }
-        --                    { position = Coord.tuple ( 0, 0 )
-        --                    , path = Tile.trainHouseLeftRailPath
-        --                    , previousPaths = []
-        --                    , t = 0.5
-        --                    , speed = Quantity -2
-        --                    , stoppedAtPostOffice = Nothing
-        --                    }
-        --        in
-        --        Train.getCoach train
-        --            |> Expect.equal
-        --                { position = Coord.tuple ( 0, 0 )
-        --                , path = RailPathHorizontal { length = 3, offsetX = 0, offsetY = 2 }
-        --                , t = 0
-        --                }
-        --, Test.only <|
-        --    test "Train coach is correctly placed 2" <|
-        --        \_ ->
-        --            let
-        --                grid : Grid
-        --                grid =
-        --                    Grid.empty
-        --                        |> Grid.addChange
-        --                            { position = Coord.tuple ( 0, 0 )
-        --                            , change = RailHorizontal
-        --                            , userId = user0
-        --                            , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                            }
-        --                        |> .grid
-        --                        |> Grid.addChange
-        --                            { position = Coord.tuple ( 1, 0 )
-        --                            , change = RailHorizontal
-        --                            , userId = user0
-        --                            , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                            }
-        --                        |> .grid
-        --                        |> Grid.addChange
-        --                            { position = Coord.tuple ( 2, 0 )
-        --                            , change = RailHorizontal
-        --                            , userId = user0
-        --                            , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                            }
-        --                        |> .grid
-        --                        |> Grid.addChange
-        --                            { position = Coord.tuple ( 3, 0 )
-        --                            , change = RailHorizontal
-        --                            , userId = user0
-        --                            , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                            }
-        --                        |> .grid
-        --
-        --                train : Train
-        --                train =
-        --                    Train.moveTrain
-        --                        2
-        --                        (Effect.Time.millisToPosix 0)
-        --                        (Effect.Time.millisToPosix 1000)
-        --                        { grid = grid, mail = AssocList.empty }
-        --                        { position = Coord.tuple ( 0, 0 )
-        --                        , path = RailPathHorizontal { length = 1, offsetX = 0, offsetY = 0 }
-        --                        , previousPaths = []
-        --                        , t = 0.7
-        --                        , speed = Quantity 2
-        --                        , stoppedAtPostOffice = Nothing
-        --                        }
-        --            in
-        --            Train.getCoach train
-        --                |> Expect.equal
-        --                    { position = Coord.tuple ( 0, 0 )
-        --                    , path = RailPathHorizontal { length = 1, offsetX = 0, offsetY = 0 }
-        --                    , t = 0.8
-        --                    }
-        --, test "Move train with small steps equals single large step" <|
-        --    \_ ->
-        --        let
-        --            grid =
-        --                Grid.empty
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( 0, 0 )
-        --                        , change = TrainHouseLeft
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( -1, 2 )
-        --                        , change = RailHorizontal
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( -2, 2 )
-        --                        , change = RailHorizontal
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( -6, 2 )
-        --                        , change = RailBottomToRight
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --                    |> Grid.addChange
-        --                        { position = Coord.tuple ( -6, 6 )
-        --                        , change = RailTopToRight
-        --                        , userId = user0
-        --                        , colors = { primaryColor = Color.white, secondaryColor = Color.white }
-        --                        }
-        --                    |> .grid
-        --
-        --            milliseconds =
-        --                4000
-        --
-        --            smallSteps : Train
-        --            smallSteps =
-        --                List.range 1 200
-        --                    |> List.foldl
-        --                        (\_ train ->
-        --                            Train.moveTrain
-        --                                Train.defaultMaxSpeed
-        --                                (Effect.Time.millisToPosix 0)
-        --                                (Effect.Time.millisToPosix (milliseconds // 200))
-        --                                { grid = grid, mail = AssocList.empty }
-        --                                train
-        --                        )
-        --                        { position = Coord.tuple ( 0, 0 )
-        --                        , path = Tile.trainHouseLeftRailPath
-        --                        , t = 0.5
-        --                        , speed = Quantity -0.1
-        --                        , stoppedAtPostOffice = Nothing
-        --                        , previousPaths = []
-        --                        }
-        --
-        --            largeStep : Train
-        --            largeStep =
-        --                Train.moveTrain
-        --                    Train.defaultMaxSpeed
-        --                    (Effect.Time.millisToPosix 0)
-        --                    (Effect.Time.millisToPosix milliseconds)
-        --                    { grid = grid, mail = AssocList.empty }
-        --                    { position = Coord.tuple ( 0, 0 )
-        --                    , path = Tile.trainHouseLeftRailPath
-        --                    , t = 0.5
-        --                    , speed = Quantity -0.1
-        --                    , stoppedAtPostOffice = Nothing
-        --                    , previousPaths = []
-        --                    }
-        --        in
-        --        trainsApproximatelyEqual smallSteps largeStep
+        , test "Grid intersection test" <|
+            \_ ->
+                let
+                    grid =
+                        Grid.addChange
+                            { position = Coord.xy 1 0
+                            , change = LogCabinDown
+                            , userId = Id.fromInt 0
+                            , colors = { primaryColor = Color.black, secondaryColor = Color.black }
+                            , time = time 0
+                            }
+                            Grid.empty
+                            |> .grid
+                in
+                Grid.rayIntersection
+                    False
+                    (Point2d.xy (Units.tileUnit 0) (Units.tileUnit 1))
+                    (Point2d.xy (Units.tileUnit 3) (Units.tileUnit 2))
+                    grid
+                    |> Expect.equal
+                        (Just
+                            { intersectionType = TileIntersection
+                            , intersection = Point2d.unsafe { x = 1.1, y = 1.3666666666666667 }
+                            }
+                        )
+        , test "Animal position" <|
+            \_ ->
+                Animal.actualPositionWithoutCursor
+                    (time 3)
+                    { animalType = Hamster
+                    , startTime = time 0
+                    , position = Point2d.origin
+                    , endPosition = Point2d.unsafe { x = 10, y = 0 }
+                    }
+                    |> Expect.equal (Point2d.unsafe { x = 6, y = 0 })
         ]
-
-
-trainsApproximatelyEqual : Train -> Train -> Expectation
-trainsApproximatelyEqual (Train expected) (Train actual) =
-    if
-        (expected.path == actual.path)
-            && (expected.speed |> Quantity.minus actual.speed |> Quantity.abs |> Quantity.lessThan (Quantity 0.01))
-            && (expected.position == actual.position)
-            && (abs (expected.t - actual.t) < 0.01)
-            && (expected.previousPaths == actual.previousPaths)
-    then
-        Expect.pass
-
-    else
-        Expect.equal expected actual
 
 
 time seconds =
     Effect.Time.millisToPosix ((seconds * 1000) + 10000000)
-
-
-
---
---checkGridValue : ( Coord CellUnit, Coord LocalUnit ) -> Maybe Ascii -> LocalModel.LocalModel a LocalGrid.LocalGrid -> TestResult
---checkGridValue ( cellPosition, localPosition ) value =
---    LocalGrid.localModel
---        >> .grid
---        >> Grid.getCell cellPosition
---        >> Maybe.andThen
---            (GridCell.flatten EverySet.empty EverySet.empty
---                >> List.find (.position >> (==) localPosition)
---                >> Maybe.map .value
---            )
---        >> (\ascii ->
---                if ascii == value then
---                    Passed
---
---                else
---                    failed
---                        ("Wrong value found in grid "
---                            ++ Debug.toString ascii
---                            ++ " at cell position "
---                            ++ Debug.toString cellPosition
---                            ++ " and local position "
---                            ++ Debug.toString localPosition
---                        )
---           )

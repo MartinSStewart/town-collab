@@ -1138,7 +1138,7 @@ updateServerChange serverChange model =
                                 animalId
                                 (\animal ->
                                     { animal
-                                        | position = animal.endPosition
+                                        | position = movement.position
                                         , endPosition = movement.endPosition
                                         , startTime = movement.startTime
                                     }

@@ -19,7 +19,7 @@ import Json.Decode
 import Json.Encode
 import LocalGrid
 import Postmark
-import Route exposing (LoginOrInviteToken(..), LoginToken, Route(..))
+import Route exposing (LoginOrInviteToken(..), LoginToken, PageRoute(..), Route(..))
 import Test exposing (Test)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, LoadingLocalModel(..), ToBackend(..), ToFrontend)
 import Unsafe
@@ -245,7 +245,7 @@ endToEndTests =
                                                     (Route.InternalRoute
                                                         { viewPoint = Coord.origin
                                                         , loginOrInviteToken = Just (LoginToken2 loginEmail.loginToken)
-                                                        , showInbox = False
+                                                        , page = WorldRoute
                                                         }
                                                     )
                                                 |> Unsafe.url

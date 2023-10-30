@@ -35,7 +35,7 @@ import MailEditor exposing (BackendMail, MailStatus(..), MailStatus2(..))
 import Maybe.Extra as Maybe
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
-import Quantity
+import Quantity exposing (Quantity)
 import Random
 import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import Set exposing (Set)
@@ -515,19 +515,23 @@ handleWorldUpdate isProduction oldTime time model =
                 )
                 model3
 
+        _ =
+            Debug.log "animal count" (IdDict.size model.animals)
+
         newAnimals : IdDict AnimalId Animal
         newAnimals =
             IdDict.map
                 (\id animal ->
                     if
                         Duration.from (Animal.moveEndTime animal) time
-                            |> Quantity.plus Duration.second
+                            |> Quantity.minus Duration.second
                             |> Quantity.lessThanZero
                     then
                         animal
 
                     else
                         let
+                            maybeMove : Maybe (Point2d WorldUnit WorldUnit)
                             maybeMove =
                                 Random.step
                                     (randomMovement animal.position)
@@ -536,11 +540,31 @@ handleWorldUpdate isProduction oldTime time model =
                         in
                         case maybeMove of
                             Just endPosition ->
-                                { position = animal.position
+                                let
+                                    start =
+                                        animal.endPosition
+                                in
+                                { position = start
                                 , startTime = time
                                 , endPosition =
-                                    Grid.rayIntersection animal.position endPosition model.grid
-                                        |> Maybe.withDefault endPosition
+                                    case Grid.rayIntersection True start endPosition model.grid of
+                                        Just { intersection } ->
+                                            let
+                                                distance : Quantity Float WorldUnit
+                                                distance =
+                                                    Point2d.distanceFrom start intersection
+                                            in
+                                            Point2d.interpolateFrom
+                                                start
+                                                intersection
+                                                (Quantity.ratio
+                                                    (distance |> Quantity.minus (Units.tileUnit 0.1))
+                                                    distance
+                                                    |> max 0
+                                                )
+
+                                        Nothing ->
+                                            endPosition
                                 , animalType = animal.animalType
                                 }
 
@@ -549,7 +573,14 @@ handleWorldUpdate isProduction oldTime time model =
                 )
                 model.animals
 
-        animalDiff : List ( Id AnimalId, { endPosition : Point2d WorldUnit WorldUnit, startTime : Effect.Time.Posix } )
+        animalDiff :
+            List
+                ( Id AnimalId
+                , { position : Point2d WorldUnit WorldUnit
+                  , endPosition : Point2d WorldUnit WorldUnit
+                  , startTime : Effect.Time.Posix
+                  }
+                )
         animalDiff =
             IdDict.merge
                 (\_ _ list -> list)
@@ -558,7 +589,8 @@ handleWorldUpdate isProduction oldTime time model =
                         list
 
                     else
-                        ( id, { endPosition = new.endPosition, startTime = new.startTime } ) :: list
+                        ( id, { position = new.position, endPosition = new.endPosition, startTime = new.startTime } )
+                            :: list
                 )
                 (\_ _ list -> list)
                 model.animals
@@ -600,7 +632,7 @@ randomMovement position =
             else
                 Nothing
         )
-        (Random.int 0 10)
+        (Random.int 0 0)
         (Random.float 0 360)
         (Random.float 0 5)
 
