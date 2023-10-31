@@ -4384,7 +4384,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
     List.filterMap
         (\( cowId, animal ) ->
             case LoadingPage.animalActualPosition cowId model of
-                Just { position } ->
+                Just { position, isHeld } ->
                     if BoundingBox2d.contains position viewBounds_ then
                         let
                             point =
@@ -4397,7 +4397,16 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                                 Animal.getData animal.animalType
                         in
                         Effect.WebGL.entityWith
-                            [ Shaders.blend, Shaders.scissorBox scissors ]
+                            ([ Shaders.blend
+                             , Shaders.scissorBox scissors
+                             ]
+                                ++ (if isHeld then
+                                        []
+
+                                    else
+                                        [ Shaders.depthTest ]
+                                   )
+                            )
                             Shaders.instancedVertexShader
                             Shaders.fragmentShader
                             Train.instancedMesh

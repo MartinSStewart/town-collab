@@ -1,6 +1,7 @@
 module Tests exposing (..)
 
 import Animal exposing (AnimalType(..))
+import BoundingBox2d
 import Color
 import Coord
 import Effect.Time
@@ -14,6 +15,7 @@ import Test exposing (Test, describe, test)
 import Tile exposing (Tile(..))
 import Train exposing (Train(..))
 import Units
+import Vector2d
 
 
 user0 =
@@ -148,7 +150,7 @@ tests =
                 in
                 Grid.rayIntersection
                     False
-                    Coord.origin
+                    Vector2d.zero
                     (Point2d.xy (Units.tileUnit 0) (Units.tileUnit 1))
                     (Point2d.xy (Units.tileUnit 3) (Units.tileUnit 2))
                     grid
@@ -168,6 +170,41 @@ tests =
                     , endPosition = Point2d.unsafe { x = 10, y = 0 }
                     }
                     |> Expect.equal (Point2d.unsafe { x = 6, y = 0 })
+        , test "Grid point collision" <|
+            \_ ->
+                let
+                    grid =
+                        Grid.addChange
+                            { position = Coord.xy 55 29
+                            , change = HouseDown
+                            , userId = Id.fromInt 0
+                            , colors = { primaryColor = Color.black, secondaryColor = Color.black }
+                            , time = time 0
+                            }
+                            Grid.empty
+                            |> .grid
+                in
+                Grid.pointInside
+                    False
+                    (Animal.getData Cow
+                        |> .size
+                        |> Units.pixelToTileVector
+                        |> Vector2d.scaleBy 0.5
+                        |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
+                    )
+                    (Point2d.xy (Units.tileUnit 56) (Units.tileUnit 32.1))
+                    grid
+                    |> Expect.equal
+                        [ { intersectionType = TileIntersection
+                          , bounds =
+                                BoundingBox2d.fromExtrema
+                                    { maxX = Quantity 58.35
+                                    , maxY = Quantity 32.15555555555556
+                                    , minX = Quantity 54.75
+                                    , minY = Quantity 29.844444444444445
+                                    }
+                          }
+                        ]
         ]
 
 

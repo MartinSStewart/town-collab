@@ -1415,18 +1415,14 @@ defaultCornerHouseColor =
 
 worldMovementBounds : Vector2d WorldUnit WorldUnit -> Tile -> Coord WorldUnit -> List (BoundingBox2d WorldUnit WorldUnit)
 worldMovementBounds expandBoundsBy tile worldPos =
-    getData tile
-        |> .movementCollision
-        |> List.map
-            (\a ->
-                BoundingBox2d.from
-                    (Bounds.minimum a
-                        |> Units.pixelToTilePoint
-                        |> Point2d.translateBy (Vector2d.reverse expandBoundsBy)
-                    )
-                    (Bounds.maximum a |> Units.pixelToTilePoint |> Point2d.translateBy expandBoundsBy)
-                    |> BoundingBox2d.translateBy (Coord.toVector2d worldPos)
-            )
+    List.map
+        (\a ->
+            BoundingBox2d.from
+                (Bounds.minimum a |> Units.pixelToTilePoint |> Point2d.translateBy (Vector2d.reverse expandBoundsBy))
+                (Bounds.maximum a |> Units.pixelToTilePoint |> Point2d.translateBy expandBoundsBy)
+                |> BoundingBox2d.translateBy (Coord.toVector2d worldPos)
+        )
+        (getData tile).movementCollision
 
 
 getData : Tile -> TileData unit
@@ -1869,7 +1865,7 @@ houseDown =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 7 23) (Coord.xy 48 24) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 7 24) (Coord.xy 48 24) ]
     }
 
 
@@ -1907,7 +1903,7 @@ houseUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 23) (Coord.xy 48 27) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 24) (Coord.xy 48 27) ]
     }
 
 
@@ -2673,7 +2669,7 @@ pineTree1 =
     , size = Coord.xy 1 2
     , tileCollision = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 7) (Coord.xy 12 8) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 6 25) (Coord.xy 10 8) ]
     }
 
 
@@ -2683,7 +2679,7 @@ pineTree2 =
     , size = Coord.xy 1 2
     , tileCollision = Set.fromList [ ( 0, 1 ) ] |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 8) (Coord.xy 12 9) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 26) (Coord.xy 9 9) ]
     }
 
 
@@ -2693,7 +2689,7 @@ bigPineTree =
     , size = Coord.xy 3 3
     , tileCollision = Set.fromList [ ( 1, 2 ) ] |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 25 41) (Coord.xy 12 10) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 25 41) (Coord.xy 10 10) ]
     }
 
 
@@ -2831,7 +2827,7 @@ road4Way =
     , size = Coord.xy 3 3
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 49) (Coord.xy 3 3) ]
     }
 
 
@@ -3017,7 +3013,7 @@ busStopLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 3 4) (Coord.xy 12 29) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 3 20) (Coord.xy 12 29) ]
     }
 
 
@@ -3032,7 +3028,7 @@ busStopRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 4) (Coord.xy 12 29) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 20) (Coord.xy 12 29) ]
     }
 
 
@@ -3047,7 +3043,7 @@ busStopUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 0) (Coord.xy 31 13) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 18) (Coord.xy 31 13) ]
     }
 
 
@@ -3086,7 +3082,7 @@ statue =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 14 10) (Coord.xy 12 9) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 14 27) (Coord.xy 12 9) ]
     }
 
 
@@ -3334,7 +3330,7 @@ apartmentUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 48) (Coord.xy 40 38) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 52) (Coord.xy 40 38) ]
     }
 
 
@@ -3476,7 +3472,7 @@ benchLeft =
     , size = Coord.xy 1 2
     , tileCollision = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 1 3) (Coord.xy 7 13) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 1 21) (Coord.xy 7 13) ]
     }
 
 
@@ -3486,7 +3482,7 @@ benchRight =
     , size = Coord.xy 1 2
     , tileCollision = [ ( 0, 1 ) ] |> Set.fromList |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 12 3) (Coord.xy 7 13) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 12 21) (Coord.xy 7 13) ]
     }
 
 
@@ -3629,7 +3625,7 @@ cornerHouseDownLeft =
     , railPath = NoRailPath
     , movementCollision =
         [ Bounds.fromCoordAndSize (Coord.xy 5 33) (Coord.xy 30 39)
-        , Bounds.fromCoordAndSize (Coord.xy 0 29) (Coord.xy 60 25)
+        , Bounds.fromCoordAndSize (Coord.xy 0 47) (Coord.xy 60 25)
         ]
     }
 
@@ -3650,7 +3646,7 @@ cornerHouseDownRight =
     , railPath = NoRailPath
     , movementCollision =
         [ Bounds.fromCoordAndSize (Coord.xy 25 33) (Coord.xy 30 39)
-        , Bounds.fromCoordAndSize (Coord.xy 0 29) (Coord.xy 60 25)
+        , Bounds.fromCoordAndSize (Coord.xy 0 47) (Coord.xy 60 25)
         ]
     }
 
@@ -3679,7 +3675,7 @@ dogHouseUp =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 6 21) (Coord.xy 10 13) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 4 21) (Coord.xy 10 13) ]
     }
 
 
@@ -3693,7 +3689,7 @@ dogHouseLeft =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 4 8) (Coord.xy 14 9) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 4 26) (Coord.xy 14 9) ]
     }
 
 
@@ -3707,7 +3703,7 @@ dogHouseRight =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 6) (Coord.xy 14 9) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 24) (Coord.xy 14 9) ]
     }
 
 

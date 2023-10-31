@@ -26,7 +26,7 @@ module LocalGrid exposing
 
 import Animal exposing (Animal, AnimalType(..))
 import AssocList
-import BoundingBox2d
+import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
 import Bounds exposing (Bounds)
 import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
@@ -612,31 +612,53 @@ updateAnimalMovement change animals =
             let
                 size : Vector2d WorldUnit WorldUnit
                 size =
-                    (Animal.getData animal.animalType).size |> Units.pixelToTileVector |> Vector2d.scaleBy 0.5
+                    (Animal.getData animal.animalType).size
+                        |> Units.pixelToTileVector
+                        |> Vector2d.scaleBy 0.5
+                        |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
 
                 position : Point2d WorldUnit WorldUnit
                 position =
                     Animal.actualPositionWithoutCursor change.time animal
 
-                maybeIntersection : Maybe (Point2d WorldUnit WorldUnit)
-                maybeIntersection =
-                    List.concatMap
-                        (\bounds ->
-                            BoundingBox2dExtra.lineIntersection (LineSegment2d.from position animal.endPosition) bounds
-                        )
-                        (Tile.worldMovementBounds size change.change change.position)
-                        |> Quantity.minimumBy (Point2d.distanceFrom position)
-            in
-            case maybeIntersection of
-                Just intersection ->
-                    { animalType = animal.animalType
-                    , position = animal.position
-                    , startTime = animal.startTime
-                    , endPosition = LineSegmentExtra.extendLine position intersection (Quantity.negate Animal.moveCollisionThreshold)
-                    }
+                changeBounds =
+                    Tile.worldMovementBounds size change.change change.position
 
-                Nothing ->
-                    animal
+                inside =
+                    List.filter (BoundingBox2d.contains position) changeBounds
+            in
+            if List.isEmpty inside then
+                let
+                    maybeIntersection : Maybe (Point2d WorldUnit WorldUnit)
+                    maybeIntersection =
+                        List.concatMap
+                            (\bounds ->
+                                BoundingBox2dExtra.lineIntersection (LineSegment2d.from position animal.endPosition) bounds
+                            )
+                            changeBounds
+                            |> Quantity.minimumBy (Point2d.distanceFrom position)
+                in
+                case maybeIntersection of
+                    Just intersection ->
+                        { animalType = animal.animalType
+                        , position = animal.position
+                        , startTime = animal.startTime
+                        , endPosition = intersection
+                        }
+
+                    Nothing ->
+                        animal
+
+            else
+                let
+                    movedTo =
+                        moveOutOfCollision position changeBounds
+                in
+                { animalType = animal.animalType
+                , position = movedTo
+                , startTime = animal.startTime
+                , endPosition = movedTo
+                }
         )
         animals
 
@@ -1312,16 +1334,22 @@ placeAnimal position grid animal =
                 )
                 position
                 grid
-                |> List.map
-                    (\inside ->
-                        BoundingBox2d.extrema inside.bounds
-                            |> .maxY
-                            |> Point2d.xy (Point2d.xCoordinate position)
-                    )
-                |> Quantity.maximumBy Point2d.yCoordinate
-                |> Maybe.withDefault position
+                |> List.map .bounds
+                |> moveOutOfCollision position
     in
     { animal | position = position2, endPosition = position2 }
+
+
+moveOutOfCollision :
+    Point2d WorldUnit WorldUnit
+    -> List (BoundingBox2d WorldUnit WorldUnit)
+    -> Point2d WorldUnit WorldUnit
+moveOutOfCollision position bounds =
+    List.map
+        (\boundingBox -> BoundingBox2d.extrema boundingBox |> .maxY |> Point2d.xy (Point2d.xCoordinate position))
+        bounds
+        |> Quantity.maximumBy Point2d.yCoordinate
+        |> Maybe.withDefault position
 
 
 moveCursor : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )

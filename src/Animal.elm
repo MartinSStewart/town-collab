@@ -37,7 +37,7 @@ type alias Animal =
 
 moveCollisionThreshold : Quantity Float WorldUnit
 moveCollisionThreshold =
-    Units.tileUnit 0.1
+    Units.tileUnit 0.01
 
 
 moveEndTime : Animal -> Effect.Time.Posix

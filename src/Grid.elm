@@ -599,6 +599,21 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                                 )
                                 data.texturePosition
                                 data.size
+                --++ List.concatMap
+                --    (\boundingBox ->
+                --        Sprite.spriteWithZ
+                --            0.25
+                --            Color.white
+                --            Color.white
+                --            (Coord.multiply Units.tileSize position2
+                --                |> Coord.plus (Bounds.minimum boundingBox |> Coord.changeUnit)
+                --            )
+                --            -0.9
+                --            (Bounds.size boundingBox |> Coord.changeUnit)
+                --            (Coord.xy 508 28)
+                --            (Coord.xy 1 1)
+                --    )
+                --    data.movementCollision
 
             else
                 []

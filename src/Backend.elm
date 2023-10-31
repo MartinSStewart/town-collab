@@ -549,7 +549,7 @@ handleWorldUpdate isProduction oldTime time model =
                                 , endPosition =
                                     case Grid.rayIntersection True size start endPosition model.grid of
                                         Just { intersection } ->
-                                            LineSegmentExtra.extendLine
+                                            LineSegmentExtra.extendLineEnd
                                                 start
                                                 intersection
                                                 (Quantity.negate Animal.moveCollisionThreshold)
