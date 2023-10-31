@@ -11,7 +11,7 @@ import Cursor
 import Dict
 import Direction2d
 import DisplayName
-import Duration
+import Duration exposing (Duration)
 import Effect.Command as Command exposing (BackendOnly, Command)
 import Effect.Http
 import Effect.Lamdera exposing (ClientId, SessionId)
@@ -529,7 +529,7 @@ handleWorldUpdate isProduction oldTime time model =
                             start =
                                 animal.endPosition
 
-                            maybeMove : Maybe (Point2d WorldUnit WorldUnit)
+                            maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
                             maybeMove =
                                 Random.step
                                     (randomMovement start)
@@ -537,7 +537,7 @@ handleWorldUpdate isProduction oldTime time model =
                                     |> Tuple.first
                         in
                         case maybeMove of
-                            Just endPosition ->
+                            Just { endPosition, delay } ->
                                 let
                                     size =
                                         (Animal.getData animal.animalType).size
@@ -545,7 +545,7 @@ handleWorldUpdate isProduction oldTime time model =
                                             |> Vector2d.scaleBy 0.5
                                 in
                                 { position = start
-                                , startTime = Duration.addTo time Duration.second
+                                , startTime = Duration.addTo time delay
                                 , endPosition =
                                     case Grid.rayIntersection True size start endPosition model.grid of
                                         Just { intersection } ->
@@ -612,12 +612,16 @@ handleWorldUpdate isProduction oldTime time model =
     )
 
 
-randomMovement : Point2d WorldUnit WorldUnit -> Random.Generator (Maybe (Point2d WorldUnit WorldUnit))
+randomMovement :
+    Point2d WorldUnit WorldUnit
+    -> Random.Generator (Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration })
 randomMovement position =
-    Random.map3
-        (\shouldMove direction distance ->
+    Random.map4
+        (\shouldMove direction distance delay ->
             if shouldMove == 0 then
-                Point2d.translateIn (Direction2d.fromAngle (Angle.degrees direction)) (Units.tileUnit distance) position
+                { endPosition = Point2d.translateIn (Direction2d.fromAngle (Angle.degrees direction)) (Units.tileUnit distance) position
+                , delay = Duration.seconds delay
+                }
                     |> Just
 
             else
@@ -626,6 +630,7 @@ randomMovement position =
         (Random.int 0 2)
         (Random.float 0 360)
         (Random.float 2 10)
+        (Random.float 1 1.5)
 
 
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
