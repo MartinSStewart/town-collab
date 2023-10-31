@@ -5,6 +5,7 @@ import Animal exposing (Animal)
 import Array
 import AssocList
 import Audio exposing (Audio, AudioCmd, AudioData)
+import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
@@ -4382,8 +4383,8 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
             WebGL.Texture.size texture
     in
     List.filterMap
-        (\( cowId, animal ) ->
-            case LoadingPage.animalActualPosition cowId model of
+        (\( animalId, animal ) ->
+            case LoadingPage.animalActualPosition animalId model of
                 Just { position, isHeld } ->
                     if BoundingBox2d.contains position viewBounds_ then
                         let
@@ -4395,6 +4396,26 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
 
                             animalData =
                                 Animal.getData animal.animalType
+
+                            ( walk, stand ) =
+                                if Point2d.xCoordinate animal.position |> Quantity.lessThan (Point2d.xCoordinate animal.endPosition) then
+                                    ( animalData.walkTexturePosition, animalData.texturePosition )
+
+                                else
+                                    ( animalData.walkTexturePositionFlipped, animalData.texturePositionFlipped )
+
+                            texturePos =
+                                if
+                                    (Duration.from model.time (Animal.moveEndTime animal) |> Quantity.lessThanZero)
+                                        || (Duration.from animal.startTime model.time |> Quantity.lessThanZero)
+                                then
+                                    stand
+
+                                else if Basics.Extra.fractionalModBy (1 / Quantity.unwrap animalData.speed) time < (0.5 / Quantity.unwrap animalData.speed) then
+                                    walk
+
+                                else
+                                    stand
                         in
                         Effect.WebGL.entityWith
                             ([ Shaders.blend
@@ -4428,9 +4449,9 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                             , secondaryColor0 = Color.toInt Color.black |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
                             , texturePosition0 =
-                                Coord.xRaw animalData.texturePosition
+                                Coord.xRaw texturePos
                                     + textureW
-                                    * Coord.yRaw animalData.texturePosition
+                                    * Coord.yRaw texturePos
                                     |> toFloat
                             , night = nightFactor
                             }

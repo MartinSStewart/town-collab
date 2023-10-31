@@ -708,8 +708,6 @@ type Tile
     | RailTopToRight_SplitLeft
     | RailTopToLeft_SplitDown
     | PostOffice
-    | MowedGrass1
-    | MowedGrass4
     | PineTree1
     | PineTree2
     | BigPineTree
@@ -1541,12 +1539,6 @@ getData tile =
 
         PostOffice ->
             postOffice
-
-        MowedGrass1 ->
-            mowedGrass1
-
-        MowedGrass4 ->
-            mowedGrass4
 
         PineTree1 ->
             pineTree1
@@ -2640,26 +2632,6 @@ postOffice =
         SingleRailPath
             (RailPathHorizontal { offsetX = 0, offsetY = 4, length = 4 })
     , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 13 27) (Coord.xy 52 34) ]
-    }
-
-
-mowedGrass1 : TileData units
-mowedGrass1 =
-    { texturePosition = Coord.xy 11 20 |> Coord.multiply Units.tileSize
-    , size = Coord.xy 1 1
-    , tileCollision = DefaultCollision
-    , railPath = NoRailPath
-    , movementCollision = []
-    }
-
-
-mowedGrass4 : TileData units
-mowedGrass4 =
-    { texturePosition = Coord.xy 11 20 |> Coord.multiply Units.tileSize
-    , size = Coord.xy 4 4
-    , tileCollision = DefaultCollision
-    , railPath = NoRailPath
-    , movementCollision = []
     }
 
 

@@ -60,6 +60,7 @@ import List.Nonempty exposing (Nonempty(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
+import Set
 import Shaders
 import Sprite exposing (Vertex)
 import Terrain exposing (TerrainType(..), TerrainValue)
@@ -342,15 +343,30 @@ canPlaceTile change =
                                             ( cellPosition
                                             , Coord.tuple ( x3 * Terrain.terrainSize, y3 * Terrain.terrainSize )
                                             )
+
+                                    ( Quantity x8, Quantity y8 ) =
+                                        change.position
+
+                                    ( Quantity x9, Quantity y9 ) =
+                                        terrainPosition
+
+                                    tileDataA =
+                                        Tile.getData change.change
+
+                                    ( Quantity width, Quantity height ) =
+                                        tileDataA.size
                                 in
-                                Tile.hasCollision
-                                    change.position
-                                    change.change
-                                    terrainPosition
-                                    MowedGrass4
-                         --{ size = Coord.xy Terrain.terrainSize Terrain.terrainSize
-                         --, collisionMask = DefaultCollision
-                         --}
+                                case tileDataA.tileCollision of
+                                    Tile.DefaultCollision ->
+                                        ((x9 >= x8 && x9 < x8 + width) || (x8 >= x9 && x8 < x9 + Terrain.terrainSize))
+                                            && ((y9 >= y8 && y9 < y8 + height) || (y8 >= y9 && y8 < y9 + Terrain.terrainSize))
+
+                                    Tile.CustomCollision setA ->
+                                        Set.toList setA
+                                            |> List.any
+                                                (\( cx, cy ) ->
+                                                    x9 <= x8 + cx && x9 + Terrain.terrainSize > x8 + cx && y9 <= y8 + cy && y9 + Terrain.terrainSize > y8 + cy
+                                                )
                         )
             )
         |> not

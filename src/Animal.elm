@@ -77,6 +77,9 @@ type AnimalType
 type alias AnimalData =
     { size : Coord Pixels
     , texturePosition : Coord Pixels
+    , walkTexturePosition : Coord Pixels
+    , texturePositionFlipped : Coord Pixels
+    , walkTexturePositionFlipped : Coord Pixels
     , sounds : Nonempty ( Float, Sound )
     , speed : Quantity Float (Rate WorldUnit Seconds)
     }
@@ -102,7 +105,10 @@ getData animal =
     case animal of
         Cow ->
             { size = Coord.xy 20 14
-            , texturePosition = Coord.xy 99 594
+            , texturePosition = Coord.xy 220 361
+            , walkTexturePosition = Coord.xy 240 361
+            , texturePositionFlipped = Coord.xy 260 361
+            , walkTexturePositionFlipped = Coord.xy 280 361
             , sounds =
                 Nonempty
                     ( 1 / 6, Moo0 )
@@ -118,14 +124,20 @@ getData animal =
 
         Hamster ->
             { size = Coord.xy 12 14
-            , texturePosition = Coord.xy 141 594
+            , texturePosition = Coord.xy 220 392
+            , walkTexturePosition = Coord.xy 232 392
+            , texturePositionFlipped = Coord.xy 244 392
+            , walkTexturePositionFlipped = Coord.xy 256 392
             , sounds = Nonempty ( 1 / 3, Hamster0 ) [ ( 1 / 3, Hamster1 ), ( 1 / 3, Hamster2 ) ]
             , speed = Quantity.per Duration.second (Units.tileUnit 2)
             }
 
         Sheep ->
             { size = Coord.xy 16 12
-            , texturePosition = Coord.xy 99 608
+            , texturePosition = Coord.xy 220 378
+            , walkTexturePosition = Coord.xy 236 378
+            , texturePositionFlipped = Coord.xy 252 378
+            , walkTexturePositionFlipped = Coord.xy 268 378
             , sounds = Nonempty ( 0.5, Sheep0 ) [ ( 0.5, Sheep1 ) ]
             , speed = Quantity.per Duration.second (Units.tileUnit 1.5)
             }
