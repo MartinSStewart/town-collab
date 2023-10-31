@@ -66,7 +66,7 @@ import Terrain exposing (TerrainType(..), TerrainValue)
 import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit, TileLocalUnit, WorldUnit)
 import User exposing (FrontendUser)
-import Vector2d
+import Vector2d exposing (Vector2d)
 import WebGL
 
 
@@ -875,7 +875,7 @@ type IntersectionType
 
 rayIntersection :
     Bool
-    -> Coord Pixels
+    -> Vector2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
     -> Grid
@@ -890,17 +890,12 @@ rayIntersection includeWater expandBoundsBy start end grid =
         cellBounds =
             Bounds.fromCoords
                 (Nonempty
-                    (Point2d.translateBy (Units.pixelToTileVector expandBoundsBy) start
+                    (Point2d.translateBy expandBoundsBy start |> worldToCellPoint |> Coord.floorPoint)
+                    [ Point2d.translateBy (Vector2d.reverse expandBoundsBy) start
                         |> worldToCellPoint
                         |> Coord.floorPoint
-                    )
-                    [ Point2d.translateBy (Units.pixelToTileVector expandBoundsBy |> Vector2d.reverse) start
-                        |> worldToCellPoint
-                        |> Coord.floorPoint
-                    , Point2d.translateBy (Units.pixelToTileVector expandBoundsBy) end
-                        |> worldToCellPoint
-                        |> Coord.floorPoint
-                    , Point2d.translateBy (Units.pixelToTileVector expandBoundsBy |> Vector2d.reverse) end
+                    , Point2d.translateBy expandBoundsBy end |> worldToCellPoint |> Coord.floorPoint
+                    , Point2d.translateBy (Vector2d.reverse expandBoundsBy) end
                         |> worldToCellPoint
                         |> Coord.floorPoint
                     ]
@@ -921,7 +916,7 @@ rayIntersection includeWater expandBoundsBy start end grid =
 
 pointInside :
     Bool
-    -> Coord Pixels
+    -> Vector2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
     -> Grid
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
@@ -930,11 +925,8 @@ pointInside includeWater expandBoundsBy start grid =
         cellBounds : Bounds CellUnit
         cellBounds =
             Bounds.from2Coords
-                (Point2d.translateBy (Units.pixelToTileVector expandBoundsBy) start
-                    |> worldToCellPoint
-                    |> Coord.floorPoint
-                )
-                (Point2d.translateBy (Units.pixelToTileVector expandBoundsBy |> Vector2d.reverse) start
+                (Point2d.translateBy expandBoundsBy start |> worldToCellPoint |> Coord.floorPoint)
+                (Point2d.translateBy (Vector2d.reverse expandBoundsBy) start
                     |> worldToCellPoint
                     |> Coord.floorPoint
                 )
@@ -953,7 +945,7 @@ pointInside includeWater expandBoundsBy start grid =
 getBounds :
     Bool
     -> Bounds CellUnit
-    -> Coord Pixels
+    -> Vector2d WorldUnit WorldUnit
     -> Grid
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 getBounds includeWater cellBounds expandBoundsBy grid =

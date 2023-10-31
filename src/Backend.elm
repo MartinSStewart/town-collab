@@ -49,6 +49,7 @@ import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
 import User exposing (FrontendUser, InviteTree(..))
+import Vector2d
 
 
 app :
@@ -539,14 +540,19 @@ handleWorldUpdate isProduction oldTime time model =
                             Just endPosition ->
                                 let
                                     size =
-                                        Animal.getData animal.animalType |> .size |> Coord.divide (Coord.xy 2 2)
+                                        (Animal.getData animal.animalType).size
+                                            |> Units.pixelToTileVector
+                                            |> Vector2d.scaleBy 0.5
                                 in
                                 { position = start
                                 , startTime = Duration.addTo time Duration.second
                                 , endPosition =
                                     case Grid.rayIntersection True size start endPosition model.grid of
                                         Just { intersection } ->
-                                            LineSegmentExtra.extendLine start intersection (Units.tileUnit -0.1)
+                                            LineSegmentExtra.extendLine
+                                                start
+                                                intersection
+                                                (Quantity.negate Animal.moveCollisionThreshold)
 
                                         Nothing ->
                                             endPosition

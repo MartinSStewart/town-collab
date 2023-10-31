@@ -57,6 +57,7 @@ import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 import User exposing (FrontendUser, InviteTree)
+import Vector2d exposing (Vector2d)
 
 
 type LocalGrid
@@ -609,9 +610,9 @@ updateAnimalMovement change animals =
     IdDict.map
         (\_ animal ->
             let
-                size : Coord Pixels
+                size : Vector2d WorldUnit WorldUnit
                 size =
-                    Animal.getData animal.animalType |> .size |> Coord.divide (Coord.xy 2 2)
+                    (Animal.getData animal.animalType).size |> Units.pixelToTileVector |> Vector2d.scaleBy 0.5
 
                 position : Point2d WorldUnit WorldUnit
                 position =
@@ -631,7 +632,7 @@ updateAnimalMovement change animals =
                     { animalType = animal.animalType
                     , position = animal.position
                     , startTime = animal.startTime
-                    , endPosition = LineSegmentExtra.extendLine position intersection (Units.tileUnit -0.1)
+                    , endPosition = LineSegmentExtra.extendLine position intersection (Quantity.negate Animal.moveCollisionThreshold)
                     }
 
                 Nothing ->
@@ -1303,18 +1304,19 @@ placeAnimal position grid animal =
         position2 =
             Grid.pointInside
                 True
-                ((Animal.getData animal.animalType).size |> Coord.divide (Coord.xy 2 2))
+                (Animal.getData animal.animalType
+                    |> .size
+                    |> Units.pixelToTileVector
+                    |> Vector2d.scaleBy 0.5
+                    |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
+                )
                 position
                 grid
                 |> List.map
                     (\inside ->
-                        let
-                            y =
-                                BoundingBox2d.extrema inside.bounds
-                                    |> .maxY
-                                    |> Quantity.plus (Units.tileUnit 0.1)
-                        in
-                        Point2d.xy (Point2d.xCoordinate position) y
+                        BoundingBox2d.extrema inside.bounds
+                            |> .maxY
+                            |> Point2d.xy (Point2d.xCoordinate position)
                     )
                 |> Quantity.maximumBy Point2d.yCoordinate
                 |> Maybe.withDefault position

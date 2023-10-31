@@ -8,6 +8,7 @@ module Animal exposing
     , defaultColors
     , getData
     , inside
+    , moveCollisionThreshold
     , moveEndTime
     )
 
@@ -32,6 +33,11 @@ type alias Animal =
     , endPosition : Point2d WorldUnit WorldUnit
     , animalType : AnimalType
     }
+
+
+moveCollisionThreshold : Quantity Float WorldUnit
+moveCollisionThreshold =
+    Units.tileUnit 0.1
 
 
 moveEndTime : Animal -> Effect.Time.Posix

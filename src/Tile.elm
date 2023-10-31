@@ -53,7 +53,7 @@ import Set exposing (Set)
 import Sprite
 import String.Nonempty exposing (NonemptyString(..))
 import Units exposing (CellLocalUnit, TileLocalUnit, WorldUnit)
-import Vector2d
+import Vector2d exposing (Vector2d)
 
 
 type TileGroup
@@ -1413,7 +1413,7 @@ defaultCornerHouseColor =
     TwoDefaultColors { primaryColor = Color.rgb255 101 108 124, secondaryColor = Color.rgb255 103 157 236 }
 
 
-worldMovementBounds : Coord Pixels -> Tile -> Coord WorldUnit -> List (BoundingBox2d WorldUnit WorldUnit)
+worldMovementBounds : Vector2d WorldUnit WorldUnit -> Tile -> Coord WorldUnit -> List (BoundingBox2d WorldUnit WorldUnit)
 worldMovementBounds expandBoundsBy tile worldPos =
     getData tile
         |> .movementCollision
@@ -1421,13 +1421,10 @@ worldMovementBounds expandBoundsBy tile worldPos =
             (\a ->
                 BoundingBox2d.from
                     (Bounds.minimum a
-                        |> Coord.minus expandBoundsBy
                         |> Units.pixelToTilePoint
+                        |> Point2d.translateBy (Vector2d.reverse expandBoundsBy)
                     )
-                    (Bounds.maximum a
-                        |> Coord.plus expandBoundsBy
-                        |> Units.pixelToTilePoint
-                    )
+                    (Bounds.maximum a |> Units.pixelToTilePoint |> Point2d.translateBy expandBoundsBy)
                     |> BoundingBox2d.translateBy (Coord.toVector2d worldPos)
             )
 
