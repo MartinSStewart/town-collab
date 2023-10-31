@@ -15,6 +15,7 @@ module LocalGrid exposing
     , localModel
     , notificationViewportHalfSize
     , notificationViewportSize
+    , placeAnimal
     , removeReported
     , restoreMail
     , setTileHotkey
@@ -298,7 +299,7 @@ updateLocalChange localChange model =
         DropAnimal animalId position _ ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    dropCow loggedIn.userId animalId position model
+                    dropAnimal loggedIn.userId animalId position model
 
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
@@ -844,7 +845,7 @@ updateServerChange serverChange model =
             pickupCow userId cowId position time model
 
         ServerDropAnimal userId cowId position ->
-            dropCow userId cowId position model
+            dropAnimal userId cowId position model
 
         ServerMoveCursor userId position ->
             moveCursor userId position model
@@ -1274,8 +1275,8 @@ pickupCow userId cowId position time model =
     )
 
 
-dropCow : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
-dropCow userId cowId position model =
+dropAnimal : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+dropAnimal userId animalId position model =
     ( { model
         | cursors =
             IdDict.update
@@ -1289,10 +1290,36 @@ dropCow userId cowId position model =
                             Cursor.defaultCursor position Nothing |> Just
                 )
                 model.cursors
-        , animals = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position, endPosition = position })) model.animals
+        , animals = IdDict.update2 animalId (placeAnimal position model.grid) model.animals
       }
     , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
     )
+
+
+placeAnimal : Point2d WorldUnit WorldUnit -> Grid -> Animal -> Animal
+placeAnimal position grid animal =
+    let
+        position2 : Point2d WorldUnit WorldUnit
+        position2 =
+            Grid.pointInside
+                True
+                ((Animal.getData animal.animalType).size |> Coord.divide (Coord.xy 2 2))
+                position
+                grid
+                |> List.map
+                    (\inside ->
+                        let
+                            y =
+                                BoundingBox2d.extrema inside.bounds
+                                    |> .maxY
+                                    |> Quantity.plus (Units.tileUnit 0.1)
+                        in
+                        Point2d.xy (Point2d.xCoordinate position) y
+                    )
+                |> Quantity.maximumBy Point2d.yCoordinate
+                |> Maybe.withDefault position
+    in
+    { animal | position = position2, endPosition = position2 }
 
 
 moveCursor : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )

@@ -1244,14 +1244,14 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                             )
                 )
 
-        DropAnimal cowId position time2 ->
+        DropAnimal animalId position time2 ->
             asUser2
                 (\userId user ->
                     case IdDict.get userId model.users |> Maybe.andThen .cursor of
                         Just cursor ->
                             case cursor.holdingCow of
                                 Just holdingCow ->
-                                    if holdingCow.cowId == cowId then
+                                    if holdingCow.cowId == animalId then
                                         ( updateUser
                                             userId
                                             (\user2 ->
@@ -1269,12 +1269,12 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                             { model
                                                 | animals =
                                                     IdDict.update2
-                                                        cowId
-                                                        (\cow -> { cow | position = position, endPosition = position })
+                                                        animalId
+                                                        (LocalGrid.placeAnimal position model.grid)
                                                         model.animals
                                             }
-                                        , ( eventId, DropAnimal cowId position (adjustEventTime time time2) )
-                                        , ServerDropAnimal userId cowId position |> BroadcastToEveryoneElse
+                                        , ( eventId, DropAnimal animalId position (adjustEventTime time time2) )
+                                        , ServerDropAnimal userId animalId position |> BroadcastToEveryoneElse
                                         )
 
                                     else
