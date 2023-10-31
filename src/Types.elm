@@ -295,7 +295,7 @@ type Hover
     = TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
-    | CowHover { cowId : Id AnimalId, cow : Animal }
+    | AnimalHover { animalId : Id AnimalId, animal : Animal }
     | UiBackgroundHover
     | UiHover UiHover { position : Coord Pixels }
 

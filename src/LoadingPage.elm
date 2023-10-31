@@ -1061,8 +1061,8 @@ hoverAt model mousePosition =
 
                 Nothing ->
                     case animalHovers of
-                        Just ( cowId, cow ) ->
-                            CowHover { cowId = cowId, cow = cow }
+                        Just ( animalId, animal ) ->
+                            AnimalHover { animalId = animalId, animal = animal }
 
                         Nothing ->
                             case tileHover of
@@ -1094,7 +1094,7 @@ animalActualPosition animalId model =
         Nothing ->
             case IdDict.get animalId localGrid.animals of
                 Just animal ->
-                    { position = Animal.actualPositionWithoutCursor model.time animal, isHeld = True } |> Just
+                    { position = Animal.actualPositionWithoutCursor model.time animal, isHeld = False } |> Just
 
                 Nothing ->
                     Nothing

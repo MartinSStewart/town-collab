@@ -287,18 +287,18 @@ updateLocalChange localChange model =
         InvalidChange ->
             ( model, NoOutMsg )
 
-        PickupCow cowId position time ->
+        PickupAnimal animalId position time ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    pickupCow loggedIn.userId cowId position time model
+                    pickupCow loggedIn.userId animalId position time model
 
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
-        DropCow cowId position _ ->
+        DropAnimal animalId position _ ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    dropCow loggedIn.userId cowId position model
+                    dropCow loggedIn.userId animalId position model
 
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
@@ -840,10 +840,10 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
-        ServerPickupCow userId cowId position time ->
+        ServerPickupAnimal userId cowId position time ->
             pickupCow userId cowId position time model
 
-        ServerDropCow userId cowId position ->
+        ServerDropAnimal userId cowId position ->
             dropCow userId cowId position model
 
         ServerMoveCursor userId position ->
@@ -1289,7 +1289,7 @@ dropCow userId cowId position model =
                             Cursor.defaultCursor position Nothing |> Just
                 )
                 model.cursors
-        , animals = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position })) model.animals
+        , animals = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position, endPosition = position })) model.animals
       }
     , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
     )

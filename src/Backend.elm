@@ -1196,7 +1196,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
         Change.InvalidChange ->
             ( model, originalChange, BroadcastToNoOne )
 
-        PickupCow cowId position time2 ->
+        PickupAnimal cowId position time2 ->
             asUser2
                 (\userId user ->
                     if model.isGridReadOnly then
@@ -1239,12 +1239,12 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                     }
                                 )
                                 model
-                            , ( eventId, PickupCow cowId position (adjustEventTime time time2) )
-                            , ServerPickupCow userId cowId position time2 |> BroadcastToEveryoneElse
+                            , ( eventId, PickupAnimal cowId position (adjustEventTime time time2) )
+                            , ServerPickupAnimal userId cowId position time2 |> BroadcastToEveryoneElse
                             )
                 )
 
-        DropCow cowId position time2 ->
+        DropAnimal cowId position time2 ->
             asUser2
                 (\userId user ->
                     case IdDict.get userId model.users |> Maybe.andThen .cursor of
@@ -1270,11 +1270,11 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                                 | animals =
                                                     IdDict.update2
                                                         cowId
-                                                        (\cow -> { cow | position = position })
+                                                        (\cow -> { cow | position = position, endPosition = position })
                                                         model.animals
                                             }
-                                        , ( eventId, DropCow cowId position (adjustEventTime time time2) )
-                                        , ServerDropCow userId cowId position |> BroadcastToEveryoneElse
+                                        , ( eventId, DropAnimal cowId position (adjustEventTime time time2) )
+                                        , ServerDropAnimal userId cowId position |> BroadcastToEveryoneElse
                                         )
 
                                     else

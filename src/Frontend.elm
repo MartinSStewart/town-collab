@@ -1001,7 +1001,7 @@ updateLoaded audioData msg model =
                                     UiHover uiHover data ->
                                         uiUpdate audioData uiHover (Ui.MouseMove { elementPosition = data.position }) model2
 
-                                    CowHover _ ->
+                                    AnimalHover _ ->
                                         ( placeTileHelper model2, Command.none )
 
                             _ ->
@@ -1603,7 +1603,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                                 HandTool ->
                                     case isHoldingCow model of
                                         Just { cowId } ->
-                                            LoadingPage.updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
+                                            LoadingPage.updateLocalModel (Change.DropAnimal cowId (LoadingPage.mouseWorldPosition model) model.time) model
                                                 |> Tuple.first
 
                                         Nothing ->
@@ -2184,7 +2184,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
             if isSmallDistance2 then
                 let
                     ( model3, _ ) =
-                        LoadingPage.updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                        LoadingPage.updateLocalModel (Change.DropAnimal cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                 in
                 ( model3, Command.none )
 
@@ -2331,11 +2331,11 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     else
                         ( model2, Command.none )
 
-                CowHover { cowId } ->
+                AnimalHover { animalId } ->
                     if isSmallDistance2 then
                         let
                             ( model3, _ ) =
-                                LoadingPage.updateLocalModel (Change.PickupCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                                LoadingPage.updateLocalModel (Change.PickupAnimal animalId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                         in
                         ( model3, Command.none )
 
@@ -3820,7 +3820,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     NoCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     NoCursor
 
                                                 UiHover _ _ ->
@@ -3845,7 +3845,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite DefaultSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite PointerSpriteCursor
 
                                                 UiHover _ _ ->
@@ -3865,7 +3865,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite EyeDropperSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite EyeDropperSpriteCursor
 
                                                 UiHover _ _ ->
@@ -3885,7 +3885,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite TextSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite TextSpriteCursor
 
                                                 UiHover _ _ ->
@@ -3905,7 +3905,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite GavelSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite GavelSpriteCursor
 
                                                 UiHover _ _ ->

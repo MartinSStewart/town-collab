@@ -2696,7 +2696,7 @@ bigPineTree =
     , size = Coord.xy 3 3
     , tileCollision = Set.fromList [ ( 1, 2 ) ] |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 24 41) (Coord.xy 13 10) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 25 41) (Coord.xy 12 10) ]
     }
 
 

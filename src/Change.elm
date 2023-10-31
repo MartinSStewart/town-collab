@@ -50,8 +50,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | PickupCow (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | DropCow (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | PickupAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | DropAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors
@@ -132,8 +132,8 @@ type ServerChange
         , newAnimals : List ( Id AnimalId, Animal )
         }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerPickupCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | ServerDropCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
+    | ServerPickupAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | ServerDropAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected

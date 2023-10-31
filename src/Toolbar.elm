@@ -1748,7 +1748,7 @@ canDragView hover =
         MapHover ->
             True
 
-        CowHover _ ->
+        AnimalHover _ ->
             True
 
         UiHover _ _ ->
