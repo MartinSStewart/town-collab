@@ -520,11 +520,7 @@ handleWorldUpdate isProduction oldTime time model =
         newAnimals =
             IdDict.map
                 (\id animal ->
-                    if
-                        Duration.from (Animal.moveEndTime animal) time
-                            |> Quantity.minus Duration.second
-                            |> Quantity.lessThanZero
-                    then
+                    if Duration.from (Animal.moveEndTime animal) time |> Quantity.lessThanZero then
                         animal
 
                     else
@@ -546,7 +542,7 @@ handleWorldUpdate isProduction oldTime time model =
                                         Animal.getData animal.animalType |> .size |> Coord.divide (Coord.xy 2 2)
                                 in
                                 { position = start
-                                , startTime = time
+                                , startTime = Duration.addTo time Duration.second
                                 , endPosition =
                                     case Grid.rayIntersection True size start endPosition model.grid of
                                         Just { intersection } ->
