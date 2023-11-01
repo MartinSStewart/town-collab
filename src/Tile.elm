@@ -9,6 +9,7 @@ module Tile exposing
     , Tile(..)
     , TileData
     , TileGroup(..)
+    , TileGroupData
     , allCategories
     , allTileGroupsExceptText
     , buildingCategory

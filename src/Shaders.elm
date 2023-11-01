@@ -3,6 +3,7 @@ module Shaders exposing
     , InstancedVertex
     , MapOverlayVertex
     , RenderData
+    , ScissorBox
     , blend
     , clearDepth
     , debrisVertexShader
@@ -34,7 +35,7 @@ import Effect.WebGL.Settings exposing (Setting)
 import Effect.WebGL.Settings.Blend as Blend
 import Effect.WebGL.Settings.DepthTest
 import Id exposing (Id, UserId)
-import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 exposing (Vec3)
 import Math.Vector4 as Vec4 exposing (Vec4)

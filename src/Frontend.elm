@@ -1,7 +1,7 @@
-module Frontend exposing (app, app_)
+module Frontend exposing (app)
 
 import AdminPage
-import Animal exposing (Animal)
+import Animal
 import Array
 import AssocList
 import Audio exposing (Audio, AudioCmd, AudioData)
@@ -9,14 +9,14 @@ import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
-import Change exposing (AreTrainsDisabled(..), Change(..), UserStatus(..))
+import Change exposing (AreTrainsDisabled(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
-import Cursor exposing (Cursor, CursorSprite(..), CursorType(..))
+import Cursor exposing (CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import DisplayName
-import Duration exposing (Duration)
+import Duration
 import Effect.Browser.Dom
 import Effect.Browser.Events
 import Effect.Browser.Navigation
@@ -664,7 +664,7 @@ updateLoaded audioData msg model =
 
               else
                 case Url.Parser.parse Route.urlParser url of
-                    Just (Route.InternalRoute { viewPoint, page }) ->
+                    Just (Route.InternalRoute { viewPoint }) ->
                         { model | viewPoint = Coord.toPoint2d viewPoint |> NormalViewPoint }
 
                     _ ->
@@ -4258,9 +4258,6 @@ canvasView audioData model =
 drawWorld : Bool -> RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
 drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
     let
-        { x, y } =
-            Point2d.unwrap (Toolbar.actualViewPoint model)
-
         localGrid : LocalGrid_
         localGrid =
             LocalGrid.localModel model.localModel

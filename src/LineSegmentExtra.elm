@@ -1,7 +1,7 @@
 module LineSegmentExtra exposing (extendLineEnd)
 
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity(..))
+import Quantity exposing (Quantity)
 
 
 extendLineEnd : Point2d u c -> Point2d u c -> Quantity Float u -> Point2d u c

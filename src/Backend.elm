@@ -1,4 +1,4 @@
-module Backend exposing (app, app_)
+module Backend exposing (app)
 
 import Angle
 import Animal exposing (Animal)
@@ -33,14 +33,14 @@ import LineSegmentExtra
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
 import LocalGrid
-import MailEditor exposing (BackendMail, MailStatus(..), MailStatus2(..))
+import MailEditor exposing (BackendMail, MailStatus(..))
 import Maybe.Extra as Maybe
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
-import Quantity exposing (Quantity)
+import Quantity
 import Random
 import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
-import Set exposing (Set)
+import Set
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..))
 import TimeOfDay exposing (TimeOfDay(..))
@@ -1219,7 +1219,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         Change.LocalAddUndo ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     if model.isGridReadOnly then
                         ( model, invalidChange, BroadcastToNoOne )
 
@@ -1232,7 +1232,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         PickupAnimal cowId position time2 ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     if model.isGridReadOnly then
                         ( model, invalidChange, BroadcastToNoOne )
 
@@ -1280,7 +1280,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         DropAnimal animalId position time2 ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     case IdDict.get userId model.users |> Maybe.andThen .cursor of
                         Just cursor ->
                             case cursor.holdingCow of
@@ -1323,7 +1323,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         MoveCursor position ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     ( updateUser
                         userId
                         (\user2 ->
@@ -1345,7 +1345,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         ChangeHandColor colors ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     ( updateUser
                         userId
                         (\user2 -> { user2 | handColor = colors })
@@ -1357,7 +1357,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         ToggleRailSplit coord ->
             asUser2
-                (\userId user ->
+                (\_ _ ->
                     ( { model | grid = Grid.toggleRailSplit coord model.grid }
                     , originalChange
                     , ServerToggleRailSplit coord |> BroadcastToEveryoneElse
@@ -1417,7 +1417,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         TeleportHomeTrainRequest trainId teleportTime ->
             asUser2
-                (\userId user ->
+                (\_ _ ->
                     let
                         adjustedTime =
                             adjustEventTime time teleportTime
@@ -1430,7 +1430,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         LeaveHomeTrainRequest trainId leaveTime ->
             asUser2
-                (\userId user ->
+                (\_ _ ->
                     let
                         adjustedTime =
                             adjustEventTime time leaveTime
@@ -1443,7 +1443,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         ViewedMail mailId ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     case IdDict.get mailId model.mail of
                         Just mail ->
                             case ( mail.to == userId, mail.status ) of
@@ -1496,7 +1496,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         ReportVandalism report ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     let
                         backendReport =
                             { reportedUser = report.reportedUser
@@ -1512,7 +1512,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         RemoveReport position ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     ( { model | reported = LocalGrid.removeReported userId position model.reported }
                     , originalChange
                     , ServerVandalismRemovedToAdmin userId position |> BroadcastToAdmin
@@ -1521,7 +1521,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
 
         AdminChange adminChange ->
             asUser2
-                (\userId user ->
+                (\userId _ ->
                     if userId == adminId then
                         case adminChange of
                             AdminResetSessions ->
@@ -1813,7 +1813,7 @@ getUserInbox userId model =
                             , deliveryTime = deliveryTime
                             }
 
-                    MailDeletedByAdmin record ->
+                    MailDeletedByAdmin _ ->
                         Nothing
 
             else

@@ -44,12 +44,10 @@ import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import LineSegment2d
-import LineSegmentExtra
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
 import Maybe.Extra as Maybe
-import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -734,7 +732,7 @@ restoreMail mailId model =
                                         MailWaitingPickup2 ->
                                             MailWaitingPickup
 
-                                        MailInTransit2 id ->
+                                        MailInTransit2 _ ->
                                             MailWaitingPickup
 
                                         MailReceived2 record ->
@@ -955,7 +953,7 @@ updateServerChange serverChange model =
                                 Nothing ->
                                     model.userStatus
 
-                        NotLoggedIn notLoggedIn_ ->
+                        NotLoggedIn _ ->
                             model.userStatus
               }
             , NoOutMsg

@@ -1,13 +1,11 @@
-module AdminPage exposing (Hover(..), Model, OutMsg(..), adminView, init, update)
+module AdminPage exposing (Config, Hover(..), Model, OutMsg(..), adminView, init, update)
 
 import Array
-import Audio exposing (AudioData)
-import Change exposing (AdminData, AreTrainsDisabled(..), Change, LocalChange, UserStatus(..))
+import Change exposing (AdminData, AreTrainsDisabled(..), Change, UserStatus(..))
 import Color
 import Coord exposing (Coord)
 import DisplayName
 import Duration
-import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.Time
 import Env
 import Id exposing (Id, MailId)
@@ -17,7 +15,6 @@ import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (MailStatus(..), MailStatus2(..))
 import Pixels exposing (Pixels)
-import Quantity
 import Round
 import Ui exposing (BorderAndFill(..), UiEvent)
 
@@ -210,7 +207,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                         MailWaitingPickup ->
                                             Ui.text "Waiting pickup"
 
-                                        MailInTransit id ->
+                                        MailInTransit _ ->
                                             Ui.text "In transit"
 
                                         MailReceived { deliveryTime } ->
