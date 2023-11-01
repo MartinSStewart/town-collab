@@ -618,7 +618,7 @@ getTileGroupData tileGroup =
 
         MushroomGroup ->
             { defaultColors = defaultMushroomColor
-            , tiles = Nonempty Mushroom []
+            , tiles = Nonempty Mushroom1 [ Mushroom2 ]
             , name = "Mushroom"
             }
 
@@ -789,7 +789,8 @@ type Tile
     | DogHouseRight
     | DogHouseUp
     | DogHouseLeft
-    | Mushroom
+    | Mushroom1
+    | Mushroom2
     | TreeStump1
     | TreeStump2
     | Sunflowers
@@ -944,7 +945,7 @@ allTiles =
     , DogHouseRight
     , DogHouseUp
     , DogHouseLeft
-    , Mushroom
+    , Mushroom1
     , TreeStump1
     , TreeStump2
     , Sunflowers
@@ -1935,8 +1936,11 @@ getData tile =
         DogHouseLeft ->
             dogHouseLeft
 
-        Mushroom ->
-            mushroom
+        Mushroom1 ->
+            mushroom1
+
+        Mushroom2 ->
+            mushroom2
 
         TreeStump1 ->
             treeStump1
@@ -3837,9 +3841,19 @@ dogHouseRight =
     }
 
 
-mushroom : TileData units
-mushroom =
+mushroom1 : TileData units
+mushroom1 =
     { texturePosition = Coord.xy 740 936
+    , size = Coord.xy 1 1
+    , tileCollision = DefaultCollision
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+mushroom2 : TileData units
+mushroom2 =
+    { texturePosition = Coord.xy 740 954
     , size = Coord.xy 1 1
     , tileCollision = DefaultCollision
     , railPath = NoRailPath
