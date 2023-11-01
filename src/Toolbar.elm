@@ -13,11 +13,11 @@ module Toolbar exposing
 
 import AdminPage
 import AssocList
-import Change exposing (AdminData, AreTrainsDisabled(..), LoggedIn_, UserStatus(..))
+import Change exposing (AreTrainsAndAnimalsDisabled(..), LoggedIn_, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
-import Dict exposing (Dict)
+import Dict
 import DisplayName
 import Duration
 import Effect.Time
@@ -27,7 +27,7 @@ import IdDict exposing (IdDict)
 import List.Extra as List
 import List.Nonempty
 import LocalGrid
-import MailEditor exposing (MailStatus(..))
+import MailEditor
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -232,22 +232,22 @@ normalView windowSize model =
                             [ case localModel.userStatus of
                                 LoggedIn loggedIn ->
                                     case ( loggedIn.isGridReadOnly, localModel.trainsDisabled ) of
-                                        ( True, TrainsEnabled ) ->
+                                        ( True, TrainsAndAnimalsEnabled ) ->
                                             Ui.el
                                                 { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
                                                 (Ui.colorText Color.white "Placing tiles currently disabled")
 
-                                        ( True, TrainsDisabled ) ->
+                                        ( True, TrainsAndAnimalsDisabled ) ->
                                             Ui.el
                                                 { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
                                                 (Ui.colorText Color.white "Trains and placing tiles disabled")
 
-                                        ( False, TrainsDisabled ) ->
+                                        ( False, TrainsAndAnimalsDisabled ) ->
                                             Ui.el
                                                 { padding = Ui.paddingXY 16 4, borderAndFill = FillOnly Color.errorColor, inFront = [] }
-                                                (Ui.colorText Color.white "Trains currently disabled")
+                                                (Ui.colorText Color.white "Trains and animals disabled")
 
-                                        ( False, TrainsEnabled ) ->
+                                        ( False, TrainsAndAnimalsEnabled ) ->
                                             Ui.none
 
                                 NotLoggedIn _ ->
@@ -1748,7 +1748,7 @@ canDragView hover =
         MapHover ->
             True
 
-        CowHover _ ->
+        AnimalHover _ ->
             True
 
         UiHover _ _ ->

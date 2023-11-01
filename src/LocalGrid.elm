@@ -15,27 +15,35 @@ module LocalGrid exposing
     , localModel
     , notificationViewportHalfSize
     , notificationViewportSize
+    , placeAnimal
     , removeReported
     , restoreMail
     , setTileHotkey
     , update
+    , updateAnimalMovement
     , updateFromBackend
+    , updateWorldUpdateDurations
     )
 
 import Animal exposing (Animal, AnimalType(..))
+import Array exposing (Array)
 import AssocList
+import BoundingBox2d exposing (BoundingBox2d)
+import BoundingBox2dExtra
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
+import Duration exposing (Duration)
 import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell
 import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
+import LineSegment2d
 import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
@@ -50,6 +58,7 @@ import Train exposing (Train)
 import Undo
 import Units exposing (CellLocalUnit, CellUnit, WorldUnit)
 import User exposing (FrontendUser, InviteTree)
+import Vector2d exposing (Vector2d)
 
 
 type LocalGrid
@@ -67,7 +76,7 @@ type alias LocalGrid_ =
     , inviteTree : InviteTree
     , mail : IdDict MailId FrontendMail
     , trains : IdDict TrainId Train
-    , trainsDisabled : AreTrainsDisabled
+    , trainsDisabled : AreTrainsAndAnimalsDisabled
     }
 
 
@@ -123,7 +132,7 @@ init :
         , inviteTree : InviteTree
         , mail : IdDict MailId FrontendMail
         , trains : IdDict TrainId Train
-        , trainsDisabled : AreTrainsDisabled
+        , trainsDisabled : AreTrainsAndAnimalsDisabled
     }
     -> LocalModel Change LocalGrid
 init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, trains, trainsDisabled } =
@@ -219,6 +228,7 @@ updateLocalChange localChange model =
 
                             else
                                 model.grid
+                        , animals = updateAnimalMovement gridChange model.animals
                       }
                         |> addAnimals change.newCells
                     , TilesRemoved change.removed
@@ -280,18 +290,18 @@ updateLocalChange localChange model =
         InvalidChange ->
             ( model, NoOutMsg )
 
-        PickupCow cowId position time ->
+        PickupAnimal animalId position time ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    pickupCow loggedIn.userId cowId position time model
+                    pickupCow loggedIn.userId animalId position time model
 
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
-        DropCow cowId position _ ->
+        DropAnimal animalId position _ ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    dropCow loggedIn.userId cowId position model
+                    dropAnimal loggedIn.userId animalId position model
 
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
@@ -593,6 +603,67 @@ updateLocalChange localChange model =
             )
 
 
+updateAnimalMovement :
+    { a | position : Coord WorldUnit, change : Tile, time : Effect.Time.Posix }
+    -> IdDict AnimalId Animal
+    -> IdDict AnimalId Animal
+updateAnimalMovement change animals =
+    IdDict.map
+        (\_ animal ->
+            let
+                size : Vector2d WorldUnit WorldUnit
+                size =
+                    (Animal.getData animal.animalType).size
+                        |> Units.pixelToTileVector
+                        |> Vector2d.scaleBy 0.5
+                        |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
+
+                position : Point2d WorldUnit WorldUnit
+                position =
+                    Animal.actualPositionWithoutCursor change.time animal
+
+                changeBounds =
+                    Tile.worldMovementBounds size change.change change.position
+
+                inside =
+                    List.filter (BoundingBox2d.contains position) changeBounds
+            in
+            if List.isEmpty inside then
+                let
+                    maybeIntersection : Maybe (Point2d WorldUnit WorldUnit)
+                    maybeIntersection =
+                        List.concatMap
+                            (\bounds ->
+                                BoundingBox2dExtra.lineIntersection (LineSegment2d.from position animal.endPosition) bounds
+                            )
+                            changeBounds
+                            |> Quantity.minimumBy (Point2d.distanceFrom position)
+                in
+                case maybeIntersection of
+                    Just intersection ->
+                        { animalType = animal.animalType
+                        , position = animal.position
+                        , startTime = animal.startTime
+                        , endPosition = intersection
+                        }
+
+                    Nothing ->
+                        animal
+
+            else
+                let
+                    movedTo =
+                        moveOutOfCollision position changeBounds
+                in
+                { animalType = animal.animalType
+                , position = movedTo
+                , startTime = animal.startTime
+                , endPosition = movedTo
+                }
+        )
+        animals
+
+
 setTileHotkey :
     TileHotkey
     -> TileGroup
@@ -661,7 +732,7 @@ restoreMail mailId model =
                                         MailWaitingPickup2 ->
                                             MailWaitingPickup
 
-                                        MailInTransit2 id ->
+                                        MailInTransit2 _ ->
                                             MailWaitingPickup
 
                                         MailReceived2 record ->
@@ -756,12 +827,12 @@ addNotification position notifications =
 updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
-        ServerGridChange { gridChange, newCows } ->
+        ServerGridChange { gridChange, newAnimals } ->
             let
                 model2 : LocalGrid_
                 model2 =
                     updateLoggedIn
-                        { model | animals = IdDict.fromList newCows |> IdDict.union model.animals }
+                        { model | animals = IdDict.fromList newAnimals |> IdDict.union model.animals }
                         (\loggedIn ->
                             { loggedIn
                                 | notifications =
@@ -779,7 +850,10 @@ updateServerChange serverChange model =
                     (Bounds.contains (Grid.worldToCellAndLocalCoord gridChange.position |> Tuple.first))
                     (model2.viewBounds :: Maybe.toList model.previewBounds)
               then
-                { model2 | grid = Grid.addChange gridChange model2.grid |> .grid }
+                { model2
+                    | grid = Grid.addChange gridChange model2.grid |> .grid
+                    , animals = updateAnimalMovement gridChange model2.animals
+                }
 
               else
                 model2
@@ -791,11 +865,11 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
-        ServerPickupCow userId cowId position time ->
+        ServerPickupAnimal userId cowId position time ->
             pickupCow userId cowId position time model
 
-        ServerDropCow userId cowId position ->
-            dropCow userId cowId position model
+        ServerDropAnimal userId cowId position ->
+            dropAnimal userId cowId position model
 
         ServerMoveCursor userId position ->
             moveCursor userId position model
@@ -879,7 +953,7 @@ updateServerChange serverChange model =
                                 Nothing ->
                                     model.userStatus
 
-                        NotLoggedIn notLoggedIn_ ->
+                        NotLoggedIn _ ->
                             model.userStatus
               }
             , NoOutMsg
@@ -1129,6 +1203,59 @@ updateServerChange serverChange model =
         ServerLogout ->
             logout model
 
+        ServerAnimalMovement newMovement ->
+            ( { model
+                | animals =
+                    List.Nonempty.foldl
+                        (\( animalId, movement ) dict ->
+                            IdDict.update2
+                                animalId
+                                (\animal ->
+                                    { animal
+                                        | position = movement.position
+                                        , endPosition = movement.endPosition
+                                        , startTime = movement.startTime
+                                    }
+                                )
+                                dict
+                        )
+                        model.animals
+                        newMovement
+              }
+            , NoOutMsg
+            )
+
+        ServerWorldUpdateDuration duration ->
+            ( updateLoggedIn
+                model
+                (\loggedIn ->
+                    { loggedIn | adminData = Maybe.map (updateWorldUpdateDurations duration) loggedIn.adminData }
+                )
+            , NoOutMsg
+            )
+
+
+updateWorldUpdateDurations :
+    Duration
+    -> { a | worldUpdateDurations : Array Duration }
+    -> { a | worldUpdateDurations : Array Duration }
+updateWorldUpdateDurations duration model =
+    let
+        newArray =
+            Array.push duration model.worldUpdateDurations
+
+        maxSize =
+            1000
+    in
+    { model
+        | worldUpdateDurations =
+            if Array.length model.worldUpdateDurations > maxSize then
+                newArray
+
+            else
+                Array.slice (Array.length newArray - maxSize) (Array.length newArray) newArray
+    }
+
 
 logout : LocalGrid_ -> ( LocalGrid_, OutMsg )
 logout model =
@@ -1203,8 +1330,8 @@ pickupCow userId cowId position time model =
     )
 
 
-dropCow : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
-dropCow userId cowId position model =
+dropAnimal : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+dropAnimal userId animalId position model =
     ( { model
         | cursors =
             IdDict.update
@@ -1218,10 +1345,43 @@ dropCow userId cowId position model =
                             Cursor.defaultCursor position Nothing |> Just
                 )
                 model.cursors
-        , animals = IdDict.update cowId (Maybe.map (\cow -> { cow | position = position })) model.animals
+        , animals = IdDict.update2 animalId (placeAnimal position model.grid) model.animals
       }
     , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
     )
+
+
+placeAnimal : Point2d WorldUnit WorldUnit -> Grid -> Animal -> Animal
+placeAnimal position grid animal =
+    let
+        position2 : Point2d WorldUnit WorldUnit
+        position2 =
+            Grid.pointInside
+                True
+                (Animal.getData animal.animalType
+                    |> .size
+                    |> Units.pixelToTileVector
+                    |> Vector2d.scaleBy 0.5
+                    |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
+                )
+                position
+                grid
+                |> List.map .bounds
+                |> moveOutOfCollision position
+    in
+    { animal | position = position2, endPosition = position2 }
+
+
+moveOutOfCollision :
+    Point2d WorldUnit WorldUnit
+    -> List (BoundingBox2d WorldUnit WorldUnit)
+    -> Point2d WorldUnit WorldUnit
+moveOutOfCollision position bounds =
+    List.map
+        (\boundingBox -> BoundingBox2d.extrema boundingBox |> .maxY |> Point2d.xy (Point2d.xCoordinate position))
+        bounds
+        |> Quantity.maximumBy Point2d.yCoordinate
+        |> Maybe.withDefault position
 
 
 moveCursor : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -1300,7 +1460,17 @@ randomAnimalsHelper worldCoord output list =
 randomAnimal : AnimalType -> Coord WorldUnit -> Random.Generator Animal
 randomAnimal animalType ( Quantity xOffset, Quantity yOffset ) =
     Random.map2
-        (\x y -> { position = Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y }, animalType = animalType })
+        (\x y ->
+            let
+                position =
+                    Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y }
+            in
+            { position = position
+            , endPosition = position
+            , startTime = Effect.Time.millisToPosix 0
+            , animalType = animalType
+            }
+        )
         (Random.float 0 Units.cellSize)
         (Random.float 0 Units.cellSize)
 

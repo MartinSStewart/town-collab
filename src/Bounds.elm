@@ -10,12 +10,14 @@ module Bounds exposing
     , coordRangeFold
     , coordRangeFoldReverse
     , expand
+    , from2Coords
     , fromCoordAndSize
     , fromCoords
     , height
     , maximum
     , minimum
     , multiplyBy
+    , size
     , translate
     , width
     )
@@ -40,6 +42,11 @@ width bounds_ =
 height : Bounds unit -> Quantity Int unit
 height bounds_ =
     maximum bounds_ |> Coord.minus (minimum bounds_) |> Tuple.second
+
+
+size : Bounds unit -> Coord unit
+size (Bounds bounds_) =
+    bounds_.max |> Coord.minus bounds_.min
 
 
 minimum : Bounds unit -> Coord unit
@@ -83,9 +90,14 @@ fromCoords coords =
         }
 
 
+from2Coords : Coord unit -> Coord unit -> Bounds unit
+from2Coords first second =
+    fromCoords (Nonempty first [ second ])
+
+
 fromCoordAndSize : Coord unit -> Coord unit -> Bounds unit
-fromCoordAndSize coord size =
-    fromCoords (Nonempty coord [ Coord.plus coord size ])
+fromCoordAndSize coord size_ =
+    fromCoords (Nonempty coord [ Coord.plus coord size_ ])
 
 
 translate : Coord unit -> Bounds unit -> Bounds unit

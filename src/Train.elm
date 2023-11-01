@@ -1,5 +1,6 @@
 module Train exposing
-    ( FieldChanged(..)
+    ( Coach
+    , FieldChanged(..)
     , IsStuckOrDerailed(..)
     , PreviousPath
     , Status(..)
@@ -9,17 +10,14 @@ module Train exposing
     , canRemoveTiles
     , carryingMail
     , defaultMaxSpeed
-    , derail
     , diff
     , draw
     , drawSpeechBubble
-    , getCoach
     , handleAddingTrain
     , home
     , homePath
     , instancedMesh
     , leaveHome
-    , moveTrain
     , moveTrains
     , nextId
     , owner
@@ -50,7 +48,7 @@ import Id exposing (Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Extra as List
 import MailEditor exposing (FrontendMail, MailStatus(..))
-import Math.Matrix4 as Mat4 exposing (Mat4)
+import Math.Matrix4 as Mat4
 import Math.Vector2 as Vec2
 import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
@@ -182,16 +180,12 @@ diffField old new =
 applyDiffField : FieldChanged a -> a -> a
 applyDiffField fieldChanged old =
     case fieldChanged of
-        Unchanged ->
-            old
-
         FieldChanged new ->
             new
 
 
 type FieldChanged a
     = FieldChanged a
-    | Unchanged
 
 
 type alias PreviousPath =

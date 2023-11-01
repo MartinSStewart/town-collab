@@ -1,21 +1,22 @@
-module Frontend exposing (app, app_)
+module Frontend exposing (app)
 
 import AdminPage
-import Animal exposing (Animal)
+import Animal
 import Array
 import AssocList
 import Audio exposing (Audio, AudioCmd, AudioData)
+import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
-import Change exposing (AreTrainsDisabled(..), Change(..), UserStatus(..))
+import Change exposing (AreTrainsAndAnimalsDisabled(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
-import Cursor exposing (Cursor, CursorSprite(..), CursorType(..))
+import Cursor exposing (CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import DisplayName
-import Duration exposing (Duration)
+import Duration
 import Effect.Browser.Dom
 import Effect.Browser.Events
 import Effect.Browser.Navigation
@@ -207,10 +208,10 @@ audioLoaded audioData model =
         trainSounds : Audio
         trainSounds =
             case localModel.trainsDisabled of
-                TrainsDisabled ->
+                TrainsAndAnimalsDisabled ->
                     Audio.silence
 
-                TrainsEnabled ->
+                TrainsAndAnimalsEnabled ->
                     List.map
                         (\train ->
                             playWithConfig
@@ -663,7 +664,7 @@ updateLoaded audioData msg model =
 
               else
                 case Url.Parser.parse Route.urlParser url of
-                    Just (Route.InternalRoute { viewPoint, page }) ->
+                    Just (Route.InternalRoute { viewPoint }) ->
                         { model | viewPoint = Coord.toPoint2d viewPoint |> NormalViewPoint }
 
                     _ ->
@@ -1001,7 +1002,7 @@ updateLoaded audioData msg model =
                                     UiHover uiHover data ->
                                         uiUpdate audioData uiHover (Ui.MouseMove { elementPosition = data.position }) model2
 
-                                    CowHover _ ->
+                                    AnimalHover _ ->
                                         ( placeTileHelper model2, Command.none )
 
                             _ ->
@@ -1156,10 +1157,10 @@ updateLoaded audioData msg model =
                         , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                         , trains =
                             case localGrid.trainsDisabled of
-                                TrainsDisabled ->
+                                TrainsAndAnimalsDisabled ->
                                     model.trains
 
-                                TrainsEnabled ->
+                                TrainsAndAnimalsEnabled ->
                                     Train.moveTrains
                                         time
                                         (Duration.from model.time time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
@@ -1603,7 +1604,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                                 HandTool ->
                                     case isHoldingCow model of
                                         Just { cowId } ->
-                                            LoadingPage.updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model) model.time) model
+                                            LoadingPage.updateLocalModel (Change.DropAnimal cowId (LoadingPage.mouseWorldPosition model) model.time) model
                                                 |> Tuple.first
 
                                         Nothing ->
@@ -2184,7 +2185,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
             if isSmallDistance2 then
                 let
                     ( model3, _ ) =
-                        LoadingPage.updateLocalModel (Change.DropCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                        LoadingPage.updateLocalModel (Change.DropAnimal cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                 in
                 ( model3, Command.none )
 
@@ -2331,11 +2332,11 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     else
                         ( model2, Command.none )
 
-                CowHover { cowId } ->
+                AnimalHover { animalId } ->
                     if isSmallDistance2 then
                         let
                             ( model3, _ ) =
-                                LoadingPage.updateLocalModel (Change.PickupCow cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                                LoadingPage.updateLocalModel (Change.PickupAnimal animalId (LoadingPage.mouseWorldPosition model2) model2.time) model2
                         in
                         ( model3, Command.none )
 
@@ -3820,7 +3821,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     NoCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     NoCursor
 
                                                 UiHover _ _ ->
@@ -3845,7 +3846,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite DefaultSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite PointerSpriteCursor
 
                                                 UiHover _ _ ->
@@ -3865,7 +3866,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite EyeDropperSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite EyeDropperSpriteCursor
 
                                                 UiHover _ _ ->
@@ -3885,7 +3886,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite TextSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite TextSpriteCursor
 
                                                 UiHover _ _ ->
@@ -3905,7 +3906,7 @@ cursorSprite hover model =
                                                 MapHover ->
                                                     CursorSprite GavelSpriteCursor
 
-                                                CowHover _ ->
+                                                AnimalHover _ ->
                                                     CursorSprite GavelSpriteCursor
 
                                                 UiHover _ _ ->
@@ -4257,9 +4258,6 @@ canvasView audioData model =
 drawWorld : Bool -> RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
 drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
     let
-        { x, y } =
-            Point2d.unwrap (Toolbar.actualViewPoint model)
-
         localGrid : LocalGrid_
         localGrid =
             LocalGrid.localModel model.localModel
@@ -4382,9 +4380,9 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
             WebGL.Texture.size texture
     in
     List.filterMap
-        (\( cowId, animal ) ->
-            case LoadingPage.animalActualPosition cowId model of
-                Just { position } ->
+        (\( animalId, animal ) ->
+            case LoadingPage.animalActualPosition animalId model of
+                Just { position, isHeld } ->
                     if BoundingBox2d.contains position viewBounds_ then
                         let
                             point =
@@ -4395,9 +4393,38 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
 
                             animalData =
                                 Animal.getData animal.animalType
+
+                            ( walk, stand ) =
+                                if Point2d.xCoordinate animal.position |> Quantity.lessThan (Point2d.xCoordinate animal.endPosition) then
+                                    ( animalData.walkTexturePosition, animalData.texturePosition )
+
+                                else
+                                    ( animalData.walkTexturePositionFlipped, animalData.texturePositionFlipped )
+
+                            texturePos =
+                                if
+                                    (Duration.from model.time (Animal.moveEndTime animal) |> Quantity.lessThanZero)
+                                        || (Duration.from animal.startTime model.time |> Quantity.lessThanZero)
+                                then
+                                    stand
+
+                                else if Basics.Extra.fractionalModBy (1 / Quantity.unwrap animalData.speed) time < (0.5 / Quantity.unwrap animalData.speed) then
+                                    walk
+
+                                else
+                                    stand
                         in
                         Effect.WebGL.entityWith
-                            [ Shaders.blend, Shaders.scissorBox scissors ]
+                            ([ Shaders.blend
+                             , Shaders.scissorBox scissors
+                             ]
+                                ++ (if isHeld then
+                                        []
+
+                                    else
+                                        [ Shaders.depthTest ]
+                                   )
+                            )
                             Shaders.instancedVertexShader
                             Shaders.fragmentShader
                             Train.instancedMesh
@@ -4419,9 +4446,9 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                             , secondaryColor0 = Color.toInt Color.black |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
                             , texturePosition0 =
-                                Coord.xRaw animalData.texturePosition
+                                Coord.xRaw texturePos
                                     + textureW
-                                    * Coord.yRaw animalData.texturePosition
+                                    * Coord.yRaw texturePos
                                     |> toFloat
                             , night = nightFactor
                             }

@@ -36,11 +36,12 @@ module Types exposing
 
 import AdminPage
 import Animal exposing (Animal)
+import Array exposing (Array)
 import AssocList
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsDisabled, BackendReport, Change, UserStatus)
+import Change exposing (AreTrainsAndAnimalsDisabled, BackendReport, Change, UserStatus)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -295,7 +296,7 @@ type Hover
     = TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
-    | CowHover { cowId : Id AnimalId, cow : Animal }
+    | AnimalHover { animalId : Id AnimalId, animal : Animal }
     | UiBackgroundHover
     | UiHover UiHover { position : Coord Pixels }
 
@@ -355,7 +356,7 @@ type alias BackendModel =
     , secretLinkCounter : Int
     , errors : List ( Effect.Time.Posix, BackendError )
     , trains : IdDict TrainId Train
-    , cows : IdDict AnimalId Animal
+    , animals : IdDict AnimalId Animal
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : IdDict MailId BackendMail
@@ -370,8 +371,9 @@ type alias BackendModel =
     , lastCacheRegeneration : Maybe Effect.Time.Posix
     , reported : IdDict UserId (Nonempty BackendReport)
     , isGridReadOnly : Bool
-    , trainsDisabled : AreTrainsDisabled
+    , trainsAndAnimalsDisabled : AreTrainsAndAnimalsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
+    , worldUpdateDurations : Array Duration
     }
 
 
@@ -479,6 +481,7 @@ type BackendMsg
     | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | RegenerateCache Effect.Time.Posix
     | SentReportVandalismAdminEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
+    | GotTimeAfterWorldUpdate Effect.Time.Posix Effect.Time.Posix
 
 
 type ToFrontend
@@ -509,5 +512,5 @@ type alias LoadingData_ =
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree
     , isGridReadOnly : Bool
-    , trainsDisabled : AreTrainsDisabled
+    , trainsDisabled : AreTrainsAndAnimalsDisabled
     }

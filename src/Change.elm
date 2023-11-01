@@ -1,11 +1,12 @@
 module Change exposing
     ( AdminChange(..)
     , AdminData
-    , AreTrainsDisabled(..)
+    , AreTrainsAndAnimalsDisabled(..)
     , BackendReport
     , Change(..)
     , LocalChange(..)
     , LoggedIn_
+    , MovementChange
     , NotLoggedIn_
     , Report
     , ServerChange(..)
@@ -16,6 +17,7 @@ module Change exposing
     )
 
 import Animal exposing (Animal)
+import Array exposing (Array)
 import AssocList
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
@@ -23,6 +25,7 @@ import Coord exposing (Coord, RawCellCoord)
 import Cursor
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
+import Duration exposing (Duration)
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Grid
@@ -49,8 +52,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | PickupCow (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | DropCow (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | PickupAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | DropAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors
@@ -114,21 +117,25 @@ type TileHotkey
 type AdminChange
     = AdminResetSessions
     | AdminSetGridReadOnly Bool
-    | AdminSetTrainsDisabled AreTrainsDisabled
+    | AdminSetTrainsDisabled AreTrainsAndAnimalsDisabled
     | AdminDeleteMail (Id MailId) Effect.Time.Posix
     | AdminRestoreMail (Id MailId)
 
 
-type AreTrainsDisabled
-    = TrainsDisabled
-    | TrainsEnabled
+type AreTrainsAndAnimalsDisabled
+    = TrainsAndAnimalsDisabled
+    | TrainsAndAnimalsEnabled
 
 
 type ServerChange
-    = ServerGridChange { gridChange : Grid.GridChange, newCells : List (Coord CellUnit), newCows : List ( Id AnimalId, Animal ) }
+    = ServerGridChange
+        { gridChange : Grid.GridChange
+        , newCells : List (Coord CellUnit)
+        , newAnimals : List ( Id AnimalId, Animal )
+        }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerPickupCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | ServerDropCow (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
+    | ServerPickupAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | ServerDropAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected
@@ -145,6 +152,7 @@ type ServerChange
     | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerWorldUpdateBroadcast (IdDict TrainId TrainDiff)
+    | ServerWorldUpdateDuration Duration
     | ServerReceivedMail
         { mailId : Id MailId
         , from : Id UserId
@@ -157,8 +165,16 @@ type ServerChange
     | ServerGridReadOnly Bool
     | ServerVandalismReportedToAdmin (Id UserId) BackendReport
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
-    | ServerSetTrainsDisabled AreTrainsDisabled
+    | ServerSetTrainsDisabled AreTrainsAndAnimalsDisabled
     | ServerLogout
+    | ServerAnimalMovement (Nonempty ( Id AnimalId, MovementChange ))
+
+
+type alias MovementChange =
+    { startTime : Effect.Time.Posix
+    , position : Point2d WorldUnit WorldUnit
+    , endPosition : Point2d WorldUnit WorldUnit
+    }
 
 
 type UserStatus
@@ -199,6 +215,7 @@ type alias AdminData =
     , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
     , reported : IdDict UserId (Nonempty BackendReport)
     , mail : IdDict MailId BackendMail
+    , worldUpdateDurations : Array Duration
     }
 
 

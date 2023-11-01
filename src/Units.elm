@@ -10,6 +10,8 @@ module Units exposing
     , cellUnit
     , localUnit
     , pixelToTile
+    , pixelToTilePoint
+    , pixelToTileVector
     , screenFrame
     , tileHeight
     , tileSize
@@ -22,7 +24,8 @@ import Coord exposing (Coord)
 import Frame2d exposing (Frame2d)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity)
+import Quantity exposing (Quantity(..))
+import Vector2d exposing (Vector2d)
 
 
 type WorldUnit
@@ -82,6 +85,22 @@ tileToPixel coord =
 pixelToTile : Coord Pixels -> Coord WorldUnit
 pixelToTile coord =
     coord |> Coord.divide tileSize |> Coord.toTuple |> Coord.tuple
+
+
+pixelToTilePoint : Coord Pixels -> Point2d WorldUnit WorldUnit
+pixelToTilePoint ( Quantity x, Quantity y ) =
+    Point2d.unsafe
+        { x = toFloat x / toFloat (Coord.xRaw tileSize)
+        , y = toFloat y / toFloat (Coord.yRaw tileSize)
+        }
+
+
+pixelToTileVector : Coord Pixels -> Vector2d WorldUnit WorldUnit
+pixelToTileVector ( Quantity x, Quantity y ) =
+    Vector2d.unsafe
+        { x = toFloat x / toFloat (Coord.xRaw tileSize)
+        , y = toFloat y / toFloat (Coord.yRaw tileSize)
+        }
 
 
 tileSize : Coord unit

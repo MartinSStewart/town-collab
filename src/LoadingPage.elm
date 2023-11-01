@@ -25,7 +25,6 @@ module LoadingPage exposing
     , updateLocalModel
     , updateMeshes
     , viewBoundsUpdate
-    , viewLoadingBoundingBox
     , windowResizedUpdate
     )
 
@@ -86,7 +85,7 @@ import Train exposing (Train)
 import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UiHover(..), UpdateMeshesData, ViewPoint(..), WorldPage2)
 import Ui
 import Units exposing (CellUnit, WorldUnit)
-import Vector2d exposing (Vector2d)
+import Vector2d
 import WebGL.Texture
 
 
@@ -1061,8 +1060,8 @@ hoverAt model mousePosition =
 
                 Nothing ->
                     case animalHovers of
-                        Just ( cowId, cow ) ->
-                            CowHover { cowId = cowId, cow = cow }
+                        Just ( animalId, animal ) ->
+                            AnimalHover { animalId = animalId, animal = animal }
 
                         Nothing ->
                             case tileHover of
@@ -1094,7 +1093,7 @@ animalActualPosition animalId model =
         Nothing ->
             case IdDict.get animalId localGrid.animals of
                 Just animal ->
-                    Just { position = animal.position, isHeld = False }
+                    { position = Animal.actualPositionWithoutCursor model.time animal, isHeld = False } |> Just
 
                 Nothing ->
                     Nothing

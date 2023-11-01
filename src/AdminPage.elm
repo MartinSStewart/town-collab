@@ -1,11 +1,11 @@
-module AdminPage exposing (Hover(..), Model, OutMsg(..), adminView, init, update)
+module AdminPage exposing (Config, Hover(..), Model, OutMsg(..), adminView, init, update)
 
-import Audio exposing (AudioData)
-import Change exposing (AdminData, AreTrainsDisabled(..), Change, LocalChange, UserStatus(..))
+import Array
+import Change exposing (AdminData, AreTrainsAndAnimalsDisabled(..), Change, UserStatus(..))
 import Color
 import Coord exposing (Coord)
 import DisplayName
-import Effect.Command as Command exposing (Command, FrontendOnly)
+import Duration
 import Effect.Time
 import Env
 import Id exposing (Id, MailId)
@@ -15,6 +15,7 @@ import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (MailStatus(..), MailStatus2(..))
 import Pixels exposing (Pixels)
+import Round
 import Ui exposing (BorderAndFill(..), UiEvent)
 
 
@@ -82,11 +83,11 @@ update config hover event model =
                     ( model
                     , Change.AdminSetTrainsDisabled
                         (case LocalGrid.localModel config.localModel |> .trainsDisabled of
-                            TrainsDisabled ->
-                                TrainsEnabled
+                            TrainsAndAnimalsDisabled ->
+                                TrainsAndAnimalsEnabled
 
-                            TrainsEnabled ->
-                                TrainsDisabled
+                            TrainsAndAnimalsEnabled ->
+                                TrainsAndAnimalsDisabled
                         )
                         |> OutMsgAdminChange
                     )
@@ -111,6 +112,24 @@ update config hover event model =
 
 adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
 adminView idMap windowSize isGridReadOnly adminData model localModel =
+    let
+        averageWorldUpdateDuration =
+            if Array.isEmpty adminData.worldUpdateDurations then
+                "N/A"
+
+            else
+                Array.foldl (\value total -> Duration.inMilliseconds value + total) 0 adminData.worldUpdateDurations
+                    / toFloat (Array.length adminData.worldUpdateDurations)
+                    |> Round.round 1
+
+        maxWorldUpdateDuration =
+            if Array.isEmpty adminData.worldUpdateDurations then
+                "N/A"
+
+            else
+                Array.foldl (\value total -> max (Duration.inMilliseconds value) total) 0 adminData.worldUpdateDurations
+                    |> Round.round 1
+    in
     Ui.topLeft2
         { size = windowSize
         , inFront =
@@ -134,7 +153,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                     Ui.text "(dev)"
                 ]
             , Ui.checkbox (idMap ToggleIsGridReadOnlyButton) isGridReadOnly "Read only grid"
-            , Ui.checkbox (idMap ToggleTrainsDisabledButton) (localModel.trainsDisabled == TrainsDisabled) "Disable trains"
+            , Ui.checkbox (idMap ToggleTrainsDisabledButton) (localModel.trainsDisabled == TrainsAndAnimalsDisabled) "Disable trains and animals"
             , Ui.text
                 ("Last cache regen: "
                     ++ (case adminData.lastCacheRegeneration of
@@ -145,6 +164,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                 "Never"
                        )
                 )
+            , Ui.text ("World update: " ++ averageWorldUpdateDuration ++ " (avg), " ++ maxWorldUpdateDuration ++ " (max)")
             , Ui.text "Sessions (id:count)"
             , Ui.button
                 { id = idMap ResetConnectionsButton, padding = Ui.paddingXY 10 4 }
@@ -187,7 +207,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                         MailWaitingPickup ->
                                             Ui.text "Waiting pickup"
 
-                                        MailInTransit id ->
+                                        MailInTransit _ ->
                                             Ui.text "In transit"
 
                                         MailReceived { deliveryTime } ->
