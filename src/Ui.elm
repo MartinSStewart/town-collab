@@ -6,6 +6,7 @@ module Ui exposing
     , InputType(..)
     , Padding
     , RowColumn
+    , TextInputData
     , UiEvent(..)
     , bottomCenter
     , bottomLeft
