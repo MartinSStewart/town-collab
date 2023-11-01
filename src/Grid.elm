@@ -917,16 +917,38 @@ rayIntersection includeWater expandBoundsBy start end grid =
         line =
             LineSegment2d.from start end
 
+        minReach : Vector2d WorldUnit WorldUnit
+        minReach =
+            Vector2d.xy
+                (BoundingBox2d.minX Tile.aggregateMovementCollision)
+                (BoundingBox2d.minY Tile.aggregateMovementCollision)
+
+        maxReach : Vector2d WorldUnit WorldUnit
+        maxReach =
+            Vector2d.xy
+                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
+                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
+                |> Vector2d.reverse
+
         cellBounds : Bounds CellUnit
         cellBounds =
             Bounds.fromCoords
                 (Nonempty
-                    (Point2d.translateBy expandBoundsBy start |> worldToCellPoint |> Coord.floorPoint)
-                    [ Point2d.translateBy (Vector2d.reverse expandBoundsBy) start
+                    (Point2d.translateBy expandBoundsBy start
+                        |> Point2d.translateBy minReach
                         |> worldToCellPoint
                         |> Coord.floorPoint
-                    , Point2d.translateBy expandBoundsBy end |> worldToCellPoint |> Coord.floorPoint
+                    )
+                    [ Point2d.translateBy (Vector2d.reverse expandBoundsBy) start
+                        |> Point2d.translateBy maxReach
+                        |> worldToCellPoint
+                        |> Coord.floorPoint
+                    , Point2d.translateBy expandBoundsBy end
+                        |> Point2d.translateBy minReach
+                        |> worldToCellPoint
+                        |> Coord.floorPoint
                     , Point2d.translateBy (Vector2d.reverse expandBoundsBy) end
+                        |> Point2d.translateBy maxReach
                         |> worldToCellPoint
                         |> Coord.floorPoint
                     ]
@@ -953,11 +975,25 @@ pointInside :
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 pointInside includeWater expandBoundsBy start grid =
     let
+        minReach : Vector2d WorldUnit WorldUnit
+        minReach =
+            Vector2d.xy
+                (BoundingBox2d.minX Tile.aggregateMovementCollision)
+                (BoundingBox2d.minY Tile.aggregateMovementCollision)
+
+        maxReach : Vector2d WorldUnit WorldUnit
+        maxReach =
+            Vector2d.xy
+                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
+                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
+                |> Vector2d.reverse
+
         cellBounds : Bounds CellUnit
         cellBounds =
             Bounds.from2Coords
-                (Point2d.translateBy expandBoundsBy start |> worldToCellPoint |> Coord.floorPoint)
+                (Point2d.translateBy expandBoundsBy start |> Point2d.translateBy minReach |> worldToCellPoint |> Coord.floorPoint)
                 (Point2d.translateBy (Vector2d.reverse expandBoundsBy) start
+                    |> Point2d.translateBy maxReach
                     |> worldToCellPoint
                     |> Coord.floorPoint
                 )

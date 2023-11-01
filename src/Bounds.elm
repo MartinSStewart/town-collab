@@ -1,6 +1,7 @@
 module Bounds exposing
     ( Bounds(..)
     , addToMax
+    , aggregate
     , bounds
     , boundsToBounds2d
     , center
@@ -72,6 +73,14 @@ bounds min_ max_ =
     Bounds
         { min = Coord.minimum min_ max_
         , max = Coord.maxTuple min_ max_
+        }
+
+
+aggregate : Nonempty (Bounds unit) -> Bounds unit
+aggregate bounds_ =
+    Bounds
+        { min = List.Nonempty.foldl1 Coord.minimum (List.Nonempty.map minimum bounds_)
+        , max = List.Nonempty.foldl1 Coord.maximum (List.Nonempty.map maximum bounds_)
         }
 
 

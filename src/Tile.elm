@@ -10,6 +10,7 @@ module Tile exposing
     , TileData
     , TileGroup(..)
     , TileGroupData
+    , aggregateMovementCollision
     , allCategories
     , allTileGroupsExceptText
     , buildingCategory
@@ -806,6 +807,162 @@ type Tile
     | RoadManholeLeft
     | RoadManholeUp
     | RoadManholeRight
+
+
+aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
+aggregateMovementCollision =
+    let
+        bounds =
+            List.foldl
+                (\tile bounds2 ->
+                    Bounds.aggregate (Nonempty bounds2 (getData tile |> .movementCollision))
+                )
+                (Bounds.from2Coords Coord.origin Coord.origin)
+                allTiles
+    in
+    BoundingBox2d.from
+        (Bounds.minimum bounds |> Units.pixelToTilePoint)
+        (Bounds.maximum bounds |> Units.pixelToTilePoint)
+
+
+allTiles : List Tile
+allTiles =
+    [ EmptyTile
+    , HouseDown
+    , HouseRight
+    , HouseUp
+    , HouseLeft
+    , RailHorizontal
+    , RailVertical
+    , RailBottomToRight
+    , RailBottomToLeft
+    , RailTopToRight
+    , RailTopToLeft
+    , RailBottomToRightLarge
+    , RailBottomToLeftLarge
+    , RailTopToRightLarge
+    , RailTopToLeftLarge
+    , RailCrossing
+    , RailStrafeDown
+    , RailStrafeUp
+    , RailStrafeLeft
+    , RailStrafeRight
+    , TrainHouseRight
+    , TrainHouseLeft
+    , RailStrafeDownSmall
+    , RailStrafeUpSmall
+    , RailStrafeLeftSmall
+    , RailStrafeRightSmall
+    , Sidewalk
+    , SidewalkHorizontalRailCrossing
+    , SidewalkVerticalRailCrossing
+    , RailBottomToRight_SplitLeft
+    , RailBottomToLeft_SplitUp
+    , RailTopToRight_SplitDown
+    , RailTopToLeft_SplitRight
+    , RailBottomToRight_SplitUp
+    , RailBottomToLeft_SplitRight
+    , RailTopToRight_SplitLeft
+    , RailTopToLeft_SplitDown
+    , PostOffice
+    , PineTree1
+    , PineTree2
+    , BigPineTree
+    , LogCabinDown
+    , LogCabinRight
+    , LogCabinUp
+    , LogCabinLeft
+    , RoadHorizontal
+    , RoadVertical
+    , RoadBottomToLeft
+    , RoadTopToLeft
+    , RoadTopToRight
+    , RoadBottomToRight
+    , Road4Way
+    , RoadSidewalkCrossingHorizontal
+    , RoadSidewalkCrossingVertical
+    , Road3WayDown
+    , Road3WayLeft
+    , Road3WayUp
+    , Road3WayRight
+    , RoadRailCrossingHorizontal
+    , RoadRailCrossingVertical
+    , FenceHorizontal
+    , FenceVertical
+    , FenceDiagonal
+    , FenceAntidiagonal
+    , RoadDeadendUp
+    , RoadDeadendDown
+    , BusStopDown
+    , BusStopLeft
+    , BusStopRight
+    , BusStopUp
+    , Hospital
+    , Statue
+    , HedgeRowDown
+    , HedgeRowLeft
+    , HedgeRowRight
+    , HedgeRowUp
+    , HedgeCornerDownLeft
+    , HedgeCornerDownRight
+    , HedgeCornerUpLeft
+    , HedgeCornerUpRight
+    , HedgePillarDownLeft
+    , HedgePillarDownRight
+    , HedgePillarUpLeft
+    , HedgePillarUpRight
+    , ApartmentDown
+    , ApartmentLeft
+    , ApartmentRight
+    , ApartmentUp
+    , RockDown
+    , RockLeft
+    , RockRight
+    , RockUp
+    , Flowers1
+    , Flowers2
+    , ElmTree
+    , DirtPathHorizontal
+    , DirtPathVertical
+    , BigText 'A'
+    , Hyperlink
+    , BenchDown
+    , BenchLeft
+    , BenchUp
+    , BenchRight
+    , ParkingDown
+    , ParkingLeft
+    , ParkingUp
+    , ParkingRight
+    , ParkingRoad
+    , ParkingRoundabout
+    , CornerHouseUpLeft
+    , CornerHouseUpRight
+    , CornerHouseDownLeft
+    , CornerHouseDownRight
+    , DogHouseDown
+    , DogHouseRight
+    , DogHouseUp
+    , DogHouseLeft
+    , Mushroom
+    , TreeStump1
+    , TreeStump2
+    , Sunflowers
+    , RailDeadEndLeft
+    , RailDeadEndRight
+    , RailStrafeLeftToRight_SplitUp
+    , RailStrafeLeftToRight_SplitDown
+    , RailStrafeRightToLeft_SplitUp
+    , RailStrafeRightToLeft_SplitDown
+    , RailStrafeTopToBottom_SplitLeft
+    , RailStrafeTopToBottom_SplitRight
+    , RailStrafeBottomToTop_SplitLeft
+    , RailStrafeBottomToTop_SplitRight
+    , RoadManholeDown
+    , RoadManholeLeft
+    , RoadManholeUp
+    , RoadManholeRight
+    ]
 
 
 type Direction

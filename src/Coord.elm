@@ -10,6 +10,7 @@ module Coord exposing
     , floorPoint
     , maxComponent
     , maxTuple
+    , maximum
     , minimum
     , minus
     , minusTuple_
@@ -127,6 +128,11 @@ divide ( Quantity x0, Quantity y0 ) ( Quantity x1, Quantity y1 ) =
 minimum : Coord unit -> Coord unit -> Coord unit
 minimum ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.min x0 x1, Quantity.min y0 y1 )
+
+
+maximum : Coord unit -> Coord unit -> Coord unit
+maximum ( x0, y0 ) ( x1, y1 ) =
+    ( Quantity.max x0 x1, Quantity.max y0 y1 )
 
 
 clamp : Coord unit -> Coord unit -> Coord unit -> Coord unit

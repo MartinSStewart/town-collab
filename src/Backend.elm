@@ -1,4 +1,4 @@
-module Backend exposing (app)
+module Backend exposing (app, app_)
 
 import Angle
 import Animal exposing (Animal)

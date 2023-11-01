@@ -1,4 +1,4 @@
-module Frontend exposing (app)
+module Frontend exposing (app, app_)
 
 import AdminPage
 import Animal
