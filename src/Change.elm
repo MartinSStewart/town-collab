@@ -1,7 +1,7 @@
 module Change exposing
     ( AdminChange(..)
     , AdminData
-    , AreTrainsDisabled(..)
+    , AreTrainsAndAnimalsDisabled(..)
     , BackendReport
     , Change(..)
     , LocalChange(..)
@@ -117,14 +117,14 @@ type TileHotkey
 type AdminChange
     = AdminResetSessions
     | AdminSetGridReadOnly Bool
-    | AdminSetTrainsDisabled AreTrainsDisabled
+    | AdminSetTrainsDisabled AreTrainsAndAnimalsDisabled
     | AdminDeleteMail (Id MailId) Effect.Time.Posix
     | AdminRestoreMail (Id MailId)
 
 
-type AreTrainsDisabled
-    = TrainsDisabled
-    | TrainsEnabled
+type AreTrainsAndAnimalsDisabled
+    = TrainsAndAnimalsDisabled
+    | TrainsAndAnimalsEnabled
 
 
 type ServerChange
@@ -165,7 +165,7 @@ type ServerChange
     | ServerGridReadOnly Bool
     | ServerVandalismReportedToAdmin (Id UserId) BackendReport
     | ServerVandalismRemovedToAdmin (Id UserId) (Coord WorldUnit)
-    | ServerSetTrainsDisabled AreTrainsDisabled
+    | ServerSetTrainsDisabled AreTrainsAndAnimalsDisabled
     | ServerLogout
     | ServerAnimalMovement (Nonempty ( Id AnimalId, MovementChange ))
 

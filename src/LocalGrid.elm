@@ -31,7 +31,7 @@ import AssocList
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AreTrainsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -76,7 +76,7 @@ type alias LocalGrid_ =
     , inviteTree : InviteTree
     , mail : IdDict MailId FrontendMail
     , trains : IdDict TrainId Train
-    , trainsDisabled : AreTrainsDisabled
+    , trainsDisabled : AreTrainsAndAnimalsDisabled
     }
 
 
@@ -132,7 +132,7 @@ init :
         , inviteTree : InviteTree
         , mail : IdDict MailId FrontendMail
         , trains : IdDict TrainId Train
-        , trainsDisabled : AreTrainsDisabled
+        , trainsDisabled : AreTrainsAndAnimalsDisabled
     }
     -> LocalModel Change LocalGrid
 init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, trains, trainsDisabled } =

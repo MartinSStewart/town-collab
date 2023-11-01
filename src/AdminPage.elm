@@ -1,7 +1,7 @@
 module AdminPage exposing (Config, Hover(..), Model, OutMsg(..), adminView, init, update)
 
 import Array
-import Change exposing (AdminData, AreTrainsDisabled(..), Change, UserStatus(..))
+import Change exposing (AdminData, AreTrainsAndAnimalsDisabled(..), Change, UserStatus(..))
 import Color
 import Coord exposing (Coord)
 import DisplayName
@@ -83,11 +83,11 @@ update config hover event model =
                     ( model
                     , Change.AdminSetTrainsDisabled
                         (case LocalGrid.localModel config.localModel |> .trainsDisabled of
-                            TrainsDisabled ->
-                                TrainsEnabled
+                            TrainsAndAnimalsDisabled ->
+                                TrainsAndAnimalsEnabled
 
-                            TrainsEnabled ->
-                                TrainsDisabled
+                            TrainsAndAnimalsEnabled ->
+                                TrainsAndAnimalsDisabled
                         )
                         |> OutMsgAdminChange
                     )
@@ -153,7 +153,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                     Ui.text "(dev)"
                 ]
             , Ui.checkbox (idMap ToggleIsGridReadOnlyButton) isGridReadOnly "Read only grid"
-            , Ui.checkbox (idMap ToggleTrainsDisabledButton) (localModel.trainsDisabled == TrainsDisabled) "Disable trains"
+            , Ui.checkbox (idMap ToggleTrainsDisabledButton) (localModel.trainsDisabled == TrainsAndAnimalsDisabled) "Disable trains and animals"
             , Ui.text
                 ("Last cache regen: "
                     ++ (case adminData.lastCacheRegeneration of

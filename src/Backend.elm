@@ -5,7 +5,7 @@ import Animal exposing (Animal)
 import Array
 import AssocList
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), LocalChange(..), ServerChange(..), UserStatus(..), ViewBoundsChange2)
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), ServerChange(..), UserStatus(..), ViewBoundsChange2)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -121,7 +121,7 @@ init =
             , lastCacheRegeneration = Nothing
             , reported = IdDict.empty
             , isGridReadOnly = False
-            , trainsDisabled = TrainsEnabled
+            , trainsAndAnimalsDisabled = TrainsAndAnimalsEnabled
             , lastReportEmailToAdmin = Nothing
             , worldUpdateDurations = Array.empty
             }
@@ -338,11 +338,11 @@ handleWorldUpdate isProduction oldTime time model =
     let
         newTrains : IdDict TrainId Train
         newTrains =
-            case model.trainsDisabled of
-                TrainsDisabled ->
+            case model.trainsAndAnimalsDisabled of
+                TrainsAndAnimalsDisabled ->
                     model.trains
 
-                TrainsEnabled ->
+                TrainsAndAnimalsEnabled ->
                     Train.moveTrains
                         time
                         (Duration.from oldTime time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
@@ -543,76 +543,81 @@ handleWorldUpdate isProduction oldTime time model =
                 )
                 model3
 
-        newAnimals : IdDict AnimalId Animal
-        newAnimals =
-            IdDict.map
-                (\id animal ->
-                    if Duration.from (Animal.moveEndTime animal) time |> Quantity.lessThanZero then
-                        animal
+        ( newAnimals, animalDiff ) =
+            case model.trainsAndAnimalsDisabled of
+                TrainsAndAnimalsEnabled ->
+                    let
+                        newAnimals2 : IdDict AnimalId Animal
+                        newAnimals2 =
+                            IdDict.map
+                                (\id animal ->
+                                    if Duration.from (Animal.moveEndTime animal) time |> Quantity.lessThanZero then
+                                        animal
 
-                    else
-                        let
-                            start =
-                                animal.endPosition
+                                    else
+                                        let
+                                            start =
+                                                animal.endPosition
 
-                            maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
-                            maybeMove =
-                                Random.step
-                                    (randomMovement start)
-                                    (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis time))
-                                    |> Tuple.first
-                        in
-                        case maybeMove of
-                            Just { endPosition, delay } ->
-                                let
-                                    size =
-                                        (Animal.getData animal.animalType).size
-                                            |> Units.pixelToTileVector
-                                            |> Vector2d.scaleBy 0.5
-                                in
-                                { position = start
-                                , startTime = Duration.addTo time delay
-                                , endPosition =
-                                    case Grid.rayIntersection True size start endPosition model.grid of
-                                        Just { intersection } ->
-                                            LineSegmentExtra.extendLineEnd
-                                                start
-                                                intersection
-                                                (Quantity.negate Animal.moveCollisionThreshold)
+                                            maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
+                                            maybeMove =
+                                                Random.step
+                                                    (randomMovement start)
+                                                    (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis time))
+                                                    |> Tuple.first
+                                        in
+                                        case maybeMove of
+                                            Just { endPosition, delay } ->
+                                                let
+                                                    size =
+                                                        (Animal.getData animal.animalType).size
+                                                            |> Units.pixelToTileVector
+                                                            |> Vector2d.scaleBy 0.5
+                                                in
+                                                { position = start
+                                                , startTime = Duration.addTo time delay
+                                                , endPosition =
+                                                    case Grid.rayIntersection True size start endPosition model.grid of
+                                                        Just { intersection } ->
+                                                            LineSegmentExtra.extendLineEnd
+                                                                start
+                                                                intersection
+                                                                (Quantity.negate Animal.moveCollisionThreshold)
 
-                                        Nothing ->
-                                            endPosition
-                                , animalType = animal.animalType
-                                }
+                                                        Nothing ->
+                                                            endPosition
+                                                , animalType = animal.animalType
+                                                }
 
-                            Nothing ->
-                                animal
-                )
-                model.animals
+                                            Nothing ->
+                                                animal
+                                )
+                                model.animals
+                    in
+                    ( newAnimals2
+                    , IdDict.merge
+                        (\_ _ list -> list)
+                        (\id old new list ->
+                            if old.endPosition == new.endPosition then
+                                list
 
-        animalDiff :
-            List
-                ( Id AnimalId
-                , { position : Point2d WorldUnit WorldUnit
-                  , endPosition : Point2d WorldUnit WorldUnit
-                  , startTime : Effect.Time.Posix
-                  }
-                )
-        animalDiff =
-            IdDict.merge
-                (\_ _ list -> list)
-                (\id old new list ->
-                    if old.endPosition == new.endPosition then
-                        list
+                            else
+                                ( id
+                                , { position = new.position
+                                  , endPosition = new.endPosition
+                                  , startTime = new.startTime
+                                  }
+                                )
+                                    :: list
+                        )
+                        (\_ _ list -> list)
+                        model.animals
+                        newAnimals2
+                        []
+                    )
 
-                    else
-                        ( id, { position = new.position, endPosition = new.endPosition, startTime = new.startTime } )
-                            :: list
-                )
-                (\_ _ list -> list)
-                model.animals
-                newAnimals
-                []
+                TrainsAndAnimalsDisabled ->
+                    ( model.animals, [] )
     in
     ( { model3
         | lastWorldUpdate = Just time
@@ -1539,7 +1544,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 )
 
                             AdminSetTrainsDisabled areTrainsDisabled ->
-                                ( { model | trainsDisabled = areTrainsDisabled }
+                                ( { model | trainsAndAnimalsDisabled = areTrainsDisabled }
                                 , originalChange
                                 , ServerSetTrainsDisabled areTrainsDisabled |> BroadcastToEveryoneElse
                                 )
@@ -2031,7 +2036,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                 invitesToInviteTree adminId model3.users
                     |> Maybe.withDefault (InviteTree { userId = adminId, invited = [] })
             , isGridReadOnly = model.isGridReadOnly
-            , trainsDisabled = model.trainsDisabled
+            , trainsDisabled = model.trainsAndAnimalsDisabled
             }
 
         frontendUser : FrontendUser

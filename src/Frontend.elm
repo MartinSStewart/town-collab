@@ -9,7 +9,7 @@ import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
-import Change exposing (AreTrainsDisabled(..), UserStatus(..))
+import Change exposing (AreTrainsAndAnimalsDisabled(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
@@ -208,10 +208,10 @@ audioLoaded audioData model =
         trainSounds : Audio
         trainSounds =
             case localModel.trainsDisabled of
-                TrainsDisabled ->
+                TrainsAndAnimalsDisabled ->
                     Audio.silence
 
-                TrainsEnabled ->
+                TrainsAndAnimalsEnabled ->
                     List.map
                         (\train ->
                             playWithConfig
@@ -1157,10 +1157,10 @@ updateLoaded audioData msg model =
                         , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                         , trains =
                             case localGrid.trainsDisabled of
-                                TrainsDisabled ->
+                                TrainsAndAnimalsDisabled ->
                                     model.trains
 
-                                TrainsEnabled ->
+                                TrainsAndAnimalsEnabled ->
                                     Train.moveTrains
                                         time
                                         (Duration.from model.time time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
