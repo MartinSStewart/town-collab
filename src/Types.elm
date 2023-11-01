@@ -36,6 +36,7 @@ module Types exposing
 
 import AdminPage
 import Animal exposing (Animal)
+import Array exposing (Array)
 import AssocList
 import Audio
 import Bounds exposing (Bounds)
@@ -372,6 +373,7 @@ type alias BackendModel =
     , isGridReadOnly : Bool
     , trainsDisabled : AreTrainsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
+    , worldUpdateDurations : Array Duration
     }
 
 
@@ -479,6 +481,7 @@ type BackendMsg
     | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | RegenerateCache Effect.Time.Posix
     | SentReportVandalismAdminEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
+    | GotTimeAfterWorldUpdate Effect.Time.Posix Effect.Time.Posix
 
 
 type ToFrontend

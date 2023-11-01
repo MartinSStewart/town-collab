@@ -2,6 +2,7 @@ module Backend exposing (app, app_)
 
 import Angle
 import Animal exposing (Animal)
+import Array
 import AssocList
 import Bounds exposing (Bounds)
 import Change exposing (AdminChange(..), AdminData, AreTrainsDisabled(..), LocalChange(..), ServerChange(..), UserStatus(..), ViewBoundsChange2)
@@ -122,6 +123,7 @@ init =
             , isGridReadOnly = False
             , trainsDisabled = TrainsEnabled
             , lastReportEmailToAdmin = Nothing
+            , worldUpdateDurations = Array.empty
             }
     in
     case Env.adminEmail of
@@ -252,6 +254,30 @@ update isProduction msg model =
 
                 Nothing ->
                     ( { model | lastWorldUpdate = Just time }, Command.none )
+
+        GotTimeAfterWorldUpdate updateStartTime updateEndTime ->
+            let
+                duration =
+                    Duration.from updateStartTime updateEndTime
+            in
+            ( LocalGrid.updateWorldUpdateDurations duration model
+            , broadcast
+                (\sessionId_ _ ->
+                    case getUserFromSessionId sessionId_ model of
+                        Just ( userId2, _ ) ->
+                            if userId2 == adminId then
+                                Nonempty (Change.ServerChange (ServerWorldUpdateDuration duration)) []
+                                    |> ChangeBroadcast
+                                    |> Just
+
+                            else
+                                Nothing
+
+                        Nothing ->
+                            Nothing
+                )
+                model
+            )
 
         SentInviteEmail inviteToken result ->
             ( { model
@@ -608,6 +634,7 @@ handleWorldUpdate isProduction oldTime time model =
 
             Nothing ->
                 Command.none
+        , Effect.Task.perform (GotTimeAfterWorldUpdate time) Effect.Time.now
         ]
     )
 
@@ -1809,6 +1836,7 @@ getAdminData userId model =
                     )
         , reported = model.reported
         , mail = model.mail
+        , worldUpdateDurations = model.worldUpdateDurations
         }
             |> Just
 

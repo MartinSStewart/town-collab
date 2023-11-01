@@ -17,6 +17,7 @@ module Change exposing
     )
 
 import Animal exposing (Animal)
+import Array exposing (Array)
 import AssocList
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
@@ -24,6 +25,7 @@ import Coord exposing (Coord, RawCellCoord)
 import Cursor
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
+import Duration exposing (Duration)
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Grid
@@ -150,6 +152,7 @@ type ServerChange
     | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerWorldUpdateBroadcast (IdDict TrainId TrainDiff)
+    | ServerWorldUpdateDuration Duration
     | ServerReceivedMail
         { mailId : Id MailId
         , from : Id UserId
@@ -212,6 +215,7 @@ type alias AdminData =
     , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
     , reported : IdDict UserId (Nonempty BackendReport)
     , mail : IdDict MailId BackendMail
+    , worldUpdateDurations : Array Duration
     }
 
 

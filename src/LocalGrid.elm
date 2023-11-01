@@ -22,9 +22,11 @@ module LocalGrid exposing
     , update
     , updateAnimalMovement
     , updateFromBackend
+    , updateWorldUpdateDurations
     )
 
 import Animal exposing (Animal, AnimalType(..))
+import Array exposing (Array)
 import AssocList
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
@@ -34,6 +36,7 @@ import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
 import Dict exposing (Dict)
+import Duration exposing (Duration)
 import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell
@@ -1223,6 +1226,37 @@ updateServerChange serverChange model =
               }
             , NoOutMsg
             )
+
+        ServerWorldUpdateDuration duration ->
+            ( updateLoggedIn
+                model
+                (\loggedIn ->
+                    { loggedIn | adminData = Maybe.map (updateWorldUpdateDurations duration) loggedIn.adminData }
+                )
+            , NoOutMsg
+            )
+
+
+updateWorldUpdateDurations :
+    Duration
+    -> { a | worldUpdateDurations : Array Duration }
+    -> { a | worldUpdateDurations : Array Duration }
+updateWorldUpdateDurations duration model =
+    let
+        newArray =
+            Array.push duration model.worldUpdateDurations
+
+        maxSize =
+            1000
+    in
+    { model
+        | worldUpdateDurations =
+            if Array.length model.worldUpdateDurations > maxSize then
+                newArray
+
+            else
+                Array.slice (Array.length newArray - maxSize) (Array.length newArray) newArray
+    }
 
 
 logout : LocalGrid_ -> ( LocalGrid_, OutMsg )

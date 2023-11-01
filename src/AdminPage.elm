@@ -1,10 +1,12 @@
 module AdminPage exposing (Hover(..), Model, OutMsg(..), adminView, init, update)
 
+import Array
 import Audio exposing (AudioData)
 import Change exposing (AdminData, AreTrainsDisabled(..), Change, LocalChange, UserStatus(..))
 import Color
 import Coord exposing (Coord)
 import DisplayName
+import Duration
 import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.Time
 import Env
@@ -15,6 +17,8 @@ import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (MailStatus(..), MailStatus2(..))
 import Pixels exposing (Pixels)
+import Quantity
+import Round
 import Ui exposing (BorderAndFill(..), UiEvent)
 
 
@@ -111,6 +115,24 @@ update config hover event model =
 
 adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
 adminView idMap windowSize isGridReadOnly adminData model localModel =
+    let
+        averageWorldUpdateDuration =
+            if Array.isEmpty adminData.worldUpdateDurations then
+                "N/A"
+
+            else
+                Array.foldl (\value total -> Duration.inMilliseconds value + total) 0 adminData.worldUpdateDurations
+                    / toFloat (Array.length adminData.worldUpdateDurations)
+                    |> Round.round 1
+
+        maxWorldUpdateDuration =
+            if Array.isEmpty adminData.worldUpdateDurations then
+                "N/A"
+
+            else
+                Array.foldl (\value total -> max (Duration.inMilliseconds value) total) 0 adminData.worldUpdateDurations
+                    |> Round.round 1
+    in
     Ui.topLeft2
         { size = windowSize
         , inFront =
@@ -145,6 +167,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                 "Never"
                        )
                 )
+            , Ui.text ("World update: " ++ averageWorldUpdateDuration ++ " (avg), " ++ maxWorldUpdateDuration ++ " (max)")
             , Ui.text "Sessions (id:count)"
             , Ui.button
                 { id = idMap ResetConnectionsButton, padding = Ui.paddingXY 10 4 }
