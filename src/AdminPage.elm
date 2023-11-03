@@ -4,10 +4,12 @@ import Array
 import Change exposing (AdminData, AreTrainsAndAnimalsDisabled(..), Change, UserStatus(..))
 import Color
 import Coord exposing (Coord)
+import Dict
 import DisplayName
 import Duration
 import Effect.Time
 import Env
+import Grid
 import Id exposing (Id, MailId)
 import IdDict
 import Keyboard
@@ -152,8 +154,23 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                   else
                     Ui.text "(dev)"
                 ]
-            , Ui.checkbox (idMap ToggleIsGridReadOnlyButton) isGridReadOnly "Read only grid"
-            , Ui.checkbox (idMap ToggleTrainsDisabledButton) (localModel.trainsDisabled == TrainsAndAnimalsDisabled) "Disable trains and animals"
+            , Ui.checkbox
+                (idMap ToggleIsGridReadOnlyButton)
+                isGridReadOnly
+                (Grid.allCellsDict localModel.grid
+                    |> Dict.size
+                    |> String.fromInt
+                    |> (\a -> "Read only grid (" ++ a ++ " grid cells)")
+                )
+            , Ui.checkbox
+                (idMap ToggleTrainsDisabledButton)
+                (localModel.trainsDisabled == TrainsAndAnimalsDisabled)
+                ("Disable trains and animals ("
+                    ++ String.fromInt (IdDict.size localModel.trains)
+                    ++ " trains, "
+                    ++ String.fromInt (IdDict.size localModel.animals)
+                    ++ " animals)"
+                )
             , Ui.text
                 ("Last cache regen: "
                     ++ (case adminData.lastCacheRegeneration of
@@ -164,7 +181,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                 "Never"
                        )
                 )
-            , Ui.text ("World update: " ++ averageWorldUpdateDuration ++ " (avg), " ++ maxWorldUpdateDuration ++ " (max)")
+            , Ui.text ("World update: " ++ averageWorldUpdateDuration ++ " avg, " ++ maxWorldUpdateDuration ++ " max")
             , Ui.text "Sessions (id:count)"
             , Ui.button
                 { id = idMap ResetConnectionsButton, padding = Ui.paddingXY 10 4 }
