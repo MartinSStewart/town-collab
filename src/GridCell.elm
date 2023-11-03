@@ -249,7 +249,7 @@ mapPixelData (Cell cell) =
 cellToData : Cell -> CellData
 cellToData (Cell cell) =
     CellData
-        { history = cell.history
+        { history = [] --cell.history
         , undoPoint = cell.undoPoint
         , railSplitToggled = cell.railSplitToggled
         , cache = cell.cache
