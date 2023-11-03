@@ -4,12 +4,10 @@ import Array
 import Change exposing (AdminData, AreTrainsAndAnimalsDisabled(..), Change, UserStatus(..))
 import Color
 import Coord exposing (Coord)
-import Dict
 import DisplayName
 import Duration
 import Effect.Time
 import Env
-import Grid
 import Id exposing (Id, MailId)
 import IdDict
 import Keyboard
@@ -157,11 +155,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
             , Ui.checkbox
                 (idMap ToggleIsGridReadOnlyButton)
                 isGridReadOnly
-                (Grid.allCellsDict localModel.grid
-                    |> Dict.size
-                    |> String.fromInt
-                    |> (\a -> "Read only grid (" ++ a ++ " grid cells)")
-                )
+                ("Read only grid (" ++ String.fromInt adminData.totalGridCells ++ " grid cells)")
             , Ui.checkbox
                 (idMap ToggleTrainsDisabledButton)
                 (localModel.trainsDisabled == TrainsAndAnimalsDisabled)

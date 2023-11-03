@@ -58,7 +58,7 @@ import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (AnimalId, EventId, Id, MailId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, PersonId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
@@ -357,6 +357,7 @@ type alias BackendModel =
     , errors : List ( Effect.Time.Posix, BackendError )
     , trains : IdDict TrainId Train
     , animals : IdDict AnimalId Animal
+    , people : IdDict PersonId Person
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : IdDict MailId BackendMail
@@ -374,6 +375,13 @@ type alias BackendModel =
     , trainsAndAnimalsDisabled : AreTrainsAndAnimalsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
+    }
+
+
+type alias Person =
+    { name : String
+    , home : Coord WorldUnit
+    , position : Point2d WorldUnit WorldUnit
     }
 
 

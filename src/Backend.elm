@@ -1842,6 +1842,7 @@ getAdminData userId model =
         , reported = model.reported
         , mail = model.mail
         , worldUpdateDurations = model.worldUpdateDurations
+        , totalGridCells = Grid.allCellsDict model.grid |> Dict.size
         }
             |> Just
 

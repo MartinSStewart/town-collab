@@ -216,6 +216,7 @@ type alias AdminData =
     , reported : IdDict UserId (Nonempty BackendReport)
     , mail : IdDict MailId BackendMail
     , worldUpdateDurations : Array Duration
+    , totalGridCells : Int
     }
 
 

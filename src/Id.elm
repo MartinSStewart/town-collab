@@ -3,6 +3,7 @@ module Id exposing
     , EventId(..)
     , Id(..)
     , MailId(..)
+    , PersonId(..)
     , SecretId(..)
     , TrainId(..)
     , UserId(..)
@@ -40,6 +41,10 @@ type EventId
 
 type AnimalId
     = CowId Never
+
+
+type PersonId
+    = PersonId Never
 
 
 fromInt : Int -> Id a
