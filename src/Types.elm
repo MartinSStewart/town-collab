@@ -21,6 +21,7 @@ module Types exposing
     , LoginRequestedBy(..)
     , MouseButtonState(..)
     , Page(..)
+    , Person
     , RemovedTileParticle
     , SubmitStatus(..)
     , ToBackend(..)
@@ -66,6 +67,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail, Model)
+import PersonName exposing (PersonName)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -379,7 +381,7 @@ type alias BackendModel =
 
 
 type alias Person =
-    { name : String
+    { name : PersonName
     , home : Coord WorldUnit
     , position : Point2d WorldUnit WorldUnit
     }

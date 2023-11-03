@@ -113,6 +113,7 @@ init =
             , errors = []
             , trains = IdDict.empty
             , animals = IdDict.empty
+            , people = IdDict.empty
             , lastWorldUpdateTrains = IdDict.empty
             , lastWorldUpdate = Nothing
             , mail = IdDict.empty
