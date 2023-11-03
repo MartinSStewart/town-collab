@@ -578,7 +578,7 @@ handleWorldUpdate isProduction oldTime time model =
                                                 { position = start
                                                 , startTime = Duration.addTo time delay
                                                 , endPosition =
-                                                    case Grid.rayIntersection True size start endPosition model.grid of
+                                                    case Grid.rayIntersection2 True size start endPosition model.grid of
                                                         Just { intersection } ->
                                                             LineSegmentExtra.extendLineEnd
                                                                 start

@@ -30,6 +30,7 @@ module Grid exposing
     , moveUndoPoint
     , pointInside
     , rayIntersection
+    , rayIntersection2
     , removeUser
     , tileMesh
     , tileMeshHelper2
@@ -59,6 +60,7 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
+import Point2dExtra
 import Quantity exposing (Quantity(..))
 import Set
 import Shaders
@@ -988,15 +990,13 @@ pointInside includeWater expandBoundsBy start grid =
                 (BoundingBox2d.maxY Tile.aggregateMovementCollision)
                 |> Vector2d.reverse
 
-        cellBounds : Bounds CellUnit
-        cellBounds =
-            Bounds.from2Coords
-                (Point2d.translateBy expandBoundsBy start |> Point2d.translateBy minReach |> worldToCellPoint |> Coord.floorPoint)
-                (Point2d.translateBy (Vector2d.reverse expandBoundsBy) start
-                    |> Point2d.translateBy maxReach
-                    |> worldToCellPoint
-                    |> Coord.floorPoint
-                )
+        pointMin : Point2d WorldUnit WorldUnit
+        pointMin =
+            Point2d.translateBy maxReach start
+
+        pointMax : Point2d WorldUnit WorldUnit
+        pointMax =
+            Point2d.translateBy minReach start
     in
     List.filterMap
         (\{ bounds, intersectionType } ->
@@ -1006,7 +1006,7 @@ pointInside includeWater expandBoundsBy start grid =
             else
                 Nothing
         )
-        (getBounds includeWater cellBounds expandBoundsBy grid)
+        (getBounds2 includeWater pointMin pointMax expandBoundsBy grid)
 
 
 getBounds :
@@ -1078,6 +1078,166 @@ getBounds includeWater cellBounds expandBoundsBy grid =
                                 cellAndLocalCoordToWorld ( coord, tile.position )
                                     |> Tile.worldMovementBounds expandBoundsBy tile.value
                                     |> List.map (\a -> { bounds = a, intersectionType = TileIntersection })
+                            )
+                        |> (\a -> a ++ water ++ list)
+
+                Nothing ->
+                    { bounds =
+                        Bounds.from2Coords
+                            (cellAndLocalCoordToWorld ( coord, Coord.xy 0 0 ))
+                            (cellAndLocalCoordToWorld ( Coord.plus (Coord.xy 1 1) coord, Coord.xy 0 0 ))
+                            |> Bounds.boundsToBounds2d
+                    , intersectionType = UnloadedCellIntersection
+                    }
+                        :: water
+                        ++ list
+        )
+        identity
+        cellBounds
+        []
+
+
+rayIntersection2 :
+    Bool
+    -> Vector2d WorldUnit WorldUnit
+    -> Point2d WorldUnit WorldUnit
+    -> Point2d WorldUnit WorldUnit
+    -> Grid
+    -> Maybe { intersection : Point2d WorldUnit WorldUnit, intersectionType : IntersectionType }
+rayIntersection2 includeWater expandBoundsBy start end grid =
+    let
+        line : LineSegment2d WorldUnit WorldUnit
+        line =
+            LineSegment2d.from start end
+
+        minReach : Vector2d WorldUnit WorldUnit
+        minReach =
+            Vector2d.xy
+                (BoundingBox2d.minX Tile.aggregateMovementCollision)
+                (BoundingBox2d.minY Tile.aggregateMovementCollision)
+
+        maxReach : Vector2d WorldUnit WorldUnit
+        maxReach =
+            Vector2d.xy
+                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
+                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
+                |> Vector2d.reverse
+
+        pointMin : Point2d WorldUnit WorldUnit
+        pointMin =
+            Point2dExtra.componentMin start end |> Point2d.translateBy maxReach
+
+        pointMax : Point2d WorldUnit WorldUnit
+        pointMax =
+            Point2dExtra.componentMax start end |> Point2d.translateBy minReach
+    in
+    List.filterMap
+        (\{ bounds, intersectionType } ->
+            case BoundingBox2d.lineIntersection line bounds |> Quantity.minimumBy (Point2d.distanceFrom start) of
+                Just intersection ->
+                    Just { intersectionType = intersectionType, intersection = intersection }
+
+                Nothing ->
+                    Nothing
+        )
+        (getBounds2 includeWater pointMin pointMax expandBoundsBy grid)
+        |> Quantity.minimumBy (\a -> Point2d.distanceFrom start a.intersection)
+
+
+getBounds2 :
+    Bool
+    -> Point2d WorldUnit WorldUnit
+    -> Point2d WorldUnit WorldUnit
+    -> Vector2d WorldUnit WorldUnit
+    -> Grid
+    -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
+getBounds2 includeWater minPoint maxPoint expandBoundsBy grid =
+    let
+        bounds : BoundingBox2d WorldUnit WorldUnit
+        bounds =
+            BoundingBox2d.from minPoint maxPoint
+
+        cellBounds : Bounds CellUnit
+        cellBounds =
+            Bounds.fromCoords
+                (Nonempty
+                    (Point2d.translateBy expandBoundsBy maxPoint |> worldToCellPoint |> Coord.floorPoint)
+                    [ Point2d.translateBy (Vector2d.reverse expandBoundsBy) minPoint
+                        |> worldToCellPoint
+                        |> Coord.floorPoint
+                    ]
+                )
+    in
+    Bounds.coordRangeFold
+        (\coord list ->
+            let
+                water : List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
+                water =
+                    if includeWater then
+                        List.range 0 (Terrain.terrainDivisionsPerCell - 1)
+                            |> List.concatMap
+                                (\x2 ->
+                                    List.range 0 (Terrain.terrainDivisionsPerCell - 1)
+                                        |> List.filterMap
+                                            (\y2 ->
+                                                let
+                                                    terrainUnit : Coord TerrainUnit
+                                                    terrainUnit =
+                                                        Coord.xy x2 y2
+
+                                                    worldPosMin =
+                                                        cellAndLocalCoordToWorld
+                                                            ( coord
+                                                            , Coord.scalar Terrain.terrainSize terrainUnit
+                                                                |> Coord.changeUnit
+                                                            )
+                                                            |> Coord.toPoint2d
+
+                                                    worldPosMax =
+                                                        cellAndLocalCoordToWorld
+                                                            ( coord
+                                                            , Coord.plus (Coord.xy 1 1) terrainUnit
+                                                                |> Coord.scalar Terrain.terrainSize
+                                                                |> Coord.changeUnit
+                                                            )
+                                                            |> Coord.toPoint2d
+                                                in
+                                                case (Terrain.getTerrainValue terrainUnit coord).terrainType of
+                                                    Water ->
+                                                        { bounds = BoundingBox2d.from worldPosMin worldPosMax
+                                                        , intersectionType = WaterIntersection
+                                                        }
+                                                            |> Just
+
+                                                    Mountain ->
+                                                        { bounds = BoundingBox2d.from worldPosMin worldPosMax
+                                                        , intersectionType = WaterIntersection
+                                                        }
+                                                            |> Just
+
+                                                    Ground ->
+                                                        Nothing
+                                            )
+                                )
+
+                    else
+                        []
+            in
+            case getCell coord grid of
+                Just cell ->
+                    GridCell.flatten cell
+                        |> List.concatMap
+                            (\tile ->
+                                cellAndLocalCoordToWorld ( coord, tile.position )
+                                    |> Tile.worldMovementBounds expandBoundsBy tile.value
+                                    |> List.filterMap
+                                        (\a ->
+                                            if BoundingBox2d.intersects a bounds then
+                                                Just { bounds = a, intersectionType = TileIntersection }
+
+                                            else
+                                                Nothing
+                                        )
                             )
                         |> (\a -> a ++ water ++ list)
 
