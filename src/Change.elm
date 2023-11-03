@@ -120,6 +120,7 @@ type AdminChange
     | AdminSetTrainsDisabled AreTrainsAndAnimalsDisabled
     | AdminDeleteMail (Id MailId) Effect.Time.Posix
     | AdminRestoreMail (Id MailId)
+    | AdminResetUpdateDuration
 
 
 type AreTrainsAndAnimalsDisabled

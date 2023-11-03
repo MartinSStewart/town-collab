@@ -17,6 +17,7 @@ module LocalGrid exposing
     , notificationViewportSize
     , placeAnimal
     , removeReported
+    , resetUpdateDuration
     , restoreMail
     , setTileHotkey
     , update
@@ -31,7 +32,7 @@ import AssocList
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -549,6 +550,13 @@ updateLocalChange localChange model =
                     , NoOutMsg
                     )
 
+                AdminResetUpdateDuration ->
+                    ( updateLoggedIn
+                        model
+                        (\loggedIn -> { loggedIn | adminData = Maybe.map resetUpdateDuration loggedIn.adminData })
+                    , NoOutMsg
+                    )
+
         SetTimeOfDay timeOfDay ->
             ( case model.userStatus of
                 LoggedIn loggedIn ->
@@ -601,6 +609,11 @@ updateLocalChange localChange model =
             ( updateLoggedIn model (\loggedIn -> { loggedIn | notifications = [], notificationsClearedAt = time })
             , NoOutMsg
             )
+
+
+resetUpdateDuration : AdminData -> AdminData
+resetUpdateDuration adminData =
+    { adminData | worldUpdateDurations = Array.empty }
 
 
 updateAnimalMovement :

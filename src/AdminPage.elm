@@ -31,6 +31,7 @@ type Hover
     | AdminMailPageButton Int
     | RestoreMailButton (Id MailId)
     | DeleteMailButton (Id MailId)
+    | ResetUpdateDurationButton
 
 
 init : Model
@@ -109,6 +110,9 @@ update config hover event model =
         DeleteMailButton mailId ->
             onPress event (\() -> ( model, Change.AdminDeleteMail mailId config.time |> OutMsgAdminChange )) model
 
+        ResetUpdateDurationButton ->
+            onPress event (\() -> ( model, OutMsgAdminChange Change.AdminResetUpdateDuration )) model
+
 
 adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
 adminView idMap windowSize isGridReadOnly adminData model localModel =
@@ -175,7 +179,15 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                 "Never"
                        )
                 )
-            , Ui.text ("World update: " ++ averageWorldUpdateDuration ++ " avg, " ++ maxWorldUpdateDuration ++ " max")
+            , Ui.row
+                { spacing = 16, padding = Ui.noPadding }
+                [ ("World update: " ++ averageWorldUpdateDuration ++ " avg, " ++ maxWorldUpdateDuration ++ " max")
+                    |> Ui.text
+                    |> Ui.el { inFront = [], borderAndFill = NoBorderOrFill, padding = Ui.paddingXY 0 4 }
+                , Ui.button
+                    { id = idMap ResetUpdateDurationButton, padding = Ui.paddingXY 10 4 }
+                    (Ui.text "Reset")
+                ]
             , Ui.text "Sessions (id:count)"
             , Ui.button
                 { id = idMap ResetConnectionsButton, padding = Ui.paddingXY 10 4 }

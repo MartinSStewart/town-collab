@@ -1566,6 +1566,9 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 , BroadcastToNoOne
                                 )
 
+                            AdminResetUpdateDuration ->
+                                ( model, originalChange, BroadcastToNoOne )
+
                     else
                         ( model, invalidChange, BroadcastToNoOne )
                 )
