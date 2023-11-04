@@ -4,7 +4,9 @@ module Grid exposing
     , GridData(..)
     , IntersectionType(..)
     , LocalGridChange
-    , addChange
+    , RemovedTile
+    , addChangeBackend
+    , addChangeFrontend
     , allCellsDict
     , backgroundMesh
     , canPlaceTile
@@ -26,7 +28,8 @@ module Grid exposing
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
     , localTilePointPlusWorldCoord
-    , moveUndoPoint
+    , moveUndoPointBackend
+    , moveUndoPointFrontend
     , pointInside
     , rayIntersection
     , rayIntersection2
@@ -45,13 +48,14 @@ import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra as BoundingBox2d
 import Bounds exposing (Bounds)
+import Bytes.Decode
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import DisplayName
 import Duration
 import Effect.Time
-import GridCell exposing (Cell, CellData)
+import GridCell exposing (BackendHistory(..), Cell, CellData, FrontendHistory(..))
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import LineSegment2d exposing (LineSegment2d)
@@ -76,21 +80,21 @@ type GridData
     = GridData (Dict ( Int, Int ) CellData)
 
 
-dataToGrid : GridData -> Grid
+dataToGrid : GridData -> Grid FrontendHistory
 dataToGrid (GridData gridData) =
     Dict.map (\_ cell -> GridCell.dataToCell cell) gridData |> Grid
 
 
-type Grid
-    = Grid (Dict ( Int, Int ) Cell)
+type Grid a
+    = Grid (Dict ( Int, Int ) (Cell a))
 
 
-empty : Grid
+empty : Grid a
 empty =
     Grid Dict.empty
 
 
-from : Dict ( Int, Int ) Cell -> Grid
+from : Dict ( Int, Int ) (Cell a) -> Grid a
 from =
     Grid
 
@@ -204,7 +208,7 @@ localChangeToChange userId change_ =
     }
 
 
-latestChanges : Effect.Time.Posix -> Id UserId -> Grid -> List (Coord WorldUnit)
+latestChanges : Effect.Time.Posix -> Id UserId -> Grid BackendHistory -> List (Coord WorldUnit)
 latestChanges time currentUser (Grid grid) =
     Dict.toList grid
         |> List.filterMap
@@ -224,11 +228,55 @@ latestChanges time currentUser (Grid grid) =
             )
 
 
-moveUndoPoint : Id UserId -> Dict RawCellCoord Int -> Grid -> Grid
-moveUndoPoint userId undoPoint (Grid grid) =
+moveUndoPointFrontend : Id UserId -> Dict RawCellCoord Int -> Grid FrontendHistory -> Grid FrontendHistory
+moveUndoPointFrontend userId undoPoint grid =
+    moveUndoPoint
+        (\a ->
+            case a of
+                FrontendEncoded bytes ->
+                    let
+                        _ =
+                            Debug.log "decode" ""
+                    in
+                    Bytes.Decode.decode GridCell.historyDecoder bytes |> Maybe.withDefault []
+
+                FrontendDecoded list ->
+                    list
+        )
+        (\history _ -> FrontendDecoded history)
+        userId
+        undoPoint
+        grid
+
+
+moveUndoPointBackend : Id UserId -> Dict RawCellCoord Int -> Grid BackendHistory -> Grid BackendHistory
+moveUndoPointBackend userId undoPoint grid =
+    moveUndoPoint
+        (\a ->
+            case a of
+                BackendDecoded list ->
+                    list
+
+                BackendEncodedAndDecoded _ list ->
+                    list
+        )
+        (\_ a -> a)
+        userId
+        undoPoint
+        grid
+
+
+moveUndoPoint :
+    (a -> List GridCell.Value)
+    -> (List GridCell.Value -> a -> a)
+    -> Id UserId
+    -> Dict RawCellCoord Int
+    -> Grid a
+    -> Grid a
+moveUndoPoint getHistory setHistory userId undoPoint (Grid grid) =
     Dict.foldl
         (\coord moveAmount newGrid ->
-            Dict.update coord (Maybe.map (GridCell.moveUndoPoint userId moveAmount (Coord.tuple coord))) newGrid
+            Dict.update coord (Maybe.map (GridCell.moveUndoPoint getHistory setHistory userId moveAmount (Coord.tuple coord))) newGrid
         )
         grid
         undoPoint
@@ -363,21 +411,70 @@ canPlaceTile change =
         |> not
 
 
-addChange :
+type alias RemovedTile =
+    { tile : Tile
+    , position : Coord WorldUnit
+    , userId : Id UserId
+    , colors : Colors
+    }
+
+
+addChangeFrontend :
     GridChange
-    -> Grid
+    -> Grid FrontendHistory
+    -> { grid : Grid FrontendHistory, removed : List RemovedTile, newCells : List (Coord CellUnit) }
+addChangeFrontend change grid =
+    addChange
+        (FrontendDecoded [])
+        (\a ->
+            case a of
+                FrontendEncoded bytes ->
+                    let
+                        _ =
+                            Debug.log "decode2" ""
+                    in
+                    Bytes.Decode.decode GridCell.historyDecoder bytes |> Maybe.withDefault []
+
+                FrontendDecoded list ->
+                    list
+        )
+        FrontendDecoded
+        change
+        grid
+
+
+addChangeBackend :
+    GridChange
+    -> Grid BackendHistory
+    -> { grid : Grid BackendHistory, removed : List RemovedTile, newCells : List (Coord CellUnit) }
+addChangeBackend change grid =
+    addChange
+        (BackendDecoded [])
+        (\a ->
+            case a of
+                BackendDecoded list ->
+                    list
+
+                BackendEncodedAndDecoded _ list ->
+                    list
+        )
+        BackendDecoded
+        change
+        grid
+
+
+addChange :
+    a
+    -> (a -> List GridCell.Value)
+    -> (List GridCell.Value -> a)
+    -> GridChange
+    -> Grid a
     ->
-        { grid : Grid
-        , removed :
-            List
-                { tile : Tile
-                , position : Coord WorldUnit
-                , userId : Id UserId
-                , colors : Colors
-                }
+        { grid : Grid a
+        , removed : List RemovedTile
         , newCells : List (Coord CellUnit)
         }
-addChange change grid =
+addChange emptyHistory getHistory setHistory change grid =
     let
         ( cellPosition, localPosition ) =
             worldToCellAndLocalCoord change.position
@@ -394,7 +491,7 @@ addChange change grid =
         neighborCells_ :
             List
                 { neighborPos : Coord CellUnit
-                , neighbor : { cell : Cell, removed : List GridCell.Value }
+                , neighbor : { cell : Cell a, removed : List GridCell.Value }
                 , isNewCell : Bool
                 }
         neighborCells_ =
@@ -412,9 +509,9 @@ addChange change grid =
                                     cell2
 
                                 Nothing ->
-                                    GridCell.empty newCellPos
+                                    GridCell.empty emptyHistory newCellPos
                             )
-                                |> GridCell.addValue { value | position = newLocalPos }
+                                |> GridCell.addValue getHistory setHistory { value | position = newLocalPos }
                         , isNewCell = oldCell == Nothing
                         }
                     )
@@ -425,9 +522,9 @@ addChange change grid =
                     ( cell2, [] )
 
                 Nothing ->
-                    ( GridCell.empty cellPosition, [ cellPosition ] )
+                    ( GridCell.empty emptyHistory cellPosition, [ cellPosition ] )
     in
-    GridCell.addValue value cell
+    GridCell.addValue getHistory setHistory value cell
         |> (\cell_ ->
                 { grid =
                     List.foldl
@@ -466,7 +563,10 @@ addChange change grid =
            )
 
 
-getCell2 : Coord CellUnit -> Grid -> { cell : Cell, isNew : Bool, grid : Grid }
+getCell2 :
+    Coord CellUnit
+    -> Grid BackendHistory
+    -> { cell : Cell BackendHistory, isNew : Bool, grid : Grid BackendHistory }
 getCell2 coord (Grid grid) =
     case Dict.get (Coord.toTuple coord) grid of
         Just cell ->
@@ -475,7 +575,7 @@ getCell2 coord (Grid grid) =
         Nothing ->
             let
                 newCell =
-                    GridCell.empty coord
+                    GridCell.empty (BackendDecoded []) coord
             in
             { cell = newCell, isNew = True, grid = Dict.insert (Coord.toTuple coord) newCell grid |> Grid }
 
@@ -485,17 +585,17 @@ maxTileSize =
     6
 
 
-allCellsDict : Grid -> Dict ( Int, Int ) Cell
+allCellsDict : Grid a -> Dict ( Int, Int ) (Cell a)
 allCellsDict (Grid grid) =
     grid
 
 
-getCell : Coord CellUnit -> Grid -> Maybe Cell
+getCell : Coord CellUnit -> Grid a -> Maybe (Cell a)
 getCell ( Quantity x, Quantity y ) (Grid grid) =
     Dict.get ( x, y ) grid
 
 
-setCell : Coord CellUnit -> Cell -> Grid -> Grid
+setCell : Coord CellUnit -> Cell a -> Grid a -> Grid a
 setCell ( Quantity x, Quantity y ) value (Grid grid) =
     Dict.insert ( x, y ) value grid |> Grid
 
@@ -820,7 +920,7 @@ tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
 
 
-getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit, colors : Colors }
+getTile : Coord WorldUnit -> Grid a -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit, colors : Colors }
 getTile coord grid =
     let
         ( cellPos, localPos ) =
@@ -851,7 +951,7 @@ getTile coord grid =
         |> List.head
 
 
-toggleRailSplit : Coord WorldUnit -> Grid -> Grid
+toggleRailSplit : Coord WorldUnit -> Grid a -> Grid a
 toggleRailSplit coord grid =
     let
         ( cellPos, localPos ) =
@@ -865,7 +965,7 @@ toggleRailSplit coord grid =
             grid
 
 
-getPostOffice : Id UserId -> Grid -> Maybe (Coord WorldUnit)
+getPostOffice : Id UserId -> Grid BackendHistory -> Maybe (Coord WorldUnit)
 getPostOffice userId (Grid grid) =
     Dict.toList grid
         |> List.findMap
@@ -893,7 +993,7 @@ rayIntersection :
     -> Vector2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
-    -> Grid
+    -> Grid a
     -> Maybe { intersection : Point2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 rayIntersection includeWater expandBoundsBy start end grid =
     let
@@ -955,7 +1055,7 @@ pointInside :
     Bool
     -> Vector2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
-    -> Grid
+    -> Grid a
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 pointInside includeWater expandBoundsBy start grid =
     let
@@ -995,7 +1095,7 @@ getBounds :
     Bool
     -> Bounds CellUnit
     -> Vector2d WorldUnit WorldUnit
-    -> Grid
+    -> Grid a
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 getBounds includeWater cellBounds expandBoundsBy grid =
     Bounds.coordRangeFold
@@ -1084,7 +1184,7 @@ rayIntersection2 :
     -> Vector2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
-    -> Grid
+    -> Grid a
     -> Maybe { intersection : Point2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 rayIntersection2 includeWater expandBoundsBy start end grid =
     let
@@ -1131,7 +1231,7 @@ getBounds2 :
     -> Point2d WorldUnit WorldUnit
     -> Point2d WorldUnit WorldUnit
     -> Vector2d WorldUnit WorldUnit
-    -> Grid
+    -> Grid a
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 getBounds2 includeWater minPoint maxPoint expandBoundsBy grid =
     let

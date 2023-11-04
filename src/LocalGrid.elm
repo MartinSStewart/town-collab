@@ -40,7 +40,7 @@ import Dict exposing (Dict)
 import Duration exposing (Duration)
 import Effect.Time
 import Grid exposing (Grid, GridData)
-import GridCell
+import GridCell exposing (FrontendHistory)
 import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
@@ -67,7 +67,7 @@ type LocalGrid
 
 
 type alias LocalGrid_ =
-    { grid : Grid
+    { grid : Grid FrontendHistory
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
     , previewBounds : Maybe (Bounds CellUnit)
@@ -210,7 +210,7 @@ updateLocalChange localChange model =
                             Grid.worldToCellAndLocalCoord gridChange.position
 
                         change =
-                            Grid.addChange (Grid.localChangeToChange loggedIn.userId gridChange) model.grid
+                            Grid.addChangeFrontend (Grid.localChangeToChange loggedIn.userId gridChange) model.grid
                     in
                     ( { model
                         | userStatus =
@@ -245,7 +245,7 @@ updateLocalChange localChange model =
                         Just newLoggedIn ->
                             { model
                                 | userStatus = LoggedIn newLoggedIn
-                                , grid = Grid.moveUndoPoint loggedIn.userId newLoggedIn.undoCurrent model.grid
+                                , grid = Grid.moveUndoPointFrontend loggedIn.userId newLoggedIn.undoCurrent model.grid
                             }
 
                         Nothing ->
@@ -264,7 +264,7 @@ updateLocalChange localChange model =
                             { model
                                 | userStatus = LoggedIn newLoggedIn
                                 , grid =
-                                    Grid.moveUndoPoint
+                                    Grid.moveUndoPointFrontend
                                         loggedIn.userId
                                         (Dict.map (\_ a -> -a) loggedIn.undoCurrent)
                                         model.grid
@@ -582,7 +582,7 @@ updateLocalChange localChange model =
 
         ViewBoundsChange { viewBounds, previewBounds, newCells, newCows } ->
             let
-                newCells2 : Dict ( Int, Int ) GridCell.Cell
+                newCells2 : Dict ( Int, Int ) (GridCell.Cell FrontendHistory)
                 newCells2 =
                     List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell cell )) newCells
                         |> Dict.fromList
@@ -864,7 +864,7 @@ updateServerChange serverChange model =
                     (model2.viewBounds :: Maybe.toList model.previewBounds)
               then
                 { model2
-                    | grid = Grid.addChange gridChange model2.grid |> .grid
+                    | grid = Grid.addChangeFrontend gridChange model2.grid |> .grid
                     , animals = updateAnimalMovement gridChange model2.animals
                 }
 
@@ -874,7 +874,7 @@ updateServerChange serverChange model =
             )
 
         ServerUndoPoint undoPoint ->
-            ( { model | grid = Grid.moveUndoPoint undoPoint.userId undoPoint.undoPoints model.grid }
+            ( { model | grid = Grid.moveUndoPointFrontend undoPoint.userId undoPoint.undoPoints model.grid }
             , NoOutMsg
             )
 
@@ -1364,7 +1364,7 @@ dropAnimal userId animalId position model =
     )
 
 
-placeAnimal : Point2d WorldUnit WorldUnit -> Grid -> Animal -> Animal
+placeAnimal : Point2d WorldUnit WorldUnit -> Grid a -> Animal -> Animal
 placeAnimal position grid animal =
     let
         position2 : Point2d WorldUnit WorldUnit

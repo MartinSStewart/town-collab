@@ -25,7 +25,7 @@ import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
 import Env
 import Grid exposing (Grid)
-import GridCell
+import GridCell exposing (BackendHistory(..))
 import Id exposing (AnimalId, EventId, Id, MailId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
@@ -318,7 +318,21 @@ update isProduction msg model =
             ( { model
                 | grid =
                     Grid.allCellsDict model.grid
-                        |> Dict.map (\cellPosition cell -> GridCell.updateCache (Coord.tuple cellPosition) cell)
+                        |> Dict.map
+                            (\cellPosition cell ->
+                                GridCell.updateCache
+                                    (\a ->
+                                        case a of
+                                            BackendDecoded list ->
+                                                list
+
+                                            BackendEncodedAndDecoded _ list ->
+                                                list
+                                    )
+                                    (\_ a -> a)
+                                    (Coord.tuple cellPosition)
+                                    cell
+                            )
                         |> Grid.from
                 , lastCacheRegeneration = Just time
               }
@@ -1072,9 +1086,9 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 undoMoveAmount =
                                     Dict.map (\_ a -> -a) user.undoCurrent
 
-                                newGrid : Grid
+                                newGrid : Grid BackendHistory
                                 newGrid =
-                                    Grid.moveUndoPoint userId undoMoveAmount model.grid
+                                    Grid.moveUndoPointBackend userId undoMoveAmount model.grid
 
                                 trainsToRemove : List (Id TrainId)
                                 trainsToRemove =
@@ -1150,7 +1164,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                     Nothing
 
                             { removed, newCells } =
-                                Grid.addChange (Grid.localChangeToChange userId localChange2) model.grid
+                                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
 
                             nextCowId =
                                 IdDict.nextId model.animals |> Id.toInt
@@ -1167,7 +1181,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                         removeTrain
                                         { model
                                             | grid =
-                                                Grid.addChange (Grid.localChangeToChange userId localChange2) model.grid
+                                                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
                                                     |> .grid
                                             , trains =
                                                 case maybeTrain of
@@ -1212,7 +1226,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                     newUser.undoCurrent
                             in
                             ( { model
-                                | grid = Grid.moveUndoPoint userId undoMoveAmount model.grid
+                                | grid = Grid.moveUndoPointBackend userId undoMoveAmount model.grid
                               }
                                 |> updateUser userId (always newUser)
                             , originalChange
@@ -1702,7 +1716,7 @@ generateVisibleRegion :
     List (Bounds CellUnit)
     -> List (Bounds CellUnit)
     -> BackendModel
-    -> ( Grid, List ( Coord CellUnit, GridCell.CellData ), List ( Id d, Animal ) )
+    -> ( Grid BackendHistory, List ( Coord CellUnit, GridCell.CellData ), List ( Id d, Animal ) )
 generateVisibleRegion oldBounds bounds model =
     let
         nextCowId =
@@ -1729,7 +1743,7 @@ generateVisibleRegion oldBounds bounds model =
                 |> Set.toList
                 |> List.map Coord.tuple
 
-        newCells : { grid : Grid, cows : List Animal, cells : List ( Coord CellUnit, GridCell.CellData ) }
+        newCells : { grid : Grid BackendHistory, cows : List Animal, cells : List ( Coord CellUnit, GridCell.CellData ) }
         newCells =
             List.foldl
                 (\coord state ->

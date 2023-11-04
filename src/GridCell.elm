@@ -1,6 +1,8 @@
 module GridCell exposing
-    ( Cell(..)
+    ( BackendHistory(..)
+    , Cell(..)
     , CellData(..)
+    , FrontendHistory(..)
     , Value
     , addValue
     , cellToData
@@ -10,6 +12,7 @@ module GridCell exposing
     , getPostOffices
     , getToggledRailSplit
     , hasChangesBy
+    , historyDecoder
     , latestChange
     , mapPixelData
     , moveUndoPoint
@@ -933,9 +936,14 @@ maxTileValue =
     (2 ^ 16) - 1
 
 
-dataToCell : CellData -> Cell
+type FrontendHistory
+    = FrontendEncoded Bytes
+    | FrontendDecoded (List Value)
+
+
+dataToCell : CellData -> Cell FrontendHistory
 dataToCell (CellData cellData) =
-    { history = EncodedOnly cellData.history
+    { history = FrontendEncoded cellData.history
     , undoPoint = cellData.undoPoint
     , cache = cellData.cache
     , railSplitToggled = cellData.railSplitToggled
@@ -1123,7 +1131,7 @@ zeroOutBit index value =
     Bitwise.shiftLeftBy index 1 |> Bitwise.complement |> Bitwise.and value
 
 
-mapPixelData : Cell -> Vec2
+mapPixelData : Cell a -> Vec2
 mapPixelData (Cell cell) =
     cell.mapCache
 
@@ -1152,10 +1160,10 @@ historyDecoder =
         (Bytes.Decode.unsignedInt32 BE)
 
 
-cellToData : Cell -> ( Cell, CellData )
+cellToData : Cell BackendHistory -> ( Cell BackendHistory, CellData )
 cellToData (Cell cell) =
     case cell.history of
-        EncodedOnly bytes ->
+        BackendEncodedAndDecoded bytes _ ->
             ( Cell cell
             , CellData
                 { history = bytes
@@ -1165,22 +1173,15 @@ cellToData (Cell cell) =
                 }
             )
 
-        EncodedAndDecoded bytes _ ->
-            ( Cell cell
-            , CellData
-                { history = bytes
-                , undoPoint = cell.undoPoint
-                , railSplitToggled = cell.railSplitToggled
-                , cache = cell.cache
-                }
-            )
-
-        DecodedOnly history ->
+        BackendDecoded history ->
             let
                 bytes =
                     Bytes.Encode.encode (historyEncoder history)
+
+                _ =
+                    Debug.log "encode" ""
             in
-            ( Cell { cell | history = EncodedAndDecoded bytes history }
+            ( Cell { cell | history = BackendEncodedAndDecoded bytes history }
             , CellData
                 { history = bytes
                 , undoPoint = cell.undoPoint
@@ -1190,15 +1191,14 @@ cellToData (Cell cell) =
             )
 
 
-type History
-    = EncodedOnly Bytes
-    | DecodedOnly (List Value)
-    | EncodedAndDecoded Bytes (List Value)
+type BackendHistory
+    = BackendDecoded (List Value)
+    | BackendEncodedAndDecoded Bytes (List Value)
 
 
-type Cell
+type Cell a
     = Cell
-        { history : History
+        { history : a
         , undoPoint : IdDict UserId Int
         , cache : List Value
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
@@ -1210,19 +1210,16 @@ type alias Value =
     { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, colors : Colors, time : Effect.Time.Posix }
 
 
-latestChange : Id UserId -> Cell -> Maybe Value
+latestChange : Id UserId -> Cell BackendHistory -> Maybe Value
 latestChange currentUser (Cell cell) =
     let
         history =
             case cell.history of
-                EncodedAndDecoded _ a ->
+                BackendEncodedAndDecoded _ a ->
                     a
 
-                DecodedOnly a ->
+                BackendDecoded a ->
                     a
-
-                EncodedOnly _ ->
-                    []
     in
     List.find
         (\value ->
@@ -1232,37 +1229,21 @@ latestChange currentUser (Cell cell) =
         history
 
 
-getPostOffices : Cell -> List { position : Coord CellLocalUnit, userId : Id UserId }
-getPostOffices (Cell cell) =
-    let
-        history =
-            case cell.history of
-                EncodedAndDecoded _ a ->
-                    a
+getPostOffices : Cell a -> List { position : Coord CellLocalUnit, userId : Id UserId }
+getPostOffices cell =
+    List.filterMap
+        (\value ->
+            if value.value == PostOffice then
+                Just { userId = value.userId, position = value.position }
 
-                DecodedOnly a ->
-                    a
-
-                EncodedOnly _ ->
-                    []
-    in
-    if List.any (\{ value } -> value == PostOffice) history then
-        List.filterMap
-            (\value ->
-                if value.value == PostOffice then
-                    Just { userId = value.userId, position = value.position }
-
-                else
-                    Nothing
-            )
-            cell.cache
-
-    else
-        []
+            else
+                Nothing
+        )
+        (flatten cell)
 
 
-addValue : Value -> Cell -> { cell : Cell, removed : List Value }
-addValue value (Cell cell) =
+addValue : (a -> List Value) -> (List Value -> a) -> Value -> Cell a -> { cell : Cell a, removed : List Value }
+addValue getHistory setHistory value (Cell cell) =
     let
         userUndoPoint =
             IdDict.get value.userId cell.undoPoint |> Maybe.withDefault 0
@@ -1272,15 +1253,17 @@ addValue value (Cell cell) =
 
         history : List Value
         history =
-            case cell.history of
-                EncodedAndDecoded _ a ->
-                    a
+            getHistory cell.history
 
-                DecodedOnly a ->
-                    a
-
-                EncodedOnly bytes ->
-                    Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []
+        --case cell.history of
+        --    EncodedAndDecoded _ a ->
+        --        a
+        --
+        --    DecodedOnly a ->
+        --        a
+        --
+        --    EncodedOnly bytes ->
+        --        Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []
     in
     { cell =
         Cell
@@ -1301,7 +1284,7 @@ addValue value (Cell cell) =
                     history
                     |> Tuple.first
                     |> (\list -> value :: list)
-                    |> DecodedOnly
+                    |> setHistory
             , undoPoint = IdDict.insert value.userId (userUndoPoint + 1) cell.undoPoint
             , cache = remaining
             , railSplitToggled = cell.railSplitToggled
@@ -1319,21 +1302,22 @@ cellBounds =
         |> Bounds.fromCoords
 
 
-updateCache : Coord CellUnit -> Cell -> Cell
-updateCache cellPosition (Cell cell) =
+updateCache : (a -> List Value) -> (List Value -> a -> a) -> Coord CellUnit -> Cell a -> Cell a
+updateCache getHistory setHistory cellPosition (Cell cell) =
     let
         history : List Value
         history =
-            case cell.history of
-                EncodedAndDecoded _ a ->
-                    a
+            getHistory cell.history
 
-                DecodedOnly a ->
-                    a
-
-                EncodedOnly bytes ->
-                    Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []
-
+        --case cell.history of
+        --    FrontendDecoded _ a ->
+        --        a
+        --
+        --    BackendDecoded a ->
+        --        a
+        --
+        --    FrontendEncoded bytes ->
+        --        Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []
         cache =
             List.foldr
                 stepCache
@@ -1342,15 +1326,17 @@ updateCache cellPosition (Cell cell) =
                 |> .list
     in
     { history =
-        case cell.history of
-            EncodedAndDecoded _ _ ->
-                cell.history
+        setHistory history cell.history
 
-            DecodedOnly _ ->
-                cell.history
-
-            EncodedOnly bytes ->
-                EncodedAndDecoded bytes history
+    --case cell.history of
+    --    FrontendDecoded _ _ ->
+    --        cell.history
+    --
+    --    BackendDecoded _ ->
+    --        cell.history
+    --
+    --    FrontendEncoded bytes ->
+    --        FrontendDecoded bytes history
     , undoPoint = cell.undoPoint
     , cache = cache
     , railSplitToggled = cell.railSplitToggled
@@ -1417,13 +1403,13 @@ stepCacheHelperWithRemoved ({ userId, position, value } as item) cache =
     }
 
 
-hasChangesBy : Id UserId -> Cell -> Bool
+hasChangesBy : Id UserId -> Cell a -> Bool
 hasChangesBy userId (Cell cell) =
     IdDict.member userId cell.undoPoint
 
 
-moveUndoPoint : Id UserId -> Int -> Coord CellUnit -> Cell -> Cell
-moveUndoPoint userId moveAmount cellPosition (Cell cell) =
+moveUndoPoint : (a -> List Value) -> (List Value -> a -> a) -> Id UserId -> Int -> Coord CellUnit -> Cell a -> Cell a
+moveUndoPoint getHistory setHistory userId moveAmount cellPosition (Cell cell) =
     Cell
         { history = cell.history
         , undoPoint = IdDict.update2 userId ((+) moveAmount) cell.undoPoint
@@ -1431,18 +1417,18 @@ moveUndoPoint userId moveAmount cellPosition (Cell cell) =
         , railSplitToggled = cell.railSplitToggled
         , mapCache = cell.mapCache
         }
-        |> updateCache cellPosition
+        |> updateCache getHistory setHistory cellPosition
 
 
-flatten : Cell -> List Value
+flatten : Cell a -> List Value
 flatten (Cell cell) =
     cell.cache
 
 
-empty : Coord CellUnit -> Cell
-empty cellPosition =
+empty : a -> Coord CellUnit -> Cell a
+empty emptyHistory cellPosition =
     Cell
-        { history = DecodedOnly []
+        { history = emptyHistory
         , undoPoint = IdDict.empty
         , cache = addTrees cellPosition
         , railSplitToggled = AssocSet.empty
@@ -1450,7 +1436,7 @@ empty cellPosition =
         }
 
 
-toggleRailSplit : Coord CellLocalUnit -> Cell -> Cell
+toggleRailSplit : Coord CellLocalUnit -> Cell a -> Cell a
 toggleRailSplit coord (Cell cell) =
     Cell
         { history = cell.history
@@ -1466,7 +1452,7 @@ toggleRailSplit coord (Cell cell) =
         }
 
 
-getToggledRailSplit : Cell -> AssocSet.Set (Coord CellLocalUnit)
+getToggledRailSplit : Cell a -> AssocSet.Set (Coord CellLocalUnit)
 getToggledRailSplit (Cell cell) =
     cell.railSplitToggled
 

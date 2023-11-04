@@ -393,7 +393,7 @@ moveTrains :
     -> IdDict TrainId Train
     ->
         { a
-            | grid : Grid
+            | grid : Grid c
             , mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId }
         }
     -> IdDict TrainId Train
@@ -473,7 +473,7 @@ moveTrain :
     -> Float
     -> Effect.Time.Posix
     -> Effect.Time.Posix
-    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
 moveTrain trainId maxSpeed startTime endTime state (Train train) =
@@ -533,7 +533,7 @@ moveTrainHelper :
     -> Effect.Time.Posix
     -> Quantity Float TileLocalUnit
     -> Quantity Float TileLocalUnit
-    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
 moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Train train) =
@@ -792,7 +792,7 @@ findNextTile :
     Id TrainId
     -> Effect.Time.Posix
     -> Point2d WorldUnit WorldUnit
-    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
@@ -834,7 +834,7 @@ findNextTileHelper :
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
-    -> { a | grid : Grid, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> Maybe TrainData

@@ -33,7 +33,7 @@ import EmailAddress
 import Env
 import Flag
 import Grid exposing (Grid)
-import GridCell
+import GridCell exposing (FrontendHistory)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
@@ -3246,7 +3246,7 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                     , time = model.time
                     }
 
-                grid : Grid
+                grid : Grid FrontendHistory
                 grid =
                     LocalGrid.localModel model.localModel |> .grid
             in
@@ -4663,7 +4663,7 @@ drawMap model =
         ( WorldPage worldPage, Just simplexNoiseLookup ) ->
             if worldPage.showMap then
                 let
-                    grid : Grid
+                    grid : Grid FrontendHistory
                     grid =
                         LocalGrid.localModel model.localModel |> .grid
 
