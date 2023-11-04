@@ -72,7 +72,7 @@ tests =
                             |> Expect.equal
                                 [ { position = Coord.tuple ( 0, 0 )
                                   , userId = user0
-                                  , value = RailHorizontal
+                                  , tile = RailHorizontal
                                   , colors = { primaryColor = Color.white, secondaryColor = Color.white }
                                   , time = Effect.Time.millisToPosix 0
                                   }
@@ -110,7 +110,7 @@ tests =
                             |> Expect.equal
                                 [ { position = Coord.tuple ( 6, 8 )
                                   , userId = user0
-                                  , value = HouseDown
+                                  , tile = HouseDown
                                   , colors = { primaryColor = Color.white, secondaryColor = Color.white }
                                   , time = Effect.Time.millisToPosix 0
                                   }

@@ -217,7 +217,7 @@ latestChanges time currentUser (Grid grid) =
                     Just latestChange ->
                         if Duration.from time latestChange.time |> Quantity.greaterThanZero then
                             cellAndLocalCoordToWorld ( Coord.tuple coord, latestChange.position )
-                                |> Coord.plus (Coord.divide (Coord.xy 2 2) (Tile.getData latestChange.value).size)
+                                |> Coord.plus (Coord.divide (Coord.xy 2 2) (Tile.getData latestChange.tile).size)
                                 |> Just
 
                         else
@@ -483,7 +483,7 @@ addChange emptyHistory getHistory setHistory change grid =
         value =
             { userId = change.userId
             , position = localPosition
-            , value = change.change
+            , tile = change.change
             , colors = change.colors
             , time = change.time
             }
@@ -540,7 +540,7 @@ addChange emptyHistory getHistory setHistory change grid =
                             (\{ neighborPos, neighbor } ->
                                 List.map
                                     (\removed ->
-                                        { tile = removed.value
+                                        { tile = removed.tile
                                         , position = cellAndLocalCoordToWorld ( neighborPos, removed.position )
                                         , userId = removed.userId
                                         , colors = removed.colors
@@ -611,8 +611,8 @@ foregroundMesh2 :
     -> WebGL.Mesh Vertex
 foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
     List.concatMap
-        (\{ position, userId, value, colors } ->
-            if showEmptyTiles || value /= EmptyTile then
+        (\{ position, userId, tile, colors } ->
+            if showEmptyTiles || tile /= EmptyTile then
                 let
                     position2 : Coord WorldUnit
                     position2 =
@@ -620,13 +620,13 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
 
                     data : TileData unit
                     data =
-                        Tile.getData value
+                        Tile.getData tile
 
                     opacity : Float
                     opacity =
                         case maybeCurrentTile of
                             Just currentTile ->
-                                if Tile.hasCollision currentTile.position currentTile.tile position2 value then
+                                if Tile.hasCollision currentTile.position currentTile.tile position2 tile then
                                     0.5
 
                                 else
@@ -659,7 +659,7 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                                 data.size
 
                     _ ->
-                        if value == PostOffice && Just userId /= maybeCurrentUserId then
+                        if tile == PostOffice && Just userId /= maybeCurrentUserId then
                             let
                                 text =
                                     Sprite.textWithZAndOpacityAndUserId
@@ -697,7 +697,7 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                                 opacityAndUserId
                                 colors
                                 (Coord.multiply Units.tileSize position2)
-                                (case value of
+                                (case tile of
                                     BigText _ ->
                                         2
 
@@ -933,13 +933,13 @@ getTile coord grid =
                     Just cell ->
                         GridCell.flatten cell
                             |> List.find
-                                (\{ value, position } ->
-                                    Tile.hasCollisionWithCoord localPos2 position (Tile.getData value)
+                                (\{ tile, position } ->
+                                    Tile.hasCollisionWithCoord localPos2 position (Tile.getData tile)
                                 )
                             |> Maybe.map
                                 (\tile ->
                                     { userId = tile.userId
-                                    , tile = tile.value
+                                    , tile = tile.tile
                                     , position = cellAndLocalCoordToWorld ( cellPos2, tile.position )
                                     , colors = tile.colors
                                     }
@@ -1158,7 +1158,7 @@ getBounds includeWater cellBounds expandBoundsBy grid =
                         |> List.concatMap
                             (\tile ->
                                 cellAndLocalCoordToWorld ( coord, tile.position )
-                                    |> Tile.worldMovementBounds expandBoundsBy tile.value
+                                    |> Tile.worldMovementBounds expandBoundsBy tile.tile
                                     |> List.map (\a -> { bounds = a, intersectionType = TileIntersection })
                             )
                         |> (\a -> a ++ water ++ list)
@@ -1311,7 +1311,7 @@ getBounds2 includeWater minPoint maxPoint expandBoundsBy grid =
                         |> List.concatMap
                             (\tile ->
                                 cellAndLocalCoordToWorld ( coord, tile.position )
-                                    |> Tile.worldMovementBounds expandBoundsBy tile.value
+                                    |> Tile.worldMovementBounds expandBoundsBy tile.tile
                                     |> List.filterMap
                                         (\a ->
                                             if BoundingBox2d.intersects a bounds then

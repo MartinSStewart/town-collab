@@ -60,7 +60,7 @@ valueEncoder value =
         [ Bytes.Encode.unsignedInt16 BE (Id.toInt value.userId)
         , Bytes.Encode.signedInt8 (Coord.xRaw value.position)
         , Bytes.Encode.signedInt8 (Coord.yRaw value.position)
-        , Bytes.Encode.unsignedInt16 BE (tileToInt value.value)
+        , Bytes.Encode.unsignedInt16 BE (tileToInt value.tile)
         , colorsEncoder value.colors
         , Bytes.Encode.float64 BE (Effect.Time.posixToMillis value.time |> toFloat)
         ]
@@ -1091,7 +1091,7 @@ tileMapValue value =
 updateMapPixelData : List Value -> Vec2
 updateMapPixelData cache =
     List.foldl
-        (\{ value, position } { lowBit, highBit } ->
+        (\{ tile, position } { lowBit, highBit } ->
             let
                 terrainPos : Coord TerrainUnit
                 terrainPos =
@@ -1108,7 +1108,7 @@ updateMapPixelData cache =
 
                 newValue : Int
                 newValue =
-                    max currentValue (tileMapValue value)
+                    max currentValue (tileMapValue tile)
 
                 newHighBit : Int
                 newHighBit =
@@ -1207,7 +1207,7 @@ type Cell a
 
 
 type alias Value =
-    { userId : Id UserId, position : Coord CellLocalUnit, value : Tile, colors : Colors, time : Effect.Time.Posix }
+    { userId : Id UserId, position : Coord CellLocalUnit, tile : Tile, colors : Colors, time : Effect.Time.Posix }
 
 
 latestChange : Id UserId -> Cell BackendHistory -> Maybe Value
@@ -1233,7 +1233,7 @@ getPostOffices : Cell a -> List { position : Coord CellLocalUnit, userId : Id Us
 getPostOffices cell =
     List.filterMap
         (\value ->
-            if value.value == PostOffice then
+            if value.tile == PostOffice then
                 Just { userId = value.userId, position = value.position }
 
             else
@@ -1254,16 +1254,6 @@ addValue getHistory setHistory value (Cell cell) =
         history : List Value
         history =
             getHistory cell.history
-
-        --case cell.history of
-        --    EncodedAndDecoded _ a ->
-        --        a
-        --
-        --    DecodedOnly a ->
-        --        a
-        --
-        --    EncodedOnly bytes ->
-        --        Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []
     in
     { cell =
         Cell
@@ -1309,15 +1299,6 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
         history =
             getHistory cell.history
 
-        --case cell.history of
-        --    FrontendDecoded _ a ->
-        --        a
-        --
-        --    BackendDecoded a ->
-        --        a
-        --
-        --    FrontendEncoded bytes ->
-        --        Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []
         cache =
             List.foldr
                 stepCache
@@ -1325,18 +1306,7 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
                 history
                 |> .list
     in
-    { history =
-        setHistory history cell.history
-
-    --case cell.history of
-    --    FrontendDecoded _ _ ->
-    --        cell.history
-    --
-    --    BackendDecoded _ ->
-    --        cell.history
-    --
-    --    FrontendEncoded bytes ->
-    --        FrontendDecoded bytes history
+    { history = setHistory history cell.history
     , undoPoint = cell.undoPoint
     , cache = cache
     , railSplitToggled = cell.railSplitToggled
@@ -1349,7 +1319,7 @@ stepCache :
     Value
     -> { list : List Value, undoPoint : IdDict UserId number }
     -> { list : List Value, undoPoint : IdDict UserId number }
-stepCache ({ userId, position, value } as item) state =
+stepCache ({ userId, position, tile } as item) state =
     case IdDict.get userId state.undoPoint of
         Just stepsLeft ->
             if stepsLeft > 0 then
@@ -1365,7 +1335,7 @@ stepCache ({ userId, position, value } as item) state =
 
 
 stepCacheHelper : Value -> List Value -> List Value
-stepCacheHelper ({ userId, position, value } as item) cache =
+stepCacheHelper ({ userId, position, tile } as item) cache =
     (if Bounds.contains position cellBounds then
         [ item ]
 
@@ -1374,19 +1344,19 @@ stepCacheHelper ({ userId, position, value } as item) cache =
     )
         ++ List.filter
             (\item2 ->
-                Tile.hasCollision position value item2.position item2.value
+                Tile.hasCollision position tile item2.position item2.tile
                     |> not
             )
             cache
 
 
 stepCacheHelperWithRemoved : Value -> List Value -> { remaining : List Value, removed : List Value }
-stepCacheHelperWithRemoved ({ userId, position, value } as item) cache =
+stepCacheHelperWithRemoved ({ userId, position, tile } as item) cache =
     let
         ( remaining, removed ) =
             List.partition
                 (\item2 ->
-                    Tile.hasCollision position value item2.position item2.value
+                    Tile.hasCollision position tile item2.position item2.tile
                         |> not
                 )
                 cache
@@ -1492,7 +1462,7 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                             (\( item, itemPosition ) cell2 ->
                                 { userId = Shaders.worldGenUserId
                                 , position = itemPosition
-                                , value = item
+                                , tile = item
                                 , colors =
                                     if item == PineTree1 || item == PineTree2 || item == BigPineTree then
                                         treeColor

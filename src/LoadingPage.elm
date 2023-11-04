@@ -78,7 +78,7 @@ import Sound
 import Sprite exposing (Vertex)
 import Terrain
 import TextInput
-import Tile exposing (Category(..), Tile, TileGroup(..))
+import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
@@ -466,11 +466,47 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
 canPlaceTile : Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid FrontendHistory -> Bool
 canPlaceTile time change trains grid =
     if Grid.canPlaceTile change then
-        True
-        --let
-        --    { removed } =
-        --        Grid.addChangeFrontend change grid
-        --in
+        let
+            ( cellPosition, localPosition ) =
+                Grid.worldToCellAndLocalCoord change.position
+        in
+        ( cellPosition, localPosition )
+            :: Grid.closeNeighborCells cellPosition localPosition
+            |> List.any
+                (\( cellPos, localPos ) ->
+                    case Grid.getCell cellPos grid of
+                        Just cell ->
+                            GridCell.flatten cell
+                                |> List.any
+                                    (\value ->
+                                        if value.tile == TrainHouseLeft || value.tile == TrainHouseRight then
+                                            if Tile.hasCollision localPos change.change value.position value.tile then
+                                                case
+                                                    Train.canRemoveTiles time
+                                                        [ { tile = value.tile
+                                                          , position =
+                                                                Grid.cellAndLocalCoordToWorld ( cellPos, value.position )
+                                                          }
+                                                        ]
+                                                        trains
+                                                of
+                                                    Ok _ ->
+                                                        False
+
+                                                    Err _ ->
+                                                        True
+
+                                            else
+                                                False
+
+                                        else
+                                            False
+                                    )
+
+                        Nothing ->
+                            False
+                )
+            |> not
         --case Train.canRemoveTiles time removed trains of
         --    Ok _ ->
         --        True

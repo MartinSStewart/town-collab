@@ -847,7 +847,7 @@ findNextTileHelper trainId time neighborCellPos position speed_ direction state 
 
                 maybeNewTrain : Maybe TrainData
                 maybeNewTrain =
-                    case Tile.getData tile.value |> .railPath of
+                    case Tile.getData tile.tile |> .railPath of
                         NoRailPath ->
                             Nothing
 
@@ -923,7 +923,7 @@ checkPath trainId time tile mail neighborCellPos position speed_ direction railP
             Tile.reverseDirection direction == railData.endExitDirection
 
         stoppedAtPostOffice () =
-            case ( tile.value, carryingMail mail trainId ) of
+            case ( tile.tile, carryingMail mail trainId ) of
                 ( PostOffice, Nothing ) ->
                     if
                         List.any
