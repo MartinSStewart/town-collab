@@ -18,9 +18,10 @@ module Color exposing
     , outlineColor
     , rgb255
     , toHexCode
-    , toInt
     , toVec3
     , toVec4
+    , unsafe
+    , unwrap
     , white
     )
 
@@ -121,9 +122,14 @@ linkColor =
     rgb255 20 100 255
 
 
-toInt : Color -> Int
-toInt (Color color) =
+unwrap : Color -> Int
+unwrap (Color color) =
     color
+
+
+unsafe : Int -> Color
+unsafe =
+    Color
 
 
 toVec3 : Color -> Vec3

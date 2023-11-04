@@ -4,6 +4,7 @@ module Sprite exposing
     , charSize
     , charTexturePosition
     , charToInt
+    , intToChar
     , nineSlice
     , opaque
     , outlinedText
@@ -23,6 +24,7 @@ module Sprite exposing
     , underlinedText
     )
 
+import Array exposing (Array)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
@@ -179,10 +181,10 @@ spriteWithZ opacity primaryColor secondaryColor ( Quantity x, Quantity y ) z ( Q
             Coord.toTuple textureSize
 
         primaryColor2 =
-            Color.toInt primaryColor |> toFloat
+            Color.unwrap primaryColor |> toFloat
 
         secondaryColor2 =
-            Color.toInt secondaryColor |> toFloat
+            Color.unwrap secondaryColor |> toFloat
 
         opacity2 =
             opacity * opaque |> round |> toFloat
@@ -232,10 +234,10 @@ spriteWithZAndOpacityAndUserId opacityAndUserId primaryColor secondaryColor ( Qu
             Coord.toTuple textureSize
 
         primaryColor2 =
-            Color.toInt primaryColor |> toFloat
+            Color.unwrap primaryColor |> toFloat
 
         secondaryColor2 =
-            Color.toInt secondaryColor |> toFloat
+            Color.unwrap secondaryColor |> toFloat
     in
     [ { x = toFloat x
       , y = toFloat y
@@ -342,6 +344,11 @@ charToInt =
     List.Nonempty.toList asciiChars
         |> List.indexedMap (\index char -> ( char, index ))
         |> Dict.fromList
+
+
+intToChar : Array Char
+intToChar =
+    List.Nonempty.toList asciiChars |> Array.fromList
 
 
 text : Color -> Int -> String -> Coord unit -> List Vertex

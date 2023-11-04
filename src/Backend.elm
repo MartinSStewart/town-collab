@@ -1729,6 +1729,7 @@ generateVisibleRegion oldBounds bounds model =
                 |> Set.toList
                 |> List.map Coord.tuple
 
+        newCells : { grid : Grid, cows : List Animal, cells : List ( Coord CellUnit, GridCell.CellData ) }
         newCells =
             List.foldl
                 (\coord state ->
@@ -1743,10 +1744,13 @@ generateVisibleRegion oldBounds bounds model =
 
                             else
                                 []
+
+                        ( newCell, cellData ) =
+                            GridCell.cellToData data.cell
                     in
-                    { grid = data.grid
+                    { grid = Grid.setCell coord newCell data.grid
                     , cows = newCows ++ state.cows
-                    , cells = ( coord, GridCell.cellToData data.cell ) :: state.cells
+                    , cells = ( coord, cellData ) :: state.cells
                     }
                 )
                 { grid = model.grid, cows = [], cells = [] }

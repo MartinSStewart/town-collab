@@ -10,7 +10,6 @@ module Grid exposing
     , canPlaceTile
     , cellAndLocalCoordToWorld
     , cellAndLocalPointToWorld
-    , changeCount
     , closeNeighborCells
     , dataToGrid
     , empty
@@ -31,7 +30,7 @@ module Grid exposing
     , pointInside
     , rayIntersection
     , rayIntersection2
-    , removeUser
+    , setCell
     , tileMesh
     , tileMeshHelper2
     , toggleRailSplit
@@ -79,7 +78,7 @@ type GridData
 
 dataToGrid : GridData -> Grid
 dataToGrid (GridData gridData) =
-    Dict.map (\coord cell -> GridCell.dataToCell (Coord.tuple coord) cell) gridData |> Grid
+    Dict.map (\_ cell -> GridCell.dataToCell cell) gridData |> Grid
 
 
 type Grid
@@ -234,16 +233,6 @@ moveUndoPoint userId undoPoint (Grid grid) =
         grid
         undoPoint
         |> Grid
-
-
-changeCount : Coord CellUnit -> Grid -> Int
-changeCount ( Quantity x, Quantity y ) (Grid grid) =
-    case Dict.get ( x, y ) grid of
-        Just cell ->
-            GridCell.changeCount cell
-
-        Nothing ->
-            0
 
 
 closeNeighborCells : Coord CellUnit -> Coord CellLocalUnit -> List ( Coord CellUnit, Coord CellLocalUnit )
@@ -829,13 +818,6 @@ tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale
         (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
         texturePosition
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
-
-
-removeUser : Id UserId -> Grid -> Grid
-removeUser userId grid =
-    allCellsDict grid
-        |> Dict.map (\coord cell -> GridCell.removeUser userId (Coord.tuple coord) cell)
-        |> from
 
 
 getTile : Coord WorldUnit -> Grid -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit, colors : Colors }

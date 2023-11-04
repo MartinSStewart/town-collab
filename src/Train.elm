@@ -1313,7 +1313,7 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors } 
                 0
         , size0 = Vec2.vec2 (toFloat trainW) y2
         , texturePosition0 = textureX + (trainData.rotationFrame * trainH * textureWidth) |> toFloat
-        , primaryColor0 = Color.toInt trainData.color |> toFloat
+        , primaryColor0 = Color.unwrap trainData.color |> toFloat
         , secondaryColor0 = 0
         , night = nightFactor
         }

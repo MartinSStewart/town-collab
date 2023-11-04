@@ -3426,10 +3426,10 @@ createDebrisMeshHelper :
 createDebrisMeshHelper position texturePosition ( Quantity textureW, Quantity textureH ) colors scale appStartTime time =
     let
         primaryColor2 =
-            Color.toInt colors.primaryColor |> toFloat
+            Color.unwrap colors.primaryColor |> toFloat
 
         secondaryColor2 =
-            Color.toInt colors.secondaryColor |> toFloat
+            Color.unwrap colors.secondaryColor |> toFloat
 
         time2 =
             Duration.from appStartTime time |> Duration.inSeconds
@@ -4442,8 +4442,8 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                                     (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2) |> round |> toFloat)
                                     (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2) |> round |> toFloat)
                                     0
-                            , primaryColor0 = Color.toInt Color.white |> toFloat
-                            , secondaryColor0 = Color.toInt Color.black |> toFloat
+                            , primaryColor0 = Color.unwrap Color.white |> toFloat
+                            , secondaryColor0 = Color.unwrap Color.black |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
                             , texturePosition0 =
                                 Coord.xRaw texturePos

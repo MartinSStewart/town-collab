@@ -584,7 +584,7 @@ updateLocalChange localChange model =
             let
                 newCells2 : Dict ( Int, Int ) GridCell.Cell
                 newCells2 =
-                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell coord cell )) newCells
+                    List.map (\( coord, cell ) -> ( Coord.toTuple coord, GridCell.dataToCell cell )) newCells
                         |> Dict.fromList
             in
             ( { model
