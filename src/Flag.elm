@@ -55,7 +55,7 @@ flagMesh position scale color frame =
             Tile.texturePositionPixels (Coord.xy 80 (594 + frame * 6)) (Coord.xy width 6)
 
         colorVec =
-            Color.toInt color |> toFloat
+            Color.unwrap color |> toFloat
 
         ( x, y ) =
             Coord.toTuple position

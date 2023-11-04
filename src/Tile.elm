@@ -13,6 +13,7 @@ module Tile exposing
     , aggregateMovementCollision
     , allCategories
     , allTileGroupsExceptText
+    , allTiles
     , buildingCategory
     , categoryToString
     , codec
@@ -925,7 +926,6 @@ allTiles =
     , ElmTree
     , DirtPathHorizontal
     , DirtPathVertical
-    , BigText 'A'
     , Hyperlink
     , BenchDown
     , BenchLeft
@@ -964,6 +964,7 @@ allTiles =
     , RoadManholeUp
     , RoadManholeRight
     ]
+        ++ List.map BigText (List.Nonempty.toList Sprite.asciiChars)
 
 
 type Direction

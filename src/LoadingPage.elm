@@ -51,7 +51,7 @@ import Effect.Time as Time
 import Effect.WebGL
 import Effect.WebGL.Texture exposing (Texture)
 import Grid exposing (Grid)
-import GridCell
+import GridCell exposing (FrontendHistory)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
@@ -78,7 +78,7 @@ import Sound
 import Sprite exposing (Vertex)
 import Terrain
 import TextInput
-import Tile exposing (Category(..), Tile, TileGroup(..))
+import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
@@ -463,19 +463,56 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
         |> (\( a, b ) -> ( Loaded a, b, Audio.cmdNone ))
 
 
-canPlaceTile : Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid -> Bool
+canPlaceTile : Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid FrontendHistory -> Bool
 canPlaceTile time change trains grid =
     if Grid.canPlaceTile change then
         let
-            { removed } =
-                Grid.addChange change grid
+            ( cellPosition, localPosition ) =
+                Grid.worldToCellAndLocalCoord change.position
         in
-        case Train.canRemoveTiles time removed trains of
-            Ok _ ->
-                True
+        ( cellPosition, localPosition )
+            :: Grid.closeNeighborCells cellPosition localPosition
+            |> List.any
+                (\( cellPos, localPos ) ->
+                    case Grid.getCell cellPos grid of
+                        Just cell ->
+                            GridCell.flatten cell
+                                |> List.any
+                                    (\value ->
+                                        if value.tile == TrainHouseLeft || value.tile == TrainHouseRight then
+                                            if Tile.hasCollision localPos change.change value.position value.tile then
+                                                case
+                                                    Train.canRemoveTiles time
+                                                        [ { tile = value.tile
+                                                          , position =
+                                                                Grid.cellAndLocalCoordToWorld ( cellPos, value.position )
+                                                          }
+                                                        ]
+                                                        trains
+                                                of
+                                                    Ok _ ->
+                                                        False
 
-            Err _ ->
-                False
+                                                    Err _ ->
+                                                        True
+
+                                            else
+                                                False
+
+                                        else
+                                            False
+                                    )
+
+                        Nothing ->
+                            False
+                )
+            |> not
+        --case Train.canRemoveTiles time removed trains of
+        --    Ok _ ->
+        --        True
+        --
+        --    Err _ ->
+        --        False
 
     else
         False
@@ -487,7 +524,7 @@ updateMeshes newModel =
         oldModel =
             newModel.previousUpdateMeshData
 
-        oldCells : Dict ( Int, Int ) GridCell.Cell
+        oldCells : Dict ( Int, Int ) (GridCell.Cell FrontendHistory)
         oldCells =
             LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
 
@@ -495,7 +532,7 @@ updateMeshes newModel =
         localModel =
             LocalGrid.localModel newModel.localModel
 
-        newCells : Dict ( Int, Int ) GridCell.Cell
+        newCells : Dict ( Int, Int ) (GridCell.Cell FrontendHistory)
         newCells =
             localModel.grid |> Grid.allCellsDict
 
@@ -555,7 +592,7 @@ updateMeshes newModel =
         newMaybeUserId =
             LocalGrid.currentUserId newModel
 
-        newMesh : Maybe (Effect.WebGL.Mesh Vertex) -> GridCell.Cell -> ( Int, Int ) -> { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
+        newMesh : Maybe (Effect.WebGL.Mesh Vertex) -> GridCell.Cell FrontendHistory -> ( Int, Int ) -> { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
         newMesh backgroundMesh newCell rawCoord =
             let
                 coord : Coord CellUnit

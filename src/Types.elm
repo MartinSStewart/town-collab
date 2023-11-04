@@ -57,6 +57,7 @@ import Effect.Time
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
+import GridCell exposing (BackendHistory)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
 import Id exposing (AnimalId, EventId, Id, MailId, PersonId, SecretId, TrainId, UserId)
@@ -347,7 +348,7 @@ type UiHover
 
 
 type alias BackendModel =
-    { grid : Grid
+    { grid : Grid BackendHistory
     , userSessions :
         Dict
             Lamdera.SessionId
