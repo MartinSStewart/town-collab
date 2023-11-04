@@ -16,6 +16,8 @@ module GridCell exposing
     , latestChange
     , mapPixelData
     , moveUndoPoint
+    , tileFromInt
+    , tileToInt
     , toggleRailSplit
     , updateCache
     )
@@ -1177,9 +1179,6 @@ cellToData (Cell cell) =
             let
                 bytes =
                     Bytes.Encode.encode (historyEncoder history)
-
-                _ =
-                    Debug.log "encode" ""
             in
             ( Cell { cell | history = BackendEncodedAndDecoded bytes history }
             , CellData

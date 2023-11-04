@@ -234,10 +234,6 @@ moveUndoPointFrontend userId undoPoint grid =
         (\a ->
             case a of
                 FrontendEncoded bytes ->
-                    let
-                        _ =
-                            Debug.log "decode" ""
-                    in
                     Bytes.Decode.decode GridCell.historyDecoder bytes |> Maybe.withDefault []
 
                 FrontendDecoded list ->

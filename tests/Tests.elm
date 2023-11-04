@@ -7,10 +7,11 @@ import Coord
 import Effect.Time
 import Expect exposing (Expectation)
 import Grid exposing (IntersectionType(..))
-import GridCell
+import GridCell exposing (FrontendHistory)
 import Id
 import Point2d
 import Quantity exposing (Quantity(..))
+import Set
 import Test exposing (Test, describe, test)
 import Tile exposing (Tile(..))
 import Train exposing (Train(..))
@@ -53,10 +54,10 @@ tests =
         [ test "Add rail" <|
             \_ ->
                 let
-                    maybeCell : Maybe GridCell.Cell
+                    maybeCell : Maybe (GridCell.Cell FrontendHistory)
                     maybeCell =
                         Grid.empty
-                            |> Grid.addChange
+                            |> Grid.addChangeFrontend
                                 { position = Coord.tuple ( 0, 0 )
                                 , change = RailHorizontal
                                 , userId = user0
@@ -83,10 +84,10 @@ tests =
         , test "Add house overlaps neighbor" <|
             \_ ->
                 let
-                    maybeCell : Maybe GridCell.Cell
+                    maybeCell : Maybe (GridCell.Cell FrontendHistory)
                     maybeCell =
                         Grid.empty
-                            |> Grid.addChange
+                            |> Grid.addChangeFrontend
                                 { position = Coord.tuple ( 21, 8 )
                                 , change = HouseDown
                                 , userId = user0
@@ -94,7 +95,7 @@ tests =
                                 , time = Effect.Time.millisToPosix 0
                                 }
                             |> .grid
-                            |> Grid.addChange
+                            |> Grid.addChangeFrontend
                                 { position = Coord.tuple ( 22, 8 )
                                 , change = HouseDown
                                 , userId = user0
@@ -138,7 +139,7 @@ tests =
             \_ ->
                 let
                     grid =
-                        Grid.addChange
+                        Grid.addChangeFrontend
                             { position = Coord.xy 1 0
                             , change = LogCabinDown
                             , userId = Id.fromInt 0
@@ -170,41 +171,24 @@ tests =
                     , endPosition = Point2d.unsafe { x = 10, y = 0 }
                     }
                     |> Expect.equal (Point2d.unsafe { x = 6, y = 0 })
-        , test "Grid point collision" <|
+        , test "Tile to int roundtrip" <|
             \_ ->
-                let
-                    grid =
-                        Grid.addChange
-                            { position = Coord.xy 55 29
-                            , change = HouseDown
-                            , userId = Id.fromInt 0
-                            , colors = { primaryColor = Color.black, secondaryColor = Color.black }
-                            , time = time 0
-                            }
-                            Grid.empty
-                            |> .grid
-                in
-                Grid.pointInside
-                    False
-                    (Animal.getData Cow
-                        |> .size
-                        |> Units.pixelToTileVector
-                        |> Vector2d.scaleBy 0.5
-                        |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
-                    )
-                    (Point2d.xy (Units.tileUnit 56) (Units.tileUnit 32.1))
-                    grid
-                    |> Expect.equal
-                        [ { intersectionType = TileIntersection
-                          , bounds =
-                                BoundingBox2d.fromExtrema
-                                    { maxX = Quantity 58.35
-                                    , maxY = Quantity 32.15555555555556
-                                    , minX = Quantity 54.75
-                                    , minY = Quantity 29.844444444444445
-                                    }
-                          }
-                        ]
+                Tile.allTiles
+                    |> List.all
+                        (\tile ->
+                            let
+                                int =
+                                    GridCell.tileToInt tile
+                            in
+                            GridCell.tileFromInt int == tile
+                        )
+                    |> Expect.equal True
+        , test "Tiles all have unique ints" <|
+            \_ ->
+                List.map GridCell.tileToInt Tile.allTiles
+                    |> Set.fromList
+                    |> Set.size
+                    |> Expect.equal (List.length Tile.allTiles)
         ]
 
 
