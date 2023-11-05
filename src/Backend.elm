@@ -142,11 +142,13 @@ init =
     in
     ( case Env.adminEmail of
         Just adminEmail ->
-            createUser adminId adminEmail model |> Tuple.first
+            createUser adminId adminEmail model
+                |> Tuple.first
 
         Nothing ->
             model
-    , broadcastLocalChange False (Effect.Time.millisToPosix 0) (Effect.Lamdera.sessionIdFromString "")
+    , Command.none
+      --broadcastLocalChange False (Effect.Time.millisToPosix 0) (Effect.Lamdera.sessionIdFromString "")
     )
 
 
@@ -475,61 +477,66 @@ handleWorldUpdate isProduction oldTime time model =
                                     state
 
                                 Nothing ->
-                                    if user.allowEmailNotifications then
-                                        let
-                                            ( loginToken, model2 ) =
-                                                generateSecretId time state.model
+                                    case user.userType of
+                                        HumanUser humanUser ->
+                                            if humanUser.allowEmailNotifications then
+                                                let
+                                                    ( loginToken, model2 ) =
+                                                        generateSecretId time state.model
 
-                                            _ =
-                                                Debug.log "notification" loginEmailUrl
+                                                    _ =
+                                                        Debug.log "notification" loginEmailUrl
 
-                                            loginEmailUrl : String
-                                            loginEmailUrl =
-                                                Env.domain
-                                                    ++ Route.encode
-                                                        (InternalRoute
-                                                            { viewPoint =
-                                                                Grid.getPostOffice mail.to state.model.grid
-                                                                    |> Maybe.withDefault Coord.origin
-                                                            , page = MailEditorRoute
-                                                            , loginOrInviteToken = LoginToken2 loginToken |> Just
-                                                            }
+                                                    loginEmailUrl : String
+                                                    loginEmailUrl =
+                                                        Env.domain
+                                                            ++ Route.encode
+                                                                (InternalRoute
+                                                                    { viewPoint =
+                                                                        Grid.getPostOffice mail.to state.model.grid
+                                                                            |> Maybe.withDefault Coord.origin
+                                                                    , page = MailEditorRoute
+                                                                    , loginOrInviteToken = LoginToken2 loginToken |> Just
+                                                                    }
+                                                                )
+                                                in
+                                                { model =
+                                                    { model2
+                                                        | pendingLoginTokens =
+                                                            AssocList.insert
+                                                                loginToken
+                                                                { requestTime = time
+                                                                , userId = mail.to
+                                                                , requestedBy = LoginRequestedByBackend
+                                                                }
+                                                                model2.pendingLoginTokens
+                                                    }
+                                                , cmds =
+                                                    sendEmail
+                                                        isProduction
+                                                        (SentMailNotification time humanUser.emailAddress)
+                                                        (NonemptyString 'Y' "ou got a letter!")
+                                                        ("You received a letter. You can view it directly by clicking on this link "
+                                                            ++ loginEmailUrl
                                                         )
-                                        in
-                                        { model =
-                                            { model2
-                                                | pendingLoginTokens =
-                                                    AssocList.insert
-                                                        loginToken
-                                                        { requestTime = time
-                                                        , userId = mail.to
-                                                        , requestedBy = LoginRequestedByBackend
-                                                        }
-                                                        model2.pendingLoginTokens
-                                            }
-                                        , cmds =
-                                            sendEmail
-                                                isProduction
-                                                (SentMailNotification time user.emailAddress)
-                                                (NonemptyString 'Y' "ou got a letter!")
-                                                ("You received a letter. You can view it directly by clicking on this link "
-                                                    ++ loginEmailUrl
-                                                )
-                                                (Email.Html.div
-                                                    []
-                                                    [ Email.Html.text "You received a letter. You can view it directly by "
-                                                    , Email.Html.a
-                                                        [ Email.Html.Attributes.href loginEmailUrl ]
-                                                        [ Email.Html.text "clicking here" ]
-                                                    , Email.Html.text "."
-                                                    ]
-                                                )
-                                                user.emailAddress
-                                                :: state.cmds
-                                        }
+                                                        (Email.Html.div
+                                                            []
+                                                            [ Email.Html.text "You received a letter. You can view it directly by "
+                                                            , Email.Html.a
+                                                                [ Email.Html.Attributes.href loginEmailUrl ]
+                                                                [ Email.Html.text "clicking here" ]
+                                                            , Email.Html.text "."
+                                                            ]
+                                                        )
+                                                        humanUser.emailAddress
+                                                        :: state.cmds
+                                                }
 
-                                    else
-                                        state
+                                            else
+                                                state
+
+                                        BotUser ->
+                                            state
 
                         _ ->
                             state
@@ -865,13 +872,18 @@ broadcastLocalChange isProduction time sessionId clientId changes model =
             model3
         , case ( sendReportVandalismEmail, getAdminUser model3 ) of
             ( True, Just adminUser ) ->
-                sendEmail
-                    isProduction
-                    (SentReportVandalismAdminEmail time adminUser.emailAddress)
-                    (NonemptyString 'V' "andalism reported")
-                    "Vandalism reported"
-                    (Email.Html.text "Vandalism reported")
-                    adminUser.emailAddress
+                case adminUser.userType of
+                    HumanUser { emailAddress } ->
+                        sendEmail
+                            isProduction
+                            (SentReportVandalismAdminEmail time emailAddress)
+                            (NonemptyString 'V' "andalism reported")
+                            "Vandalism reported"
+                            (Email.Html.text "Vandalism reported")
+                            emailAddress
+
+                    BotUser ->
+                        Command.none
 
             _ ->
                 Command.none
@@ -928,8 +940,20 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
                                         , viewPoint = Route.startPointAt
                                         }
                                     )
+
+                        maybeUser =
+                            IdDict.toList model.users
+                                |> List.find
+                                    (\( _, user ) ->
+                                        case user.userType of
+                                            HumanUser humanUser ->
+                                                humanUser.emailAddress == emailAddress
+
+                                            BotUser ->
+                                                False
+                                    )
                     in
-                    case IdDict.toList model.users |> List.find (\( _, user ) -> user.emailAddress == emailAddress) of
+                    case maybeUser of
                         Just ( userId, _ ) ->
                             let
                                 _ =
@@ -991,7 +1015,18 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
                         model
                         (\userId user model2 ->
                             -- Check if email address has already accepted an invite
-                            if IdDict.toList model2.users |> List.any (\( _, user2 ) -> user2.emailAddress == emailAddress) then
+                            if
+                                IdDict.toList model2.users
+                                    |> List.any
+                                        (\( _, user2 ) ->
+                                            case user2.userType of
+                                                HumanUser humanUser ->
+                                                    humanUser.emailAddress == emailAddress
+
+                                                BotUser ->
+                                                    False
+                                        )
+                            then
                                 ( model2, Effect.Lamdera.sendToFrontend clientId (SendInviteEmailResponse emailAddress) )
 
                             else
@@ -1525,7 +1560,7 @@ updateLocalChange sessionId clientId time change model =
         SetAllowEmailNotifications allow ->
             asUser2
                 (\userId user ->
-                    ( { model | users = IdDict.insert userId { user | allowEmailNotifications = allow } model.users }
+                    ( updateHumanUser (\a -> { a | allowEmailNotifications = allow }) userId user model
                     , OriginalChange
                     , BroadcastToNoOne
                     )
@@ -1609,7 +1644,7 @@ updateLocalChange sessionId clientId time change model =
                                         adjustEventTime time deleteTime
                                 in
                                 ( LocalGrid.deleteMail mailId adjustedTime model
-                                , AdminDeleteMail mailId adjustedTime |> AdminChange
+                                , AdminDeleteMail mailId adjustedTime |> AdminChange |> NewLocalChange
                                 , BroadcastToNoOne
                                 )
 
@@ -1629,7 +1664,7 @@ updateLocalChange sessionId clientId time change model =
         SetTimeOfDay timeOfDay ->
             case getUserFromSessionId sessionId model of
                 Just ( userId, user ) ->
-                    ( { model | users = IdDict.insert userId { user | timeOfDay = timeOfDay } model.users }
+                    ( updateHumanUser (\a -> { a | timeOfDay = timeOfDay }) userId user model
                     , OriginalChange
                     , BroadcastToNoOne
                     )
@@ -1640,13 +1675,7 @@ updateLocalChange sessionId clientId time change model =
         SetTileHotkey tileHotkey tileGroup ->
             asUser2
                 (\userId user ->
-                    ( { model
-                        | users =
-                            IdDict.insert
-                                userId
-                                (LocalGrid.setTileHotkey tileHotkey tileGroup user)
-                                model.users
-                      }
+                    ( updateHumanUser (LocalGrid.setTileHotkey tileHotkey tileGroup) userId user model
                     , OriginalChange
                     , BroadcastToNoOne
                     )
@@ -1655,9 +1684,7 @@ updateLocalChange sessionId clientId time change model =
         ShowNotifications showNotifications ->
             asUser2
                 (\userId user ->
-                    ( { model
-                        | users = IdDict.insert userId { user | showNotifications = showNotifications } model.users
-                      }
+                    ( updateHumanUser (\a -> { a | showNotifications = showNotifications }) userId user model
                     , OriginalChange
                     , BroadcastToNoOne
                     )
@@ -1685,11 +1712,28 @@ updateLocalChange sessionId clientId time change model =
         ClearNotifications clearedAt ->
             asUser2
                 (\userId user ->
-                    ( { model | users = IdDict.insert userId { user | notificationsClearedAt = clearedAt } model.users }
+                    ( updateHumanUser (\a -> { a | notificationsClearedAt = clearedAt }) userId user model
                     , OriginalChange
                     , BroadcastToNoOne
                     )
                 )
+
+
+updateHumanUser : (HumanUserData -> HumanUserData) -> Id UserId -> BackendUserData -> BackendModel -> BackendModel
+updateHumanUser updateFunc userId user model =
+    { model
+        | users =
+            IdDict.insert
+                userId
+                (case user.userType of
+                    HumanUser humanUser ->
+                        { user | userType = HumanUser (updateFunc humanUser) }
+
+                    BotUser ->
+                        user
+                )
+                model.users
+    }
 
 
 viewBoundsChange :
@@ -1938,26 +1982,31 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
         checkLogin () =
             ( case getUserFromSessionId sessionId model of
                 Just ( userId, user ) ->
-                    LoggedIn
-                        { userId = userId
-                        , undoCurrent = user.undoCurrent
-                        , undoHistory = user.undoHistory
-                        , redoHistory = user.redoHistory
-                        , mailDrafts = user.mailDrafts
-                        , emailAddress = user.emailAddress
-                        , inbox = getUserInbox userId model
-                        , allowEmailNotifications = user.allowEmailNotifications
-                        , adminData = getAdminData userId model
-                        , reports = getUserReports userId model
-                        , isGridReadOnly = model.isGridReadOnly
-                        , timeOfDay = user.timeOfDay
-                        , tileHotkeys = user.tileHotkeys
-                        , showNotifications = user.showNotifications
-                        , notifications =
-                            Grid.latestChanges user.notificationsClearedAt userId model.grid
-                                |> List.foldl LocalGrid.addNotification []
-                        , notificationsClearedAt = user.notificationsClearedAt
-                        }
+                    case user.userType of
+                        HumanUser humanUser ->
+                            LoggedIn
+                                { userId = userId
+                                , undoCurrent = user.undoCurrent
+                                , undoHistory = user.undoHistory
+                                , redoHistory = user.redoHistory
+                                , mailDrafts = user.mailDrafts
+                                , emailAddress = humanUser.emailAddress
+                                , inbox = getUserInbox userId model
+                                , allowEmailNotifications = humanUser.allowEmailNotifications
+                                , adminData = getAdminData userId model
+                                , reports = getUserReports userId model
+                                , isGridReadOnly = model.isGridReadOnly
+                                , timeOfDay = humanUser.timeOfDay
+                                , tileHotkeys = humanUser.tileHotkeys
+                                , showNotifications = humanUser.showNotifications
+                                , notifications =
+                                    Grid.latestChanges humanUser.notificationsClearedAt userId model.grid
+                                        |> List.foldl LocalGrid.addNotification []
+                                , notificationsClearedAt = humanUser.notificationsClearedAt
+                                }
+
+                        BotUser ->
+                            NotLoggedIn { timeOfDay = Automatic }
 
                 Nothing ->
                     NotLoggedIn { timeOfDay = Automatic }
@@ -1973,34 +2022,42 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                             if Duration.from data.requestTime currentTime |> Quantity.lessThan (Duration.minutes 10) then
                                 case IdDict.get data.userId model.users of
                                     Just user ->
-                                        ( LoggedIn
-                                            { userId = data.userId
-                                            , undoCurrent = user.undoCurrent
-                                            , undoHistory = user.undoHistory
-                                            , redoHistory = user.redoHistory
-                                            , mailDrafts = user.mailDrafts
-                                            , emailAddress = user.emailAddress
-                                            , inbox = getUserInbox data.userId model
-                                            , allowEmailNotifications = user.allowEmailNotifications
-                                            , adminData = getAdminData data.userId model
-                                            , reports = getUserReports data.userId model
-                                            , isGridReadOnly = model.isGridReadOnly
-                                            , timeOfDay = user.timeOfDay
-                                            , tileHotkeys = user.tileHotkeys
-                                            , showNotifications = user.showNotifications
-                                            , notifications =
-                                                Grid.latestChanges user.notificationsClearedAt data.userId model.grid
-                                                    |> List.foldl LocalGrid.addNotification []
-                                            , notificationsClearedAt = user.notificationsClearedAt
-                                            }
-                                        , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
-                                        , case data.requestedBy of
-                                            LoginRequestedByBackend ->
-                                                Nothing
+                                        case user.userType of
+                                            HumanUser humanUser ->
+                                                ( LoggedIn
+                                                    { userId = data.userId
+                                                    , undoCurrent = user.undoCurrent
+                                                    , undoHistory = user.undoHistory
+                                                    , redoHistory = user.redoHistory
+                                                    , mailDrafts = user.mailDrafts
+                                                    , emailAddress = humanUser.emailAddress
+                                                    , inbox = getUserInbox data.userId model
+                                                    , allowEmailNotifications = humanUser.allowEmailNotifications
+                                                    , adminData = getAdminData data.userId model
+                                                    , reports = getUserReports data.userId model
+                                                    , isGridReadOnly = model.isGridReadOnly
+                                                    , timeOfDay = humanUser.timeOfDay
+                                                    , tileHotkeys = humanUser.tileHotkeys
+                                                    , showNotifications = humanUser.showNotifications
+                                                    , notifications =
+                                                        Grid.latestChanges humanUser.notificationsClearedAt data.userId model.grid
+                                                            |> List.foldl LocalGrid.addNotification []
+                                                    , notificationsClearedAt = humanUser.notificationsClearedAt
+                                                    }
+                                                , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
+                                                , case data.requestedBy of
+                                                    LoginRequestedByBackend ->
+                                                        Nothing
 
-                                            LoginRequestedByFrontend requestedBy ->
-                                                Just requestedBy
-                                        )
+                                                    LoginRequestedByFrontend requestedBy ->
+                                                        Just requestedBy
+                                                )
+
+                                            BotUser ->
+                                                ( NotLoggedIn { timeOfDay = Automatic }
+                                                , addError currentTime (UserNotFoundWhenLoggingIn data.userId) model
+                                                , Nothing
+                                                )
 
                                     Nothing ->
                                         ( NotLoggedIn { timeOfDay = Automatic }
@@ -2025,34 +2082,53 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                 ( model4, newUser ) =
                                     createUser userId invite.invitedEmailAddress model
                             in
-                            ( LoggedIn
-                                { userId = userId
-                                , undoCurrent = newUser.undoCurrent
-                                , undoHistory = newUser.undoHistory
-                                , redoHistory = newUser.redoHistory
-                                , mailDrafts = newUser.mailDrafts
-                                , emailAddress = newUser.emailAddress
-                                , inbox = getUserInbox userId model
-                                , allowEmailNotifications = newUser.allowEmailNotifications
-                                , adminData = getAdminData userId model
-                                , reports = getUserReports userId model
-                                , isGridReadOnly = model.isGridReadOnly
-                                , timeOfDay = Automatic
-                                , tileHotkeys = newUser.tileHotkeys
-                                , showNotifications = newUser.showNotifications
-                                , notifications = []
-                                , notificationsClearedAt = newUser.notificationsClearedAt
-                                }
-                            , { model4
-                                | invites = AssocList.remove inviteToken model.invites
-                                , users =
-                                    IdDict.update2
-                                        invite.invitedBy
-                                        (\user -> { user | acceptedInvites = IdDict.insert userId () user.acceptedInvites })
-                                        model4.users
-                              }
-                            , Nothing
-                            )
+                            case newUser.userType of
+                                HumanUser humanUser ->
+                                    ( LoggedIn
+                                        { userId = userId
+                                        , undoCurrent = newUser.undoCurrent
+                                        , undoHistory = newUser.undoHistory
+                                        , redoHistory = newUser.redoHistory
+                                        , mailDrafts = newUser.mailDrafts
+                                        , emailAddress = humanUser.emailAddress
+                                        , inbox = getUserInbox userId model
+                                        , allowEmailNotifications = humanUser.allowEmailNotifications
+                                        , adminData = getAdminData userId model
+                                        , reports = getUserReports userId model
+                                        , isGridReadOnly = model.isGridReadOnly
+                                        , timeOfDay = Automatic
+                                        , tileHotkeys = humanUser.tileHotkeys
+                                        , showNotifications = humanUser.showNotifications
+                                        , notifications = []
+                                        , notificationsClearedAt = humanUser.notificationsClearedAt
+                                        }
+                                    , { model4
+                                        | invites = AssocList.remove inviteToken model.invites
+                                        , users =
+                                            IdDict.update2
+                                                invite.invitedBy
+                                                (\user ->
+                                                    case user.userType of
+                                                        HumanUser humanUser2 ->
+                                                            { user
+                                                                | userType =
+                                                                    { humanUser2
+                                                                        | acceptedInvites =
+                                                                            IdDict.insert userId () humanUser2.acceptedInvites
+                                                                    }
+                                                                        |> HumanUser
+                                                            }
+
+                                                        BotUser ->
+                                                            user
+                                                )
+                                                model4.users
+                                      }
+                                    , Nothing
+                                    )
+
+                                BotUser ->
+                                    ( NotLoggedIn { timeOfDay = Automatic }, model4, Nothing )
 
                         Nothing ->
                             checkLogin ()
@@ -2157,14 +2233,23 @@ invitesToInviteTree : Id UserId -> IdDict UserId BackendUserData -> Maybe Invite
 invitesToInviteTree rootUserId users =
     case IdDict.get rootUserId users of
         Just user ->
-            { userId = rootUserId
-            , invited =
-                List.filterMap
-                    (\( userId, () ) -> invitesToInviteTree userId users)
-                    (IdDict.toList user.acceptedInvites)
-            }
-                |> InviteTree
-                |> Just
+            case user.userType of
+                HumanUser humanUser ->
+                    { userId = rootUserId
+                    , invited =
+                        List.filterMap
+                            (\( userId, () ) -> invitesToInviteTree userId users)
+                            (IdDict.toList humanUser.acceptedInvites)
+                    }
+                        |> InviteTree
+                        |> Just
+
+                BotUser ->
+                    { userId = rootUserId
+                    , invited = []
+                    }
+                        |> InviteTree
+                        |> Just
 
         Nothing ->
             Nothing
@@ -2224,14 +2309,17 @@ createUser userId emailAddress model =
             , mailDrafts = IdDict.empty
             , cursor = Nothing
             , handColor = Cursor.defaultColors
-            , emailAddress = emailAddress
-            , acceptedInvites = IdDict.empty
             , name = DisplayName.default
-            , allowEmailNotifications = True
-            , timeOfDay = Automatic
-            , tileHotkeys = AssocList.empty
-            , showNotifications = False
-            , notificationsClearedAt = Effect.Time.millisToPosix 0
+            , userType =
+                HumanUser
+                    { emailAddress = emailAddress
+                    , acceptedInvites = IdDict.empty
+                    , allowEmailNotifications = True
+                    , timeOfDay = Automatic
+                    , tileHotkeys = AssocList.empty
+                    , showNotifications = False
+                    , notificationsClearedAt = Effect.Time.millisToPosix 0
+                    }
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )

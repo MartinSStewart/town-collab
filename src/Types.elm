@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , BackendUserType(..)
     , ContextMenu
     , CssPixels
     , EmailEvent(..)
@@ -14,6 +15,7 @@ module Types exposing
     , FrontendMsg
     , FrontendMsg_(..)
     , Hover(..)
+    , HumanUserData
     , Invite
     , LoadedLocalModel_
     , LoadingData_
@@ -421,14 +423,24 @@ type alias BackendUserData =
     , mailDrafts : IdDict UserId (List MailEditor.Content)
     , cursor : Maybe Cursor
     , handColor : Colors
-    , emailAddress : EmailAddress
-    , acceptedInvites : IdDict UserId ()
+    , userType : BackendUserType
     , name : DisplayName
-    , allowEmailNotifications : Bool
+    }
+
+
+type BackendUserType
+    = HumanUser HumanUserData
+    | BotUser
+
+
+type alias HumanUserData =
+    { emailAddress : EmailAddress
+    , acceptedInvites : IdDict UserId ()
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict Change.TileHotkey TileGroup
     , showNotifications : Bool
     , notificationsClearedAt : Effect.Time.Posix
+    , allowEmailNotifications : Bool
     }
 
 
