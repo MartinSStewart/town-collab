@@ -699,7 +699,7 @@ images =
                 in
                 TileImage group 0 (Tile.defaultToPrimaryAndSecondary data.defaultColors)
             )
-            (List.remove EmptyTileGroup Tile.allTileGroupsExceptText)
+            (List.remove EmptyTileGroup Tile.allTileGroups |> List.remove BigTextGroup)
         |> List.sortBy
             (\image ->
                 let

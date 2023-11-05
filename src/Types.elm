@@ -79,6 +79,7 @@ import Sound exposing (Sound)
 import Sprite exposing (Vertex)
 import TextInput
 import Tile exposing (Category, Tile, TileGroup)
+import TileUsageBot
 import Time
 import TimeOfDay exposing (TimeOfDay)
 import Tool exposing (Tool)
@@ -378,6 +379,7 @@ type alias BackendModel =
     , trainsAndAnimalsDisabled : AreTrainsAndAnimalsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
+    , tileUsageBot : TileUsageBot.Model
     }
 
 

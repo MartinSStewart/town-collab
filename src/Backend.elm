@@ -43,6 +43,7 @@ import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import Set
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..))
+import TileUsageBot
 import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
@@ -69,19 +70,27 @@ app =
 app_ :
     Bool
     ->
-        { init : ( BackendModel, Command restriction toMsg msg )
+        { init : ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
         , update : BackendMsg -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
         , updateFromFrontend : SessionId -> ClientId -> ToBackend -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
         , subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
         }
 app_ isProduction =
-    { init = ( init, Command.none )
+    { init = init
     , update = update isProduction
-    , updateFromFrontend =
-        \sessionId clientId msg model ->
-            ( model, Effect.Time.now |> Effect.Task.perform (UpdateFromFrontend sessionId clientId msg) )
+    , updateFromFrontend = updateFromFrontend
     , subscriptions = subscriptions
     }
+
+
+updateFromFrontend :
+    SessionId
+    -> ClientId
+    -> ToBackend
+    -> BackendModel
+    -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+updateFromFrontend sessionId clientId msg model =
+    ( model, Effect.Time.now |> Effect.Task.perform (UpdateFromFrontend sessionId clientId msg) )
 
 
 subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
@@ -101,12 +110,15 @@ subscriptions model =
         ]
 
 
-init : BackendModel
+init : ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 init =
     let
+        grid =
+            Grid.empty
+
         model : BackendModel
         model =
-            { grid = Grid.empty
+            { grid = grid
             , userSessions = Dict.empty
             , users = IdDict.empty
             , secretLinkCounter = 0
@@ -125,14 +137,17 @@ init =
             , trainsAndAnimalsDisabled = TrainsAndAnimalsEnabled
             , lastReportEmailToAdmin = Nothing
             , worldUpdateDurations = Array.empty
+            , tileUsageBot = TileUsageBot.init grid
             }
     in
-    case Env.adminEmail of
+    ( case Env.adminEmail of
         Just adminEmail ->
             createUser adminId adminEmail model |> Tuple.first
 
         Nothing ->
             model
+    , broadcastLocalChange False (Effect.Time.millisToPosix 0) (Effect.Lamdera.sessionIdFromString "")
+    )
 
 
 adminId : Id UserId
@@ -238,7 +253,7 @@ update isProduction msg model =
             ( model, Command.none )
 
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
-            updateFromFrontend isProduction time sessionId clientId toBackendMsg model
+            updateFromFrontendWithTime isProduction time sessionId clientId toBackendMsg model
 
         SentLoginEmail sendTime emailAddress result ->
             case result of
@@ -719,6 +734,22 @@ asUser sessionId model updateFunc =
             ( model, Command.none )
 
 
+localChangeStatusToLocalChange : Id EventId -> LocalChange -> LocalChangeStatus -> Change.Change
+localChangeStatusToLocalChange eventId originalChange localChangeStatus =
+    Change.LocalChange
+        eventId
+        (case localChangeStatus of
+            OriginalChange ->
+                originalChange
+
+            InvalidChange ->
+                Change.InvalidChange
+
+            NewLocalChange localChange ->
+                localChange
+        )
+
+
 broadcastLocalChange :
     Bool
     -> Effect.Time.Posix
@@ -729,24 +760,29 @@ broadcastLocalChange :
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 broadcastLocalChange isProduction time sessionId clientId changes model =
     let
-        ( model2, ( eventId, originalChange ), firstMsg ) =
-            updateLocalChange sessionId clientId time (Nonempty.head changes) model
+        ( model2, localChange, firstMsg ) =
+            updateLocalChange sessionId clientId time (Nonempty.head changes |> Tuple.second) model
 
-        ( model3, originalChanges2, serverChanges ) =
+        ( model3, allLocalChanges, serverChanges ) =
             Nonempty.tail changes
                 |> List.foldl
-                    (\change ( model_, originalChanges, serverChanges_ ) ->
+                    (\( eventId2, change ) ( model_, originalChanges, serverChanges_ ) ->
                         let
-                            ( newModel, ( eventId2, originalChange2 ), serverChange_ ) =
+                            ( newModel, localChange2, serverChange_ ) =
                                 updateLocalChange sessionId clientId time change model_
                         in
                         ( newModel
-                        , Nonempty.cons (Change.LocalChange eventId2 originalChange2) originalChanges
+                        , Nonempty.cons (localChangeStatusToLocalChange eventId2 change localChange2) originalChanges
                         , Nonempty.cons serverChange_ serverChanges_
                         )
                     )
                     ( model2
-                    , Nonempty.singleton (Change.LocalChange eventId originalChange)
+                    , Nonempty.singleton
+                        (localChangeStatusToLocalChange
+                            (Nonempty.head changes |> Tuple.first)
+                            (Nonempty.head changes |> Tuple.second)
+                            localChange
+                        )
                     , Nonempty.singleton firstMsg
                     )
                 |> (\( a, b, c ) -> ( a, Nonempty.reverse b, Nonempty.reverse c ))
@@ -788,7 +824,7 @@ broadcastLocalChange isProduction time sessionId clientId changes model =
         [ broadcast
             (\sessionId_ clientId_ ->
                 if clientId == clientId_ then
-                    ChangeBroadcast originalChanges2 |> Just
+                    ChangeBroadcast allLocalChanges |> Just
 
                 else
                     Nonempty.toList serverChanges
@@ -856,7 +892,7 @@ generateSecretId currentTime model =
     )
 
 
-updateFromFrontend :
+updateFromFrontendWithTime :
     Bool
     -> Effect.Time.Posix
     -> SessionId
@@ -864,7 +900,7 @@ updateFromFrontend :
     -> ToBackend
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
-updateFromFrontend isProduction currentTime sessionId clientId msg model =
+updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model =
     case msg of
         ConnectToBackend requestData maybeToken ->
             connectToBackend currentTime sessionId clientId requestData maybeToken model
@@ -1052,28 +1088,31 @@ type BroadcastTo
     | BroadcastToRestOfSessionAndEveryoneElse SessionId ServerChange ServerChange
 
 
+type LocalChangeStatus
+    = OriginalChange
+    | InvalidChange
+    | NewLocalChange LocalChange
+
+
 updateLocalChange :
     SessionId
     -> ClientId
     -> Effect.Time.Posix
-    -> ( Id EventId, Change.LocalChange )
+    -> Change.LocalChange
     -> BackendModel
-    -> ( BackendModel, ( Id EventId, Change.LocalChange ), BroadcastTo )
-updateLocalChange sessionId clientId time (( eventId, change ) as originalChange) model =
+    -> ( BackendModel, LocalChangeStatus, BroadcastTo )
+updateLocalChange sessionId clientId time change model =
     let
-        invalidChange =
-            ( eventId, Change.InvalidChange )
-
         asUser2 :
-            (Id UserId -> BackendUserData -> ( BackendModel, ( Id EventId, Change.LocalChange ), BroadcastTo ))
-            -> ( BackendModel, ( Id EventId, Change.LocalChange ), BroadcastTo )
+            (Id UserId -> BackendUserData -> ( BackendModel, LocalChangeStatus, BroadcastTo ))
+            -> ( BackendModel, LocalChangeStatus, BroadcastTo )
         asUser2 func =
             case getUserFromSessionId sessionId model of
                 Just ( userId, user ) ->
                     func userId user
 
                 Nothing ->
-                    ( model, invalidChange, BroadcastToNoOne )
+                    ( model, InvalidChange, BroadcastToNoOne )
     in
     case change of
         Change.LocalUndo ->
@@ -1128,19 +1167,19 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                             in
                             ( List.foldl removeTrain { model | grid = newGrid } trainsToRemove
                                 |> updateUser userId (always newUser)
-                            , originalChange
+                            , OriginalChange
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
                             )
 
                         _ ->
-                            ( model, invalidChange, BroadcastToNoOne )
+                            ( model, InvalidChange, BroadcastToNoOne )
                 )
 
         Change.LocalGridChange localChange ->
             asUser2
                 (\userId user ->
                     if model.isGridReadOnly then
-                        ( model, invalidChange, BroadcastToNoOne )
+                        ( model, InvalidChange, BroadcastToNoOne )
 
                     else
                         let
@@ -1203,7 +1242,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                                     LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
                                             }
                                         )
-                                , ( eventId, Change.LocalGridChange localChange2 )
+                                , Change.LocalGridChange localChange2 |> NewLocalChange
                                 , ServerGridChange
                                     { gridChange = Grid.localChangeToChange userId localChange2
                                     , newCells = newCells
@@ -1213,7 +1252,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 )
 
                             Err _ ->
-                                ( model, invalidChange, BroadcastToNoOne )
+                                ( model, InvalidChange, BroadcastToNoOne )
                 )
 
         Change.LocalRedo ->
@@ -1229,32 +1268,32 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 | grid = Grid.moveUndoPointBackend userId undoMoveAmount model.grid
                               }
                                 |> updateUser userId (always newUser)
-                            , originalChange
+                            , OriginalChange
                             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
                             )
 
                         _ ->
-                            ( model, invalidChange, BroadcastToNoOne )
+                            ( model, InvalidChange, BroadcastToNoOne )
                 )
 
         Change.LocalAddUndo ->
             asUser2
                 (\userId _ ->
                     if model.isGridReadOnly then
-                        ( model, invalidChange, BroadcastToNoOne )
+                        ( model, InvalidChange, BroadcastToNoOne )
 
                     else
-                        ( updateUser userId Undo.add model, originalChange, BroadcastToNoOne )
+                        ( updateUser userId Undo.add model, OriginalChange, BroadcastToNoOne )
                 )
 
         Change.InvalidChange ->
-            ( model, originalChange, BroadcastToNoOne )
+            ( model, OriginalChange, BroadcastToNoOne )
 
         PickupAnimal cowId position time2 ->
             asUser2
                 (\userId _ ->
                     if model.isGridReadOnly then
-                        ( model, invalidChange, BroadcastToNoOne )
+                        ( model, InvalidChange, BroadcastToNoOne )
 
                     else
                         let
@@ -1271,7 +1310,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                         )
                         in
                         if isCowHeld then
-                            ( model, ( eventId, InvalidChange ), BroadcastToNoOne )
+                            ( model, InvalidChange, BroadcastToNoOne )
 
                         else
                             ( updateUser
@@ -1293,7 +1332,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                     }
                                 )
                                 model
-                            , ( eventId, PickupAnimal cowId position (adjustEventTime time time2) )
+                            , PickupAnimal cowId position (adjustEventTime time time2) |> NewLocalChange
                             , ServerPickupAnimal userId cowId position time2 |> BroadcastToEveryoneElse
                             )
                 )
@@ -1327,18 +1366,18 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                                         (LocalGrid.placeAnimal position model.grid)
                                                         model.animals
                                             }
-                                        , ( eventId, DropAnimal animalId position (adjustEventTime time time2) )
+                                        , DropAnimal animalId position (adjustEventTime time time2) |> NewLocalChange
                                         , ServerDropAnimal userId animalId position |> BroadcastToEveryoneElse
                                         )
 
                                     else
-                                        ( model, ( eventId, InvalidChange ), BroadcastToNoOne )
+                                        ( model, InvalidChange, BroadcastToNoOne )
 
                                 Nothing ->
-                                    ( model, ( eventId, InvalidChange ), BroadcastToNoOne )
+                                    ( model, InvalidChange, BroadcastToNoOne )
 
                         Nothing ->
-                            ( model, ( eventId, InvalidChange ), BroadcastToNoOne )
+                            ( model, InvalidChange, BroadcastToNoOne )
                 )
 
         MoveCursor position ->
@@ -1358,7 +1397,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                             }
                         )
                         model
-                    , originalChange
+                    , OriginalChange
                     , ServerMoveCursor userId position |> BroadcastToEveryoneElse
                     )
                 )
@@ -1370,7 +1409,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                         userId
                         (\user2 -> { user2 | handColor = colors })
                         model
-                    , originalChange
+                    , OriginalChange
                     , ServerChangeHandColor userId colors |> BroadcastToEveryoneElse
                     )
                 )
@@ -1379,7 +1418,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
             asUser2
                 (\_ _ ->
                     ( { model | grid = Grid.toggleRailSplit coord model.grid }
-                    , originalChange
+                    , OriginalChange
                     , ServerToggleRailSplit coord |> BroadcastToEveryoneElse
                     )
                 )
@@ -1388,7 +1427,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
             asUser2
                 (\userId user ->
                     ( { model | users = IdDict.insert userId { user | name = displayName } model.users }
-                    , originalChange
+                    , OriginalChange
                     , ServerChangeDisplayName userId displayName |> BroadcastToEveryoneElse
                     )
                 )
@@ -1415,7 +1454,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                         | mail = newMail
                         , users = IdDict.insert userId { user | mailDrafts = IdDict.remove to user.mailDrafts } model.users
                       }
-                    , originalChange
+                    , OriginalChange
                     , ServerSubmitMail { to = to, from = userId } |> BroadcastToEveryoneElse
                     )
                 )
@@ -1430,7 +1469,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 { user | mailDrafts = IdDict.insert to content user.mailDrafts }
                                 model.users
                       }
-                    , originalChange
+                    , OriginalChange
                     , BroadcastToNoOne
                     )
                 )
@@ -1443,7 +1482,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                             adjustEventTime time teleportTime
                     in
                     ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome adjustedTime) model.trains }
-                    , ( eventId, TeleportHomeTrainRequest trainId adjustedTime )
+                    , TeleportHomeTrainRequest trainId adjustedTime |> NewLocalChange
                     , ServerTeleportHomeTrainRequest trainId adjustedTime |> BroadcastToEveryoneElse
                     )
                 )
@@ -1456,7 +1495,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                             adjustEventTime time leaveTime
                     in
                     ( { model | trains = IdDict.update2 trainId (Train.leaveHome adjustedTime) model.trains }
-                    , ( eventId, LeaveHomeTrainRequest trainId adjustedTime )
+                    , LeaveHomeTrainRequest trainId adjustedTime |> NewLocalChange
                     , ServerLeaveHomeTrainRequest trainId adjustedTime |> BroadcastToEveryoneElse
                     )
                 )
@@ -1472,22 +1511,22 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                         | mail =
                                             IdDict.insert mailId { mail | status = MailReceivedAndViewed data } model.mail
                                       }
-                                    , originalChange
+                                    , OriginalChange
                                     , ServerViewedMail mailId userId |> BroadcastToEveryoneElse
                                     )
 
                                 _ ->
-                                    ( model, invalidChange, BroadcastToNoOne )
+                                    ( model, InvalidChange, BroadcastToNoOne )
 
                         Nothing ->
-                            ( model, invalidChange, BroadcastToNoOne )
+                            ( model, InvalidChange, BroadcastToNoOne )
                 )
 
         SetAllowEmailNotifications allow ->
             asUser2
                 (\userId user ->
                     ( { model | users = IdDict.insert userId { user | allowEmailNotifications = allow } model.users }
-                    , originalChange
+                    , OriginalChange
                     , BroadcastToNoOne
                     )
                 )
@@ -1509,7 +1548,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 }
                                 model.users
                       }
-                    , originalChange
+                    , OriginalChange
                     , ServerChangeTool userId tool |> BroadcastToEveryoneElse
                     )
                 )
@@ -1525,7 +1564,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                             }
                     in
                     ( { model | reported = LocalGrid.addReported userId backendReport model.reported }
-                    , originalChange
+                    , OriginalChange
                     , ServerVandalismReportedToAdmin userId backendReport |> BroadcastToAdmin
                     )
                 )
@@ -1534,7 +1573,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
             asUser2
                 (\userId _ ->
                     ( { model | reported = LocalGrid.removeReported userId position model.reported }
-                    , originalChange
+                    , OriginalChange
                     , ServerVandalismRemovedToAdmin userId position |> BroadcastToAdmin
                     )
                 )
@@ -1548,19 +1587,19 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 ( { model
                                     | userSessions = Dict.map (\_ data -> { data | clientIds = AssocList.empty }) model.userSessions
                                   }
-                                , originalChange
+                                , OriginalChange
                                 , BroadcastToNoOne
                                 )
 
                             AdminSetGridReadOnly isGridReadOnly ->
                                 ( { model | isGridReadOnly = isGridReadOnly }
-                                , originalChange
+                                , OriginalChange
                                 , ServerGridReadOnly isGridReadOnly |> BroadcastToEveryoneElse
                                 )
 
                             AdminSetTrainsDisabled areTrainsDisabled ->
                                 ( { model | trainsAndAnimalsDisabled = areTrainsDisabled }
-                                , originalChange
+                                , OriginalChange
                                 , ServerSetTrainsDisabled areTrainsDisabled |> BroadcastToEveryoneElse
                                 )
 
@@ -1570,33 +1609,33 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                         adjustEventTime time deleteTime
                                 in
                                 ( LocalGrid.deleteMail mailId adjustedTime model
-                                , ( eventId, AdminDeleteMail mailId adjustedTime |> AdminChange )
+                                , AdminDeleteMail mailId adjustedTime |> AdminChange
                                 , BroadcastToNoOne
                                 )
 
                             AdminRestoreMail mailId ->
                                 ( LocalGrid.restoreMail mailId model
-                                , originalChange
+                                , OriginalChange
                                 , BroadcastToNoOne
                                 )
 
                             AdminResetUpdateDuration ->
-                                ( model, originalChange, BroadcastToNoOne )
+                                ( model, OriginalChange, BroadcastToNoOne )
 
                     else
-                        ( model, invalidChange, BroadcastToNoOne )
+                        ( model, InvalidChange, BroadcastToNoOne )
                 )
 
         SetTimeOfDay timeOfDay ->
             case getUserFromSessionId sessionId model of
                 Just ( userId, user ) ->
                     ( { model | users = IdDict.insert userId { user | timeOfDay = timeOfDay } model.users }
-                    , originalChange
+                    , OriginalChange
                     , BroadcastToNoOne
                     )
 
                 Nothing ->
-                    ( model, originalChange, BroadcastToNoOne )
+                    ( model, OriginalChange, BroadcastToNoOne )
 
         SetTileHotkey tileHotkey tileGroup ->
             asUser2
@@ -1608,7 +1647,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 (LocalGrid.setTileHotkey tileHotkey tileGroup user)
                                 model.users
                       }
-                    , originalChange
+                    , OriginalChange
                     , BroadcastToNoOne
                     )
                 )
@@ -1619,7 +1658,7 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                     ( { model
                         | users = IdDict.insert userId { user | showNotifications = showNotifications } model.users
                       }
-                    , originalChange
+                    , OriginalChange
                     , BroadcastToNoOne
                     )
                 )
@@ -1635,32 +1674,31 @@ updateLocalChange sessionId clientId time (( eventId, change ) as originalChange
                                 model.userSessions
                         , users = IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
                       }
-                    , originalChange
+                    , OriginalChange
                     , BroadcastToRestOfSessionAndEveryoneElse sessionId ServerLogout (ServerUserDisconnected userId)
                     )
                 )
 
         ViewBoundsChange data ->
-            viewBoundsChange eventId data sessionId clientId model
+            viewBoundsChange data sessionId clientId model
 
         ClearNotifications clearedAt ->
             asUser2
                 (\userId user ->
                     ( { model | users = IdDict.insert userId { user | notificationsClearedAt = clearedAt } model.users }
-                    , originalChange
+                    , OriginalChange
                     , BroadcastToNoOne
                     )
                 )
 
 
 viewBoundsChange :
-    Id EventId
-    -> ViewBoundsChange2
+    ViewBoundsChange2
     -> SessionId
     -> ClientId
     -> BackendModel
-    -> ( BackendModel, ( Id EventId, LocalChange ), BroadcastTo )
-viewBoundsChange eventId { viewBounds, previewBounds } sessionId clientId model =
+    -> ( BackendModel, LocalChangeStatus, BroadcastTo )
+viewBoundsChange { viewBounds, previewBounds } sessionId clientId model =
     case
         Dict.get (Effect.Lamdera.sessionIdToString sessionId) model.userSessions
             |> Maybe.andThen (\{ clientIds } -> AssocList.get clientId clientIds)
@@ -1692,14 +1730,13 @@ viewBoundsChange eventId { viewBounds, previewBounds } sessionId clientId model 
                     }
             in
             ( model2
-            , ( eventId
-              , ViewBoundsChange
-                    { viewBounds = viewBounds
-                    , previewBounds = previewBounds
-                    , newCells = cells
-                    , newCows = newCows
-                    }
-              )
+            , ViewBoundsChange
+                { viewBounds = viewBounds
+                , previewBounds = previewBounds
+                , newCells = cells
+                , newCows = newCows
+                }
+                |> NewLocalChange
             , case Nonempty.fromList newCows of
                 Just nonempty ->
                     ServerNewCows nonempty |> BroadcastToEveryoneElse
@@ -1709,7 +1746,7 @@ viewBoundsChange eventId { viewBounds, previewBounds } sessionId clientId model 
             )
 
         Nothing ->
-            ( model, ( eventId, InvalidChange ), BroadcastToNoOne )
+            ( model, InvalidChange, BroadcastToNoOne )
 
 
 generateVisibleRegion :

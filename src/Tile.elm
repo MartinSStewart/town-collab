@@ -12,7 +12,7 @@ module Tile exposing
     , TileGroupData
     , aggregateMovementCollision
     , allCategories
-    , allTileGroupsExceptText
+    , allTileGroups
     , allTiles
     , buildingCategory
     , categoryToString
@@ -21,6 +21,7 @@ module Tile exposing
     , defaultPostOfficeColor
     , defaultRockColor
     , defaultToPrimaryAndSecondary
+    , fromInt
     , getData
     , getTileGroupData
     , hasCollision
@@ -34,18 +35,21 @@ module Tile exposing
     , sceneryCategory
     , texturePositionPixels
     , tileToTileGroup
+    , toInt
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
     , worldMovementBounds
     )
 
 import Angle
+import Array
 import Axis2d
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
 import Codec exposing (Codec)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import Dict
 import Direction2d exposing (Direction2d)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
@@ -171,8 +175,8 @@ codec =
         ]
 
 
-allTileGroupsExceptText : List TileGroup
-allTileGroupsExceptText =
+allTileGroups : List TileGroup
+allTileGroups =
     [ EmptyTileGroup
     , HouseGroup
     , RailStraightGroup
@@ -215,6 +219,7 @@ allTileGroupsExceptText =
     , ParkingRoadGroup
     , ParkingRoundaboutGroup
     , CornerHouseGroup
+    , BigTextGroup
     ]
 
 
@@ -334,7 +339,7 @@ tileToTileGroup tile =
                 Nothing ->
                     Nothing
         )
-        allTileGroupsExceptText
+        allTileGroups
 
 
 type alias TileGroupData =
@@ -4373,3 +4378,837 @@ trainHouseLeftRailPath =
 trainHouseRightRailPath : RailPath
 trainHouseRightRailPath =
     RailPathHorizontal { offsetX = 1, offsetY = 2, length = 3 }
+
+
+toInt : Tile -> Int
+toInt tile =
+    case tile of
+        EmptyTile ->
+            0
+
+        HouseDown ->
+            1
+
+        HouseRight ->
+            2
+
+        HouseUp ->
+            3
+
+        HouseLeft ->
+            4
+
+        RailHorizontal ->
+            5
+
+        RailVertical ->
+            6
+
+        RailBottomToRight ->
+            7
+
+        RailBottomToLeft ->
+            8
+
+        RailTopToRight ->
+            9
+
+        RailTopToLeft ->
+            10
+
+        RailBottomToRightLarge ->
+            11
+
+        RailBottomToLeftLarge ->
+            12
+
+        RailTopToRightLarge ->
+            13
+
+        RailTopToLeftLarge ->
+            14
+
+        RailCrossing ->
+            15
+
+        RailStrafeDown ->
+            16
+
+        RailStrafeUp ->
+            17
+
+        RailStrafeLeft ->
+            18
+
+        RailStrafeRight ->
+            19
+
+        TrainHouseRight ->
+            20
+
+        TrainHouseLeft ->
+            21
+
+        RailStrafeDownSmall ->
+            22
+
+        RailStrafeUpSmall ->
+            23
+
+        RailStrafeLeftSmall ->
+            24
+
+        RailStrafeRightSmall ->
+            25
+
+        Sidewalk ->
+            26
+
+        SidewalkHorizontalRailCrossing ->
+            27
+
+        SidewalkVerticalRailCrossing ->
+            28
+
+        RailBottomToRight_SplitLeft ->
+            29
+
+        RailBottomToLeft_SplitUp ->
+            30
+
+        RailTopToRight_SplitDown ->
+            31
+
+        RailTopToLeft_SplitRight ->
+            32
+
+        RailBottomToRight_SplitUp ->
+            33
+
+        RailBottomToLeft_SplitRight ->
+            34
+
+        RailTopToRight_SplitLeft ->
+            35
+
+        RailTopToLeft_SplitDown ->
+            36
+
+        PostOffice ->
+            37
+
+        PineTree1 ->
+            38
+
+        PineTree2 ->
+            39
+
+        BigPineTree ->
+            40
+
+        LogCabinDown ->
+            41
+
+        LogCabinRight ->
+            42
+
+        LogCabinUp ->
+            43
+
+        LogCabinLeft ->
+            44
+
+        RoadHorizontal ->
+            45
+
+        RoadVertical ->
+            46
+
+        RoadBottomToLeft ->
+            47
+
+        RoadTopToLeft ->
+            48
+
+        RoadTopToRight ->
+            49
+
+        RoadBottomToRight ->
+            50
+
+        Road4Way ->
+            51
+
+        RoadSidewalkCrossingHorizontal ->
+            52
+
+        RoadSidewalkCrossingVertical ->
+            53
+
+        Road3WayDown ->
+            54
+
+        Road3WayLeft ->
+            55
+
+        Road3WayUp ->
+            56
+
+        Road3WayRight ->
+            57
+
+        RoadRailCrossingHorizontal ->
+            58
+
+        RoadRailCrossingVertical ->
+            59
+
+        FenceHorizontal ->
+            60
+
+        FenceVertical ->
+            61
+
+        FenceDiagonal ->
+            62
+
+        FenceAntidiagonal ->
+            63
+
+        RoadDeadendUp ->
+            64
+
+        RoadDeadendDown ->
+            65
+
+        BusStopDown ->
+            66
+
+        BusStopLeft ->
+            67
+
+        BusStopRight ->
+            68
+
+        BusStopUp ->
+            69
+
+        Hospital ->
+            70
+
+        Statue ->
+            71
+
+        HedgeRowDown ->
+            72
+
+        HedgeRowLeft ->
+            73
+
+        HedgeRowRight ->
+            74
+
+        HedgeRowUp ->
+            75
+
+        HedgeCornerDownLeft ->
+            76
+
+        HedgeCornerDownRight ->
+            77
+
+        HedgeCornerUpLeft ->
+            78
+
+        HedgeCornerUpRight ->
+            79
+
+        HedgePillarDownLeft ->
+            80
+
+        HedgePillarDownRight ->
+            81
+
+        HedgePillarUpLeft ->
+            82
+
+        HedgePillarUpRight ->
+            83
+
+        ApartmentDown ->
+            84
+
+        ApartmentLeft ->
+            85
+
+        ApartmentRight ->
+            86
+
+        ApartmentUp ->
+            87
+
+        RockDown ->
+            88
+
+        RockLeft ->
+            89
+
+        RockRight ->
+            90
+
+        RockUp ->
+            91
+
+        Flowers1 ->
+            92
+
+        Flowers2 ->
+            93
+
+        ElmTree ->
+            94
+
+        DirtPathHorizontal ->
+            95
+
+        DirtPathVertical ->
+            96
+
+        Hyperlink ->
+            97
+
+        BenchDown ->
+            98
+
+        BenchLeft ->
+            99
+
+        BenchUp ->
+            100
+
+        BenchRight ->
+            101
+
+        ParkingDown ->
+            102
+
+        ParkingLeft ->
+            103
+
+        ParkingUp ->
+            104
+
+        ParkingRight ->
+            105
+
+        ParkingRoad ->
+            106
+
+        ParkingRoundabout ->
+            107
+
+        CornerHouseUpLeft ->
+            108
+
+        CornerHouseUpRight ->
+            109
+
+        CornerHouseDownLeft ->
+            110
+
+        CornerHouseDownRight ->
+            111
+
+        DogHouseDown ->
+            112
+
+        DogHouseRight ->
+            113
+
+        DogHouseUp ->
+            114
+
+        DogHouseLeft ->
+            115
+
+        Mushroom1 ->
+            116
+
+        Mushroom2 ->
+            117
+
+        TreeStump1 ->
+            118
+
+        TreeStump2 ->
+            119
+
+        Sunflowers ->
+            120
+
+        RailDeadEndLeft ->
+            121
+
+        RailDeadEndRight ->
+            122
+
+        RailStrafeLeftToRight_SplitUp ->
+            123
+
+        RailStrafeLeftToRight_SplitDown ->
+            124
+
+        RailStrafeRightToLeft_SplitUp ->
+            125
+
+        RailStrafeRightToLeft_SplitDown ->
+            126
+
+        RailStrafeTopToBottom_SplitLeft ->
+            127
+
+        RailStrafeTopToBottom_SplitRight ->
+            128
+
+        RailStrafeBottomToTop_SplitLeft ->
+            129
+
+        RailStrafeBottomToTop_SplitRight ->
+            130
+
+        RoadManholeDown ->
+            131
+
+        RoadManholeLeft ->
+            132
+
+        RoadManholeUp ->
+            133
+
+        RoadManholeRight ->
+            134
+
+        BigText char ->
+            maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
+
+
+fromInt : Int -> Tile
+fromInt int =
+    case int of
+        0 ->
+            EmptyTile
+
+        1 ->
+            HouseDown
+
+        2 ->
+            HouseRight
+
+        3 ->
+            HouseUp
+
+        4 ->
+            HouseLeft
+
+        5 ->
+            RailHorizontal
+
+        6 ->
+            RailVertical
+
+        7 ->
+            RailBottomToRight
+
+        8 ->
+            RailBottomToLeft
+
+        9 ->
+            RailTopToRight
+
+        10 ->
+            RailTopToLeft
+
+        11 ->
+            RailBottomToRightLarge
+
+        12 ->
+            RailBottomToLeftLarge
+
+        13 ->
+            RailTopToRightLarge
+
+        14 ->
+            RailTopToLeftLarge
+
+        15 ->
+            RailCrossing
+
+        16 ->
+            RailStrafeDown
+
+        17 ->
+            RailStrafeUp
+
+        18 ->
+            RailStrafeLeft
+
+        19 ->
+            RailStrafeRight
+
+        20 ->
+            TrainHouseRight
+
+        21 ->
+            TrainHouseLeft
+
+        22 ->
+            RailStrafeDownSmall
+
+        23 ->
+            RailStrafeUpSmall
+
+        24 ->
+            RailStrafeLeftSmall
+
+        25 ->
+            RailStrafeRightSmall
+
+        26 ->
+            Sidewalk
+
+        27 ->
+            SidewalkHorizontalRailCrossing
+
+        28 ->
+            SidewalkVerticalRailCrossing
+
+        29 ->
+            RailBottomToRight_SplitLeft
+
+        30 ->
+            RailBottomToLeft_SplitUp
+
+        31 ->
+            RailTopToRight_SplitDown
+
+        32 ->
+            RailTopToLeft_SplitRight
+
+        33 ->
+            RailBottomToRight_SplitUp
+
+        34 ->
+            RailBottomToLeft_SplitRight
+
+        35 ->
+            RailTopToRight_SplitLeft
+
+        36 ->
+            RailTopToLeft_SplitDown
+
+        37 ->
+            PostOffice
+
+        38 ->
+            PineTree1
+
+        39 ->
+            PineTree2
+
+        40 ->
+            BigPineTree
+
+        41 ->
+            LogCabinDown
+
+        42 ->
+            LogCabinRight
+
+        43 ->
+            LogCabinUp
+
+        44 ->
+            LogCabinLeft
+
+        45 ->
+            RoadHorizontal
+
+        46 ->
+            RoadVertical
+
+        47 ->
+            RoadBottomToLeft
+
+        48 ->
+            RoadTopToLeft
+
+        49 ->
+            RoadTopToRight
+
+        50 ->
+            RoadBottomToRight
+
+        51 ->
+            Road4Way
+
+        52 ->
+            RoadSidewalkCrossingHorizontal
+
+        53 ->
+            RoadSidewalkCrossingVertical
+
+        54 ->
+            Road3WayDown
+
+        55 ->
+            Road3WayLeft
+
+        56 ->
+            Road3WayUp
+
+        57 ->
+            Road3WayRight
+
+        58 ->
+            RoadRailCrossingHorizontal
+
+        59 ->
+            RoadRailCrossingVertical
+
+        60 ->
+            FenceHorizontal
+
+        61 ->
+            FenceVertical
+
+        62 ->
+            FenceDiagonal
+
+        63 ->
+            FenceAntidiagonal
+
+        64 ->
+            RoadDeadendUp
+
+        65 ->
+            RoadDeadendDown
+
+        66 ->
+            BusStopDown
+
+        67 ->
+            BusStopLeft
+
+        68 ->
+            BusStopRight
+
+        69 ->
+            BusStopUp
+
+        70 ->
+            Hospital
+
+        71 ->
+            Statue
+
+        72 ->
+            HedgeRowDown
+
+        73 ->
+            HedgeRowLeft
+
+        74 ->
+            HedgeRowRight
+
+        75 ->
+            HedgeRowUp
+
+        76 ->
+            HedgeCornerDownLeft
+
+        77 ->
+            HedgeCornerDownRight
+
+        78 ->
+            HedgeCornerUpLeft
+
+        79 ->
+            HedgeCornerUpRight
+
+        80 ->
+            HedgePillarDownLeft
+
+        81 ->
+            HedgePillarDownRight
+
+        82 ->
+            HedgePillarUpLeft
+
+        83 ->
+            HedgePillarUpRight
+
+        84 ->
+            ApartmentDown
+
+        85 ->
+            ApartmentLeft
+
+        86 ->
+            ApartmentRight
+
+        87 ->
+            ApartmentUp
+
+        88 ->
+            RockDown
+
+        89 ->
+            RockLeft
+
+        90 ->
+            RockRight
+
+        91 ->
+            RockUp
+
+        92 ->
+            Flowers1
+
+        93 ->
+            Flowers2
+
+        94 ->
+            ElmTree
+
+        95 ->
+            DirtPathHorizontal
+
+        96 ->
+            DirtPathVertical
+
+        97 ->
+            Hyperlink
+
+        98 ->
+            BenchDown
+
+        99 ->
+            BenchLeft
+
+        100 ->
+            BenchUp
+
+        101 ->
+            BenchRight
+
+        102 ->
+            ParkingDown
+
+        103 ->
+            ParkingLeft
+
+        104 ->
+            ParkingUp
+
+        105 ->
+            ParkingRight
+
+        106 ->
+            ParkingRoad
+
+        107 ->
+            ParkingRoundabout
+
+        108 ->
+            CornerHouseUpLeft
+
+        109 ->
+            CornerHouseUpRight
+
+        110 ->
+            CornerHouseDownLeft
+
+        111 ->
+            CornerHouseDownRight
+
+        112 ->
+            DogHouseDown
+
+        113 ->
+            DogHouseRight
+
+        114 ->
+            DogHouseUp
+
+        115 ->
+            DogHouseLeft
+
+        116 ->
+            Mushroom1
+
+        117 ->
+            Mushroom2
+
+        118 ->
+            TreeStump1
+
+        119 ->
+            TreeStump2
+
+        120 ->
+            Sunflowers
+
+        121 ->
+            RailDeadEndLeft
+
+        122 ->
+            RailDeadEndRight
+
+        123 ->
+            RailStrafeLeftToRight_SplitUp
+
+        124 ->
+            RailStrafeLeftToRight_SplitDown
+
+        125 ->
+            RailStrafeRightToLeft_SplitUp
+
+        126 ->
+            RailStrafeRightToLeft_SplitDown
+
+        127 ->
+            RailStrafeTopToBottom_SplitLeft
+
+        128 ->
+            RailStrafeTopToBottom_SplitRight
+
+        129 ->
+            RailStrafeBottomToTop_SplitLeft
+
+        130 ->
+            RailStrafeBottomToTop_SplitRight
+
+        131 ->
+            RoadManholeDown
+
+        132 ->
+            RoadManholeLeft
+
+        133 ->
+            RoadManholeUp
+
+        134 ->
+            RoadManholeRight
+
+        _ ->
+            --maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
+            case Array.get (maxTileValue - int) Sprite.intToChar of
+                Just char ->
+                    BigText char
+
+                Nothing ->
+                    BigText '?'
+
+
+maxTileValue =
+    (2 ^ 16) - 1
