@@ -1,20 +1,26 @@
 module Tests exposing (..)
 
 import Animal exposing (AnimalType(..))
+import Backend
 import BoundingBox2d
 import Color
 import Coord
+import Cursor
+import Dict
 import Effect.Time
 import Expect exposing (Expectation)
 import Grid exposing (IntersectionType(..))
 import GridCell exposing (FrontendHistory)
 import Id
+import IdDict
 import Point2d
 import Quantity exposing (Quantity(..))
 import Set
 import Test exposing (Test, describe, test)
 import Tile exposing (Tile(..))
+import TileCountBot
 import Train exposing (Train(..))
+import Types exposing (BackendUserType(..))
 import Units
 import Vector2d
 
@@ -178,19 +184,179 @@ tests =
                         (\tile ->
                             let
                                 int =
-                                    GridCell.tileToInt tile
+                                    Tile.toInt tile
                             in
-                            GridCell.tileFromInt int == tile
+                            Tile.fromInt int == tile
                         )
                     |> Expect.equal True
         , test "Tiles all have unique ints" <|
             \_ ->
-                List.map GridCell.tileToInt Tile.allTiles
+                List.map Tile.toInt Tile.allTiles
                     |> Set.fromList
                     |> Set.size
                     |> Expect.equal (List.length Tile.allTiles)
+        , test "Undo bot change" <|
+            \_ ->
+                let
+                    ( backendModel, userId ) =
+                        (Backend.app_ False).init
+                            |> Tuple.first
+                            |> Backend.createBotUser TileCountBot.name
+                in
+                case IdDict.get userId backendModel.users of
+                    Just user ->
+                        Backend.localAddUndo backendModel userId user
+                            |> (\( a, _, _ ) -> a)
+                            |> (\model ->
+                                    case IdDict.get userId model.users of
+                                        Just user2 ->
+                                            Backend.localGridChange
+                                                (time 0)
+                                                model
+                                                { position = Coord.xy 1 0
+                                                , change = LogCabinDown
+                                                , colors = { primaryColor = Color.black, secondaryColor = Color.black }
+                                                , time = time 0
+                                                }
+                                                userId
+                                                user2
+                                                |> (\( a, _, _ ) -> a)
+                                                |> (\model2 ->
+                                                        case IdDict.get userId model2.users of
+                                                            Just user3 ->
+                                                                Backend.localUndo model2 userId user3
+                                                                    |> (\( a, _, _ ) ->
+                                                                            Grid.getCell (Coord.xy 0 0) a.grid |> Maybe.map GridCell.flatten
+                                                                       )
+                                                                    |> Expect.equal (Just [])
+
+                                                            Nothing ->
+                                                                Expect.fail "User not found 3"
+                                                   )
+
+                                        Nothing ->
+                                            Expect.fail "User not found 2"
+                               )
+
+                    Nothing ->
+                        Expect.fail "User not found"
         ]
 
 
 time seconds =
     Effect.Time.millisToPosix ((seconds * 1000) + 10000000)
+
+
+
+--abc =
+--    { animals = Dict.fromList []
+--    , errors = []
+--    , grid =
+--        Grid
+--            (Dict.fromList
+--                [ ( ( -1, -1 )
+--                  , Cell
+--                        { cache = []
+--                        , history = BackendDecoded [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }, position = ( Quantity 17, Quantity 16 ), tile = LogCabinDown, time = Posix 10000000, userId = Id 1 } ]
+--                        , railSplitToggled = Set (D [])
+--                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
+--                        }
+--                  )
+--                , ( ( -1, 0 )
+--                  , Cell
+--                        { cache = []
+--                        , history = BackendDecoded [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }, position = ( Quantity 17, Quantity 0 ), tile = LogCabinDown, time = Posix 10000000, userId = Id 1 } ]
+--                        , railSplitToggled = Set (D [])
+--                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
+--                        }
+--                  )
+--                , ( ( 0, -1 )
+--                  , Cell
+--                        { cache = []
+--                        , history = BackendDecoded [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }, position = ( Quantity 1, Quantity 16 ), tile = LogCabinDown, time = Posix 10000000, userId = Id 1 } ]
+--                        , railSplitToggled = Set (D [])
+--                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
+--                        }
+--                  )
+--                , ( ( 0, 0 )
+--                  , Cell
+--                        { cache =
+--                            [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }
+--                              , position = ( Quantity 1, Quantity 0 )
+--                              , tile = LogCabinDown
+--                              , time = Posix 10000000
+--                              , userId = Id 1
+--                              }
+--                            ]
+--                        , history =
+--                            BackendDecoded
+--                                [ { colors =
+--                                        { primaryColor =
+--                                            Color
+--                                                0
+--                                        , secondaryColor = Color 0
+--                                        }
+--                                  , position = ( Quantity 1, Quantity 0 )
+--                                  , tile = LogCabinDown
+--                                  , time = Posix 10000000
+--                                  , userId = Id 1
+--                                  }
+--                                ]
+--                        , railSplitToggled = Set (D [])
+--                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
+--                        }
+--                  )
+--                ]
+--            )
+--    , invites = D []
+--    , isGridReadOnly = False
+--    , lastCacheRegeneration = Nothing
+--    , lastReportEmailToAdmin = Nothing
+--    , lastWorldUpdate = Nothing
+--    , lastWorldUpdateTrains = Dict.fromList []
+--    , mail = Dict.fromList []
+--    , pendingLoginTokens = D []
+--    , people = Dict.fromList []
+--    , reported = Dict.fromList []
+--    , secretLinkCounter = 0
+--    , tileCountBot = Nothing
+--    , trains = Dict.fromList []
+--    , trainsAndAnimalsDisabled = TrainsAndAnimalsEnabled
+--    , userSessions = Dict.fromList []
+--    , users =
+--        Dict.fromList
+--            [ ( 0
+--              , { cursor = Nothing
+--                , handColor =
+--                    { primaryColor = Color 12500665
+--                    , secondaryColor =
+--                        Color 108
+--                            55840
+--                    }
+--                , mailDrafts = Dict.fromList []
+--                , name = DisplayName (NonemptyString 'U' "nnamed")
+--                , redoHistory = []
+--                , undoCurrent = Dict.fromList []
+--                , undoHistory = []
+--                , userType =
+--                    HumanUser
+--                        { acceptedInvites = Dict.fromList []
+--                        , allowEmailNotifications = True
+--                        , emailAddress =
+--                            EmailAddress
+--                                { domain = "a"
+--                                , localPart = "a"
+--                                , tags =
+--                                    []
+--                                , tld = [ "se" ]
+--                                }
+--                        , notificationsClearedAt = Posix 0
+--                        , showNotifications = False
+--                        , tileHotkeys = D []
+--                        , timeOfDay = Automatic
+--                        }
+--                }
+--              )
+--            ]
+--    , worldUpdateDurations = Array.fromList []
+--    }

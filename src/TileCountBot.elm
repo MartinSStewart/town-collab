@@ -113,8 +113,8 @@ textColor =
     { primaryColor = Color.black, secondaryColor = Color.black }
 
 
-drawHighscore : Effect.Time.Posix -> Model -> Nonempty LocalChange
-drawHighscore time model =
+drawHighscore : Bool -> Effect.Time.Posix -> Model -> Nonempty LocalChange
+drawHighscore isFirstDraw time model =
     let
         newChanges : List LocalChange
         newChanges =
@@ -158,10 +158,14 @@ drawHighscore time model =
                                 ++ state.changes
                         }
                     )
-                    { y = Coord.yRaw position, changes = [ Change.LocalAddUndo ] }
+                    { y = Coord.yRaw position, changes = [] }
                 |> .changes
     in
-    Nonempty Change.LocalUndo newChanges
+    if isFirstDraw then
+        Nonempty Change.LocalAddUndo newChanges
+
+    else
+        Nonempty Change.LocalUndo (Change.LocalAddUndo :: newChanges)
 
 
 position : Coord WorldUnit

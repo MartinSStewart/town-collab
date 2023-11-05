@@ -1,4 +1,4 @@
-module Backend exposing (app, app_)
+module Backend exposing (app, app_, createBotUser, localAddUndo, localGridChange, localUndo)
 
 import Angle
 import Animal exposing (Animal)
@@ -365,9 +365,6 @@ update isProduction msg model =
             case model.tileCountBot of
                 Just tileCountBot ->
                     let
-                        _ =
-                            Debug.log "a" (Dict.size tileCountBot.changedCells)
-
                         tileCountBot2 : TileCountBot.Model
                         tileCountBot2 =
                             { tileCountBot
@@ -381,14 +378,14 @@ update isProduction msg model =
                                                             GridCell.flatten cell
 
                                                         Nothing ->
-                                                            []
+                                                            Debug.log "b" []
                                             in
                                             AssocList.merge
                                                 (\tileGroup count tileUsage2 ->
                                                     AssocList.update
                                                         tileGroup
                                                         (\maybe ->
-                                                            Maybe.withDefault 0 maybe |> (+) count |> Just
+                                                            Maybe.withDefault 0 maybe |> (+) -count |> Debug.log "d" |> Just
                                                         )
                                                         tileUsage2
                                                 )
@@ -397,7 +394,7 @@ update isProduction msg model =
                                                         tileGroup
                                                         (\maybe ->
                                                             Maybe.withDefault 0 maybe
-                                                                |> (+) (newCount - oldCount)
+                                                                |> (+) (newCount - oldCount |> Debug.log "a")
                                                                 |> Just
                                                         )
                                                         tileUsage2
@@ -406,7 +403,7 @@ update isProduction msg model =
                                                     AssocList.update
                                                         tileGroup
                                                         (\maybe ->
-                                                            Maybe.withDefault 0 maybe |> (+) -count |> Just
+                                                            Maybe.withDefault 0 maybe |> (+) count |> Just
                                                         )
                                                         tileUsage2
                                                 )
@@ -431,8 +428,7 @@ update isProduction msg model =
                         broadcastBotLocalChange
                             tileCountBot2.userId
                             time
-                            (Nonempty Change.LocalUndo [])
-                            --(TileCountBot.drawHighscore time tileCountBot2)
+                            (TileCountBot.drawHighscore False time tileCountBot2)
                             { model2 | tileCountBot = Just tileCountBot2 }
 
                 Nothing ->
@@ -446,7 +442,7 @@ update isProduction msg model =
                     broadcastBotLocalChange
                         botId
                         time
-                        (TileCountBot.drawHighscore time bot)
+                        (TileCountBot.drawHighscore True time bot)
                         { model2 | tileCountBot = Just bot }
 
 
@@ -859,21 +855,23 @@ broadcastBotLocalChange userId time changes model =
                     Nonempty.tail changes
                         |> List.foldl
                             (\change ( model_, serverChanges_ ) ->
-                                let
-                                    ( newModel, _, serverChange_ ) =
-                                        updateLocalChangeBot userId user time change model_
-                                in
-                                ( newModel
-                                , Nonempty.cons serverChange_ serverChanges_
-                                )
+                                case IdDict.get userId model_.users of
+                                    Just user2 ->
+                                        let
+                                            ( newModel, _, serverChange_ ) =
+                                                updateLocalChangeBot userId user2 time change model_
+                                        in
+                                        ( newModel
+                                        , Nonempty.cons serverChange_ serverChanges_
+                                        )
+
+                                    Nothing ->
+                                        ( model_, serverChanges_ )
                             )
                             ( model2
                             , Nonempty.singleton firstMsg
                             )
                         |> (\( a, c ) -> ( a, Nonempty.reverse c ))
-
-                _ =
-                    Debug.log "bot" (IdDict.get userId model3.users)
             in
             ( model3
             , broadcast
@@ -1462,20 +1460,12 @@ updateLocalChangeBot :
 updateLocalChangeBot userId user time change model =
     case change of
         Change.LocalUndo ->
-            let
-                _ =
-                    Debug.log "undo" ()
-            in
             localUndo model userId user
 
         Change.LocalGridChange localChange ->
             localGridChange time model localChange userId user
 
         Change.LocalAddUndo ->
-            let
-                _ =
-                    Debug.log "add undo" ()
-            in
             localAddUndo model userId user
 
         _ ->
