@@ -11,7 +11,7 @@ import Crypto.Hash
 import Cursor
 import Dict
 import Direction2d
-import DisplayName
+import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Command as Command exposing (BackendOnly, Command)
 import Effect.Http
@@ -43,7 +43,7 @@ import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import Set
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (RailPathType(..))
-import TileUsageBot
+import TileCountBot
 import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
 import Types exposing (..)
@@ -107,18 +107,16 @@ subscriptions model =
             )
             WorldUpdateTimeElapsed
         , Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
+        , Effect.Time.every (Duration.seconds 3) TileCountBotUpdate
         ]
 
 
 init : ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 init =
     let
-        grid =
-            Grid.empty
-
         model : BackendModel
         model =
-            { grid = grid
+            { grid = Grid.empty
             , userSessions = Dict.empty
             , users = IdDict.empty
             , secretLinkCounter = 0
@@ -137,18 +135,17 @@ init =
             , trainsAndAnimalsDisabled = TrainsAndAnimalsEnabled
             , lastReportEmailToAdmin = Nothing
             , worldUpdateDurations = Array.empty
-            , tileUsageBot = TileUsageBot.init grid
+            , tileCountBot = Nothing
             }
     in
     ( case Env.adminEmail of
         Just adminEmail ->
-            createUser adminId adminEmail model
+            createHumanUser adminId adminEmail model
                 |> Tuple.first
 
         Nothing ->
             model
     , Command.none
-      --broadcastLocalChange False (Effect.Time.millisToPosix 0) (Effect.Lamdera.sessionIdFromString "")
     )
 
 
@@ -363,6 +360,94 @@ update isProduction msg model =
 
                 Err error ->
                     ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
+
+        TileCountBotUpdate time ->
+            case model.tileCountBot of
+                Just tileCountBot ->
+                    let
+                        _ =
+                            Debug.log "a" (Dict.size tileCountBot.changedCells)
+
+                        tileCountBot2 : TileCountBot.Model
+                        tileCountBot2 =
+                            { tileCountBot
+                                | tileUsage =
+                                    Dict.foldl
+                                        (\coord oldFlattenedCell tileUsage ->
+                                            let
+                                                newFlattenedCell =
+                                                    case Grid.getCell (Coord.tuple coord) model.grid of
+                                                        Just cell ->
+                                                            GridCell.flatten cell
+
+                                                        Nothing ->
+                                                            []
+                                            in
+                                            AssocList.merge
+                                                (\tileGroup count tileUsage2 ->
+                                                    AssocList.update
+                                                        tileGroup
+                                                        (\maybe ->
+                                                            Maybe.withDefault 0 maybe |> (+) count |> Just
+                                                        )
+                                                        tileUsage2
+                                                )
+                                                (\tileGroup oldCount newCount tileUsage2 ->
+                                                    AssocList.update
+                                                        tileGroup
+                                                        (\maybe ->
+                                                            Maybe.withDefault 0 maybe
+                                                                |> (+) (newCount - oldCount)
+                                                                |> Just
+                                                        )
+                                                        tileUsage2
+                                                )
+                                                (\tileGroup count tileUsage2 ->
+                                                    AssocList.update
+                                                        tileGroup
+                                                        (\maybe ->
+                                                            Maybe.withDefault 0 maybe |> (+) -count |> Just
+                                                        )
+                                                        tileUsage2
+                                                )
+                                                (TileCountBot.countCellsHelper AssocList.empty oldFlattenedCell)
+                                                (TileCountBot.countCellsHelper AssocList.empty newFlattenedCell)
+                                                tileUsage
+                                        )
+                                        tileCountBot.tileUsage
+                                        tileCountBot.changedCells
+                                , changedCells = Dict.empty
+                            }
+
+                        model2 =
+                            { model
+                                | tileCountBot = Just tileCountBot2
+                            }
+                    in
+                    if Dict.isEmpty tileCountBot.changedCells then
+                        ( model, Command.none )
+
+                    else
+                        broadcastBotLocalChange
+                            tileCountBot2.userId
+                            time
+                            (Nonempty Change.LocalUndo [])
+                            --(TileCountBot.drawHighscore time tileCountBot2)
+                            { model2 | tileCountBot = Just tileCountBot2 }
+
+                Nothing ->
+                    let
+                        ( model2, botId ) =
+                            createBotUser TileCountBot.name model
+
+                        bot =
+                            TileCountBot.init botId model2.grid
+                    in
+                    broadcastBotLocalChange
+                        botId
+                        time
+                        (TileCountBot.drawHighscore time bot)
+                        { model2 | tileCountBot = Just bot }
 
 
 handleWorldUpdate : Bool -> Effect.Time.Posix -> Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
@@ -757,6 +842,84 @@ localChangeStatusToLocalChange eventId originalChange localChangeStatus =
         )
 
 
+broadcastBotLocalChange :
+    Id UserId
+    -> Effect.Time.Posix
+    -> Nonempty Change.LocalChange
+    -> BackendModel
+    -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+broadcastBotLocalChange userId time changes model =
+    case IdDict.get userId model.users of
+        Just user ->
+            let
+                ( model2, _, firstMsg ) =
+                    updateLocalChangeBot userId user time (Nonempty.head changes) model
+
+                ( model3, serverChanges ) =
+                    Nonempty.tail changes
+                        |> List.foldl
+                            (\change ( model_, serverChanges_ ) ->
+                                let
+                                    ( newModel, _, serverChange_ ) =
+                                        updateLocalChangeBot userId user time change model_
+                                in
+                                ( newModel
+                                , Nonempty.cons serverChange_ serverChanges_
+                                )
+                            )
+                            ( model2
+                            , Nonempty.singleton firstMsg
+                            )
+                        |> (\( a, c ) -> ( a, Nonempty.reverse c ))
+
+                _ =
+                    Debug.log "bot" (IdDict.get userId model3.users)
+            in
+            ( model3
+            , broadcast
+                (\sessionId_ _ ->
+                    Nonempty.toList serverChanges
+                        |> List.filterMap
+                            (\broadcastTo ->
+                                case broadcastTo of
+                                    BroadcastToEveryoneElse serverChange ->
+                                        Change.ServerChange serverChange |> Just
+
+                                    BroadcastToAdmin serverChange ->
+                                        case getUserFromSessionId sessionId_ model of
+                                            Just ( userId2, _ ) ->
+                                                if userId2 == adminId then
+                                                    Change.ServerChange serverChange |> Just
+
+                                                else
+                                                    Nothing
+
+                                            Nothing ->
+                                                Nothing
+
+                                    BroadcastToNoOne ->
+                                        Nothing
+
+                                    BroadcastToRestOfSessionAndEveryoneElse sessionId2 restOfSession everyoneElse ->
+                                        (if sessionId_ == sessionId2 then
+                                            restOfSession
+
+                                         else
+                                            everyoneElse
+                                        )
+                                            |> Change.ServerChange
+                                            |> Just
+                            )
+                        |> Nonempty.fromList
+                        |> Maybe.map ChangeBroadcast
+                )
+                model3
+            )
+
+        Nothing ->
+            ( model, Command.none )
+
+
 broadcastLocalChange :
     Bool
     -> Effect.Time.Posix
@@ -1129,6 +1292,196 @@ type LocalChangeStatus
     | NewLocalChange LocalChange
 
 
+localGridChange :
+    Effect.Time.Posix
+    -> BackendModel
+    -> Grid.LocalGridChange
+    -> Id UserId
+    -> BackendUserData
+    -> ( BackendModel, LocalChangeStatus, BroadcastTo )
+localGridChange time model localChange userId user =
+    if model.isGridReadOnly then
+        ( model, InvalidChange, BroadcastToNoOne )
+
+    else
+        let
+            localChange2 : Grid.LocalGridChange
+            localChange2 =
+                { position = localChange.position
+                , change = localChange.change
+                , colors = localChange.colors
+                , time = time
+                }
+
+            ( cellPosition, localPosition ) =
+                Grid.worldToCellAndLocalCoord localChange2.position
+
+            maybeTrain : Maybe ( Id TrainId, Train )
+            maybeTrain =
+                if IdDict.size model.trains < 50 then
+                    Train.handleAddingTrain model.trains userId localChange2.change localChange2.position
+
+                else
+                    Nothing
+
+            { removed, newCells } =
+                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
+
+            nextCowId =
+                IdDict.nextId model.animals |> Id.toInt
+
+            newAnimals : List ( Id AnimalId, Animal )
+            newAnimals =
+                List.concatMap LocalGrid.getCowsForCell newCells
+                    |> List.indexedMap (\index cow -> ( Id.fromInt (nextCowId + index), cow ))
+        in
+        case Train.canRemoveTiles time removed model.trains of
+            Ok trainsToRemove ->
+                ( List.map Tuple.first trainsToRemove
+                    |> List.foldl
+                        removeTrain
+                        { model
+                            | grid =
+                                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
+                                    |> .grid
+                            , trains =
+                                case maybeTrain of
+                                    Just ( trainId, train ) ->
+                                        IdDict.insert trainId train model.trains
+
+                                    Nothing ->
+                                        model.trains
+                            , animals =
+                                IdDict.union
+                                    (LocalGrid.updateAnimalMovement localChange model.animals)
+                                    (IdDict.fromList newAnimals)
+                            , tileCountBot =
+                                case model.tileCountBot of
+                                    Just tileCountBot ->
+                                        TileCountBot.onGridChanged localChange model.grid tileCountBot |> Just
+
+                                    Nothing ->
+                                        Nothing
+                        }
+                    |> updateUser
+                        userId
+                        (always
+                            { user
+                                | undoCurrent =
+                                    LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
+                            }
+                        )
+                , Change.LocalGridChange localChange2 |> NewLocalChange
+                , ServerGridChange
+                    { gridChange = Grid.localChangeToChange userId localChange2
+                    , newCells = newCells
+                    , newAnimals = newAnimals
+                    }
+                    |> BroadcastToEveryoneElse
+                )
+
+            Err _ ->
+                ( model, InvalidChange, BroadcastToNoOne )
+
+
+localUndo : BackendModel -> Id UserId -> BackendUserData -> ( BackendModel, LocalChangeStatus, BroadcastTo )
+localUndo model userId user =
+    case ( model.isGridReadOnly, Undo.undo user ) of
+        ( False, Just newUser ) ->
+            let
+                undoMoveAmount : Dict.Dict RawCellCoord Int
+                undoMoveAmount =
+                    Dict.map (\_ a -> -a) user.undoCurrent
+
+                newGrid : Grid BackendHistory
+                newGrid =
+                    Grid.moveUndoPointBackend userId undoMoveAmount model.grid
+
+                trainsToRemove : List (Id TrainId)
+                trainsToRemove =
+                    IdDict.toList model.trains
+                        |> List.filterMap
+                            (\( trainId, train ) ->
+                                if Train.owner train == userId then
+                                    case
+                                        Grid.getTile
+                                            -- Add an offset since the top of the train home isn't collidable
+                                            (Train.home train |> Coord.plus (Coord.xy 1 1))
+                                            newGrid
+                                    of
+                                        Just tile ->
+                                            case
+                                                ( Tile.getData tile.tile |> .railPath
+                                                , tile.position == Train.home train
+                                                , tile.userId == userId
+                                                )
+                                            of
+                                                ( SingleRailPath path, True, True ) ->
+                                                    if Train.homePath train == path then
+                                                        Nothing
+
+                                                    else
+                                                        Just trainId
+
+                                                _ ->
+                                                    Just trainId
+
+                                        Nothing ->
+                                            Just trainId
+
+                                else
+                                    Nothing
+                            )
+            in
+            ( List.foldl removeTrain { model | grid = newGrid } trainsToRemove
+                |> updateUser userId (always newUser)
+            , OriginalChange
+            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
+            )
+
+        _ ->
+            ( model, InvalidChange, BroadcastToNoOne )
+
+
+localAddUndo : BackendModel -> Id UserId -> BackendUserData -> ( BackendModel, LocalChangeStatus, BroadcastTo )
+localAddUndo model userId _ =
+    if model.isGridReadOnly then
+        ( model, InvalidChange, BroadcastToNoOne )
+
+    else
+        ( updateUser userId Undo.add model, OriginalChange, BroadcastToNoOne )
+
+
+updateLocalChangeBot :
+    Id UserId
+    -> BackendUserData
+    -> Effect.Time.Posix
+    -> LocalChange
+    -> BackendModel
+    -> ( BackendModel, LocalChangeStatus, BroadcastTo )
+updateLocalChangeBot userId user time change model =
+    case change of
+        Change.LocalUndo ->
+            let
+                _ =
+                    Debug.log "undo" ()
+            in
+            localUndo model userId user
+
+        Change.LocalGridChange localChange ->
+            localGridChange time model localChange userId user
+
+        Change.LocalAddUndo ->
+            let
+                _ =
+                    Debug.log "add undo" ()
+            in
+            localAddUndo model userId user
+
+        _ ->
+            ( model, InvalidChange, BroadcastToNoOne )
+
+
 updateLocalChange :
     SessionId
     -> ClientId
@@ -1151,144 +1504,10 @@ updateLocalChange sessionId clientId time change model =
     in
     case change of
         Change.LocalUndo ->
-            asUser2
-                (\userId user ->
-                    case ( model.isGridReadOnly, Undo.undo user ) of
-                        ( False, Just newUser ) ->
-                            let
-                                undoMoveAmount : Dict.Dict RawCellCoord Int
-                                undoMoveAmount =
-                                    Dict.map (\_ a -> -a) user.undoCurrent
-
-                                newGrid : Grid BackendHistory
-                                newGrid =
-                                    Grid.moveUndoPointBackend userId undoMoveAmount model.grid
-
-                                trainsToRemove : List (Id TrainId)
-                                trainsToRemove =
-                                    IdDict.toList model.trains
-                                        |> List.filterMap
-                                            (\( trainId, train ) ->
-                                                if Train.owner train == userId then
-                                                    case
-                                                        Grid.getTile
-                                                            -- Add an offset since the top of the train home isn't collidable
-                                                            (Train.home train |> Coord.plus (Coord.xy 1 1))
-                                                            newGrid
-                                                    of
-                                                        Just tile ->
-                                                            case
-                                                                ( Tile.getData tile.tile |> .railPath
-                                                                , tile.position == Train.home train
-                                                                , tile.userId == userId
-                                                                )
-                                                            of
-                                                                ( SingleRailPath path, True, True ) ->
-                                                                    if Train.homePath train == path then
-                                                                        Nothing
-
-                                                                    else
-                                                                        Just trainId
-
-                                                                _ ->
-                                                                    Just trainId
-
-                                                        Nothing ->
-                                                            Just trainId
-
-                                                else
-                                                    Nothing
-                                            )
-                            in
-                            ( List.foldl removeTrain { model | grid = newGrid } trainsToRemove
-                                |> updateUser userId (always newUser)
-                            , OriginalChange
-                            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
-                            )
-
-                        _ ->
-                            ( model, InvalidChange, BroadcastToNoOne )
-                )
+            asUser2 (localUndo model)
 
         Change.LocalGridChange localChange ->
-            asUser2
-                (\userId user ->
-                    if model.isGridReadOnly then
-                        ( model, InvalidChange, BroadcastToNoOne )
-
-                    else
-                        let
-                            localChange2 : Grid.LocalGridChange
-                            localChange2 =
-                                { position = localChange.position
-                                , change = localChange.change
-                                , colors = localChange.colors
-                                , time = time
-                                }
-
-                            ( cellPosition, localPosition ) =
-                                Grid.worldToCellAndLocalCoord localChange2.position
-
-                            maybeTrain : Maybe ( Id TrainId, Train )
-                            maybeTrain =
-                                if IdDict.size model.trains < 50 then
-                                    Train.handleAddingTrain model.trains userId localChange2.change localChange2.position
-
-                                else
-                                    Nothing
-
-                            { removed, newCells } =
-                                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
-
-                            nextCowId =
-                                IdDict.nextId model.animals |> Id.toInt
-
-                            newAnimals : List ( Id AnimalId, Animal )
-                            newAnimals =
-                                List.concatMap LocalGrid.getCowsForCell newCells
-                                    |> List.indexedMap (\index cow -> ( Id.fromInt (nextCowId + index), cow ))
-                        in
-                        case Train.canRemoveTiles time removed model.trains of
-                            Ok trainsToRemove ->
-                                ( List.map Tuple.first trainsToRemove
-                                    |> List.foldl
-                                        removeTrain
-                                        { model
-                                            | grid =
-                                                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
-                                                    |> .grid
-                                            , trains =
-                                                case maybeTrain of
-                                                    Just ( trainId, train ) ->
-                                                        IdDict.insert trainId train model.trains
-
-                                                    Nothing ->
-                                                        model.trains
-                                            , animals =
-                                                IdDict.union
-                                                    (LocalGrid.updateAnimalMovement localChange model.animals)
-                                                    (IdDict.fromList newAnimals)
-                                        }
-                                    |> updateUser
-                                        userId
-                                        (always
-                                            { user
-                                                | undoCurrent =
-                                                    LocalGrid.incrementUndoCurrent cellPosition localPosition user.undoCurrent
-                                            }
-                                        )
-                                , Change.LocalGridChange localChange2 |> NewLocalChange
-                                , ServerGridChange
-                                    { gridChange = Grid.localChangeToChange userId localChange2
-                                    , newCells = newCells
-                                    , newAnimals = newAnimals
-                                    }
-                                    |> BroadcastToEveryoneElse
-                                )
-
-                            Err _ ->
-                                ( model, InvalidChange, BroadcastToNoOne )
-                )
+            asUser2 (localGridChange time model localChange)
 
         Change.LocalRedo ->
             asUser2
@@ -1312,14 +1531,7 @@ updateLocalChange sessionId clientId time change model =
                 )
 
         Change.LocalAddUndo ->
-            asUser2
-                (\userId _ ->
-                    if model.isGridReadOnly then
-                        ( model, InvalidChange, BroadcastToNoOne )
-
-                    else
-                        ( updateUser userId Undo.add model, OriginalChange, BroadcastToNoOne )
-                )
+            asUser2 (localAddUndo model)
 
         Change.InvalidChange ->
             ( model, OriginalChange, BroadcastToNoOne )
@@ -2080,7 +2292,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                     Train.nextId model.users
 
                                 ( model4, newUser ) =
-                                    createUser userId invite.invitedEmailAddress model
+                                    createHumanUser userId invite.invitedEmailAddress model
                             in
                             case newUser.userType of
                                 HumanUser humanUser ->
@@ -2186,11 +2398,13 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                         Nothing ->
                             { handColor = Cursor.defaultColors
                             , name = DisplayName.default
+                            , isBot = False
                             }
 
                 NotLoggedIn _ ->
                     { handColor = Cursor.defaultColors
                     , name = DisplayName.default
+                    , isBot = False
                     }
     in
     ( model3
@@ -2259,6 +2473,7 @@ backendUserToFrontend : BackendUserData -> FrontendUser
 backendUserToFrontend user =
     { name = user.name
     , handColor = user.handColor
+    , isBot = user.userType == BotUser
     }
 
 
@@ -2298,8 +2513,8 @@ addSession sessionId clientId viewBounds userStatus model =
     }
 
 
-createUser : Id UserId -> EmailAddress -> BackendModel -> ( BackendModel, BackendUserData )
-createUser userId emailAddress model =
+createHumanUser : Id UserId -> EmailAddress -> BackendModel -> ( BackendModel, BackendUserData )
+createHumanUser userId emailAddress model =
     let
         userBackendData : BackendUserData
         userBackendData =
@@ -2323,6 +2538,27 @@ createUser userId emailAddress model =
             }
     in
     ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )
+
+
+createBotUser : DisplayName -> BackendModel -> ( BackendModel, Id UserId )
+createBotUser name model =
+    let
+        userBackendData : BackendUserData
+        userBackendData =
+            { undoHistory = []
+            , redoHistory = []
+            , undoCurrent = Dict.empty
+            , mailDrafts = IdDict.empty
+            , cursor = Nothing
+            , handColor = Cursor.defaultColors
+            , name = name
+            , userType = BotUser
+            }
+
+        id =
+            Train.nextId model.users
+    in
+    ( { model | users = IdDict.insert id userBackendData model.users }, id )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Command BackendOnly ToFrontend BackendMsg

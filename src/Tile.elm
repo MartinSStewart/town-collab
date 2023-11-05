@@ -213,7 +213,8 @@ allTileGroups =
     , FlowersGroup
     , ElmTreeGroup
     , DirtPathGroup
-    , HyperlinkGroup
+
+    --, HyperlinkGroup
     , BenchGroup
     , ParkingLotGroup
     , ParkingRoadGroup

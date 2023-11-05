@@ -81,7 +81,7 @@ import Sound exposing (Sound)
 import Sprite exposing (Vertex)
 import TextInput
 import Tile exposing (Category, Tile, TileGroup)
-import TileUsageBot
+import TileCountBot
 import Time
 import TimeOfDay exposing (TimeOfDay)
 import Tool exposing (Tool)
@@ -381,7 +381,7 @@ type alias BackendModel =
     , trainsAndAnimalsDisabled : AreTrainsAndAnimalsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
-    , tileUsageBot : TileUsageBot.Model
+    , tileCountBot : Maybe TileCountBot.Model
     }
 
 
@@ -507,6 +507,7 @@ type BackendMsg
     | RegenerateCache Effect.Time.Posix
     | SentReportVandalismAdminEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | GotTimeAfterWorldUpdate Effect.Time.Posix Effect.Time.Posix
+    | TileCountBotUpdate Effect.Time.Posix
 
 
 type ToFrontend
