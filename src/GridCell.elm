@@ -13,6 +13,7 @@ module GridCell exposing
     , getToggledRailSplit
     , hasChangesBy
     , hasUserChanges
+    , history2
     , historyDecoder
     , latestChange
     , mapPixelData
@@ -653,3 +654,13 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                     cell
             )
             []
+
+
+history2 : Cell FrontendHistory -> List Value
+history2 (Cell cell) =
+    case cell.history of
+        FrontendDecoded list ->
+            list
+
+        FrontendEncoded bytes ->
+            Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []

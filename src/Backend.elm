@@ -372,20 +372,21 @@ update isProduction msg model =
                                     Dict.foldl
                                         (\coord oldFlattenedCell tileUsage ->
                                             let
+                                                newFlattenedCell : List GridCell.Value
                                                 newFlattenedCell =
                                                     case Grid.getCell (Coord.tuple coord) model.grid of
                                                         Just cell ->
                                                             GridCell.flatten cell
 
                                                         Nothing ->
-                                                            Debug.log "b" []
+                                                            []
                                             in
                                             AssocList.merge
                                                 (\tileGroup count tileUsage2 ->
                                                     AssocList.update
                                                         tileGroup
                                                         (\maybe ->
-                                                            Maybe.withDefault 0 maybe |> (+) -count |> Debug.log "d" |> Just
+                                                            Maybe.withDefault 0 maybe |> (+) -count |> Just
                                                         )
                                                         tileUsage2
                                                 )
@@ -394,7 +395,7 @@ update isProduction msg model =
                                                         tileGroup
                                                         (\maybe ->
                                                             Maybe.withDefault 0 maybe
-                                                                |> (+) (newCount - oldCount |> Debug.log "a")
+                                                                |> (+) (newCount - oldCount)
                                                                 |> Just
                                                         )
                                                         tileUsage2
@@ -421,8 +422,8 @@ update isProduction msg model =
                                 | tileCountBot = Just tileCountBot2
                             }
                     in
-                    if Dict.isEmpty tileCountBot.changedCells then
-                        ( model, Command.none )
+                    if tileCountBot.tileUsage == tileCountBot2.tileUsage then
+                        ( model, Debug.log "same" Command.none )
 
                     else
                         broadcastBotLocalChange
@@ -1356,7 +1357,11 @@ localGridChange time model localChange userId user =
                             , tileCountBot =
                                 case model.tileCountBot of
                                     Just tileCountBot ->
-                                        TileCountBot.onGridChanged localChange model.grid tileCountBot |> Just
+                                        TileCountBot.onGridChanged
+                                            [ Grid.worldToCellAndLocalCoord localChange.position |> Tuple.first ]
+                                            model.grid
+                                            tileCountBot
+                                            |> Just
 
                                     Nothing ->
                                         Nothing
@@ -1431,7 +1436,23 @@ localUndo model userId user =
                                     Nothing
                             )
             in
-            ( List.foldl removeTrain { model | grid = newGrid } trainsToRemove
+            ( List.foldl
+                removeTrain
+                { model
+                    | grid = newGrid
+                    , tileCountBot =
+                        case model.tileCountBot of
+                            Just tileCountBot ->
+                                TileCountBot.onGridChanged
+                                    (List.map Coord.tuple (Dict.keys undoMoveAmount))
+                                    model.grid
+                                    tileCountBot
+                                    |> Just
+
+                            Nothing ->
+                                Nothing
+                }
+                trainsToRemove
                 |> updateUser userId (always newUser)
             , OriginalChange
             , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
@@ -1450,6 +1471,37 @@ localAddUndo model userId _ =
         ( updateUser userId Undo.add model, OriginalChange, BroadcastToNoOne )
 
 
+localRedo : BackendModel -> Id UserId -> BackendUserData -> ( BackendModel, LocalChangeStatus, BroadcastTo )
+localRedo model userId user =
+    case ( model.isGridReadOnly, Undo.redo user ) of
+        ( False, Just newUser ) ->
+            let
+                undoMoveAmount =
+                    newUser.undoCurrent
+            in
+            ( { model
+                | grid = Grid.moveUndoPointBackend userId undoMoveAmount model.grid
+                , tileCountBot =
+                    case model.tileCountBot of
+                        Just tileCountBot ->
+                            TileCountBot.onGridChanged
+                                (List.map Coord.tuple (Dict.keys undoMoveAmount))
+                                model.grid
+                                tileCountBot
+                                |> Just
+
+                        Nothing ->
+                            Nothing
+              }
+                |> updateUser userId (always newUser)
+            , OriginalChange
+            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
+            )
+
+        _ ->
+            ( model, InvalidChange, BroadcastToNoOne )
+
+
 updateLocalChangeBot :
     Id UserId
     -> BackendUserData
@@ -1464,6 +1516,9 @@ updateLocalChangeBot userId user time change model =
 
         Change.LocalGridChange localChange ->
             localGridChange time model localChange userId user
+
+        Change.LocalRedo ->
+            localRedo model userId user
 
         Change.LocalAddUndo ->
             localAddUndo model userId user
@@ -1500,25 +1555,7 @@ updateLocalChange sessionId clientId time change model =
             asUser2 (localGridChange time model localChange)
 
         Change.LocalRedo ->
-            asUser2
-                (\userId user ->
-                    case ( model.isGridReadOnly, Undo.redo user ) of
-                        ( False, Just newUser ) ->
-                            let
-                                undoMoveAmount =
-                                    newUser.undoCurrent
-                            in
-                            ( { model
-                                | grid = Grid.moveUndoPointBackend userId undoMoveAmount model.grid
-                              }
-                                |> updateUser userId (always newUser)
-                            , OriginalChange
-                            , ServerUndoPoint { userId = userId, undoPoints = undoMoveAmount } |> BroadcastToEveryoneElse
-                            )
-
-                        _ ->
-                            ( model, InvalidChange, BroadcastToNoOne )
-                )
+            asUser2 (localRedo model)
 
         Change.LocalAddUndo ->
             asUser2 (localAddUndo model)

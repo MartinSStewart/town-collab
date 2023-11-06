@@ -213,6 +213,7 @@ allTileGroups =
     , FlowersGroup
     , ElmTreeGroup
     , DirtPathGroup
+    , BigTextGroup
 
     --, HyperlinkGroup
     , BenchGroup
@@ -220,7 +221,14 @@ allTileGroups =
     , ParkingRoadGroup
     , ParkingRoundaboutGroup
     , CornerHouseGroup
-    , BigTextGroup
+    , DogHouseGroup
+    , MushroomGroup
+    , TreeStumpGroup
+    , SunflowersGroup
+    , RailDeadendGroup
+    , RailStrafeSplitGroup
+    , RailStrafeSplitMirrorGroup
+    , RoadStraightManholeGroup
     ]
 
 

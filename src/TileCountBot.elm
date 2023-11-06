@@ -20,7 +20,7 @@ import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty(..))
 import Shaders
 import Tile exposing (Tile, TileGroup, TileGroupData)
-import Units exposing (WorldUnit)
+import Units exposing (CellUnit, WorldUnit)
 import Unsafe
 
 
@@ -75,32 +75,33 @@ countCellsHelper dict flattenedCell =
         flattenedCell
 
 
-onGridChanged : Grid.LocalGridChange -> Grid BackendHistory -> Model -> Model
-onGridChanged localChange grid model =
-    let
-        ( cellPos, _ ) =
-            Grid.worldToCellAndLocalCoord localChange.position
-    in
+onGridChanged : List (Coord CellUnit) -> Grid BackendHistory -> Model -> Model
+onGridChanged changedCells grid model =
     { model
         | changedCells =
-            Dict.update
-                (Coord.toTuple cellPos)
-                (\maybe ->
-                    case maybe of
-                        Just _ ->
-                            maybe
-
-                        Nothing ->
-                            (case Grid.getCell cellPos grid of
-                                Just cell ->
-                                    GridCell.flatten cell
+            List.foldl
+                (\cellPos dict ->
+                    Dict.update
+                        (Coord.toTuple cellPos)
+                        (\maybe ->
+                            case maybe of
+                                Just _ ->
+                                    maybe
 
                                 Nothing ->
-                                    []
-                            )
-                                |> Just
+                                    (case Grid.getCell cellPos grid of
+                                        Just cell ->
+                                            GridCell.flatten cell
+
+                                        Nothing ->
+                                            []
+                                    )
+                                        |> Just
+                        )
+                        dict
                 )
                 model.changedCells
+                changedCells
     }
 
 
@@ -170,4 +171,4 @@ drawHighscore isFirstDraw time model =
 
 position : Coord WorldUnit
 position =
-    Coord.xy -228 -879
+    Coord.xy 336 -32
