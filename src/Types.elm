@@ -3,6 +3,7 @@ module Types exposing
     , BackendModel
     , BackendMsg(..)
     , BackendUserData
+    , BackendUserType(..)
     , ContextMenu
     , CssPixels
     , EmailEvent(..)
@@ -14,6 +15,7 @@ module Types exposing
     , FrontendMsg
     , FrontendMsg_(..)
     , Hover(..)
+    , HumanUserData
     , Invite
     , LoadedLocalModel_
     , LoadingData_
@@ -79,6 +81,7 @@ import Sound exposing (Sound)
 import Sprite exposing (Vertex)
 import TextInput
 import Tile exposing (Category, Tile, TileGroup)
+import TileCountBot
 import Time
 import TimeOfDay exposing (TimeOfDay)
 import Tool exposing (Tool)
@@ -378,6 +381,7 @@ type alias BackendModel =
     , trainsAndAnimalsDisabled : AreTrainsAndAnimalsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
+    , tileCountBot : Maybe TileCountBot.Model
     }
 
 
@@ -419,14 +423,24 @@ type alias BackendUserData =
     , mailDrafts : IdDict UserId (List MailEditor.Content)
     , cursor : Maybe Cursor
     , handColor : Colors
-    , emailAddress : EmailAddress
-    , acceptedInvites : IdDict UserId ()
+    , userType : BackendUserType
     , name : DisplayName
-    , allowEmailNotifications : Bool
+    }
+
+
+type BackendUserType
+    = HumanUser HumanUserData
+    | BotUser
+
+
+type alias HumanUserData =
+    { emailAddress : EmailAddress
+    , acceptedInvites : IdDict UserId ()
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict Change.TileHotkey TileGroup
     , showNotifications : Bool
     , notificationsClearedAt : Effect.Time.Posix
+    , allowEmailNotifications : Bool
     }
 
 
@@ -493,6 +507,7 @@ type BackendMsg
     | RegenerateCache Effect.Time.Posix
     | SentReportVandalismAdminEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | GotTimeAfterWorldUpdate Effect.Time.Posix Effect.Time.Posix
+    | TileCountBotUpdate Effect.Time.Posix
 
 
 type ToFrontend

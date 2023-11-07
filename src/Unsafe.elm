@@ -1,5 +1,6 @@
-module Unsafe exposing (emailAddress, url)
+module Unsafe exposing (displayName, emailAddress, url)
 
+import DisplayName exposing (DisplayName)
 import EmailAddress exposing (EmailAddress)
 import Url exposing (Url)
 
@@ -25,6 +26,16 @@ emailAddress text =
             emailAddress_
 
         Nothing ->
+            unreachable ()
+
+
+displayName : String -> DisplayName
+displayName text =
+    case DisplayName.fromString text of
+        Ok value ->
+            value
+
+        Err _ ->
             unreachable ()
 
 

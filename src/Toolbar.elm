@@ -22,6 +22,8 @@ import DisplayName
 import Duration
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
+import Grid
+import GridCell
 import Id
 import IdDict exposing (IdDict)
 import List.Extra as List
@@ -487,6 +489,9 @@ contextMenuView toolbarHeight contextMenu model =
         localModel =
             LocalGrid.localModel model.localModel
 
+        ( cellPos, _ ) =
+            Grid.worldToCellAndLocalCoord contextMenu.position
+
         contextMenuElement : Ui.Element UiHover
         contextMenuElement =
             Ui.el
@@ -549,6 +554,25 @@ contextMenuView toolbarHeight contextMenu model =
 
                         Nothing ->
                             Ui.none
+
+                    --, "Cell pos: "
+                    --    ++ String.fromInt (Coord.xRaw cellPos)
+                    --    ++ ","
+                    --    ++ String.fromInt (Coord.yRaw cellPos)
+                    --    |> Ui.text
+                    --, Ui.column
+                    --    { spacing = 4, padding = Ui.noPadding }
+                    --    (Ui.text "History"
+                    --        :: (case Grid.getCell cellPos localModel.grid of
+                    --                Just cell ->
+                    --                    List.map
+                    --                        (\value -> Id.toInt value.userId |> String.fromInt |> Ui.text)
+                    --                        (GridCell.history2 cell)
+                    --
+                    --                Nothing ->
+                    --                    [ Ui.text "Empty" ]
+                    --           )
+                    --    )
                     ]
                 )
 
