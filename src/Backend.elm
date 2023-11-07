@@ -137,7 +137,6 @@ init =
             , lastReportEmailToAdmin = Nothing
             , worldUpdateDurations = Array.empty
             , tileCountBot = Nothing
-            , tempField = 0
             }
     in
     ( case Env.adminEmail of
@@ -435,18 +434,23 @@ update isProduction msg model =
                             { model2 | tileCountBot = Just tileCountBot2 }
 
                 Nothing ->
-                    let
-                        ( model2, botId ) =
-                            createBotUser TileCountBot.name model
+                    initTileCountBot time model
 
-                        bot =
-                            TileCountBot.init botId model2.grid
-                    in
-                    broadcastBotLocalChange
-                        botId
-                        time
-                        (TileCountBot.drawHighscore True time bot)
-                        { model2 | tileCountBot = Just bot }
+
+initTileCountBot : Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
+initTileCountBot time model =
+    let
+        ( model2, botId ) =
+            createBotUser TileCountBot.name model
+
+        bot =
+            TileCountBot.init botId model2.grid
+    in
+    broadcastBotLocalChange
+        botId
+        time
+        (TileCountBot.drawHighscore True time bot)
+        { model2 | tileCountBot = Just bot }
 
 
 handleWorldUpdate : Bool -> Effect.Time.Posix -> Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
@@ -1267,6 +1271,23 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
                         |> Effect.Lamdera.sendToFrontend clientId
                     )
                 )
+
+        ResetTileBotRequest ->
+            case model.tileCountBot of
+                Just bot ->
+                    let
+                        newBot : TileCountBot.Model
+                        newBot =
+                            TileCountBot.init bot.userId model.grid
+                    in
+                    broadcastBotLocalChange
+                        bot.userId
+                        currentTime
+                        (TileCountBot.drawHighscore False currentTime newBot)
+                        { model | tileCountBot = Just newBot }
+
+                Nothing ->
+                    initTileCountBot currentTime model
 
 
 {-| Allow a client to say when something happened but restrict how far it can be away from the current time.

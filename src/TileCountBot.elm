@@ -34,6 +34,7 @@ type alias Model =
 init : Id UserId -> Grid BackendHistory -> Model
 init userId grid =
     let
+        initialDict : AssocList.Dict TileGroup number
         initialDict =
             List.foldl (\group dict -> AssocList.insert group 0 dict) AssocList.empty Tile.allTileGroups
     in

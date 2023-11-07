@@ -2909,6 +2909,9 @@ uiUpdate audioData id event model =
                                 { model | page = AdminPage adminPage2 }
                                 |> LoadingPage.handleOutMsg False
 
+                        AdminPage.ResetTileCountBot ->
+                            ( model, Effect.Lamdera.sendToBackend ResetTileBotRequest )
+
                 _ ->
                     ( model, Command.none )
 

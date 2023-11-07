@@ -32,6 +32,7 @@ type Hover
     | RestoreMailButton (Id MailId)
     | DeleteMailButton (Id MailId)
     | ResetUpdateDurationButton
+    | ResetTileCountButton
 
 
 init : Model
@@ -54,6 +55,7 @@ onPress event updateFunc model =
 type OutMsg
     = OutMsgAdminChange Change.AdminChange
     | AdminPageClosed
+    | ResetTileCountBot
     | NoOutMsg
 
 
@@ -112,6 +114,9 @@ update config hover event model =
 
         ResetUpdateDurationButton ->
             onPress event (\() -> ( model, OutMsgAdminChange Change.AdminResetUpdateDuration )) model
+
+        ResetTileCountButton ->
+            onPress event (\() -> ( model, ResetTileCountBot )) model
 
 
 adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
@@ -188,6 +193,9 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                     { id = idMap ResetUpdateDurationButton, padding = Ui.paddingXY 10 4 }
                     (Ui.text "Reset")
                 ]
+            , Ui.button
+                { id = idMap ResetTileCountButton, padding = Ui.paddingXY 10 4 }
+                (Ui.text "Reset tile count bot")
             , Ui.text "Sessions (id:count)"
             , Ui.button
                 { id = idMap ResetConnectionsButton, padding = Ui.paddingXY 10 4 }

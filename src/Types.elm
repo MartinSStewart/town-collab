@@ -382,7 +382,6 @@ type alias BackendModel =
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
     , tileCountBot : Maybe TileCountBot.Model
-    , tempField : Int
     }
 
 
@@ -493,6 +492,7 @@ type ToBackend
     | SendLoginEmailRequest (Untrusted EmailAddress)
     | SendInviteEmailRequest (Untrusted EmailAddress)
     | PostOfficePositionRequest
+    | ResetTileBotRequest
 
 
 type BackendMsg
