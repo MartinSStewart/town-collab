@@ -117,6 +117,19 @@ textColor =
 drawHighscore : Bool -> Effect.Time.Posix -> Model -> Nonempty LocalChange
 drawHighscore isFirstDraw time model =
     let
+        title : List LocalChange
+        title =
+            List.indexedMap
+                (\index char ->
+                    { position = Coord.xy (Coord.xRaw position + index) (Coord.yRaw position)
+                    , change = Tile.BigText char
+                    , colors = textColor
+                    , time = time
+                    }
+                        |> Change.LocalGridChange
+                )
+                (String.toList "Tile highscores (world gen tiles excluded)")
+
         newChanges : List LocalChange
         newChanges =
             AssocList.toList model.tileUsage
@@ -142,7 +155,7 @@ drawHighscore isFirstDraw time model =
 
                             ( x2, y2, columnWidth ) =
                                 if state.y + height - Coord.yRaw position > 33 then
-                                    ( state.x + state.columnWidth + 1, Coord.yRaw position, 0 )
+                                    ( state.x + state.columnWidth + 1, Coord.yRaw position + 3, 0 )
 
                                 else
                                     ( state.x
@@ -174,7 +187,7 @@ drawHighscore isFirstDraw time model =
                                 ++ state.changes
                         }
                     )
-                    { x = Coord.xRaw position, y = Coord.yRaw position, columnWidth = 0, changes = [] }
+                    { x = Coord.xRaw position, y = Coord.yRaw position + 3, columnWidth = 0, changes = title }
                 |> .changes
     in
     if isFirstDraw then
@@ -186,4 +199,4 @@ drawHighscore isFirstDraw time model =
 
 position : Coord WorldUnit
 position =
-    Coord.xy 336 -32
+    Coord.xy 329 -32
