@@ -108,7 +108,7 @@ subscriptions model =
             )
             WorldUpdateTimeElapsed
         , Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
-        , Effect.Time.every (Duration.seconds 3) TileCountBotUpdate
+        , Effect.Time.every (Duration.minutes 15) TileCountBotUpdate
         ]
 
 
