@@ -561,10 +561,10 @@ hasUserChanges : Cell BackendHistory -> Bool
 hasUserChanges (Cell cell) =
     case cell.history of
         BackendDecoded values ->
-            List.isEmpty values
+            List.isEmpty values |> not
 
         BackendEncodedAndDecoded _ values ->
-            List.isEmpty values
+            List.isEmpty values |> not
 
 
 empty : a -> Coord CellUnit -> Cell a

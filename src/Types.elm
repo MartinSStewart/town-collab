@@ -382,6 +382,7 @@ type alias BackendModel =
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
     , tileCountBot : Maybe TileCountBot.Model
+    , tempField : Int
     }
 
 

@@ -137,6 +137,7 @@ init =
             , lastReportEmailToAdmin = Nothing
             , worldUpdateDurations = Array.empty
             , tileCountBot = Nothing
+            , tempField = 0
             }
     in
     ( case Env.adminEmail of
