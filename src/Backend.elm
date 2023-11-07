@@ -32,6 +32,7 @@ import Lamdera
 import LineSegmentExtra
 import List.Extra as List
 import List.Nonempty as Nonempty exposing (Nonempty(..))
+import LoadingPage
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Maybe.Extra as Maybe
@@ -423,7 +424,7 @@ update isProduction msg model =
                             }
                     in
                     if tileCountBot.tileUsage == tileCountBot2.tileUsage then
-                        ( model, Debug.log "same" Command.none )
+                        ( model, Command.none )
 
                     else
                         broadcastBotLocalChange
@@ -1299,32 +1300,37 @@ localGridChange :
     -> BackendUserData
     -> ( BackendModel, LocalChangeStatus, BroadcastTo )
 localGridChange time model localChange userId user =
+    let
+        localChange2 : Grid.LocalGridChange
+        localChange2 =
+            { position = localChange.position
+            , change = localChange.change
+            , colors = localChange.colors
+            , time = time
+            }
+
+        change : Grid.GridChange
+        change =
+            Grid.localChangeToChange userId localChange2
+    in
     if model.isGridReadOnly then
         ( model, InvalidChange, BroadcastToNoOne )
 
-    else
+    else if LoadingPage.canPlaceTile time change model.trains model.grid then
         let
-            localChange2 : Grid.LocalGridChange
-            localChange2 =
-                { position = localChange.position
-                , change = localChange.change
-                , colors = localChange.colors
-                , time = time
-                }
-
             ( cellPosition, localPosition ) =
-                Grid.worldToCellAndLocalCoord localChange2.position
+                Grid.worldToCellAndLocalCoord change.position
 
             maybeTrain : Maybe ( Id TrainId, Train )
             maybeTrain =
                 if IdDict.size model.trains < 50 then
-                    Train.handleAddingTrain model.trains userId localChange2.change localChange2.position
+                    Train.handleAddingTrain model.trains userId change.change change.position
 
                 else
                     Nothing
 
             { removed, newCells } =
-                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
+                Grid.addChangeBackend change model.grid
 
             nextCowId =
                 IdDict.nextId model.animals |> Id.toInt
@@ -1340,9 +1346,7 @@ localGridChange time model localChange userId user =
                     |> List.foldl
                         removeTrain
                         { model
-                            | grid =
-                                Grid.addChangeBackend (Grid.localChangeToChange userId localChange2) model.grid
-                                    |> .grid
+                            | grid = Grid.addChangeBackend change model.grid |> .grid
                             , trains =
                                 case maybeTrain of
                                     Just ( trainId, train ) ->
@@ -1358,7 +1362,10 @@ localGridChange time model localChange userId user =
                                 case model.tileCountBot of
                                     Just tileCountBot ->
                                         TileCountBot.onGridChanged
-                                            [ Grid.worldToCellAndLocalCoord localChange.position |> Tuple.first ]
+                                            (Grid.worldToCellAndLocalCoord localChange.position
+                                                |> (\( a, b ) -> Grid.closeNeighborCells a b)
+                                                |> List.map Tuple.first
+                                            )
                                             model.grid
                                             tileCountBot
                                             |> Just
@@ -1376,7 +1383,7 @@ localGridChange time model localChange userId user =
                         )
                 , Change.LocalGridChange localChange2 |> NewLocalChange
                 , ServerGridChange
-                    { gridChange = Grid.localChangeToChange userId localChange2
+                    { gridChange = change
                     , newCells = newCells
                     , newAnimals = newAnimals
                     }
@@ -1385,6 +1392,9 @@ localGridChange time model localChange userId user =
 
             Err _ ->
                 ( model, InvalidChange, BroadcastToNoOne )
+
+    else
+        ( model, InvalidChange, BroadcastToNoOne )
 
 
 localUndo : BackendModel -> Id UserId -> BackendUserData -> ( BackendModel, LocalChangeStatus, BroadcastTo )
@@ -2585,7 +2595,25 @@ createBotUser name model =
         id =
             Train.nextId model.users
     in
-    ( { model | users = IdDict.insert id userBackendData model.users }, id )
+    ( { model
+        | users =
+            IdDict.insert id userBackendData model.users
+                |> IdDict.update2
+                    adminId
+                    (\user ->
+                        case user.userType of
+                            HumanUser humanUser ->
+                                { user
+                                    | userType =
+                                        { humanUser | acceptedInvites = IdDict.insert id () humanUser.acceptedInvites } |> HumanUser
+                                }
+
+                            BotUser ->
+                                user
+                    )
+      }
+    , id
+    )
 
 
 broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Command BackendOnly ToFrontend BackendMsg

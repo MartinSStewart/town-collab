@@ -131,17 +131,32 @@ drawHighscore isFirstDraw time model =
                             tile =
                                 List.Nonempty.head data.tiles
 
+                            tileSize =
+                                (Tile.getData tile).size
+
                             text =
                                 String.fromInt count ++ " x "
 
                             height =
-                                Tile.getData tile |> .size |> Coord.yRaw |> max 2
+                                Coord.yRaw tileSize |> max 2
+
+                            ( x2, y2, columnWidth ) =
+                                if state.y + height - Coord.yRaw position > 33 then
+                                    ( state.x + state.columnWidth + 1, Coord.yRaw position, 0 )
+
+                                else
+                                    ( state.x
+                                    , state.y
+                                    , max state.columnWidth (String.length text + Coord.xRaw tileSize)
+                                    )
                         in
-                        { y = state.y + height
+                        { x = x2
+                        , y = y2 + height
+                        , columnWidth = columnWidth
                         , changes =
                             List.indexedMap
                                 (\index char ->
-                                    { position = Coord.xy (Coord.xRaw position + index) (state.y + (height - 1) // 2)
+                                    { position = Coord.xy (x2 + index) (y2 + (height - 1) // 2)
                                     , change = Tile.BigText char
                                     , colors = textColor
                                     , time = time
@@ -149,7 +164,7 @@ drawHighscore isFirstDraw time model =
                                         |> Change.LocalGridChange
                                 )
                                 (String.toList text)
-                                ++ [ { position = Coord.xy (Coord.xRaw position + String.length text) state.y
+                                ++ [ { position = Coord.xy (x2 + String.length text) y2
                                      , change = tile
                                      , colors = Tile.defaultToPrimaryAndSecondary data.defaultColors
                                      , time = time
@@ -159,7 +174,7 @@ drawHighscore isFirstDraw time model =
                                 ++ state.changes
                         }
                     )
-                    { y = Coord.yRaw position, changes = [] }
+                    { x = Coord.xRaw position, y = Coord.yRaw position, columnWidth = 0, changes = [] }
                 |> .changes
     in
     if isFirstDraw then

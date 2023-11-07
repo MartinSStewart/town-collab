@@ -22,7 +22,6 @@ module GridCell exposing
     , updateCache
     )
 
-import Array
 import AssocSet
 import Bitwise
 import Bounds exposing (Bounds)
@@ -31,7 +30,6 @@ import Bytes.Decode
 import Bytes.Encode
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
-import Dict
 import Effect.Time
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
@@ -41,7 +39,6 @@ import Math.Vector2 as Vec2 exposing (Vec2)
 import Quantity exposing (Quantity(..))
 import Random
 import Shaders exposing (MapOverlayVertex)
-import Sprite
 import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit)

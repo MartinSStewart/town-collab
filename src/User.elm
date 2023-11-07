@@ -76,6 +76,9 @@ nameAndHand isOnline currentUserId userId user =
         , if currentUserId == Just userId then
             Ui.text "(You)"
 
+          else if user.isBot then
+            Ui.text "(Bot)"
+
           else
             Ui.none
         ]

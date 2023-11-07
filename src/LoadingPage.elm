@@ -463,7 +463,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
         |> (\( a, b ) -> ( Loaded a, b, Audio.cmdNone ))
 
 
-canPlaceTile : Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid FrontendHistory -> Bool
+canPlaceTile : Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid a -> Bool
 canPlaceTile time change trains grid =
     if Grid.canPlaceTile change then
         let
