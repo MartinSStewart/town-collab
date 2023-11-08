@@ -424,6 +424,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lightsSwitched = Nothing
             , selectedTileCategory = Buildings
             , lastHotkeyChange = Nothing
+            , oneTimePasswordInput = TextInput.init
             }
                 |> setCurrentTool HandToolButton
     in

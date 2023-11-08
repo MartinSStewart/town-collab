@@ -1144,6 +1144,9 @@ updateLoaded audioData msg model =
                                         MailEditorHover _ ->
                                             False
 
+                                        OneTimePasswordInput ->
+                                            False
+
                                         _ ->
                                             True
 
@@ -2465,6 +2468,7 @@ uiUpdate audioData id event model =
 
         InviteEmailAddressTextInput ->
             textInputUpdate
+                2
                 InviteEmailAddressTextInput
                 (\_ model2 -> model2)
                 (\() -> sendInvite model)
@@ -2475,6 +2479,7 @@ uiUpdate audioData id event model =
 
         EmailAddressTextInputHover ->
             textInputUpdate
+                2
                 EmailAddressTextInputHover
                 (\_ model2 -> model2)
                 (\() -> sendEmail model)
@@ -2489,6 +2494,7 @@ uiUpdate audioData id event model =
                     ( { model
                         | primaryColorTextInput =
                             TextInput.mouseDownMove
+                                TextInput.defaultTextScale
                                 (LoadingPage.mouseScreenPosition model |> Coord.roundPoint)
                                 elementPosition
                                 model.primaryColorTextInput
@@ -2500,6 +2506,7 @@ uiUpdate audioData id event model =
                     ( { model
                         | primaryColorTextInput =
                             TextInput.mouseDown
+                                TextInput.defaultTextScale
                                 (LoadingPage.mouseScreenPosition model |> Coord.roundPoint)
                                 elementPosition
                                 model.primaryColorTextInput
@@ -2550,6 +2557,7 @@ uiUpdate audioData id event model =
                     ( { model
                         | secondaryColorTextInput =
                             TextInput.mouseDownMove
+                                TextInput.defaultTextScale
                                 (LoadingPage.mouseScreenPosition model |> Coord.roundPoint)
                                 elementPosition
                                 model.secondaryColorTextInput
@@ -2561,6 +2569,7 @@ uiUpdate audioData id event model =
                     ( { model
                         | secondaryColorTextInput =
                             TextInput.mouseDown
+                                TextInput.defaultTextScale
                                 (LoadingPage.mouseScreenPosition model |> Coord.roundPoint)
                                 elementPosition
                                 model.secondaryColorTextInput
@@ -2673,6 +2682,7 @@ uiUpdate audioData id event model =
             case model.topMenuOpened of
                 Just (SettingsMenu nameTextInput) ->
                     textInputUpdate
+                        2
                         DisplayNameTextInput
                         (\newTextInput model3 ->
                             let
@@ -2974,9 +2984,32 @@ uiUpdate audioData id event model =
                 )
                 model
 
+        OneTimePasswordInput ->
+            textInputUpdate
+                Toolbar.oneTimePasswordTextScale
+                OneTimePasswordInput
+                (\_ model2 -> model2)
+                (\() -> ( model, Command.none ))
+                model.oneTimePasswordInput
+                (\a ->
+                    { model
+                        | oneTimePasswordInput =
+                            { a
+                                | current =
+                                    { cursorPosition = min 6 a.current.cursorPosition
+                                    , cursorSize = a.current.cursorSize
+                                    , text = String.left 6 a.current.text
+                                    }
+                            }
+                    }
+                )
+                event
+                model
+
 
 textInputUpdate :
-    UiHover
+    Int
+    -> UiHover
     -> (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
     -> (() -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> TextInput.Model
@@ -2984,7 +3017,7 @@ textInputUpdate :
     -> UiEvent
     -> FrontendLoaded
     -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
-textInputUpdate id textChanged onEnter textInput setTextInput event model =
+textInputUpdate textScale id textChanged onEnter textInput setTextInput event model =
     case event of
         Ui.PastedText text ->
             let
@@ -2997,6 +3030,7 @@ textInputUpdate id textChanged onEnter textInput setTextInput event model =
 
         Ui.MouseDown { elementPosition } ->
             ( TextInput.mouseDown
+                textScale
                 (LoadingPage.mouseScreenPosition model |> Coord.roundPoint)
                 elementPosition
                 textInput
@@ -3038,7 +3072,8 @@ textInputUpdate id textChanged onEnter textInput setTextInput event model =
         Ui.MouseMove { elementPosition } ->
             case model.mouseLeft of
                 MouseButtonDown { current } ->
-                    ( TextInput.mouseDownMove (Coord.roundPoint current) elementPosition textInput |> setTextInput
+                    ( TextInput.mouseDownMove textScale (Coord.roundPoint current) elementPosition textInput
+                        |> setTextInput
                     , Command.none
                     )
 

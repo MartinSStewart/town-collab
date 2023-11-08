@@ -6,6 +6,7 @@ module Toolbar exposing
     , mapSize
     , notificationsViewWidth
     , offsetViewPoint
+    , oneTimePasswordTextScale
     , screenToWorld
     , validateInviteEmailAddress
     , view
@@ -207,7 +208,7 @@ normalView windowSize model =
                                 )
 
                         NotLoggedIn _ ->
-                            loginToolbarUi model.pressedSubmitEmail model.loginTextInput
+                            loginToolbarUi model.pressedSubmitEmail model.loginTextInput model.oneTimePasswordInput
                     )
     in
     Ui.bottomCenter
@@ -939,8 +940,8 @@ pressedSubmit submitStatus =
             False
 
 
-loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> Ui.Element UiHover
-loginToolbarUi pressedSubmitEmail emailTextInput =
+loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> TextInput.Model -> Ui.Element UiHover
+loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
@@ -1007,10 +1008,30 @@ loginToolbarUi pressedSubmitEmail emailTextInput =
                 , inFront = []
                 , borderAndFill = Ui.defaultElBorderAndFill
                 }
-                submittedText
+                (Ui.column
+                    { spacing = 16, padding = Ui.noPadding }
+                    [ submittedText
+                    , Ui.column
+                        { spacing = 4, padding = Ui.noPadding }
+                        [ Ui.text "Please type in the code you received"
+                        , Ui.textInputScaled
+                            { id = OneTimePasswordInput
+                            , width = 252
+                            , textScale = oneTimePasswordTextScale
+                            , isValid = True
+                            , state = oneTimePasswordInput.current
+                            }
+                        ]
+                    ]
+                )
 
         _ ->
             loginUi
+
+
+oneTimePasswordTextScale : number
+oneTimePasswordTextScale =
+    4
 
 
 dummyEmail =
@@ -1364,7 +1385,7 @@ colorTextInput :
 colorTextInput id textInput color =
     let
         padding =
-            TextInput.size (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
+            TextInput.size TextInput.defaultTextScale (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
     in
     Ui.row
         { spacing = -2, padding = Ui.noPadding }
@@ -1574,7 +1595,7 @@ tileMesh colors tile =
 
 primaryColorInputWidth : Int
 primaryColorInputWidth =
-    6 * Coord.xRaw Sprite.charSize * TextInput.charScale + Coord.xRaw TextInput.padding * 2 + 2
+    6 * Coord.xRaw Sprite.charSize * TextInput.defaultTextScale + Coord.xRaw TextInput.padding * 2 + 2
 
 
 buttonSize : Coord units

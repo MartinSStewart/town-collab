@@ -3,6 +3,7 @@ module Id exposing
     , EventId(..)
     , Id(..)
     , MailId(..)
+    , OneTimePassword(..)
     , PersonId(..)
     , SecretId(..)
     , TrainId(..)
@@ -45,6 +46,10 @@ type AnimalId
 
 type PersonId
     = PersonId Never
+
+
+type OneTimePassword
+    = OneTimePassword Never
 
 
 fromInt : Int -> Id a

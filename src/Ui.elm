@@ -43,6 +43,7 @@ module Ui exposing
     , table
     , text
     , textInput
+    , textInputScaled
     , topLeft
     , topLeft2
     , topRight
@@ -88,6 +89,7 @@ type alias TextInputData id =
     , width : Int
     , isValid : Bool
     , state : TextInput.State
+    , textScale : Int
     }
 
 
@@ -393,7 +395,14 @@ wrappedColorText maxWidth color text2 =
 textInput :
     { id : id, width : Int, isValid : Bool, state : TextInput.State }
     -> Element id
-textInput =
+textInput data =
+    TextInput { id = data.id, width = data.width, textScale = 2, isValid = data.isValid, state = data.state }
+
+
+textInputScaled :
+    { id : id, width : Int, textScale : Int, isValid : Bool, state : TextInput.State }
+    -> Element id
+textInputScaled =
     TextInput
 
 
@@ -715,7 +724,7 @@ hoverHelper point elementPosition element2 =
             NoHover
 
         TextInput data ->
-            if Bounds.fromCoordAndSize elementPosition (TextInput.size (Quantity data.width)) |> Bounds.contains point then
+            if Bounds.fromCoordAndSize elementPosition (TextInput.size data.textScale (Quantity data.width)) |> Bounds.contains point then
                 InputHover { id = data.id, position = elementPosition }
 
             else
@@ -855,7 +864,14 @@ viewHelper focus position vertices element2 =
                 ++ vertices
 
         TextInput data ->
-            TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid data.state ++ vertices
+            TextInput.view
+                data.textScale
+                position
+                (Quantity data.width)
+                (focus == Just data.id)
+                data.isValid
+                data.state
+                ++ vertices
 
         Button data child ->
             borderAndFillView position
@@ -966,7 +982,7 @@ size element2 =
             data.cachedSize
 
         TextInput data ->
-            TextInput.size (Quantity data.width)
+            TextInput.size data.textScale (Quantity data.width)
 
         Button data _ ->
             data.cachedSize

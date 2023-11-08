@@ -62,7 +62,7 @@ import Grid exposing (Grid, GridData)
 import GridCell exposing (BackendHistory)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (AnimalId, EventId, Id, MailId, PersonId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, OneTimePassword, PersonId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
@@ -210,6 +210,7 @@ type alias FrontendLoaded =
     , handMeshes : IdDict UserId CursorMeshes
     , hasCmdKey : Bool
     , loginTextInput : TextInput.Model
+    , oneTimePasswordInput : TextInput.Model
     , pressedSubmitEmail : SubmitStatus EmailAddress
     , topMenuOpened : Maybe TopMenu
     , inviteTextInput : TextInput.Model
@@ -348,6 +349,7 @@ type UiHover
     | CloseInviteTreeButton
     | LogoutButton
     | ClearNotificationsButton
+    | OneTimePasswordInput
 
 
 type alias BackendModel =
@@ -373,6 +375,14 @@ type alias BackendModel =
             { requestTime : Effect.Time.Posix
             , userId : Id UserId
             , requestedBy : LoginRequestedBy
+            }
+    , pendingOneTimePasswords :
+        AssocList.Dict
+            SessionId
+            { requestTime : Effect.Time.Posix
+            , userId : Id UserId
+            , loginAttempts : Int
+            , oneTimePassword : SecretId OneTimePassword
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
