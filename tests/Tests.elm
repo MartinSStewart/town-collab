@@ -4,7 +4,9 @@ import Animal exposing (AnimalType(..))
 import Backend
 import Color
 import Coord
+import Effect.Test
 import Effect.Time
+import EndToEndTests
 import Expect exposing (Expectation)
 import Grid exposing (IntersectionType(..))
 import GridCell exposing (FrontendHistory)
@@ -52,7 +54,8 @@ user0 =
 tests : Test
 tests =
     describe "Tests"
-        [ test "Add rail" <|
+        [ Test.describe "End to end tests" (List.map Effect.Test.toTest EndToEndTests.tests)
+        , test "Add rail" <|
             \_ ->
                 let
                     maybeCell : Maybe (GridCell.Cell FrontendHistory)

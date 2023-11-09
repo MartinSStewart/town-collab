@@ -46,7 +46,7 @@ config =
 
 main : Program () (Effect.Test.Model (Audio.Model Types.FrontendMsg_ FrontendModel_)) Effect.Test.Msg
 main =
-    Effect.Test.viewer endToEndTests
+    Effect.Test.viewer tests
 
 
 handleRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
@@ -246,9 +246,55 @@ findNodesByTag tagName nodes =
         nodes
 
 
-endToEndTests : List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
-endToEndTests =
-    [ Effect.Test.start config "Login"
+shouldBeLoggedIn frontend0 =
+    checkFrontend
+        frontend0.clientId
+        (\model ->
+            case model of
+                Loading loading ->
+                    case loading.localModel of
+                        LoadedLocalModel loadedLocalModel ->
+                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
+                                LoggedIn _ ->
+                                    Ok ()
+
+                                NotLoggedIn _ ->
+                                    Err "Should be logged in"
+
+                        LoadingLocalModel _ ->
+                            Err "Local model not loaded"
+
+                Loaded _ ->
+                    Debug.todo "Check loaded case"
+        )
+
+
+shouldBeLoggedOut frontend0 =
+    checkFrontend
+        frontend0.clientId
+        (\model ->
+            case model of
+                Loading loading ->
+                    case loading.localModel of
+                        LoadedLocalModel loadedLocalModel ->
+                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
+                                LoggedIn _ ->
+                                    Err "Should be logged out"
+
+                                NotLoggedIn _ ->
+                                    Ok ()
+
+                        LoadingLocalModel _ ->
+                            Err "Local model not loaded"
+
+                Loaded _ ->
+                    Debug.todo "Check loaded case"
+        )
+
+
+tests : List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
+tests =
+    [ Effect.Test.start config "Login with one time password"
         |> Effect.Test.connectFrontend
             sessionId0
             url
@@ -256,26 +302,7 @@ endToEndTests =
             (\( state, frontend0 ) ->
                 state
                     |> shortWait
-                    |> checkFrontend
-                        frontend0.clientId
-                        (\model ->
-                            case model of
-                                Loading loading ->
-                                    case loading.localModel of
-                                        LoadedLocalModel loadedLocalModel ->
-                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
-                                                LoggedIn _ ->
-                                                    Err "Shouldn't be logged in"
-
-                                                NotLoggedIn _ ->
-                                                    Ok ()
-
-                                        LoadingLocalModel _ ->
-                                            Err "Local model not loaded"
-
-                                Loaded _ ->
-                                    Debug.todo "Check loaded case"
-                        )
+                    |> shouldBeLoggedOut frontend0
                     |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
                     |> shortWait
                     |> Effect.Test.andThen
@@ -288,25 +315,42 @@ endToEndTests =
                                             frontend0.clientId
                                             (LoginAttemptRequest loginEmail.oneTimePassword)
                                         |> shortWait
-                                        |> checkFrontend
-                                            frontend0.clientId
-                                            (\model ->
-                                                case model of
-                                                    Loading loading ->
-                                                        case loading.localModel of
-                                                            LoadedLocalModel loadedLocalModel ->
-                                                                case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
-                                                                    LoggedIn _ ->
-                                                                        Ok ()
+                                        |> shouldBeLoggedIn frontend0
 
-                                                                    NotLoggedIn _ ->
-                                                                        Err "Should be logged in"
-
-                                                            LoadingLocalModel _ ->
-                                                                Err "Local model not loaded"
-
-                                                    Loaded _ ->
-                                                        Debug.todo "Check loaded case"
+                                _ ->
+                                    Effect.Test.continueWith state2
+                                        |> Effect.Test.checkState (\_ -> Err "Login email not found")
+                        )
+            )
+    , Effect.Test.start config "Can't log in for a different session"
+        |> Effect.Test.connectFrontend
+            sessionId0
+            url
+            { width = 1920, height = 1080 }
+            (\( state, frontend0 ) ->
+                state
+                    |> shortWait
+                    |> shouldBeLoggedOut frontend0
+                    |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
+                    |> shortWait
+                    |> Effect.Test.andThen
+                        (\state2 ->
+                            case List.filterMap isOneTimePasswordEmail state2.httpRequests of
+                                [ loginEmail ] ->
+                                    Effect.Test.continueWith state2
+                                        |> Effect.Test.connectFrontend
+                                            sessionId1
+                                            url
+                                            { width = 1920, height = 1080 }
+                                            (\( state3, frontend1 ) ->
+                                                state3
+                                                    |> Effect.Test.sendToBackend
+                                                        sessionId1
+                                                        frontend1.clientId
+                                                        (LoginAttemptRequest loginEmail.oneTimePassword)
+                                                    |> shortWait
+                                                    |> shouldBeLoggedOut frontend0
+                                                    |> shouldBeLoggedOut frontend1
                                             )
 
                                 _ ->
@@ -338,7 +382,3 @@ checkFrontend clientId checkFunc =
                 Nothing ->
                     Err "Frontend 1 not found"
         )
-
-
-tests =
-    Test.describe "End to end tests" (List.map Effect.Test.toTest endToEndTests)
