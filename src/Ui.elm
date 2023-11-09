@@ -12,6 +12,7 @@ module Ui exposing
     , bottomLeft
     , button
     , center
+    , centerHorizontally
     , centerRight
     , checkbox
     , colorScaledText
@@ -43,6 +44,8 @@ module Ui exposing
     , table
     , text
     , textInput
+    , textInputScaled
+    , topCenter
     , topLeft
     , topLeft2
     , topRight
@@ -88,6 +91,7 @@ type alias TextInputData id =
     , width : Int
     , isValid : Bool
     , state : TextInput.State
+    , textScale : Int
     }
 
 
@@ -393,7 +397,14 @@ wrappedColorText maxWidth color text2 =
 textInput :
     { id : id, width : Int, isValid : Bool, state : TextInput.State }
     -> Element id
-textInput =
+textInput data =
+    TextInput { id = data.id, width = data.width, textScale = 2, isValid = data.isValid, state = data.state }
+
+
+textInputScaled :
+    { id : id, width : Int, textScale : Int, isValid : Bool, state : TextInput.State }
+    -> Element id
+textInputScaled =
     TextInput
 
 
@@ -511,6 +522,27 @@ el data element2 =
         element2
 
 
+centerHorizontally : { parentWidth : Int } -> Element id -> Element id
+centerHorizontally data element2 =
+    let
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+
+        left =
+            (data.parentWidth - childSizeX) // 2
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy left 0
+            , bottomRight = Coord.xy (data.parentWidth - childSizeX - left) 0
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , cachedSize = Coord.xy data.parentWidth childSizeY
+        }
+        element2
+
+
 center : { size : Coord Pixels } -> Element id -> Element id
 center data element2 =
     let
@@ -574,6 +606,30 @@ topLeft2 data element2 =
             }
         , inFront = data.inFront
         , borderAndFill = data.borderAndFill
+        , cachedSize = data.size
+        }
+        element2
+
+
+topCenter : { size : Coord Pixels } -> Element id -> Element id
+topCenter data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+
+        left =
+            (sizeX - childSizeX) // 2
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy left 0
+            , bottomRight = Coord.xy (sizeX - childSizeX - left) (sizeY - childSizeY)
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
         }
         element2
@@ -715,7 +771,7 @@ hoverHelper point elementPosition element2 =
             NoHover
 
         TextInput data ->
-            if Bounds.fromCoordAndSize elementPosition (TextInput.size (Quantity data.width)) |> Bounds.contains point then
+            if Bounds.fromCoordAndSize elementPosition (TextInput.size data.textScale (Quantity data.width)) |> Bounds.contains point then
                 InputHover { id = data.id, position = elementPosition }
 
             else
@@ -855,7 +911,14 @@ viewHelper focus position vertices element2 =
                 ++ vertices
 
         TextInput data ->
-            TextInput.view position (Quantity data.width) (focus == Just data.id) data.isValid data.state ++ vertices
+            TextInput.view
+                data.textScale
+                position
+                (Quantity data.width)
+                (focus == Just data.id)
+                data.isValid
+                data.state
+                ++ vertices
 
         Button data child ->
             borderAndFillView position
@@ -966,7 +1029,7 @@ size element2 =
             data.cachedSize
 
         TextInput data ->
-            TextInput.size (Quantity data.width)
+            TextInput.size data.textScale (Quantity data.width)
 
         Button data _ ->
             data.cachedSize

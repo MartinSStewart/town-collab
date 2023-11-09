@@ -197,6 +197,7 @@ type OutMsg
     | ReceivedMail
     | ExportMail (List MailEditor.Content)
     | ImportMail
+    | LoggedOut
 
 
 updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -903,12 +904,23 @@ updateServerChange serverChange model =
             , HandColorOrNameChanged userId
             )
 
-        ServerUserConnected { userId, user, cowsSpawnedFromVisibleRegion } ->
+        ServerUserConnected { maybeLoggedIn, cowsSpawnedFromVisibleRegion } ->
             ( { model
-                | users = IdDict.insert userId user model.users
+                | users =
+                    case maybeLoggedIn of
+                        Just { userId, user } ->
+                            IdDict.insert userId user model.users
+
+                        Nothing ->
+                            model.users
                 , animals = IdDict.fromList cowsSpawnedFromVisibleRegion |> IdDict.union model.animals
               }
-            , HandColorOrNameChanged userId
+            , case maybeLoggedIn of
+                Just { userId, user } ->
+                    HandColorOrNameChanged userId
+
+                Nothing ->
+                    NoOutMsg
             )
 
         ServerYouLoggedIn loggedIn user ->
@@ -1278,7 +1290,7 @@ logout model =
                 | userStatus = NotLoggedIn { timeOfDay = loggedIn.timeOfDay }
                 , cursors = IdDict.remove loggedIn.userId model.cursors
               }
-            , NoOutMsg
+            , LoggedOut
             )
 
         NotLoggedIn _ ->

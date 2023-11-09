@@ -20,6 +20,7 @@ module Types exposing
     , LoadedLocalModel_
     , LoadingData_
     , LoadingLocalModel(..)
+    , LoginError(..)
     , LoginRequestedBy(..)
     , MouseButtonState(..)
     , Page(..)
@@ -62,7 +63,7 @@ import Grid exposing (Grid, GridData)
 import GridCell exposing (BackendHistory)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (AnimalId, EventId, Id, MailId, PersonId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, PersonId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
@@ -209,7 +210,8 @@ type alias FrontendLoaded =
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
     , handMeshes : IdDict UserId CursorMeshes
     , hasCmdKey : Bool
-    , loginTextInput : TextInput.Model
+    , loginEmailInput : TextInput.Model
+    , oneTimePasswordInput : TextInput.Model
     , pressedSubmitEmail : SubmitStatus EmailAddress
     , topMenuOpened : Maybe TopMenu
     , inviteTextInput : TextInput.Model
@@ -230,6 +232,7 @@ type alias FrontendLoaded =
     , page : Page
     , selectedTileCategory : Category
     , lastHotkeyChange : Maybe Time.Posix
+    , loginError : Maybe LoginError
     }
 
 
@@ -348,6 +351,7 @@ type UiHover
     | CloseInviteTreeButton
     | LogoutButton
     | ClearNotificationsButton
+    | OneTimePasswordInput
 
 
 type alias BackendModel =
@@ -373,6 +377,14 @@ type alias BackendModel =
             { requestTime : Effect.Time.Posix
             , userId : Id UserId
             , requestedBy : LoginRequestedBy
+            }
+    , pendingOneTimePasswords :
+        AssocList.Dict
+            SessionId
+            { requestTime : Effect.Time.Posix
+            , userId : Id UserId
+            , loginAttempts : Int
+            , oneTimePassword : SecretId OneTimePasswordId
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
@@ -493,6 +505,7 @@ type ToBackend
     | SendInviteEmailRequest (Untrusted EmailAddress)
     | PostOfficePositionRequest
     | ResetTileBotRequest
+    | LoginAttemptRequest (SecretId OneTimePasswordId)
 
 
 type BackendMsg
@@ -522,6 +535,12 @@ type ToFrontend
     | PostOfficePositionResponse (Maybe (Coord WorldUnit))
     | ClientConnected
     | CheckConnectionBroadcast
+    | LoginAttemptResponse LoginError
+
+
+type LoginError
+    = OneTimePasswordExpiredOrTooManyAttempts
+    | WrongOneTimePassword (SecretId OneTimePasswordId)
 
 
 type EmailEvent

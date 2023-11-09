@@ -3,13 +3,16 @@ module Id exposing
     , EventId(..)
     , Id(..)
     , MailId(..)
+    , OneTimePasswordId(..)
     , PersonId(..)
     , SecretId(..)
     , TrainId(..)
     , UserId(..)
     , fromInt
     , increment
+    , oneTimePasswordLength
     , secretFromString
+    , secretIdEquals
     , secretToString
     , toInt
     )
@@ -47,6 +50,15 @@ type PersonId
     = PersonId Never
 
 
+type OneTimePasswordId
+    = OneTimePasswordId Never
+
+
+oneTimePasswordLength : number
+oneTimePasswordLength =
+    6
+
+
 fromInt : Int -> Id a
 fromInt =
     Id
@@ -70,3 +82,14 @@ secretToString (SecretId secretId) =
 secretFromString : String -> SecretId a
 secretFromString =
     SecretId
+
+
+{-| Use this when testing equality for secret keys. It is less prone to timing attacks
+-}
+secretIdEquals : SecretId a -> SecretId a -> Bool
+secretIdEquals (SecretId a) (SecretId b) =
+    if String.length a == String.length b then
+        List.map2 (\charA charB -> charA == charB) (String.toList a) (String.toList b) |> List.all identity
+
+    else
+        False
