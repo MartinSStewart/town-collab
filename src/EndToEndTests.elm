@@ -14,7 +14,7 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import Frontend
 import Html.Parser
-import Id exposing (SecretId)
+import Id exposing (OneTimePasswordId, SecretId)
 import Json.Decode
 import Json.Encode
 import LocalGrid
@@ -42,6 +42,11 @@ config =
             Nothing
     , domain = url
     }
+
+
+main : Program () (Effect.Test.Model (Audio.Model Types.FrontendMsg_ FrontendModel_)) Effect.Test.Msg
+main =
+    Effect.Test.viewer endToEndTests
 
 
 handleRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
@@ -97,9 +102,18 @@ email =
     Unsafe.emailAddress Env.adminEmail2
 
 
-decodePostmark : Json.Decode.Decoder ( String, EmailAddress, List Html.Parser.Node )
+type alias PostmarkRequest =
+    { subject : String
+    , to : EmailAddress
+    , htmlBody : List Html.Parser.Node
+    , textBody : String
+    }
+
+
+decodePostmark : Json.Decode.Decoder PostmarkRequest
 decodePostmark =
-    Json.Decode.map3 (\subject to body -> ( subject, to, body ))
+    Json.Decode.map4
+        PostmarkRequest
         (Json.Decode.field "Subject" Json.Decode.string)
         (Json.Decode.field "To" Json.Decode.string
             |> Json.Decode.andThen
@@ -123,19 +137,50 @@ decodePostmark =
                             Json.Decode.fail "Failed to parse html"
                 )
         )
+        (Json.Decode.field "TextBody" Json.Decode.string)
 
 
-isLoginEmail :
+isOneTimePasswordEmail :
     Effect.Test.HttpRequest
-    -> Maybe { emailAddress : EmailAddress, loginToken : SecretId LoginToken }
-isLoginEmail httpRequest =
+    -> Maybe { emailAddress : EmailAddress, oneTimePassword : SecretId OneTimePasswordId }
+isOneTimePasswordEmail httpRequest =
     if String.startsWith (Postmark.endpoint ++ "/email") httpRequest.url then
         case httpRequest.body of
             Effect.Test.JsonBody value ->
                 case Json.Decode.decodeValue decodePostmark value of
-                    Ok ( subject, to, body ) ->
-                        case ( subject, getRoutesFromHtml body ) of
-                            ( "Login Email", [ InternalRoute { loginOrInviteToken } ] ) ->
+                    Ok { subject, to, textBody } ->
+                        case subject of
+                            "Login Email" ->
+                                { emailAddress = to
+                                , oneTimePassword =
+                                    String.right Id.oneTimePasswordLength textBody |> Id.secretFromString
+                                }
+                                    |> Just
+
+                            _ ->
+                                Nothing
+
+                    Err _ ->
+                        Nothing
+
+            _ ->
+                Nothing
+
+    else
+        Nothing
+
+
+isInviteEmail :
+    Effect.Test.HttpRequest
+    -> Maybe { emailAddress : EmailAddress, loginToken : SecretId LoginToken }
+isInviteEmail httpRequest =
+    if String.startsWith (Postmark.endpoint ++ "/email") httpRequest.url then
+        case httpRequest.body of
+            Effect.Test.JsonBody value ->
+                case Json.Decode.decodeValue decodePostmark value of
+                    Ok { subject, to, htmlBody } ->
+                        case ( subject, getRoutesFromHtml htmlBody ) of
+                            ( "Town-collab invitation", [ InternalRoute { loginOrInviteToken } ] ) ->
                                 case loginOrInviteToken of
                                     Just (LoginToken2 loginToken2) ->
                                         { emailAddress = to
@@ -201,7 +246,7 @@ findNodesByTag tagName nodes =
         nodes
 
 
-endToEndTests : List Test
+endToEndTests : List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
 endToEndTests =
     [ Effect.Test.start config "Login"
         |> Effect.Test.connectFrontend
@@ -210,7 +255,7 @@ endToEndTests =
             { width = 1920, height = 1080 }
             (\( state, frontend0 ) ->
                 state
-                    |> Effect.Test.simulateTime (Duration.milliseconds 50)
+                    |> shortWait
                     |> checkFrontend
                         frontend0.clientId
                         (\model ->
@@ -232,105 +277,48 @@ endToEndTests =
                                     Debug.todo "Check loaded case"
                         )
                     |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
-                    |> Effect.Test.simulateTime (Duration.milliseconds 50)
+                    |> shortWait
                     |> Effect.Test.andThen
                         (\state2 ->
-                            case List.filterMap isLoginEmail state2.httpRequests of
+                            case List.filterMap isOneTimePasswordEmail state2.httpRequests of
                                 [ loginEmail ] ->
                                     Effect.Test.continueWith state2
-                                        |> Effect.Test.connectFrontend
-                                            sessionId1
-                                            (Url.toString url
-                                                ++ Route.encode
-                                                    (Route.InternalRoute
-                                                        { viewPoint = Coord.origin
-                                                        , loginOrInviteToken = Just (LoginToken2 loginEmail.loginToken)
-                                                        , page = WorldRoute
-                                                        }
-                                                    )
-                                                |> Unsafe.url
-                                            )
-                                            { width = 1920, height = 1080 }
-                                            (\( state3, frontend1 ) ->
-                                                state3
-                                                    |> Effect.Test.simulateTime (Duration.milliseconds 50)
-                                                    |> checkFrontend
-                                                        frontend1.clientId
-                                                        (\model ->
-                                                            case model of
-                                                                Loading loading ->
-                                                                    case loading.localModel of
-                                                                        LoadedLocalModel loadedLocalModel ->
-                                                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
-                                                                                LoggedIn loggedIn ->
-                                                                                    Ok ()
+                                        |> Effect.Test.sendToBackend
+                                            sessionId0
+                                            frontend0.clientId
+                                            (LoginAttemptRequest loginEmail.oneTimePassword)
+                                        |> shortWait
+                                        |> checkFrontend
+                                            frontend0.clientId
+                                            (\model ->
+                                                case model of
+                                                    Loading loading ->
+                                                        case loading.localModel of
+                                                            LoadedLocalModel loadedLocalModel ->
+                                                                case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
+                                                                    LoggedIn _ ->
+                                                                        Ok ()
 
-                                                                                NotLoggedIn _ ->
-                                                                                    Err "Not logged in"
+                                                                    NotLoggedIn _ ->
+                                                                        Err "Should be logged in"
 
-                                                                        LoadingLocalModel _ ->
-                                                                            Err "Local model not loaded"
+                                                            LoadingLocalModel _ ->
+                                                                Err "Local model not loaded"
 
-                                                                Loaded _ ->
-                                                                    Debug.todo "Check loaded case"
-                                                        )
-                                            )
-                                        |> Effect.Test.connectFrontend
-                                            sessionId1
-                                            url
-                                            { width = 1920, height = 1080 }
-                                            (\( state5, frontend2 ) ->
-                                                state5
-                                                    |> Effect.Test.simulateTime (Duration.milliseconds 50)
-                                                    |> checkFrontend
-                                                        frontend2.clientId
-                                                        (\model ->
-                                                            case model of
-                                                                Loading loading ->
-                                                                    case loading.localModel of
-                                                                        LoadedLocalModel loadedLocalModel ->
-                                                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
-                                                                                LoggedIn loggedIn ->
-                                                                                    Ok ()
-
-                                                                                NotLoggedIn _ ->
-                                                                                    Err "Not logged in"
-
-                                                                        LoadingLocalModel _ ->
-                                                                            Err "Local model not loaded"
-
-                                                                Loaded _ ->
-                                                                    Debug.todo "Check loaded case"
-                                                        )
+                                                    Loaded _ ->
+                                                        Debug.todo "Check loaded case"
                                             )
 
                                 _ ->
-                                    Effect.Test.continueWith state2 |> Effect.Test.checkState (\_ -> Err "Login email not found")
-                        )
-                    |> Effect.Test.simulateTime (Duration.milliseconds 50)
-                    |> checkFrontend
-                        frontend0.clientId
-                        (\model ->
-                            case model of
-                                Loading loading ->
-                                    case loading.localModel of
-                                        LoadedLocalModel loadedLocalModel ->
-                                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
-                                                LoggedIn _ ->
-                                                    Ok ()
-
-                                                NotLoggedIn _ ->
-                                                    Err "Original session not logged in"
-
-                                        LoadingLocalModel _ ->
-                                            Err "Local model not loaded"
-
-                                Loaded _ ->
-                                    Debug.todo "Check loaded case"
+                                    Effect.Test.continueWith state2
+                                        |> Effect.Test.checkState (\_ -> Err "Login email not found")
                         )
             )
-        |> Effect.Test.toTest
     ]
+
+
+shortWait =
+    Effect.Test.simulateTime (Duration.milliseconds 50)
 
 
 checkFrontend :
@@ -353,4 +341,4 @@ checkFrontend clientId checkFunc =
 
 
 tests =
-    Test.describe "End to end tests" endToEndTests
+    Test.describe "End to end tests" (List.map Effect.Test.toTest endToEndTests)

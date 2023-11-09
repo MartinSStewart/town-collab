@@ -2,11 +2,8 @@ module Tests exposing (..)
 
 import Animal exposing (AnimalType(..))
 import Backend
-import BoundingBox2d
 import Color
 import Coord
-import Cursor
-import Dict
 import Effect.Time
 import Expect exposing (Expectation)
 import Grid exposing (IntersectionType(..))
@@ -14,12 +11,10 @@ import GridCell exposing (FrontendHistory)
 import Id
 import IdDict
 import Point2d
-import Quantity exposing (Quantity(..))
 import Set
 import Test exposing (Test, describe, test)
 import Tile exposing (Tile(..))
 import TileCountBot
-import Train exposing (Train(..))
 import Types exposing (BackendUserType(..))
 import Units
 import Vector2d
@@ -213,7 +208,7 @@ tests =
                                             Backend.localGridChange
                                                 (time 0)
                                                 model
-                                                { position = Coord.xy 1 0
+                                                { position = Coord.xy 1 -4
                                                 , change = LogCabinDown
                                                 , colors = { primaryColor = Color.black, secondaryColor = Color.black }
                                                 , time = time 0
@@ -226,7 +221,7 @@ tests =
                                                             Just user3 ->
                                                                 Backend.localUndo model2 userId user3
                                                                     |> (\( a, _, _ ) ->
-                                                                            Grid.getCell (Coord.xy 0 0) a.grid |> Maybe.map GridCell.flatten
+                                                                            Grid.getCell (Coord.xy 0 -1) a.grid |> Maybe.map GridCell.flatten
                                                                        )
                                                                     |> Expect.equal (Just [])
 
