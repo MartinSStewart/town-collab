@@ -28,7 +28,7 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import Grid exposing (Grid)
 import GridCell exposing (BackendHistory(..))
-import Id exposing (AnimalId, EventId, Id, MailId, OneTimePassword, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
 import LineSegmentExtra
@@ -1079,7 +1079,7 @@ generateSecretId currentTime model =
 generateOneTimePassword :
     Effect.Time.Posix
     -> { a | secretLinkCounter : Int }
-    -> ( SecretId OneTimePassword, { a | secretLinkCounter : Int } )
+    -> ( SecretId OneTimePasswordId, { a | secretLinkCounter : Int } )
 generateOneTimePassword currentTime model =
     ( Env.secretKey
         ++ "_"
@@ -1100,7 +1100,7 @@ oneTimePasswordDecoder =
     Bytes.Decode.loop
         ( [], 0 )
         (\( list, count ) ->
-            if count >= 6 then
+            if count >= Id.oneTimePasswordLength then
                 Bytes.Decode.succeed (Bytes.Decode.Done (String.fromList list))
 
             else
@@ -1126,6 +1126,11 @@ oneTimePasswordChars =
         ++ List.range (Char.toCode 'A') (Char.toCode 'Z')
         ++ List.range (Char.toCode '0') (Char.toCode '9')
         |> List.map Char.fromCode
+        -- Remove chars that are easily confused with eachother
+        |> List.remove 'O'
+        |> List.remove '0'
+        |> List.remove 'l'
+        |> List.remove '1'
         |> Array.fromList
 
 
@@ -1332,6 +1337,94 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
 
                 Nothing ->
                     initTileCountBot currentTime model
+
+        LoginAttemptRequest oneTimePassword ->
+            case AssocList.get sessionId model.pendingOneTimePasswords of
+                Just pending ->
+                    if
+                        (Duration.from pending.requestTime currentTime |> Quantity.lessThan (Duration.minutes 10))
+                            && (pending.loginAttempts < 20)
+                    then
+                        if Id.secretIdEquals oneTimePassword pending.oneTimePassword then
+                            case IdDict.get pending.userId model.users of
+                                Just user ->
+                                    case user.userType of
+                                        HumanUser humanUser ->
+                                            let
+                                                loggedIn : Change.LoggedIn_
+                                                loggedIn =
+                                                    getLoggedInData pending.userId user humanUser model
+
+                                                model2 =
+                                                    { model
+                                                        | userSessions =
+                                                            Dict.update
+                                                                (Effect.Lamdera.sessionIdToString sessionId)
+                                                                (Maybe.map (\a -> { a | userId = Just pending.userId }))
+                                                                model.userSessions
+                                                        , pendingOneTimePasswords = AssocList.remove sessionId model.pendingOneTimePasswords
+                                                    }
+
+                                                frontendUser : FrontendUser
+                                                frontendUser =
+                                                    backendUserToFrontend user
+                                            in
+                                            ( model2
+                                            , broadcast
+                                                (\sessionId2 _ ->
+                                                    if sessionId2 == sessionId then
+                                                        ServerYouLoggedIn loggedIn frontendUser
+                                                            |> Change.ServerChange
+                                                            |> Nonempty.singleton
+                                                            |> ChangeBroadcast
+                                                            |> Just
+
+                                                    else
+                                                        ServerUserConnected
+                                                            { maybeLoggedIn =
+                                                                Just { userId = loggedIn.userId, user = frontendUser }
+                                                            , cowsSpawnedFromVisibleRegion = []
+                                                            }
+                                                            |> Change.ServerChange
+                                                            |> Nonempty.singleton
+                                                            |> ChangeBroadcast
+                                                            |> Just
+                                                )
+                                                model2
+                                            )
+
+                                        BotUser ->
+                                            ( model, Command.none )
+
+                                Nothing ->
+                                    ( model, Command.none )
+
+                        else
+                            ( { model
+                                | pendingOneTimePasswords =
+                                    AssocList.update
+                                        sessionId
+                                        (Maybe.map (\a -> { a | loginAttempts = a.loginAttempts + 1 |> Debug.log "a" }))
+                                        model.pendingOneTimePasswords
+                              }
+                            , Effect.Lamdera.sendToFrontend
+                                clientId
+                                (LoginAttemptResponse (WrongOneTimePassword oneTimePassword))
+                            )
+
+                    else
+                        ( model
+                        , Effect.Lamdera.sendToFrontend
+                            clientId
+                            (LoginAttemptResponse OneTimePasswordExpiredOrTooManyAttempts)
+                        )
+
+                Nothing ->
+                    ( model
+                    , Effect.Lamdera.sendToFrontend
+                        clientId
+                        (LoginAttemptResponse OneTimePasswordExpiredOrTooManyAttempts)
+                    )
 
 
 {-| Allow a client to say when something happened but restrict how far it can be away from the current time.
@@ -2284,6 +2377,29 @@ getUserReports userId model =
             []
 
 
+getLoggedInData : Id UserId -> BackendUserData -> HumanUserData -> BackendModel -> Change.LoggedIn_
+getLoggedInData userId user humanUser model =
+    { userId = userId
+    , undoCurrent = user.undoCurrent
+    , undoHistory = user.undoHistory
+    , redoHistory = user.redoHistory
+    , mailDrafts = user.mailDrafts
+    , emailAddress = humanUser.emailAddress
+    , inbox = getUserInbox userId model
+    , allowEmailNotifications = humanUser.allowEmailNotifications
+    , adminData = getAdminData userId model
+    , reports = getUserReports userId model
+    , isGridReadOnly = model.isGridReadOnly
+    , timeOfDay = humanUser.timeOfDay
+    , tileHotkeys = humanUser.tileHotkeys
+    , showNotifications = humanUser.showNotifications
+    , notifications =
+        Grid.latestChanges humanUser.notificationsClearedAt userId model.grid
+            |> List.foldl LocalGrid.addNotification []
+    , notificationsClearedAt = humanUser.notificationsClearedAt
+    }
+
+
 connectToBackend :
     Effect.Time.Posix
     -> SessionId
@@ -2529,8 +2645,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
 
                         else
                             ServerUserConnected
-                                { userId = loggedIn.userId
-                                , user = frontendUser
+                                { maybeLoggedIn = Just { userId = loggedIn.userId, user = frontendUser }
                                 , cowsSpawnedFromVisibleRegion = newCows
                                 }
                                 |> Change.ServerChange

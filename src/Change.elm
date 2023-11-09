@@ -140,8 +140,7 @@ type ServerChange
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected
-        { userId : Id UserId
-        , user : FrontendUser
+        { maybeLoggedIn : Maybe { userId : Id UserId, user : FrontendUser }
         , cowsSpawnedFromVisibleRegion : List ( Id AnimalId, Animal )
         }
     | ServerYouLoggedIn LoggedIn_ FrontendUser

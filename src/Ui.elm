@@ -12,6 +12,7 @@ module Ui exposing
     , bottomLeft
     , button
     , center
+    , centerHorizontally
     , centerRight
     , checkbox
     , colorScaledText
@@ -44,6 +45,7 @@ module Ui exposing
     , text
     , textInput
     , textInputScaled
+    , topCenter
     , topLeft
     , topLeft2
     , topRight
@@ -520,6 +522,27 @@ el data element2 =
         element2
 
 
+centerHorizontally : { parentWidth : Int } -> Element id -> Element id
+centerHorizontally data element2 =
+    let
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+
+        left =
+            (data.parentWidth - childSizeX) // 2
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy left 0
+            , bottomRight = Coord.xy (data.parentWidth - childSizeX - left) 0
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , cachedSize = Coord.xy data.parentWidth childSizeY
+        }
+        element2
+
+
 center : { size : Coord Pixels } -> Element id -> Element id
 center data element2 =
     let
@@ -583,6 +606,30 @@ topLeft2 data element2 =
             }
         , inFront = data.inFront
         , borderAndFill = data.borderAndFill
+        , cachedSize = data.size
+        }
+        element2
+
+
+topCenter : { size : Coord Pixels } -> Element id -> Element id
+topCenter data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+
+        left =
+            (sizeX - childSizeX) // 2
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy left 0
+            , bottomRight = Coord.xy (sizeX - childSizeX - left) (sizeY - childSizeY)
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
         }
         element2

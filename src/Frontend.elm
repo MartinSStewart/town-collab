@@ -2470,7 +2470,7 @@ uiUpdate audioData id event model =
             textInputUpdate
                 2
                 InviteEmailAddressTextInput
-                (\_ model2 -> model2)
+                (\_ model2 -> ( model2, Command.none ))
                 (\() -> sendInvite model)
                 model.inviteTextInput
                 (\a -> { model | inviteTextInput = a })
@@ -2481,10 +2481,10 @@ uiUpdate audioData id event model =
             textInputUpdate
                 2
                 EmailAddressTextInputHover
-                (\_ model2 -> model2)
+                (\_ model2 -> ( model2, Command.none ))
                 (\() -> sendEmail model)
-                model.loginTextInput
-                (\a -> { model | loginTextInput = a })
+                model.loginEmailInput
+                (\a -> { model | loginEmailInput = a })
                 event
                 model
 
@@ -2701,7 +2701,7 @@ uiUpdate audioData id event model =
                                         _ ->
                                             ( model3, LocalGrid.NoOutMsg )
                             in
-                            LoadingPage.handleOutMsg False ( model2, outMsg2 ) |> Tuple.first
+                            LoadingPage.handleOutMsg False ( model2, outMsg2 )
                         )
                         (\() -> ( model, Command.none ))
                         nameTextInput
@@ -2988,7 +2988,17 @@ uiUpdate audioData id event model =
             textInputUpdate
                 Toolbar.oneTimePasswordTextScale
                 OneTimePasswordInput
-                (\_ model2 -> model2)
+                (\textModel model2 ->
+                    if String.length textModel.current.text == Id.oneTimePasswordLength then
+                        ( model2
+                        , Id.secretFromString textModel.current.text
+                            |> LoginAttemptRequest
+                            |> Effect.Lamdera.sendToBackend
+                        )
+
+                    else
+                        ( model2, Command.none )
+                )
                 (\() -> ( model, Command.none ))
                 model.oneTimePasswordInput
                 (\a ->
@@ -2996,9 +3006,9 @@ uiUpdate audioData id event model =
                         | oneTimePasswordInput =
                             { a
                                 | current =
-                                    { cursorPosition = min 6 a.current.cursorPosition
+                                    { cursorPosition = min Id.oneTimePasswordLength a.current.cursorPosition
                                     , cursorSize = a.current.cursorSize
-                                    , text = String.left 6 a.current.text
+                                    , text = String.left Id.oneTimePasswordLength a.current.text
                                     }
                             }
                     }
@@ -3010,7 +3020,7 @@ uiUpdate audioData id event model =
 textInputUpdate :
     Int
     -> UiHover
-    -> (TextInput.Model -> FrontendLoaded -> FrontendLoaded)
+    -> (TextInput.Model -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> (() -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> TextInput.Model
     -> (TextInput.Model -> FrontendLoaded)
@@ -3024,9 +3034,7 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
                 textInput2 =
                     TextInput.paste text textInput
             in
-            ( setTextInput textInput2 |> textChanged textInput2
-            , Command.none
-            )
+            setTextInput textInput2 |> textChanged textInput2
 
         Ui.MouseDown { elementPosition } ->
             ( TextInput.mouseDown
@@ -3053,17 +3061,20 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
                         (LocalGrid.keyDown Keyboard.Shift model)
                         key
                         textInput
+
+                ( model2, cmd ) =
+                    setTextInput newTextInput |> textChanged newTextInput
             in
-            ( setTextInput newTextInput |> textChanged newTextInput
+            ( model2
             , case outMsg of
                 CopyText text ->
-                    Ports.copyToClipboard text
+                    Command.batch [ cmd, Ports.copyToClipboard text ]
 
                 PasteText ->
-                    Ports.readFromClipboardRequest
+                    Command.batch [ cmd, Ports.readFromClipboardRequest ]
 
                 NoOutMsg ->
-                    Command.none
+                    cmd
             )
 
         Ui.MousePressed _ ->
@@ -3090,7 +3101,7 @@ sendEmail : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend F
 sendEmail model2 =
     case model2.pressedSubmitEmail of
         NotSubmitted _ ->
-            case EmailAddress.fromString model2.loginTextInput.current.text of
+            case EmailAddress.fromString model2.loginEmailInput.current.text of
                 Just emailAddress ->
                     ( { model2 | pressedSubmitEmail = Submitting }
                     , Untrusted.untrust emailAddress |> SendLoginEmailRequest |> Effect.Lamdera.sendToBackend
@@ -3764,6 +3775,9 @@ updateLoadedFromBackend msg model =
         CheckConnectionBroadcast ->
             ( { model | lastCheckConnection = model.time }, Command.none )
 
+        LoginAttemptResponse loginError ->
+            ( { model | loginError = Just loginError }, Command.none )
+
 
 actualTime : FrontendLoaded -> Effect.Time.Posix
 actualTime model =
@@ -4058,7 +4072,7 @@ getNightFactor model =
 
 
 uiNightFactorScaling =
-    0.5
+    0.3
 
 
 staticMatrix windowWidth windowHeight zoom =

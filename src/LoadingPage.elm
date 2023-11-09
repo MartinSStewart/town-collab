@@ -401,7 +401,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
                                 user.handColor
                         )
             , hasCmdKey = loading.hasCmdKey
-            , loginTextInput = TextInput.init
+            , loginEmailInput = TextInput.init
             , pressedSubmitEmail = NotSubmitted { pressedSubmit = False }
             , topMenuOpened = Nothing
             , inviteTextInput = TextInput.init
@@ -425,6 +425,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , selectedTileCategory = Buildings
             , lastHotkeyChange = Nothing
             , oneTimePasswordInput = TextInput.init
+            , loginError = Nothing
             }
                 |> setCurrentTool HandToolButton
     in
@@ -1287,6 +1288,18 @@ handleOutMsg isFromBackend ( model, outMsg ) =
 
         LocalGrid.ImportMail ->
             ( model, Effect.File.Select.file [ "application/json" ] ImportedMail )
+
+        LocalGrid.LoggedOut ->
+            ( { model
+                | loginError = Nothing
+                , loginEmailInput = TextInput.init
+                , oneTimePasswordInput = TextInput.init
+                , topMenuOpened = Nothing
+                , pressedSubmitEmail = NotSubmitted { pressedSubmit = False }
+                , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
+              }
+            , Command.none
+            )
 
 
 handleRailToggleSound : Coord WorldUnit -> FrontendLoaded -> FrontendLoaded

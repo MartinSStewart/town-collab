@@ -43,7 +43,7 @@ import Tile exposing (Category(..), DefaultColor(..), Tile(..), TileData, TileGr
 import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Train
-import Types exposing (ContextMenu, FrontendLoaded, Hover(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu, FrontendLoaded, Hover(..), LoginError(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
 import Unsafe
@@ -208,7 +208,11 @@ normalView windowSize model =
                                 )
 
                         NotLoggedIn _ ->
-                            loginToolbarUi model.pressedSubmitEmail model.loginTextInput model.oneTimePasswordInput
+                            loginToolbarUi
+                                model.pressedSubmitEmail
+                                model.loginEmailInput
+                                model.oneTimePasswordInput
+                                model.loginError
                     )
     in
     Ui.bottomCenter
@@ -940,8 +944,13 @@ pressedSubmit submitStatus =
             False
 
 
-loginToolbarUi : SubmitStatus EmailAddress -> TextInput.Model -> TextInput.Model -> Ui.Element UiHover
-loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput =
+loginToolbarUi :
+    SubmitStatus EmailAddress
+    -> TextInput.Model
+    -> TextInput.Model
+    -> Maybe LoginError
+    -> Ui.Element UiHover
+loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLoginError =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
@@ -995,35 +1004,68 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput =
     case pressedSubmitEmail of
         Submitted emailAddress ->
             let
-                submittedText : Ui.Element id
+                loginExpired =
+                    Ui.colorText Color.errorColor "Login expired, refresh the page to retry"
+
+                centerHorizontally item =
+                    Ui.centerHorizontally { parentWidth = Ui.size loginExpired |> Coord.xRaw } item
+
+                ( isValid, statusUi ) =
+                    case maybeLoginError of
+                        Just (WrongOneTimePassword code) ->
+                            if Id.secretToString code == oneTimePasswordInput.current.text then
+                                ( False, Ui.colorText Color.errorColor "Wrong code" |> centerHorizontally )
+
+                            else if String.length oneTimePasswordInput.current.text == Id.oneTimePasswordLength then
+                                ( True, Ui.text "Sending..." |> centerHorizontally )
+
+                            else
+                                ( True, Ui.none )
+
+                        Just OneTimePasswordExpiredOrTooManyAttempts ->
+                            ( False, loginExpired )
+
+                        Nothing ->
+                            ( True
+                            , if String.length oneTimePasswordInput.current.text == Id.oneTimePasswordLength then
+                                Ui.text "Sending..." |> centerHorizontally
+
+                              else
+                                Ui.none
+                            )
+
+                submittedText : Ui.Element UiHover
                 submittedText =
-                    "Login email sent to " ++ EmailAddress.toString emailAddress |> Ui.wrappedText 1000
+                    Ui.column
+                        { spacing = 8, padding = Ui.noPadding }
+                        [ "Login email sent to "
+                            ++ EmailAddress.toString emailAddress
+                            |> Ui.wrappedText 1000
+                            |> centerHorizontally
+                        , Ui.column
+                            { spacing = 4, padding = Ui.noPadding }
+                            [ Ui.text "Please type in the code you received" |> centerHorizontally
+                            , Ui.textInputScaled
+                                { id = OneTimePasswordInput
+                                , width = 252
+                                , textScale = oneTimePasswordTextScale
+                                , isValid = isValid
+                                , state = oneTimePasswordInput.current
+                                }
+                                |> centerHorizontally
+                            , statusUi
+                            ]
+                        ]
+
+                topPadding =
+                    16
             in
             Ui.el
-                { padding =
-                    Ui.size loginUi
-                        |> Coord.minus (Ui.size submittedText)
-                        |> Coord.divide (Coord.xy 2 2)
-                        |> Ui.paddingXY2
+                { padding = { topLeft = Coord.xy 0 topPadding, bottomRight = Coord.origin }
                 , inFront = []
                 , borderAndFill = Ui.defaultElBorderAndFill
                 }
-                (Ui.column
-                    { spacing = 16, padding = Ui.noPadding }
-                    [ submittedText
-                    , Ui.column
-                        { spacing = 4, padding = Ui.noPadding }
-                        [ Ui.text "Please type in the code you received"
-                        , Ui.textInputScaled
-                            { id = OneTimePasswordInput
-                            , width = 252
-                            , textScale = oneTimePasswordTextScale
-                            , isValid = True
-                            , state = oneTimePasswordInput.current
-                            }
-                        ]
-                    ]
-                )
+                (Ui.topCenter { size = Ui.size loginUi |> Coord.minus (Coord.xy 0 topPadding) } submittedText)
 
         _ ->
             loginUi
