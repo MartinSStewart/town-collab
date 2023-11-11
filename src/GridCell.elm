@@ -605,6 +605,12 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
         treeColor =
             Tile.defaultToPrimaryAndSecondary Tile.defaultPineTreeColor
 
+        berryBushColor =
+            Tile.defaultToPrimaryAndSecondary Tile.defaultBerryBushColor
+
+        mushroomColor =
+            Tile.defaultToPrimaryAndSecondary Tile.defaultMushroomColor
+
         rockColor =
             Tile.defaultToPrimaryAndSecondary Tile.defaultRockColor
     in
@@ -638,6 +644,12 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                                 , colors =
                                     if item == PineTree1 || item == PineTree2 || item == BigPineTree then
                                         treeColor
+
+                                    else if item == BerryBush1 || item == BerryBush2 then
+                                        berryBushColor
+
+                                    else if item == Mushroom1 || item == Mushroom2 then
+                                        mushroomColor
 
                                     else
                                         rockColor

@@ -175,8 +175,9 @@ visuallyEqual a b =
                 && (aText.underlined == bText.underlined)
 
         ( TextInput aTextInput, TextInput bTextInput ) ->
-            (aTextInput.width == bTextInput.width)
+            (aTextInput.width - bTextInput.width == 0)
                 && (aTextInput.isValid == bTextInput.isValid)
+                && (aTextInput.textScale - bTextInput.textScale == 0)
                 && (aTextInput.state == bTextInput.state)
 
         ( Button aButton aChild, Button bButton bChild ) ->

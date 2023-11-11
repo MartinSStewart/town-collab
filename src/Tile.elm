@@ -17,6 +17,8 @@ module Tile exposing
     , buildingCategory
     , categoryToString
     , codec
+    , defaultBerryBushColor
+    , defaultMushroomColor
     , defaultPineTreeColor
     , defaultPostOfficeColor
     , defaultRockColor
@@ -115,6 +117,7 @@ type TileGroup
     | RailStrafeSplitGroup
     | RailStrafeSplitMirrorGroup
     | RoadStraightManholeGroup
+    | BerryBushGroup
 
 
 codec : Codec TileGroup
@@ -172,6 +175,7 @@ codec =
         , ( "RailStrafeSplit", RailStrafeSplitGroup )
         , ( "RailStrafeSplitMirror", RailStrafeSplitMirrorGroup )
         , ( "RoadManhole", RoadStraightManholeGroup )
+        , ( "Bush", BerryBushGroup )
         ]
 
 
@@ -229,6 +233,7 @@ allTileGroups =
     , RailStrafeSplitGroup
     , RailStrafeSplitMirrorGroup
     , RoadStraightManholeGroup
+    , BerryBushGroup
     ]
 
 
@@ -283,6 +288,7 @@ sceneryCategory =
     , BenchGroup
     , DogHouseGroup
     , MushroomGroup
+    , BerryBushGroup
     ]
 
 
@@ -685,6 +691,12 @@ getTileGroupData tileGroup =
             , name = "Manhole road"
             }
 
+        BerryBushGroup ->
+            { defaultColors = defaultBerryBushColor
+            , tiles = Nonempty BerryBush1 [ BerryBush2 ]
+            , name = "Berry bush"
+            }
+
 
 type Tile
     = EmptyTile
@@ -823,6 +835,8 @@ type Tile
     | RoadManholeLeft
     | RoadManholeUp
     | RoadManholeRight
+    | BerryBush1
+    | BerryBush2
 
 
 aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
@@ -1533,6 +1547,11 @@ defaultLogCabinColor =
     TwoDefaultColors { primaryColor = Color.rgb255 220 129 97, secondaryColor = Color.rgb255 236 202 66 }
 
 
+defaultBerryBushColor : DefaultColor
+defaultBerryBushColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 44 148 54, secondaryColor = Color.rgb255 182 8 8 }
+
+
 defaultRoadColor : DefaultColor
 defaultRoadColor =
     TwoDefaultColors { primaryColor = sidewalkColor, secondaryColor = Color.rgb255 243 243 243 }
@@ -2007,6 +2026,12 @@ getData tile =
 
         RoadManholeRight ->
             roadManholeRight
+
+        BerryBush1 ->
+            berryBush1
+
+        BerryBush2 ->
+            berryBush2
 
 
 emptyTile : TileData units
@@ -4212,6 +4237,34 @@ roadManholeRight =
     }
 
 
+berryBush1 : TileData units
+berryBush1 =
+    { texturePosition = Coord.xy 680 972
+    , size = Coord.xy 3 2
+    , tileCollision =
+        [ ( 1, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+berryBush2 : TileData units
+berryBush2 =
+    { texturePosition = Coord.xy 740 972
+    , size = Coord.xy 3 2
+    , tileCollision =
+        [ ( 1, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
 collisionRectangle x y width height =
     List.range x (x + width - 1)
         |> List.concatMap
@@ -4797,6 +4850,12 @@ toInt tile =
         RoadManholeRight ->
             134
 
+        BerryBush1 ->
+            135
+
+        BerryBush2 ->
+            136
+
         BigText char ->
             maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
 
@@ -5208,6 +5267,9 @@ fromInt int =
 
         134 ->
             RoadManholeRight
+
+        135 ->
+            BerryBush1
 
         _ ->
             --maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
