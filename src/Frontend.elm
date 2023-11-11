@@ -850,13 +850,21 @@ updateLoaded audioData msg model =
                         position =
                             Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
 
+                        maybeTile :
+                            Maybe
+                                { userId : Id UserId
+                                , tile : Tile
+                                , position : Coord WorldUnit
+                                , colors : Colors
+                                , time : Effect.Time.Posix
+                                }
                         maybeTile =
                             Grid.getTile position (LocalGrid.localModel model.localModel).grid
                     in
                     ( { model
                         | contextMenu =
                             Just
-                                { userId = Maybe.map .userId maybeTile
+                                { change = maybeTile
                                 , position = position
                                 , linkCopied = False
                                 }
@@ -1932,7 +1940,7 @@ isSmallDistance previousMouseState mousePosition =
 
 tileInteraction :
     Id UserId
-    -> { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
+    -> { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors, time : Effect.Time.Posix }
     -> FrontendLoaded
     -> Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
 tileInteraction currentUserId2 { tile, userId, position } model =
@@ -2814,8 +2822,8 @@ uiUpdate audioData id event model =
                 (\() ->
                     case model.contextMenu of
                         Just contextMenu ->
-                            case contextMenu.userId of
-                                Just userId ->
+                            case contextMenu.change of
+                                Just { userId } ->
                                     LoadingPage.updateLocalModel
                                         (Change.ReportVandalism { reportedUser = userId, position = contextMenu.position })
                                         model
@@ -4366,7 +4374,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                         }
                         (case model.contextMenu of
                             Just contextMenu ->
-                                contextMenu.userId
+                                Maybe.map .userId contextMenu.change
 
                             Nothing ->
                                 Nothing
@@ -5102,8 +5110,8 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                     , userId =
                         case maybeContextMenu of
                             Just contextMenu ->
-                                case contextMenu.userId of
-                                    Just userId ->
+                                case contextMenu.change of
+                                    Just { userId } ->
                                         Id.toInt userId |> toFloat
 
                                     Nothing ->

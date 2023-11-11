@@ -553,7 +553,7 @@ contextMenuView toolbarHeight contextMenu model =
                                                 else
                                                     " "
                                                )
-                                            ++ diffToString change.time model.time
+                                            ++ diffToString model.time change.time
                                             |> Ui.wrappedText 400
 
                                     Nothing ->
@@ -700,28 +700,28 @@ diffToString start end =
                 " ago"
     in
     if months >= 2 then
-        String.fromInt months ++ "\u{00A0}months" ++ suffix
+        String.fromInt months ++ " months" ++ suffix
 
     else if weeks >= 2 then
-        String.fromInt weeks ++ "\u{00A0}weeks" ++ suffix
+        String.fromInt weeks ++ " weeks" ++ suffix
 
     else if days > 1 then
-        String.fromInt days ++ "\u{00A0}days" ++ suffix
+        String.fromInt days ++ " days" ++ suffix
 
     else if hours > 22 then
-        "1\u{00A0}day" ++ suffix
+        "1 day" ++ suffix
 
     else if hours > 6 then
-        String.fromInt hours ++ "\u{00A0}hours" ++ suffix
+        String.fromInt hours ++ " hours" ++ suffix
 
     else if Duration.inHours difference >= 1.2 then
-        removeTrailing0s 1 (Duration.inHours difference) ++ "\u{00A0}hours" ++ suffix
+        removeTrailing0s 1 (Duration.inHours difference) ++ " hours" ++ suffix
 
     else if minutes > 1 then
-        String.fromInt minutes ++ "\u{00A0}minutes" ++ suffix
+        String.fromInt minutes ++ " minutes" ++ suffix
 
     else
-        "1\u{00A0}minute" ++ suffix
+        "1 minute" ++ suffix
 
 
 removeTrailing0s : Int -> Float -> String

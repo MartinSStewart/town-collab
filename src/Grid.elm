@@ -916,7 +916,17 @@ tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
 
 
-getTile : Coord WorldUnit -> Grid a -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit, colors : Colors }
+getTile :
+    Coord WorldUnit
+    -> Grid a
+    ->
+        Maybe
+            { userId : Id UserId
+            , tile : Tile
+            , position : Coord WorldUnit
+            , colors : Colors
+            , time : Effect.Time.Posix
+            }
 getTile coord grid =
     let
         ( cellPos, localPos ) =
@@ -938,6 +948,7 @@ getTile coord grid =
                                     , tile = tile.tile
                                     , position = cellAndLocalCoordToWorld ( cellPos2, tile.position )
                                     , colors = tile.colors
+                                    , time = tile.time
                                     }
                                 )
 

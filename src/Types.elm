@@ -266,7 +266,14 @@ type alias UpdateMeshesData =
 
 
 type alias ContextMenu =
-    { change : Maybe GridCell.Value
+    { change :
+        Maybe
+            { userId : Id UserId
+            , tile : Tile
+            , position : Coord WorldUnit
+            , colors : Colors
+            , time : Effect.Time.Posix
+            }
     , position : Coord WorldUnit
     , linkCopied : Bool
     }
@@ -302,7 +309,13 @@ type alias UserSettings =
 
 
 type Hover
-    = TileHover { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
+    = TileHover
+        { tile : Tile
+        , userId : Id UserId
+        , position : Coord WorldUnit
+        , colors : Colors
+        , time : Effect.Time.Posix
+        }
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
     | AnimalHover { animalId : Id AnimalId, animal : Animal }
