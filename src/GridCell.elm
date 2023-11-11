@@ -461,6 +461,7 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
         history =
             getHistory cell.history
 
+        cache : List Value
         cache =
             List.foldr
                 stepCache

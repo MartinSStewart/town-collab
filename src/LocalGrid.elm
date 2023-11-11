@@ -558,6 +558,18 @@ updateLocalChange localChange model =
                     , NoOutMsg
                     )
 
+                AdminRegenerateGridCellCache regenTime ->
+                    ( updateLoggedIn
+                        { model | grid = Grid.regenerateGridCellCacheFrontend model.grid }
+                        (\loggedIn ->
+                            { loggedIn
+                                | adminData =
+                                    Maybe.map (\admin -> { admin | lastCacheRegeneration = Just regenTime }) loggedIn.adminData
+                            }
+                        )
+                    , NoOutMsg
+                    )
+
         SetTimeOfDay timeOfDay ->
             ( case model.userStatus of
                 LoggedIn loggedIn ->
@@ -1255,6 +1267,18 @@ updateServerChange serverChange model =
                 model
                 (\loggedIn ->
                     { loggedIn | adminData = Maybe.map (updateWorldUpdateDurations duration) loggedIn.adminData }
+                )
+            , NoOutMsg
+            )
+
+        ServerRegenerateCache regenTime ->
+            ( updateLoggedIn
+                { model | grid = Grid.regenerateGridCellCacheFrontend model.grid }
+                (\loggedIn ->
+                    { loggedIn
+                        | adminData =
+                            Maybe.map (\admin -> { admin | lastCacheRegeneration = Just regenTime }) loggedIn.adminData
+                    }
                 )
             , NoOutMsg
             )

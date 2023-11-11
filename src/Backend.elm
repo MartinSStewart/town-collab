@@ -2065,6 +2065,12 @@ updateLocalChange sessionId clientId time change model =
                             AdminResetUpdateDuration ->
                                 ( model, OriginalChange, BroadcastToNoOne )
 
+                            AdminRegenerateGridCellCache _ ->
+                                ( { model | grid = Grid.regenerateGridCellCacheBackend model.grid }
+                                , OriginalChange
+                                , BroadcastToEveryoneElse (ServerRegenerateCache time)
+                                )
+
                     else
                         ( model, InvalidChange, BroadcastToNoOne )
                 )

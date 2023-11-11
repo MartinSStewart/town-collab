@@ -33,6 +33,7 @@ type Hover
     | DeleteMailButton (Id MailId)
     | ResetUpdateDurationButton
     | ResetTileCountButton
+    | RegenerateGridCellCacheButton
 
 
 init : Model
@@ -118,6 +119,9 @@ update config hover event model =
         ResetTileCountButton ->
             onPress event (\() -> ( model, ResetTileCountBot )) model
 
+        RegenerateGridCellCacheButton ->
+            onPress event (\() -> ( model, OutMsgAdminChange (Change.AdminRegenerateGridCellCache config.time) )) model
+
 
 adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
 adminView idMap windowSize isGridReadOnly adminData model localModel =
@@ -174,16 +178,22 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                     ++ String.fromInt (IdDict.size localModel.animals)
                     ++ " animals)"
                 )
-            , Ui.text
-                ("Last cache regen: "
-                    ++ (case adminData.lastCacheRegeneration of
-                            Just time ->
-                                MailEditor.date time
+            , Ui.row
+                { spacing = 16, padding = Ui.noPadding }
+                [ Ui.button
+                    { id = idMap RegenerateGridCellCacheButton, padding = Ui.paddingXY 10 4 }
+                    (Ui.text "Regenerate grid cell cache")
+                , Ui.text
+                    ("Last cache regen: "
+                        ++ (case adminData.lastCacheRegeneration of
+                                Just time ->
+                                    MailEditor.date time
 
-                            Nothing ->
-                                "Never"
-                       )
-                )
+                                Nothing ->
+                                    "Never"
+                           )
+                    )
+                ]
             , Ui.row
                 { spacing = 16, padding = Ui.noPadding }
                 [ ("World update: " ++ averageWorldUpdateDuration ++ " avg, " ++ maxWorldUpdateDuration ++ " max")

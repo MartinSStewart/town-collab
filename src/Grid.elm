@@ -33,6 +33,8 @@ module Grid exposing
     , pointInside
     , rayIntersection
     , rayIntersection2
+    , regenerateGridCellCacheBackend
+    , regenerateGridCellCacheFrontend
     , setCell
     , tileMesh
     , tileMeshHelper2
@@ -914,6 +916,48 @@ tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale
         (Coord.multiply Units.tileSize size |> Coord.toTuple |> Coord.tuple)
         texturePosition
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
+
+
+regenerateGridCellCacheBackend : Grid BackendHistory -> Grid BackendHistory
+regenerateGridCellCacheBackend (Grid grid) =
+    Dict.map
+        (\cellPos cell ->
+            GridCell.updateCache
+                (\a ->
+                    case a of
+                        BackendDecoded list ->
+                            list
+
+                        BackendEncodedAndDecoded _ list ->
+                            list
+                )
+                (\history _ -> BackendDecoded history)
+                (Coord.tuple cellPos)
+                cell
+        )
+        grid
+        |> Grid
+
+
+regenerateGridCellCacheFrontend : Grid FrontendHistory -> Grid FrontendHistory
+regenerateGridCellCacheFrontend (Grid grid) =
+    Dict.map
+        (\cellPos cell ->
+            GridCell.updateCache
+                (\a ->
+                    case a of
+                        FrontendEncoded bytes ->
+                            Bytes.Decode.decode GridCell.historyDecoder bytes |> Maybe.withDefault []
+
+                        FrontendDecoded list ->
+                            list
+                )
+                (\history _ -> FrontendDecoded history)
+                (Coord.tuple cellPos)
+                cell
+        )
+        grid
+        |> Grid
 
 
 getTile :

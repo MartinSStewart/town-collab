@@ -991,6 +991,8 @@ allTiles =
     , RoadManholeLeft
     , RoadManholeUp
     , RoadManholeRight
+    , BerryBush1
+    , BerryBush2
     ]
         ++ List.map BigText (List.Nonempty.toList Sprite.asciiChars)
 
@@ -5270,6 +5272,9 @@ fromInt int =
 
         135 ->
             BerryBush1
+
+        136 ->
+            BerryBush2
 
         _ ->
             --maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
