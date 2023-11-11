@@ -41,6 +41,7 @@ init =
     { mailPage = 0 }
 
 
+onPress : UiEvent -> (() -> ( c, OutMsg )) -> c -> ( c, OutMsg )
 onPress event updateFunc model =
     case event of
         Ui.MousePressed ->
@@ -308,5 +309,6 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
         )
 
 
+mailPerPage : number
 mailPerPage =
     20

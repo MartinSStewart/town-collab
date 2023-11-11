@@ -36,7 +36,7 @@ import Email.Html.Attributes
 import EmailAddress exposing (EmailAddress)
 import Env
 import Grid exposing (Grid)
-import GridCell exposing (BackendHistory(..))
+import GridCell exposing (BackendHistory)
 import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
@@ -59,7 +59,7 @@ import Tile exposing (RailPathType(..))
 import TileCountBot
 import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
-import Types exposing (..)
+import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), ToBackend(..), ToFrontend(..))
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
@@ -580,7 +580,6 @@ handleWorldUpdate isProduction oldTime time model =
                                                                 loginToken
                                                                 { requestTime = time
                                                                 , userId = mail.to
-                                                                , requestedBy = LoginRequestedByBackend
                                                                 }
                                                                 model2.pendingLoginTokens
                                                     }
@@ -2432,15 +2431,14 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                 Nothing ->
                     NotLoggedIn { timeOfDay = Automatic }
             , model
-            , Nothing
             )
 
-        ( userStatus, model2, maybeRequestedBy ) =
+        ( userStatus, model2 ) =
             case maybeToken of
                 Just (LoginToken2 loginToken) ->
                     case AssocList.get loginToken model.pendingLoginTokens of
                         Just data ->
-                            if Duration.from data.requestTime currentTime |> Quantity.lessThan (Duration.minutes 10) then
+                            if Duration.from data.requestTime currentTime |> Quantity.lessThan Duration.day then
                                 case IdDict.get data.userId model.users of
                                     Just user ->
                                         case user.userType of
@@ -2466,24 +2464,16 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                                     , notificationsClearedAt = humanUser.notificationsClearedAt
                                                     }
                                                 , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
-                                                , case data.requestedBy of
-                                                    LoginRequestedByBackend ->
-                                                        Nothing
-
-                                                    LoginRequestedByFrontend requestedBy ->
-                                                        Just requestedBy
                                                 )
 
                                             BotUser ->
                                                 ( NotLoggedIn { timeOfDay = Automatic }
                                                 , addError currentTime (UserNotFoundWhenLoggingIn data.userId) model
-                                                , Nothing
                                                 )
 
                                     Nothing ->
                                         ( NotLoggedIn { timeOfDay = Automatic }
                                         , addError currentTime (UserNotFoundWhenLoggingIn data.userId) model
-                                        , Nothing
                                         )
 
                             else
@@ -2545,11 +2535,10 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                                 )
                                                 model4.users
                                       }
-                                    , Nothing
                                     )
 
                                 BotUser ->
-                                    ( NotLoggedIn { timeOfDay = Automatic }, model4, Nothing )
+                                    ( NotLoggedIn { timeOfDay = Automatic }, model4 )
 
                         Nothing ->
                             checkLogin ()
@@ -2568,13 +2557,6 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                 viewBounds
                 userStatus
                 { model2 | grid = newGrid, animals = IdDict.fromList newCows |> IdDict.union model.animals }
-                |> (case maybeRequestedBy of
-                        Just requestedBy ->
-                            addSession requestedBy clientId viewBounds userStatus
-
-                        Nothing ->
-                            identity
-                   )
 
         loadingData : LoadingData_
         loadingData =
@@ -2626,7 +2608,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                         if clientId2 == clientId then
                             Nothing
 
-                        else if sessionId2 == sessionId || Just sessionId2 == maybeRequestedBy then
+                        else if sessionId2 == sessionId then
                             ServerYouLoggedIn loggedIn frontendUser
                                 |> Change.ServerChange
                                 |> Nonempty.singleton

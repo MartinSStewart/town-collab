@@ -20,7 +20,6 @@ module Types exposing
     , LoadingData_
     , LoadingLocalModel(..)
     , LoginError(..)
-    , LoginRequestedBy(..)
     , MouseButtonState(..)
     , Page(..)
     , Person
@@ -343,7 +342,6 @@ type UiHover
     | AllowEmailNotificationsCheckbox
     | UsersOnlineButton
     | CopyPositionUrlButton
-    | ReportUserButton
     | ZoomInButton
     | ZoomOutButton
     | RotateLeftButton
@@ -386,7 +384,6 @@ type alias BackendModel =
             (SecretId LoginToken)
             { requestTime : Effect.Time.Posix
             , userId : Id UserId
-            , requestedBy : LoginRequestedBy
             }
     , pendingOneTimePasswords :
         AssocList.Dict
@@ -412,11 +409,6 @@ type alias Person =
     , home : Coord WorldUnit
     , position : Point2d WorldUnit WorldUnit
     }
-
-
-type LoginRequestedBy
-    = LoginRequestedByBackend
-    | LoginRequestedByFrontend SessionId
 
 
 type alias Invite =

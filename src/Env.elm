@@ -4,7 +4,6 @@ module Env exposing (adminEmail, adminEmail2, domain, isProduction, postmarkApiK
 -- See https://dashboard.lamdera.app/docs/environment for more info.
 
 import EmailAddress exposing (EmailAddress)
-import Id exposing (Id, UserId)
 import Postmark
 
 

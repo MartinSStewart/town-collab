@@ -2813,28 +2813,6 @@ uiUpdate audioData id event model =
                 )
                 model
 
-        ReportUserButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    case model.contextMenu of
-                        Just contextMenu ->
-                            case contextMenu.change of
-                                Just { userId } ->
-                                    LoadingPage.updateLocalModel
-                                        (Change.ReportVandalism { reportedUser = userId, position = contextMenu.position })
-                                        model
-                                        |> LoadingPage.handleOutMsg False
-
-                                Nothing ->
-                                    ( model, Command.none )
-
-                        Nothing ->
-                            ( model, Command.none )
-                )
-                model
-
         ZoomInButton ->
             onPress
                 audioData
