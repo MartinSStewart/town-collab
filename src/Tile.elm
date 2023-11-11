@@ -3558,7 +3558,7 @@ flowers1 =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 18) ]
+    , movementCollision = []
     }
 
 
@@ -3572,7 +3572,7 @@ flowers2 =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 18) ]
+    , movementCollision = []
     }
 
 

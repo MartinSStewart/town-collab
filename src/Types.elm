@@ -266,7 +266,7 @@ type alias UpdateMeshesData =
 
 
 type alias ContextMenu =
-    { userId : Maybe (Id UserId)
+    { change : Maybe GridCell.Value
     , position : Coord WorldUnit
     , linkCopied : Bool
     }
