@@ -1,11 +1,9 @@
 module Route exposing
-    ( ConfirmEmailKey(..)
-    , InviteToken(..)
+    ( InviteToken(..)
     , LoginOrInviteToken(..)
     , LoginToken(..)
     , PageRoute(..)
     , Route(..)
-    , UnsubscribeEmailKey(..)
     , decode
     , encode
     , internalRoute
@@ -133,14 +131,17 @@ pages =
     ]
 
 
+loginToken : String
 loginToken =
     "login-token"
 
 
+pageParameter : String
 pageParameter =
     "page"
 
 
+inviteToken : String
 inviteToken =
     "invite-token"
 
@@ -151,14 +152,6 @@ type Route
         , page : PageRoute
         , loginOrInviteToken : Maybe LoginOrInviteToken
         }
-
-
-type ConfirmEmailKey
-    = ConfirmEmailKey String
-
-
-type UnsubscribeEmailKey
-    = UnsubscribeEmailKey String
 
 
 internalRoute : Coord WorldUnit -> Route

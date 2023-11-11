@@ -1,4 +1,4 @@
-module Tests exposing (..)
+module Tests exposing (tests)
 
 import Animal exposing (AnimalType(..))
 import Backend
@@ -7,21 +7,21 @@ import Coord
 import Effect.Test
 import Effect.Time
 import EndToEndTests
-import Expect exposing (Expectation)
+import Expect
 import Grid exposing (IntersectionType(..))
 import GridCell exposing (FrontendHistory)
-import Id
+import Id exposing (Id, UserId)
 import IdDict
 import Point2d
 import Set
 import Test exposing (Test, describe, test)
 import Tile exposing (Tile(..))
 import TileCountBot
-import Types exposing (BackendUserType(..))
 import Units
 import Vector2d
 
 
+user0 : Id UserId
 user0 =
     Id.fromInt 0
 
@@ -241,120 +241,6 @@ tests =
         ]
 
 
+time : Int -> Effect.Time.Posix
 time seconds =
     Effect.Time.millisToPosix ((seconds * 1000) + 10000000)
-
-
-
---abc =
---    { animals = Dict.fromList []
---    , errors = []
---    , grid =
---        Grid
---            (Dict.fromList
---                [ ( ( -1, -1 )
---                  , Cell
---                        { cache = []
---                        , history = BackendDecoded [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }, position = ( Quantity 17, Quantity 16 ), tile = LogCabinDown, time = Posix 10000000, userId = Id 1 } ]
---                        , railSplitToggled = Set (D [])
---                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
---                        }
---                  )
---                , ( ( -1, 0 )
---                  , Cell
---                        { cache = []
---                        , history = BackendDecoded [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }, position = ( Quantity 17, Quantity 0 ), tile = LogCabinDown, time = Posix 10000000, userId = Id 1 } ]
---                        , railSplitToggled = Set (D [])
---                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
---                        }
---                  )
---                , ( ( 0, -1 )
---                  , Cell
---                        { cache = []
---                        , history = BackendDecoded [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }, position = ( Quantity 1, Quantity 16 ), tile = LogCabinDown, time = Posix 10000000, userId = Id 1 } ]
---                        , railSplitToggled = Set (D [])
---                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
---                        }
---                  )
---                , ( ( 0, 0 )
---                  , Cell
---                        { cache =
---                            [ { colors = { primaryColor = Color 0, secondaryColor = Color 0 }
---                              , position = ( Quantity 1, Quantity 0 )
---                              , tile = LogCabinDown
---                              , time = Posix 10000000
---                              , userId = Id 1
---                              }
---                            ]
---                        , history =
---                            BackendDecoded
---                                [ { colors =
---                                        { primaryColor =
---                                            Color
---                                                0
---                                        , secondaryColor = Color 0
---                                        }
---                                  , position = ( Quantity 1, Quantity 0 )
---                                  , tile = LogCabinDown
---                                  , time = Posix 10000000
---                                  , userId = Id 1
---                                  }
---                                ]
---                        , railSplitToggled = Set (D [])
---                        , undoPoint = Dict.fromList [ ( 1, 1 ) ]
---                        }
---                  )
---                ]
---            )
---    , invites = D []
---    , isGridReadOnly = False
---    , lastCacheRegeneration = Nothing
---    , lastReportEmailToAdmin = Nothing
---    , lastWorldUpdate = Nothing
---    , lastWorldUpdateTrains = Dict.fromList []
---    , mail = Dict.fromList []
---    , pendingLoginTokens = D []
---    , people = Dict.fromList []
---    , reported = Dict.fromList []
---    , secretLinkCounter = 0
---    , tileCountBot = Nothing
---    , trains = Dict.fromList []
---    , trainsAndAnimalsDisabled = TrainsAndAnimalsEnabled
---    , userSessions = Dict.fromList []
---    , users =
---        Dict.fromList
---            [ ( 0
---              , { cursor = Nothing
---                , handColor =
---                    { primaryColor = Color 12500665
---                    , secondaryColor =
---                        Color 108
---                            55840
---                    }
---                , mailDrafts = Dict.fromList []
---                , name = DisplayName (NonemptyString 'U' "nnamed")
---                , redoHistory = []
---                , undoCurrent = Dict.fromList []
---                , undoHistory = []
---                , userType =
---                    HumanUser
---                        { acceptedInvites = Dict.fromList []
---                        , allowEmailNotifications = True
---                        , emailAddress =
---                            EmailAddress
---                                { domain = "a"
---                                , localPart = "a"
---                                , tags =
---                                    []
---                                , tld = [ "se" ]
---                                }
---                        , notificationsClearedAt = Posix 0
---                        , showNotifications = False
---                        , tileHotkeys = D []
---                        , timeOfDay = Automatic
---                        }
---                }
---              )
---            ]
---    , worldUpdateDurations = Array.fromList []
---    }

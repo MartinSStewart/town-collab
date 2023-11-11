@@ -1,4 +1,13 @@
-module Backend exposing (app, app_, createBotUser, localAddUndo, localGridChange, localUndo)
+module Backend exposing
+    ( BroadcastTo
+    , LocalChangeStatus
+    , app
+    , app_
+    , createBotUser
+    , localAddUndo
+    , localGridChange
+    , localUndo
+    )
 
 import Angle
 import Animal exposing (Animal)
@@ -101,7 +110,7 @@ subscriptions : BackendModel -> Subscription BackendOnly BackendMsg
 subscriptions model =
     Subscription.batch
         [ Effect.Lamdera.onDisconnect UserDisconnected
-        , Effect.Lamdera.onConnect UserConnected
+        , Effect.Lamdera.onConnect (\_ clientId -> UserConnected clientId)
         , Effect.Time.every
             (if Dict.toList model.userSessions |> List.all (\( _, { clientIds } ) -> AssocList.isEmpty clientIds) then
                 Duration.minute
@@ -250,11 +259,8 @@ update isProduction msg model =
         UserDisconnected sessionId clientId ->
             disconnectClient sessionId clientId model
 
-        UserConnected _ clientId ->
+        UserConnected clientId ->
             ( model, Effect.Lamdera.sendToFrontend clientId ClientConnected )
-
-        NotifyAdminEmailSent ->
-            ( model, Command.none )
 
         UpdateFromFrontend sessionId clientId toBackendMsg time ->
             updateFromFrontendWithTime isProduction time sessionId clientId toBackendMsg model
@@ -332,31 +338,6 @@ update isProduction msg model =
 
                 Err error ->
                     ( addError sendTime (PostmarkError emailAddress error) model, Command.none )
-
-        RegenerateCache time ->
-            ( { model
-                | grid =
-                    Grid.allCellsDict model.grid
-                        |> Dict.map
-                            (\cellPosition cell ->
-                                GridCell.updateCache
-                                    (\a ->
-                                        case a of
-                                            BackendDecoded list ->
-                                                list
-
-                                            BackendEncodedAndDecoded _ list ->
-                                                list
-                                    )
-                                    (\_ a -> a)
-                                    (Coord.tuple cellPosition)
-                                    cell
-                            )
-                        |> Grid.from
-                , lastCacheRegeneration = Just time
-              }
-            , Command.none
-            )
 
         SentReportVandalismAdminEmail sendTime emailAddress result ->
             case result of
@@ -2066,7 +2047,10 @@ updateLocalChange sessionId clientId time change model =
                                 ( model, OriginalChange, BroadcastToNoOne )
 
                             AdminRegenerateGridCellCache _ ->
-                                ( { model | grid = Grid.regenerateGridCellCacheBackend model.grid }
+                                ( { model
+                                    | grid = Grid.regenerateGridCellCacheBackend model.grid
+                                    , lastCacheRegeneration = Just time
+                                  }
                                 , OriginalChange
                                 , BroadcastToEveryoneElse (ServerRegenerateCache time)
                                 )

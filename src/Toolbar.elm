@@ -23,8 +23,6 @@ import DisplayName
 import Duration exposing (Duration)
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
-import Grid
-import GridCell
 import Id
 import IdDict exposing (IdDict)
 import List.Extra as List
@@ -317,7 +315,6 @@ normalView windowSize model =
                                         model.musicVolume
                                         model.soundEffectVolume
                                         nameTextInput
-                                        localModel
                                         loggedIn
 
                                 NotLoggedIn _ ->
@@ -406,6 +403,7 @@ normalView windowSize model =
         toolbarElement
 
 
+onlineUsersButton : Int -> { a | showOnlineUsers : Bool } -> Ui.Element UiHover
 onlineUsersButton otherUsersOnline model =
     Ui.selectableButton
         { id = UsersOnlineButton
@@ -494,9 +492,6 @@ contextMenuView toolbarHeight contextMenu model =
     let
         localModel =
             LocalGrid.localModel model.localModel
-
-        ( cellPos, _ ) =
-            Grid.worldToCellAndLocalCoord contextMenu.position
 
         contextMenuElement : Ui.Element UiHover
         contextMenuElement =
@@ -774,8 +769,8 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> LocalGrid.LocalGrid_ -> LoggedIn_ -> Ui.Element UiHover
-settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
+settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
+settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
     let
         musicVolumeInput =
             volumeControl
@@ -1172,6 +1167,7 @@ oneTimePasswordTextScale =
     4
 
 
+dummyEmail : EmailAddress
 dummyEmail =
     Unsafe.emailAddress "a@a.se"
 
@@ -1375,6 +1371,7 @@ toolbarUi handColor loggedIn model currentToolButton =
             ]
 
 
+smallToolButtonPadding : Ui.Padding
 smallToolButtonPadding =
     Ui.paddingXY 8 8
 

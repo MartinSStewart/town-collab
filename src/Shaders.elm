@@ -27,7 +27,7 @@ module Shaders exposing
     )
 
 import Bitwise
-import Color
+import Color exposing (Color)
 import Coord exposing (Coord)
 import Dict exposing (Dict)
 import Effect.WebGL exposing (Shader)
@@ -131,6 +131,7 @@ mapSquare =
         ]
 
 
+reflectionDepth : Float
 reflectionDepth =
     0.05
 
@@ -163,6 +164,7 @@ moonMesh =
         |> Sprite.toMesh
 
 
+starColor : Color
 starColor =
     Color.rgb255 200 200 255
 
@@ -277,6 +279,7 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors
             )
 
 
+depthTest : Setting
 depthTest =
     Effect.WebGL.Settings.DepthTest.lessOrEqual { write = True, near = 0, far = 1 }
 

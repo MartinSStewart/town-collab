@@ -331,7 +331,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , undoAddLast = Time.millisToPosix 0
             , time = time
             , startTime = time
-            , adminEnabled = False
             , animationElapsedTime = Duration.seconds 0
             , ignoreNextUrlChanged = False
             , lastTilePlaced = Nothing
@@ -407,7 +406,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , inviteTextInput = TextInput.init
             , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
             , railToggles = []
-            , debugText = ""
             , lastReceivedMail = Nothing
             , isReconnecting = False
             , lastCheckConnection = time
@@ -1429,6 +1427,10 @@ windowResizedUpdate cssWindowSize model =
     )
 
 
+devicePixelRatioChanged :
+    Float
+    -> { a | cssWindowSize : Coord CssPixels, devicePixelRatio : Float, cssCanvasSize : Coord CssPixels, windowSize : Coord Pixels }
+    -> ( { a | cssWindowSize : Coord CssPixels, devicePixelRatio : Float, cssCanvasSize : Coord CssPixels, windowSize : Coord Pixels }, Command restriction toMsg msg )
 devicePixelRatioChanged devicePixelRatio model =
     let
         { cssCanvasSize, windowSize } =

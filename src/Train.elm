@@ -169,7 +169,7 @@ applyDiff trainDiff maybeTrain =
 
 
 diffField : a -> a -> FieldChanged a
-diffField old new =
+diffField _ new =
     --if old == new then
     --    Unchanged
     --
@@ -178,7 +178,7 @@ diffField old new =
 
 
 applyDiffField : FieldChanged a -> a -> a
-applyDiffField fieldChanged old =
+applyDiffField fieldChanged _ =
     case fieldChanged of
         FieldChanged new ->
             new
@@ -378,6 +378,7 @@ speed time (Train train) =
             train.speed
 
 
+acceleration : number
 acceleration =
     1
 
@@ -1026,6 +1027,7 @@ draw :
     -> List Effect.WebGL.Entity
 draw renderData maybeSelectedUserId time mail trains viewBounds =
     let
+        trainViewBounds : BoundingBox2d WorldUnit WorldUnit
         trainViewBounds =
             BoundingBox2d.expandBy (Coord.maxComponent trainSize |> Quantity.toFloatQuantity) viewBounds
     in
@@ -1336,10 +1338,12 @@ carryingMail mail trainId =
             )
 
 
+trainFrames : number
 trainFrames =
     48
 
 
+trainSize : Coord a
 trainSize =
     Coord.xy 36 36
 
@@ -1532,6 +1536,7 @@ speechBubbleRadioMesh =
         |> Array.fromList
 
 
+speechBubbleFrames : number
 speechBubbleFrames =
     3
 

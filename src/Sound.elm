@@ -56,6 +56,7 @@ type Sound
     | LightSwitch
 
 
+allSounds : List Sound
 allSounds =
     [ PopSound
     , CrackleSound
@@ -95,6 +96,7 @@ allSounds =
     ]
 
 
+songs : Nonempty Sound
 songs =
     Nonempty Music0 [ Music1, Music2 ]
 

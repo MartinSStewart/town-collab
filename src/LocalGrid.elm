@@ -17,7 +17,6 @@ module LocalGrid exposing
     , notificationViewportSize
     , placeAnimal
     , removeReported
-    , resetUpdateDuration
     , restoreMail
     , setTileHotkey
     , update
@@ -928,7 +927,7 @@ updateServerChange serverChange model =
                 , animals = IdDict.fromList cowsSpawnedFromVisibleRegion |> IdDict.union model.animals
               }
             , case maybeLoggedIn of
-                Just { userId, user } ->
+                Just { userId } ->
                     HandColorOrNameChanged userId
 
                 Nothing ->
@@ -1342,6 +1341,11 @@ addReported userId report reported =
         reported
 
 
+removeReported :
+    Id UserId
+    -> Coord WorldUnit
+    -> IdDict UserId (Nonempty { a | position : Coord WorldUnit })
+    -> IdDict UserId (Nonempty { a | position : Coord WorldUnit })
 removeReported userId position reported =
     IdDict.update
         userId

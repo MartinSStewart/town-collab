@@ -9,16 +9,12 @@ module Color exposing
     , fillColor3
     , focusedUiColor
     , fromHexCode
-    , getBlue
-    , getGreen
-    , getRed
     , highlightColor
     , linkColor
     , localReportColor
     , outlineColor
     , rgb255
     , toHexCode
-    , toVec3
     , toVec4
     , unsafe
     , unwrap
@@ -27,7 +23,6 @@ module Color exposing
 
 import Bitwise
 import Hex
-import Math.Vector3 as Vec3 exposing (Vec3)
 import Math.Vector4 as Vec4 exposing (Vec4)
 
 
@@ -130,14 +125,6 @@ unwrap (Color color) =
 unsafe : Int -> Color
 unsafe =
     Color
-
-
-toVec3 : Color -> Vec3
-toVec3 color =
-    Vec3.vec3
-        (getRed color |> toFloat |> (*) (1 / 255))
-        (getGreen color |> toFloat |> (*) (1 / 255))
-        (getBlue color |> toFloat |> (*) (1 / 255))
 
 
 toVec4 : Color -> Vec4

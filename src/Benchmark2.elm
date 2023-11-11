@@ -6,18 +6,18 @@ import Color
 import Coord
 import Effect.Time
 import Grid exposing (Grid)
+import GridCell exposing (FrontendHistory)
 import Id
 import Point2d
 import Tile exposing (Tile(..))
-import Ui
 import Units
 import Vector2d
 
 
-grid : Grid
+grid : Grid FrontendHistory
 grid =
     Grid.empty
-        |> Grid.addChange
+        |> Grid.addChangeFrontend
             { position = Coord.xy 73 -117
             , change = EmptyTile
             , userId = Id.fromInt 1
@@ -27,28 +27,8 @@ grid =
         |> .grid
 
 
-a =
-    (Grid.rayIntersection
-        True
-        Vector2d.zero
-        (Point2d.fromTuple Units.tileUnit ( 72, -118 ))
-        (Point2d.fromTuple Units.tileUnit ( 77, -113 ))
-        grid
-        == Grid.rayIntersection2
-            True
-            Vector2d.zero
-            (Point2d.fromTuple Units.tileUnit ( 72, -118 ))
-            (Point2d.fromTuple Units.tileUnit ( 77, -113 ))
-            grid
-    )
-        |> Debug.log "result"
-
-
+main : Benchmark.Runner.BenchmarkProgram
 main =
-    let
-        b =
-            a
-    in
     Benchmark.compare
         "Grid.rayIntersection"
         "V1"

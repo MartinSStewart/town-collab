@@ -6,7 +6,6 @@ module Types exposing
     , BackendUserType(..)
     , ContextMenu
     , CssPixels
-    , EmailEvent(..)
     , EmailResult(..)
     , FrontendLoaded
     , FrontendLoading
@@ -70,13 +69,13 @@ import Lamdera
 import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
-import MailEditor exposing (BackendMail, FrontendMail, Model)
+import MailEditor exposing (BackendMail, FrontendMail)
 import PersonName exposing (PersonName)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
-import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, PageRoute, UnsubscribeEmailKey)
+import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, PageRoute)
 import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
 import Sprite exposing (Vertex)
@@ -178,7 +177,6 @@ type alias FrontendLoaded =
     , undoAddLast : Effect.Time.Posix
     , time : Effect.Time.Posix
     , startTime : Effect.Time.Posix
-    , adminEnabled : Bool
     , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
     , lastTilePlaced : Maybe { time : Effect.Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
@@ -217,7 +215,6 @@ type alias FrontendLoaded =
     , inviteTextInput : TextInput.Model
     , inviteSubmitStatus : SubmitStatus EmailAddress
     , railToggles : List ( Time.Posix, Coord WorldUnit )
-    , debugText : String
     , lastReceivedMail : Maybe Time.Posix
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
@@ -498,7 +495,6 @@ type FrontendMsg_
     | MouseWheel Html.Events.Extra.Wheel.Event
     | MouseLeave
     | ShortIntervalElapsed Effect.Time.Posix
-    | ToggleAdminEnabledPressed
     | AnimationFrame Effect.Time.Posix
     | SoundLoaded Sound (Result Audio.LoadError Audio.Source)
     | VisibilityChanged
@@ -523,15 +519,13 @@ type ToBackend
 
 type BackendMsg
     = UserDisconnected SessionId ClientId
-    | UserConnected SessionId ClientId
-    | NotifyAdminEmailSent
+    | UserConnected ClientId
     | SentLoginEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | UpdateFromFrontend SessionId ClientId ToBackend Effect.Time.Posix
     | WorldUpdateTimeElapsed Effect.Time.Posix
     | SentInviteEmail (SecretId InviteToken) (Result Effect.Http.Error PostmarkSendResponse)
     | CheckConnectionTimeElapsed
     | SentMailNotification Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
-    | RegenerateCache Effect.Time.Posix
     | SentReportVandalismAdminEmail Effect.Time.Posix EmailAddress (Result Effect.Http.Error PostmarkSendResponse)
     | GotTimeAfterWorldUpdate Effect.Time.Posix Effect.Time.Posix
     | TileCountBotUpdate Effect.Time.Posix
@@ -540,10 +534,8 @@ type BackendMsg
 type ToFrontend
     = LoadingData LoadingData_
     | ChangeBroadcast (Nonempty Change)
-    | UnsubscribeEmailConfirmed
     | PingResponse Effect.Time.Posix
     | SendLoginEmailResponse EmailAddress
-    | DebugResponse String
     | SendInviteEmailResponse EmailAddress
     | PostOfficePositionResponse (Maybe (Coord WorldUnit))
     | ClientConnected
@@ -554,10 +546,6 @@ type ToFrontend
 type LoginError
     = OneTimePasswordExpiredOrTooManyAttempts
     | WrongOneTimePassword (SecretId OneTimePasswordId)
-
-
-type EmailEvent
-    = UnsubscribeEmail UnsubscribeEmailKey
 
 
 type alias LoadingData_ =

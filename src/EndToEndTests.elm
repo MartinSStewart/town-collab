@@ -1,11 +1,10 @@
-module EndToEndTests exposing (..)
+module EndToEndTests exposing (PostmarkRequest, main, tests)
 
 import AssocList
 import Audio
 import Backend
 import Bytes exposing (Bytes)
 import Change exposing (UserStatus(..))
-import Coord
 import Duration
 import Effect.Http exposing (Response(..))
 import Effect.Lamdera
@@ -19,8 +18,6 @@ import Json.Decode
 import Json.Encode
 import LocalGrid
 import Postmark
-import Route exposing (LoginOrInviteToken(..), LoginToken, PageRoute(..), Route(..))
-import Test exposing (Test)
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, LoadingLocalModel(..), ToBackend(..), ToFrontend)
 import Unsafe
 import Untrusted
@@ -34,7 +31,7 @@ config =
     , handleHttpRequest = handleRequest
     , handlePortToJs = handlePorts
     , handleFileRequest =
-        \request ->
+        \_ ->
             --let
             --    _ =
             --        Debug.log "file request" request
@@ -50,7 +47,7 @@ main =
 
 
 handleRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
-handleRequest { currentRequest } =
+handleRequest _ =
     --let
     --    _ =
     --        Debug.log "request" currentRequest
@@ -84,10 +81,12 @@ handlePorts { currentRequest } =
             Nothing
 
 
+sessionId0 : Effect.Lamdera.SessionId
 sessionId0 =
     Effect.Lamdera.sessionIdFromString "sessionId0"
 
 
+sessionId1 : Effect.Lamdera.SessionId
 sessionId1 =
     Effect.Lamdera.sessionIdFromString "sessionId1"
 
@@ -170,82 +169,7 @@ isOneTimePasswordEmail httpRequest =
         Nothing
 
 
-isInviteEmail :
-    Effect.Test.HttpRequest
-    -> Maybe { emailAddress : EmailAddress, loginToken : SecretId LoginToken }
-isInviteEmail httpRequest =
-    if String.startsWith (Postmark.endpoint ++ "/email") httpRequest.url then
-        case httpRequest.body of
-            Effect.Test.JsonBody value ->
-                case Json.Decode.decodeValue decodePostmark value of
-                    Ok { subject, to, htmlBody } ->
-                        case ( subject, getRoutesFromHtml htmlBody ) of
-                            ( "Town-collab invitation", [ InternalRoute { loginOrInviteToken } ] ) ->
-                                case loginOrInviteToken of
-                                    Just (LoginToken2 loginToken2) ->
-                                        { emailAddress = to
-                                        , loginToken = loginToken2
-                                        }
-                                            |> Just
-
-                                    _ ->
-                                        Nothing
-
-                            _ ->
-                                Nothing
-
-                    Err _ ->
-                        Nothing
-
-            _ ->
-                Nothing
-
-    else
-        Nothing
-
-
-getRoutesFromHtml : List Html.Parser.Node -> List Route
-getRoutesFromHtml nodes =
-    List.filterMap
-        (\( attributes, _ ) ->
-            let
-                maybeHref =
-                    List.filterMap
-                        (\( name, value ) ->
-                            if name == "href" then
-                                Just value
-
-                            else
-                                Nothing
-                        )
-                        attributes
-                        |> List.head
-            in
-            maybeHref |> Maybe.andThen Url.fromString |> Maybe.andThen Route.decode
-        )
-        (findNodesByTag "a" nodes)
-
-
-findNodesByTag : String -> List Html.Parser.Node -> List ( List Html.Parser.Attribute, List Html.Parser.Node )
-findNodesByTag tagName nodes =
-    List.concatMap
-        (\node ->
-            case node of
-                Html.Parser.Element name attributes children ->
-                    (if name == tagName then
-                        [ ( attributes, children ) ]
-
-                     else
-                        []
-                    )
-                        ++ findNodesByTag tagName children
-
-                _ ->
-                    []
-        )
-        nodes
-
-
+shouldBeLoggedIn : { a | clientId : Effect.Lamdera.ClientId } -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel
 shouldBeLoggedIn frontend0 =
     checkFrontend
         frontend0.clientId
@@ -269,6 +193,7 @@ shouldBeLoggedIn frontend0 =
         )
 
 
+shouldBeLoggedOut : { a | clientId : Effect.Lamdera.ClientId } -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel
 shouldBeLoggedOut frontend0 =
     checkFrontend
         frontend0.clientId
@@ -361,6 +286,7 @@ tests =
     ]
 
 
+shortWait : Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 shortWait =
     Effect.Test.simulateTime (Duration.milliseconds 50)
 

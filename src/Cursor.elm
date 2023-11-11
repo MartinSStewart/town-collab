@@ -328,6 +328,7 @@ pointerCursorMesh colors =
         handPointerSize
 
 
+gavelSize : Coord units
 gavelSize =
     Coord.xy 21 21
 

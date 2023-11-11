@@ -24,10 +24,8 @@ module Grid exposing
     , getTile
     , latestChanges
     , localChangeToChange
-    , localTileCoordPlusWorld
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
-    , localTilePointPlusWorldCoord
     , moveUndoPointBackend
     , moveUndoPointFrontend
     , pointInside
@@ -106,11 +104,6 @@ fromData =
     GridData
 
 
-localTileCoordPlusWorld : Coord WorldUnit -> Coord TileLocalUnit -> Coord WorldUnit
-localTileCoordPlusWorld world local =
-    Coord.toTuple local |> Coord.tuple |> Coord.plus world
-
-
 localTilePointPlusWorld : Coord WorldUnit -> Point2d TileLocalUnit TileLocalUnit -> Point2d WorldUnit WorldUnit
 localTilePointPlusWorld world local =
     Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d world)
@@ -121,14 +114,6 @@ localTilePointPlusCellLocalCoord :
     -> Point2d TileLocalUnit TileLocalUnit
     -> Point2d CellLocalUnit CellLocalUnit
 localTilePointPlusCellLocalCoord cellLocal local =
-    Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d cellLocal)
-
-
-localTilePointPlusWorldCoord :
-    Coord WorldUnit
-    -> Point2d TileLocalUnit TileLocalUnit
-    -> Point2d WorldUnit WorldUnit
-localTilePointPlusWorldCoord cellLocal local =
     Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d cellLocal)
 
 
