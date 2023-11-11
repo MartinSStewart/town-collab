@@ -24,15 +24,15 @@ module Grid exposing
     , getTile
     , latestChanges
     , localChangeToChange
-    , localTileCoordPlusWorld
     , localTilePointPlusCellLocalCoord
     , localTilePointPlusWorld
-    , localTilePointPlusWorldCoord
     , moveUndoPointBackend
     , moveUndoPointFrontend
     , pointInside
     , rayIntersection
     , rayIntersection2
+    , regenerateGridCellCacheBackend
+    , regenerateGridCellCacheFrontend
     , setCell
     , tileMesh
     , tileMeshHelper2
@@ -104,11 +104,6 @@ fromData =
     GridData
 
 
-localTileCoordPlusWorld : Coord WorldUnit -> Coord TileLocalUnit -> Coord WorldUnit
-localTileCoordPlusWorld world local =
-    Coord.toTuple local |> Coord.tuple |> Coord.plus world
-
-
 localTilePointPlusWorld : Coord WorldUnit -> Point2d TileLocalUnit TileLocalUnit -> Point2d WorldUnit WorldUnit
 localTilePointPlusWorld world local =
     Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d world)
@@ -119,14 +114,6 @@ localTilePointPlusCellLocalCoord :
     -> Point2d TileLocalUnit TileLocalUnit
     -> Point2d CellLocalUnit CellLocalUnit
 localTilePointPlusCellLocalCoord cellLocal local =
-    Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d cellLocal)
-
-
-localTilePointPlusWorldCoord :
-    Coord WorldUnit
-    -> Point2d TileLocalUnit TileLocalUnit
-    -> Point2d WorldUnit WorldUnit
-localTilePointPlusWorldCoord cellLocal local =
     Point2d.translateBy (Point2d.unwrap local |> Vector2d.unsafe) (Coord.toPoint2d cellLocal)
 
 
@@ -916,7 +903,59 @@ tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale
         (Coord.multiply Units.tileSize size |> Coord.divide (Coord.xy scale scale))
 
 
-getTile : Coord WorldUnit -> Grid a -> Maybe { userId : Id UserId, tile : Tile, position : Coord WorldUnit, colors : Colors }
+regenerateGridCellCacheBackend : Grid BackendHistory -> Grid BackendHistory
+regenerateGridCellCacheBackend (Grid grid) =
+    Dict.map
+        (\cellPos cell ->
+            GridCell.updateCache
+                (\a ->
+                    case a of
+                        BackendDecoded list ->
+                            list
+
+                        BackendEncodedAndDecoded _ list ->
+                            list
+                )
+                (\history _ -> BackendDecoded history)
+                (Coord.tuple cellPos)
+                cell
+        )
+        grid
+        |> Grid
+
+
+regenerateGridCellCacheFrontend : Grid FrontendHistory -> Grid FrontendHistory
+regenerateGridCellCacheFrontend (Grid grid) =
+    Dict.map
+        (\cellPos cell ->
+            GridCell.updateCache
+                (\a ->
+                    case a of
+                        FrontendEncoded bytes ->
+                            Bytes.Decode.decode GridCell.historyDecoder bytes |> Maybe.withDefault []
+
+                        FrontendDecoded list ->
+                            list
+                )
+                (\history _ -> FrontendDecoded history)
+                (Coord.tuple cellPos)
+                cell
+        )
+        grid
+        |> Grid
+
+
+getTile :
+    Coord WorldUnit
+    -> Grid a
+    ->
+        Maybe
+            { userId : Id UserId
+            , tile : Tile
+            , position : Coord WorldUnit
+            , colors : Colors
+            , time : Effect.Time.Posix
+            }
 getTile coord grid =
     let
         ( cellPos, localPos ) =
@@ -938,6 +977,7 @@ getTile coord grid =
                                     , tile = tile.tile
                                     , position = cellAndLocalCoordToWorld ( cellPos2, tile.position )
                                     , colors = tile.colors
+                                    , time = tile.time
                                     }
                                 )
 

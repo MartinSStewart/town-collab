@@ -17,7 +17,6 @@ module LocalGrid exposing
     , notificationViewportSize
     , placeAnimal
     , removeReported
-    , resetUpdateDuration
     , restoreMail
     , setTileHotkey
     , update
@@ -558,6 +557,18 @@ updateLocalChange localChange model =
                     , NoOutMsg
                     )
 
+                AdminRegenerateGridCellCache regenTime ->
+                    ( updateLoggedIn
+                        { model | grid = Grid.regenerateGridCellCacheFrontend model.grid }
+                        (\loggedIn ->
+                            { loggedIn
+                                | adminData =
+                                    Maybe.map (\admin -> { admin | lastCacheRegeneration = Just regenTime }) loggedIn.adminData
+                            }
+                        )
+                    , NoOutMsg
+                    )
+
         SetTimeOfDay timeOfDay ->
             ( case model.userStatus of
                 LoggedIn loggedIn ->
@@ -916,7 +927,7 @@ updateServerChange serverChange model =
                 , animals = IdDict.fromList cowsSpawnedFromVisibleRegion |> IdDict.union model.animals
               }
             , case maybeLoggedIn of
-                Just { userId, user } ->
+                Just { userId } ->
                     HandColorOrNameChanged userId
 
                 Nothing ->
@@ -1259,6 +1270,18 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
+        ServerRegenerateCache regenTime ->
+            ( updateLoggedIn
+                { model | grid = Grid.regenerateGridCellCacheFrontend model.grid }
+                (\loggedIn ->
+                    { loggedIn
+                        | adminData =
+                            Maybe.map (\admin -> { admin | lastCacheRegeneration = Just regenTime }) loggedIn.adminData
+                    }
+                )
+            , NoOutMsg
+            )
+
 
 updateWorldUpdateDurations :
     Duration
@@ -1318,6 +1341,11 @@ addReported userId report reported =
         reported
 
 
+removeReported :
+    Id UserId
+    -> Coord WorldUnit
+    -> IdDict UserId (Nonempty { a | position : Coord WorldUnit })
+    -> IdDict UserId (Nonempty { a | position : Coord WorldUnit })
 removeReported userId position reported =
     IdDict.update
         userId

@@ -121,6 +121,7 @@ type AdminChange
     | AdminDeleteMail (Id MailId) Effect.Time.Posix
     | AdminRestoreMail (Id MailId)
     | AdminResetUpdateDuration
+    | AdminRegenerateGridCellCache Effect.Time.Posix
 
 
 type AreTrainsAndAnimalsDisabled
@@ -168,6 +169,7 @@ type ServerChange
     | ServerSetTrainsDisabled AreTrainsAndAnimalsDisabled
     | ServerLogout
     | ServerAnimalMovement (Nonempty ( Id AnimalId, MovementChange ))
+    | ServerRegenerateCache Effect.Time.Posix
 
 
 type alias MovementChange =

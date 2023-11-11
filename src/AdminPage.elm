@@ -33,6 +33,7 @@ type Hover
     | DeleteMailButton (Id MailId)
     | ResetUpdateDurationButton
     | ResetTileCountButton
+    | RegenerateGridCellCacheButton
 
 
 init : Model
@@ -40,9 +41,10 @@ init =
     { mailPage = 0 }
 
 
+onPress : UiEvent -> (() -> ( c, OutMsg )) -> c -> ( c, OutMsg )
 onPress event updateFunc model =
     case event of
-        Ui.MousePressed _ ->
+        Ui.MousePressed ->
             updateFunc ()
 
         Ui.KeyDown _ Keyboard.Enter ->
@@ -118,6 +120,9 @@ update config hover event model =
         ResetTileCountButton ->
             onPress event (\() -> ( model, ResetTileCountBot )) model
 
+        RegenerateGridCellCacheButton ->
+            onPress event (\() -> ( model, OutMsgAdminChange (Change.AdminRegenerateGridCellCache config.time) )) model
+
 
 adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
 adminView idMap windowSize isGridReadOnly adminData model localModel =
@@ -174,16 +179,22 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                     ++ String.fromInt (IdDict.size localModel.animals)
                     ++ " animals)"
                 )
-            , Ui.text
-                ("Last cache regen: "
-                    ++ (case adminData.lastCacheRegeneration of
-                            Just time ->
-                                MailEditor.date time
+            , Ui.row
+                { spacing = 16, padding = Ui.noPadding }
+                [ Ui.button
+                    { id = idMap RegenerateGridCellCacheButton, padding = Ui.paddingXY 10 4 }
+                    (Ui.text "Regenerate grid cell cache")
+                , Ui.text
+                    ("Last cache regen: "
+                        ++ (case adminData.lastCacheRegeneration of
+                                Just time ->
+                                    MailEditor.date time
 
-                            Nothing ->
-                                "Never"
-                       )
-                )
+                                Nothing ->
+                                    "Never"
+                           )
+                    )
+                ]
             , Ui.row
                 { spacing = 16, padding = Ui.noPadding }
                 [ ("World update: " ++ averageWorldUpdateDuration ++ " avg, " ++ maxWorldUpdateDuration ++ " max")
@@ -255,8 +266,10 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                                         MailWaitingPickup2 ->
                                                             "waiting pickup"
 
-                                                        MailInTransit2 _ ->
-                                                            "in transit"
+                                                        MailInTransit2 trainId ->
+                                                            "in transit (Train "
+                                                                ++ String.fromInt (Id.toInt trainId)
+                                                                ++ ")"
 
                                                         MailReceived2 _ ->
                                                             "received"
@@ -296,5 +309,6 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
         )
 
 
+mailPerPage : number
 mailPerPage =
     20

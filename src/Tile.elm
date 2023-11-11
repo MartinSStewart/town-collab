@@ -991,6 +991,8 @@ allTiles =
     , RoadManholeLeft
     , RoadManholeUp
     , RoadManholeRight
+    , BerryBush1
+    , BerryBush2
     ]
         ++ List.map BigText (List.Nonempty.toList Sprite.asciiChars)
 
@@ -1049,10 +1051,12 @@ trackTurnRadiusLarge =
     6
 
 
+turnLength : Float
 turnLength =
     trackTurnRadius * pi / 2
 
 
+turnLengthLarge : Float
 turnLengthLarge =
     trackTurnRadiusLarge * pi / 2
 
@@ -1469,6 +1473,7 @@ hasCollision positionA tileA positionB tileB =
                 Set.size intersection > 0
 
 
+isFence : Tile -> Bool
 isFence tile =
     tile == FenceHorizontal || tile == FenceVertical || tile == FenceDiagonal || tile == FenceAntidiagonal || tile == DirtPathHorizontal || tile == DirtPathVertical
 
@@ -1498,6 +1503,7 @@ defaultHouseColors =
     TwoDefaultColors { primaryColor = Color.rgb255 234 100 66, secondaryColor = Color.rgb255 234 168 36 }
 
 
+sidewalkColor : Color
 sidewalkColor =
     Color.rgb255 193 182 162
 
@@ -1572,34 +1578,42 @@ defaultStatueColor =
     TwoDefaultColors { primaryColor = Color.rgb255 208 195 173, secondaryColor = Color.rgb255 171 129 128 }
 
 
+defaultHedgeBushColor : DefaultColor
 defaultHedgeBushColor =
     OneDefaultColor (Color.rgb255 74 148 74)
 
 
+defaultApartmentColor : DefaultColor
 defaultApartmentColor =
     TwoDefaultColors { primaryColor = Color.rgb255 127 53 53, secondaryColor = Color.rgb255 202 170 105 }
 
 
+defaultRockColor : DefaultColor
 defaultRockColor =
     OneDefaultColor (Color.rgb255 160 160 160)
 
 
+defaultFlowerColor : DefaultColor
 defaultFlowerColor =
     TwoDefaultColors { primaryColor = Color.rgb255 242 210 81, secondaryColor = Color.rgb255 242 146 0 }
 
 
+defaultElmTreeColor : DefaultColor
 defaultElmTreeColor =
     TwoDefaultColors { primaryColor = Color.rgb255 39 171 82, secondaryColor = Color.rgb255 141 96 65 }
 
 
+defaultDirtPathColor : DefaultColor
 defaultDirtPathColor =
     OneDefaultColor (Color.rgb255 192 146 117)
 
 
+defaultBenchColor : DefaultColor
 defaultBenchColor =
     OneDefaultColor (Color.rgb255 162 115 83)
 
 
+defaultCornerHouseColor : DefaultColor
 defaultCornerHouseColor =
     TwoDefaultColors { primaryColor = Color.rgb255 101 108 124, secondaryColor = Color.rgb255 103 157 236 }
 
@@ -3558,7 +3572,7 @@ flowers1 =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 18) ]
+    , movementCollision = []
     }
 
 
@@ -3572,7 +3586,7 @@ flowers2 =
             |> Set.fromList
             |> CustomCollision
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 18) (Coord.xy 20 18) ]
+    , movementCollision = []
     }
 
 
@@ -4265,6 +4279,7 @@ berryBush2 =
     }
 
 
+collisionRectangle : Int -> Int -> Int -> Int -> CollisionMask
 collisionRectangle x y width height =
     List.range x (x + width - 1)
         |> List.concatMap
@@ -5271,6 +5286,9 @@ fromInt int =
         135 ->
             BerryBush1
 
+        136 ->
+            BerryBush2
+
         _ ->
             --maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
             case Array.get (maxTileValue - int) Sprite.intToChar of
@@ -5281,5 +5299,6 @@ fromInt int =
                     BigText '?'
 
 
+maxTileValue : number
 maxTileValue =
     (2 ^ 16) - 1

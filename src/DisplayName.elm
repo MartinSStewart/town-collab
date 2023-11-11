@@ -3,11 +3,8 @@ module DisplayName exposing
     , Error(..)
     , default
     , fromString
-    , maxLength
-    , minLength
     , nameAndId
     , nameAndId2
-    , toNonemptyString
     , toString
     )
 
@@ -59,11 +56,6 @@ fromString text =
 toString : DisplayName -> String
 toString (DisplayName groupName) =
     String.Nonempty.toString groupName
-
-
-toNonemptyString : DisplayName -> NonemptyString
-toNonemptyString (DisplayName groupName) =
-    groupName
 
 
 default : DisplayName

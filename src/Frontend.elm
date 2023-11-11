@@ -16,7 +16,7 @@ import Coord exposing (Coord)
 import Cursor exposing (CursorSprite(..), CursorType(..))
 import Dict exposing (Dict)
 import DisplayName
-import Duration
+import Duration exposing (Duration)
 import Effect.Browser.Dom
 import Effect.Browser.Events
 import Effect.Browser.Navigation
@@ -73,7 +73,7 @@ import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Status(..), Train)
-import Types exposing (..)
+import Types exposing (ContextMenu, FrontendLoaded, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadingLocalModel(..), MouseButtonState(..), Page(..), RemovedTileParticle, SubmitStatus(..), ToBackend(..), ToFrontend(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (UiEvent)
 import Units exposing (WorldUnit)
 import Untrusted
@@ -102,6 +102,26 @@ app =
     Effect.Lamdera.frontend Lamdera.sendToBackend app_
 
 
+app_ :
+    { init :
+        Url
+        -> Effect.Browser.Navigation.Key
+        -> ( Audio.Model FrontendMsg_ FrontendModel_, Command FrontendOnly ToBackend (Audio.Msg FrontendMsg_) )
+    , view : Audio.Model FrontendMsg_ FrontendModel_ -> Browser.Document (Audio.Msg FrontendMsg_)
+    , update :
+        Audio.Msg FrontendMsg_
+        -> Audio.Model FrontendMsg_ FrontendModel_
+        -> ( Audio.Model FrontendMsg_ FrontendModel_, Command FrontendOnly ToBackend (Audio.Msg FrontendMsg_) )
+    , updateFromBackend :
+        ToFrontend
+        -> Audio.Model FrontendMsg_ FrontendModel_
+        -> ( Audio.Model FrontendMsg_ FrontendModel_, Command FrontendOnly ToBackend (Audio.Msg FrontendMsg_) )
+    , subscriptions :
+        Audio.Model FrontendMsg_ FrontendModel_
+        -> Subscription FrontendOnly (Audio.Msg FrontendMsg_)
+    , onUrlRequest : Browser.UrlRequest -> Audio.Msg FrontendMsg_
+    , onUrlChange : Url -> Audio.Msg FrontendMsg_
+    }
 app_ =
     Audio.lamderaFrontendWithAudio
         { init = init
@@ -850,13 +870,21 @@ updateLoaded audioData msg model =
                         position =
                             Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
 
+                        maybeTile :
+                            Maybe
+                                { userId : Id UserId
+                                , tile : Tile
+                                , position : Coord WorldUnit
+                                , colors : Colors
+                                , time : Effect.Time.Posix
+                                }
                         maybeTile =
                             Grid.getTile position (LocalGrid.localModel model.localModel).grid
                     in
                     ( { model
                         | contextMenu =
                             Just
-                                { userId = Maybe.map .userId maybeTile
+                                { change = maybeTile
                                 , position = position
                                 , linkCopied = False
                                 }
@@ -1082,15 +1110,6 @@ updateLoaded audioData msg model =
                 Nothing ->
                     ( model4, urlChange )
 
-        ToggleAdminEnabledPressed ->
-            ( if LocalGrid.currentUserId model == Env.adminUserId then
-                { model | adminEnabled = not model.adminEnabled }
-
-              else
-                model
-            , Command.none
-            )
-
         AnimationFrame localTime ->
             let
                 time =
@@ -1125,29 +1144,14 @@ updateLoaded audioData msg model =
                         _ ->
                             case model.focus of
                                 Just uiHover ->
-                                    case uiHover of
-                                        EmailAddressTextInputHover ->
+                                    case Ui.findInput uiHover model.ui of
+                                        Just Ui.TextInputType ->
                                             False
 
-                                        PrimaryColorInput ->
-                                            False
+                                        Just (Ui.ButtonType _) ->
+                                            True
 
-                                        SecondaryColorInput ->
-                                            False
-
-                                        InviteEmailAddressTextInput ->
-                                            False
-
-                                        DisplayNameTextInput ->
-                                            False
-
-                                        MailEditorHover _ ->
-                                            False
-
-                                        OneTimePasswordInput ->
-                                            False
-
-                                        _ ->
+                                        Nothing ->
                                             True
 
                                 Nothing ->
@@ -1932,7 +1936,7 @@ isSmallDistance previousMouseState mousePosition =
 
 tileInteraction :
     Id UserId
-    -> { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors }
+    -> { tile : Tile, userId : Id UserId, position : Coord WorldUnit, colors : Colors, time : Effect.Time.Posix }
     -> FrontendLoaded
     -> Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
 tileInteraction currentUserId2 { tile, userId, position } model =
@@ -2346,14 +2350,10 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     else
                         ( model2, Command.none )
 
-                UiHover id data ->
+                UiHover id _ ->
                     case sameUiHover of
                         Just _ ->
-                            uiUpdate
-                                audioData
-                                id
-                                (Ui.MousePressed { elementPosition = data.position })
-                                model2
+                            uiUpdate audioData id Ui.MousePressed model2
 
                         Nothing ->
                             ( model2, Command.none )
@@ -2403,9 +2403,15 @@ sendInvite model =
             ( model, Command.none )
 
 
+onPress :
+    AudioData
+    -> UiEvent
+    -> (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
+    -> FrontendLoaded
+    -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 onPress audioData event updateFunc model =
     case event of
-        Ui.MousePressed _ ->
+        Ui.MousePressed ->
             updateFunc ()
 
         Ui.KeyDown _ Keyboard.Enter ->
@@ -2807,28 +2813,6 @@ uiUpdate audioData id event model =
                 )
                 model
 
-        ReportUserButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    case model.contextMenu of
-                        Just contextMenu ->
-                            case contextMenu.userId of
-                                Just userId ->
-                                    LoadingPage.updateLocalModel
-                                        (Change.ReportVandalism { reportedUser = userId, position = contextMenu.position })
-                                        model
-                                        |> LoadingPage.handleOutMsg False
-
-                                Nothing ->
-                                    ( model, Command.none )
-
-                        Nothing ->
-                            ( model, Command.none )
-                )
-                model
-
         ZoomInButton ->
             onPress
                 audioData
@@ -3077,7 +3061,7 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
                     cmd
             )
 
-        Ui.MousePressed _ ->
+        Ui.MousePressed ->
             ( model, Command.none )
 
         Ui.MouseMove { elementPosition } ->
@@ -3643,9 +3627,6 @@ updateLoadedFromBackend msg model =
                 ( { model | localModel = newLocalModel }, Command.none )
                 outMsgs
 
-        UnsubscribeEmailConfirmed ->
-            ( model, Command.none )
-
         PingResponse serverTime ->
             case model.pingStartTime of
                 Just pingStartTime ->
@@ -3743,9 +3724,6 @@ updateLoadedFromBackend msg model =
             , Command.none
             )
 
-        DebugResponse debugText ->
-            ( { model | debugText = debugText }, Command.none )
-
         PostOfficePositionResponse maybePosition ->
             case maybePosition of
                 Just position ->
@@ -3784,6 +3762,7 @@ actualTime model =
     Duration.addTo model.localTime debugTimeOffset
 
 
+debugTimeOffset : Duration
 debugTimeOffset =
     Duration.seconds 0
 
@@ -3808,12 +3787,6 @@ view audioData model =
 
             Loaded loadedModel ->
                 canvasView audioData loadedModel
-        , case model of
-            Loading _ ->
-                Html.text ""
-
-            Loaded loadedModel ->
-                Html.text loadedModel.debugText
         , Html.node "style" [] [ Html.text "body { overflow: hidden; margin: 0; }" ]
         ]
     }
@@ -4071,10 +4044,12 @@ getNightFactor model =
     TimeOfDay.nightFactor timeOfDay model.time
 
 
+uiNightFactorScaling : Float
 uiNightFactorScaling =
     0.3
 
 
+staticMatrix : Int -> Int -> Int -> Mat4
 staticMatrix windowWidth windowHeight zoom =
     Mat4.makeScale3 (toFloat zoom * 2 / toFloat windowWidth) (toFloat zoom * -2 / toFloat windowHeight) 1
 
@@ -4366,7 +4341,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                         }
                         (case model.contextMenu of
                             Just contextMenu ->
-                                contextMenu.userId
+                                Maybe.map .userId contextMenu.change
 
                             Nothing ->
                                 Nothing
@@ -5102,8 +5077,8 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                     , userId =
                         case maybeContextMenu of
                             Just contextMenu ->
-                                case contextMenu.userId of
-                                    Just userId ->
+                                case contextMenu.change of
+                                    Just { userId } ->
                                         Id.toInt userId |> toFloat
 
                                     Nothing ->

@@ -9,17 +9,17 @@ module TileCountBot exposing
 
 import AssocList
 import Change exposing (LocalChange)
-import Color
+import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
 import Effect.Time
-import Grid exposing (Grid, GridChange)
+import Grid exposing (Grid)
 import GridCell exposing (BackendHistory)
 import Id exposing (Id, UserId)
 import List.Nonempty exposing (Nonempty(..))
 import Shaders
-import Tile exposing (Tile, TileGroup, TileGroupData)
+import Tile exposing (TileGroup, TileGroupData)
 import Units exposing (CellUnit, WorldUnit)
 import Unsafe
 
@@ -111,6 +111,7 @@ name =
     Unsafe.displayName "Tile count"
 
 
+textColor : Colors
 textColor =
     { primaryColor = Color.black, secondaryColor = Color.black }
 

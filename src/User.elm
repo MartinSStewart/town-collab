@@ -1,12 +1,13 @@
 module User exposing (FrontendUser, InviteTree(..), drawInviteTree, nameAndHand)
 
-import Color exposing (Colors)
-import Coord
+import Color exposing (Color, Colors)
+import Coord exposing (Coord)
 import Cursor exposing (Cursor)
 import DisplayName exposing (DisplayName)
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Extra
+import Pixels exposing (Pixels)
 import Sprite
 import Ui exposing (BorderAndFill(..))
 
@@ -25,14 +26,17 @@ type InviteTree
         }
 
 
+charScale : number
 charScale =
     2
 
 
+onlineColor : Color
 onlineColor =
     Color.rgb255 80 255 100
 
 
+dotSize : Coord Pixels
 dotSize =
     Coord.xy 8 8
 

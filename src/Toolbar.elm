@@ -20,11 +20,9 @@ import Coord exposing (Coord)
 import Cursor
 import Dict
 import DisplayName
-import Duration
+import Duration exposing (Duration)
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
-import Grid
-import GridCell
 import Id
 import IdDict exposing (IdDict)
 import List.Extra as List
@@ -34,6 +32,7 @@ import MailEditor
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
+import Round
 import Shaders
 import Sound
 import Sprite
@@ -316,7 +315,6 @@ normalView windowSize model =
                                         model.musicVolume
                                         model.soundEffectVolume
                                         nameTextInput
-                                        localModel
                                         loggedIn
 
                                 NotLoggedIn _ ->
@@ -405,6 +403,7 @@ normalView windowSize model =
         toolbarElement
 
 
+onlineUsersButton : Int -> { a | showOnlineUsers : Bool } -> Ui.Element UiHover
 onlineUsersButton otherUsersOnline model =
     Ui.selectableButton
         { id = UsersOnlineButton
@@ -494,9 +493,6 @@ contextMenuView toolbarHeight contextMenu model =
         localModel =
             LocalGrid.localModel model.localModel
 
-        ( cellPos, _ ) =
-            Grid.worldToCellAndLocalCoord contextMenu.position
-
         contextMenuElement : Ui.Element UiHover
         contextMenuElement =
             Ui.el
@@ -524,34 +520,35 @@ contextMenuView toolbarHeight contextMenu model =
                                 )
                             )
                         ]
-                    , case contextMenu.userId of
-                        Just userId ->
-                            if userId == Shaders.worldGenUserId then
-                                Ui.wrappedText 400 "Last changed by server"
+                    , case contextMenu.change of
+                        Just change ->
+                            if change.userId == Shaders.worldGenUserId then
+                                Ui.wrappedText 400 "Placed by world gen"
 
                             else
-                                case IdDict.get userId localModel.users of
+                                case IdDict.get change.userId localModel.users of
                                     Just user ->
                                         let
                                             name =
-                                                DisplayName.nameAndId user.name userId
+                                                DisplayName.nameAndId user.name change.userId
 
                                             isYou =
                                                 case localModel.userStatus of
                                                     LoggedIn loggedIn ->
-                                                        loggedIn.userId == userId
+                                                        loggedIn.userId == change.userId
 
                                                     NotLoggedIn _ ->
                                                         False
                                         in
-                                        "Last changed by "
+                                        "Placed by "
                                             ++ name
                                             ++ (if isYou then
-                                                    " (you)"
+                                                    " (you) "
 
                                                 else
-                                                    ""
+                                                    " "
                                                )
+                                            ++ diffToString model.time change.time
                                             |> Ui.wrappedText 400
 
                                     Nothing ->
@@ -668,6 +665,100 @@ contextMenuView toolbarHeight contextMenu model =
         )
 
 
+diffToString : Effect.Time.Posix -> Effect.Time.Posix -> String
+diffToString start end =
+    let
+        difference : Duration
+        difference =
+            Duration.from start end |> Quantity.abs
+
+        months =
+            Duration.inDays difference / 30 |> floor
+
+        weeks =
+            Duration.inWeeks difference |> floor
+
+        days =
+            Duration.inDays difference |> round
+
+        hours =
+            Duration.inHours difference |> floor
+
+        minutes =
+            Duration.inMinutes difference |> round
+
+        suffix =
+            if Effect.Time.posixToMillis start <= Effect.Time.posixToMillis end then
+                ""
+
+            else
+                " ago"
+    in
+    if months >= 2 then
+        String.fromInt months ++ " months" ++ suffix
+
+    else if weeks >= 2 then
+        String.fromInt weeks ++ " weeks" ++ suffix
+
+    else if days > 1 then
+        String.fromInt days ++ " days" ++ suffix
+
+    else if hours > 22 then
+        "1 day" ++ suffix
+
+    else if hours > 6 then
+        String.fromInt hours ++ " hours" ++ suffix
+
+    else if Duration.inHours difference >= 1.2 then
+        removeTrailing0s 1 (Duration.inHours difference) ++ " hours" ++ suffix
+
+    else if minutes > 1 then
+        String.fromInt minutes ++ " minutes" ++ suffix
+
+    else
+        "1 minute" ++ suffix
+
+
+removeTrailing0s : Int -> Float -> String
+removeTrailing0s decimalPoints value =
+    case Round.round decimalPoints value |> String.split "." of
+        [ nonDecimal, decimal ] ->
+            if decimalPoints > 0 then
+                nonDecimal
+                    ++ "."
+                    ++ (String.foldr
+                            (\char ( text, reachedNonZero ) ->
+                                if reachedNonZero || char /= '0' then
+                                    ( text, True )
+
+                                else
+                                    ( String.dropRight 1 text, False )
+                            )
+                            ( decimal, False )
+                            decimal
+                            |> Tuple.first
+                       )
+                    |> dropSuffix "."
+
+            else
+                nonDecimal
+
+        [ nonDecimal ] ->
+            nonDecimal
+
+        _ ->
+            "0"
+
+
+dropSuffix : String -> String -> String
+dropSuffix suffix string =
+    if String.endsWith suffix string then
+        String.dropRight (String.length suffix) string
+
+    else
+        string
+
+
 isDisconnected : FrontendLoaded -> Bool
 isDisconnected model =
     Duration.from model.lastCheckConnection model.time |> Quantity.greaterThan (Duration.seconds 20)
@@ -678,8 +769,8 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> LocalGrid.LocalGrid_ -> LoggedIn_ -> Ui.Element UiHover
-settingsView musicVolume soundEffectVolume nameTextInput localModel loggedIn =
+settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
+settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
     let
         musicVolumeInput =
             volumeControl
@@ -1076,6 +1167,7 @@ oneTimePasswordTextScale =
     4
 
 
+dummyEmail : EmailAddress
 dummyEmail =
     Unsafe.emailAddress "a@a.se"
 
@@ -1279,6 +1371,7 @@ toolbarUi handColor loggedIn model currentToolButton =
             ]
 
 
+smallToolButtonPadding : Ui.Padding
 smallToolButtonPadding =
     Ui.paddingXY 8 8
 

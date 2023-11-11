@@ -5,31 +5,31 @@ module MailEditor exposing
     , FrontendMail
     , Hover(..)
     , Image(..)
+    , ImageData
+    , ImagePlacer_
     , MailStatus(..)
     , MailStatus2(..)
     , Model
     , OutMsg(..)
     , ReceivedMail
+    , SubmitStatus
+    , TextUnit
     , Tool(..)
-    , backendMailToFrontend
     , backgroundLayer
     , contentCodec
     , cursorSprite
     , date
     , disconnectWarning
     , drawMail
-    , getImageData
     , getMailFrom
     , getMailTo
     , handleKeyDown
     , importMail
     , init
     , openAnimationLength
-    , redo
     , scroll
     , ui
     , uiUpdate
-    , undo
     )
 
 import Animal exposing (AnimalData, AnimalType)
@@ -107,11 +107,6 @@ type Hover
     | CloseMailViewButton
 
 
-backendMailToFrontend : BackendMail -> FrontendMail
-backendMailToFrontend mail =
-    { status = mail.status, from = mail.from, to = mail.to }
-
-
 getMailFrom : Id UserId -> IdDict MailId { a | from : Id UserId } -> List ( Id MailId, { a | from : Id UserId } )
 getMailFrom userId dict =
     IdDict.toList dict
@@ -155,7 +150,6 @@ type MailStatus2
 
 type Tool
     = ImagePlacer ImagePlacer_
-    | ImagePicker
     | EraserTool
     | TextTool (Coord TextUnit)
 
@@ -224,9 +218,6 @@ scroll scrollUp audioData config model =
     case model.currentTool of
         ImagePlacer imagePlacer ->
             rotateImage audioData config imagePlacer scrollUp model
-
-        ImagePicker ->
-            model
 
         EraserTool ->
             model
@@ -299,9 +290,10 @@ mailMousePosition elementPosition maybeImageData windowSize mousePosition =
         |> Coord.scalar 2
 
 
+onPress : UiEvent -> (() -> ( Maybe Model, OutMsg )) -> Model -> ( Maybe Model, OutMsg )
 onPress event updateFunc model =
     case event of
-        Ui.MousePressed data ->
+        Ui.MousePressed ->
             updateFunc ()
 
         Ui.KeyDown _ Keyboard.Enter ->
@@ -332,7 +324,7 @@ uiUpdate config mousePosition id event model =
 
         BackgroundHover ->
             case event of
-                Ui.MousePressed _ ->
+                Ui.MousePressed ->
                     ( Nothing, NoOutMsg )
 
                 _ ->
@@ -437,9 +429,6 @@ uiUpdate config mousePosition id event model =
 
                                     else
                                         ( Just { model | lastErase = Just config.time }, NoOutMsg )
-
-                                ImagePicker ->
-                                    ( Just model, NoOutMsg )
 
                                 TextTool _ ->
                                     ( addContent
@@ -765,11 +754,6 @@ updateCurrentImageMesh model =
             { model
                 | currentImageMesh =
                     imageMesh (Coord.divide (Coord.xy -2 -2) imageData.textureSize) 1 image |> Sprite.toMesh
-            }
-
-        ImagePicker ->
-            { model
-                | currentImageMesh = Effect.WebGL.triangleFan []
             }
 
         EraserTool ->
@@ -1341,6 +1325,7 @@ screenToWorld windowSize model =
         >> Point2d.placeIn (Point2d.unsafe { x = 0, y = 0 } |> Frame2d.atPoint)
 
 
+scaleForScreenToWorld : Coord Pixels -> Quantity Float units
 scaleForScreenToWorld windowSize =
     1 / toFloat (mailZoomFactor windowSize) |> Quantity
 
@@ -1423,9 +1408,6 @@ drawMail { lights, nightFactor, texture, depth, time } mailPosition mailSize2 mo
                     ImagePlacer _ ->
                         Vec4.vec4 1 1 1 0.5
 
-                    ImagePicker ->
-                        Vec4.vec4 1 1 1 1
-
                     EraserTool ->
                         Vec4.vec4 1 1 1 1
 
@@ -1451,10 +1433,12 @@ drawMail { lights, nightFactor, texture, depth, time } mailPosition mailSize2 mo
         []
 
 
+mainColumnSpacing : number
 mainColumnSpacing =
     40
 
 
+toolbarMaxHeight : number
 toolbarMaxHeight =
     250
 
@@ -1667,9 +1651,6 @@ cursorSprite windowSize uiHover model =
                     ImagePlacer _ ->
                         Cursor.NoCursor
 
-                    ImagePicker ->
-                        Cursor.PointerCursor
-
                     EraserTool ->
                         Cursor.CursorSprite Cursor.EraserSpriteCursor
 
@@ -1746,9 +1727,6 @@ editorView idMap userIdAndName windowSize model =
                         (case model.currentTool of
                             ImagePlacer imagePlacer ->
                                 Just imagePlacer.imageIndex
-
-                            ImagePicker ->
-                                Nothing
 
                             EraserTool ->
                                 Nothing

@@ -29,10 +29,8 @@ module Ui exposing
     , ignoreInputs
     , noPadding
     , none
-    , outlinedScaledText
     , outlinedText
     , paddingXY
-    , paddingXY2
     , quads
     , row
     , scaledText
@@ -53,7 +51,6 @@ module Ui exposing
     , underlinedText
     , view
     , visuallyEqual
-    , wrappedColorText
     , wrappedText
     )
 
@@ -97,7 +94,7 @@ type alias TextInputData id =
 
 type UiEvent
     = MouseDown { elementPosition : Coord Pixels }
-    | MousePressed { elementPosition : Coord Pixels }
+    | MousePressed
     | MouseMove { elementPosition : Coord Pixels }
     | KeyDown Keyboard.RawKey Keyboard.Key
     | PastedText String
@@ -210,11 +207,6 @@ paddingXY x y =
     { topLeft = Coord.xy x y, bottomRight = Coord.xy x y }
 
 
-paddingXY2 : Coord Pixels -> Padding
-paddingXY2 coord =
-    { topLeft = coord, bottomRight = coord }
-
-
 text : String -> Element id
 text text2 =
     Text
@@ -299,18 +291,7 @@ outlinedText data =
         }
 
 
-outlinedScaledText : { outline : Color, color : Color, scale : Int, text : String } -> Element id
-outlinedScaledText data =
-    Text
-        { outline = Just data.outline
-        , color = data.color
-        , scale = defaultCharScale
-        , text = data.text
-        , underlined = False
-        , cachedSize = Sprite.textSize data.scale data.text
-        }
-
-
+defaultCharScale : number
 defaultCharScale =
     2
 
@@ -1104,23 +1085,23 @@ columnSize data children =
 
 type InputType id
     = ButtonType { data : ButtonData id, position : Coord Pixels }
-    | TextInputType { data : TextInputData id, position : Coord Pixels }
+    | TextInputType
 
 
 findInput : id -> Element id -> Maybe (InputType id)
 findInput id element =
-    findButtonHelper id Coord.origin element
+    findInputHelper id Coord.origin element
 
 
-findButtonHelper : id -> Coord Pixels -> Element id -> Maybe (InputType id)
-findButtonHelper id position element =
+findInputHelper : id -> Coord Pixels -> Element id -> Maybe (InputType id)
+findInputHelper id position element =
     case element of
         Text _ ->
             Nothing
 
         TextInput data ->
             if data.id == id then
-                TextInputType { data = data, position = position } |> Just
+                TextInputType |> Just
 
             else
                 Nothing
@@ -1140,7 +1121,7 @@ findButtonHelper id position element =
                             state
 
                         Nothing ->
-                            { result = findButtonHelper id state.position child
+                            { result = findInputHelper id state.position child
                             , position =
                                 Coord.xy (Coord.xRaw (size child) + data.spacing) 0
                                     |> Coord.plus state.position
@@ -1160,7 +1141,7 @@ findButtonHelper id position element =
                             state
 
                         Nothing ->
-                            { result = findButtonHelper id state.position child
+                            { result = findInputHelper id state.position child
                             , position =
                                 Coord.xy 0 (Coord.yRaw (size child) + data.spacing)
                                     |> Coord.plus state.position
@@ -1177,12 +1158,12 @@ findButtonHelper id position element =
                 position2 =
                     Coord.plus data.padding.topLeft position
             in
-            case List.findMap (findButtonHelper id position2) (child :: data.inFront) of
+            case List.findMap (findInputHelper id position2) (child :: data.inFront) of
                 Just result ->
                     Just result
 
                 Nothing ->
-                    findButtonHelper id position2 child
+                    findInputHelper id position2 child
 
         Quads _ ->
             Nothing
@@ -1191,7 +1172,7 @@ findButtonHelper id position element =
             Nothing
 
         IgnoreInputs child ->
-            findButtonHelper id position child
+            findInputHelper id position child
 
 
 tabForward : id -> Element id -> id

@@ -11,9 +11,7 @@ module GridCell exposing
     , flatten
     , getPostOffices
     , getToggledRailSplit
-    , hasChangesBy
     , hasUserChanges
-    , history2
     , historyDecoder
     , latestChange
     , mapPixelData
@@ -38,7 +36,7 @@ import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Quantity exposing (Quantity(..))
 import Random
-import Shaders exposing (MapOverlayVertex)
+import Shaders
 import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit)
@@ -292,6 +290,7 @@ updateMapPixelData cache =
         |> (\{ lowBit, highBit } -> Vec2.vec2 (toFloat lowBit) (toFloat highBit))
 
 
+zeroOutBit : Int -> Int -> Int
 zeroOutBit index value =
     Bitwise.shiftLeftBy index 1 |> Bitwise.complement |> Bitwise.and value
 
@@ -461,6 +460,7 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
         history =
             getHistory cell.history
 
+        cache : List Value
         cache =
             List.foldr
                 stepCache
@@ -481,12 +481,12 @@ stepCache :
     Value
     -> { list : List Value, undoPoint : IdDict UserId number }
     -> { list : List Value, undoPoint : IdDict UserId number }
-stepCache ({ userId, position, tile } as item) state =
-    case IdDict.get userId state.undoPoint of
+stepCache item state =
+    case IdDict.get item.userId state.undoPoint of
         Just stepsLeft ->
             if stepsLeft > 0 then
                 { list = stepCacheHelper item state.list
-                , undoPoint = IdDict.insert userId (stepsLeft - 1) state.undoPoint
+                , undoPoint = IdDict.insert item.userId (stepsLeft - 1) state.undoPoint
                 }
 
             else
@@ -497,7 +497,7 @@ stepCache ({ userId, position, tile } as item) state =
 
 
 stepCacheHelper : Value -> List Value -> List Value
-stepCacheHelper ({ userId, position, tile } as item) cache =
+stepCacheHelper ({ position, tile } as item) cache =
     (if Bounds.contains position cellBounds then
         [ item ]
 
@@ -513,7 +513,7 @@ stepCacheHelper ({ userId, position, tile } as item) cache =
 
 
 stepCacheHelperWithRemoved : Value -> List Value -> { remaining : List Value, removed : List Value }
-stepCacheHelperWithRemoved ({ userId, position, tile } as item) cache =
+stepCacheHelperWithRemoved ({ position, tile } as item) cache =
     let
         ( remaining, removed ) =
             List.partition
@@ -533,11 +533,6 @@ stepCacheHelperWithRemoved ({ userId, position, tile } as item) cache =
             ++ remaining
     , removed = removed
     }
-
-
-hasChangesBy : Id UserId -> Cell a -> Bool
-hasChangesBy userId (Cell cell) =
-    IdDict.member userId cell.undoPoint
 
 
 moveUndoPoint : (a -> List Value) -> (List Value -> a -> a) -> Id UserId -> Int -> Coord CellUnit -> Cell a -> Cell a
@@ -663,13 +658,3 @@ addTrees (( Quantity cellX, Quantity cellY ) as cellPosition) =
                     cell
             )
             []
-
-
-history2 : Cell FrontendHistory -> List Value
-history2 (Cell cell) =
-    case cell.history of
-        FrontendDecoded list ->
-            list
-
-        FrontendEncoded bytes ->
-            Bytes.Decode.decode historyDecoder bytes |> Maybe.withDefault []

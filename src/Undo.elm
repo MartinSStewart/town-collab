@@ -48,5 +48,6 @@ add model =
     }
 
 
+maxUndoHistory : number
 maxUndoHistory =
     200

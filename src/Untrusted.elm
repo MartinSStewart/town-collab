@@ -2,7 +2,6 @@ module Untrusted exposing
     ( Untrusted(..)
     , Validation(..)
     , emailAddress
-    , toString
     , untrust
     )
 
@@ -21,11 +20,6 @@ type Untrusted a
 type Validation a
     = Valid a
     | Invalid
-
-
-toString : (a -> String) -> Untrusted a -> String
-toString toStringFunc (Untrusted a) =
-    toStringFunc a
 
 
 fromMaybe : Maybe a -> Validation a

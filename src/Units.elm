@@ -1,14 +1,12 @@
 module Units exposing
     ( CellLocalUnit(..)
     , CellUnit(..)
-    , MailPixelUnit(..)
     , TerrainUnit(..)
     , TileLocalUnit(..)
     , WorldUnit(..)
     , cellSize
     , cellToTile
     , cellUnit
-    , localUnit
     , pixelToTile
     , pixelToTilePoint
     , pixelToTileVector
@@ -44,10 +42,6 @@ type TileLocalUnit
     = TileLocalUnit Never
 
 
-type MailPixelUnit
-    = MailUnit Never
-
-
 type TerrainUnit
     = TerrainUnit Never
 
@@ -59,11 +53,6 @@ tileUnit =
 
 cellUnit : number -> Quantity number CellUnit
 cellUnit =
-    Quantity.Quantity
-
-
-localUnit : number -> Quantity number CellLocalUnit
-localUnit =
     Quantity.Quantity
 
 
