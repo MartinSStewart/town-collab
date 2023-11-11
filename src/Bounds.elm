@@ -120,7 +120,7 @@ coordRangeFold foldFunc rowChangeFunc (Bounds bounds_) initialValue =
         ( x1, y1 ) =
             Coord.toTuple bounds_.max
     in
-    coordRangeFoldHelper foldFunc rowChangeFunc x0 x1 y0 y1 x0 y0 initialValue
+    coordRangeFoldHelper foldFunc rowChangeFunc x0 x1 y1 x0 y0 initialValue
 
 
 coordRangeFoldHelper : (Coord units -> a -> a) -> (a -> a) -> Int -> Int -> Int -> Int -> Int -> a -> a
