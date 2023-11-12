@@ -429,9 +429,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , loginError = Nothing
             , hyperlinkInput = TextInputMultiline.init |> TextInputMultiline.withText "example.com"
             }
-                |> setCurrentTool (TilePlacerToolButton HyperlinkGroup)
-
-        --|> setCurrentTool HandToolButton
+                |> setCurrentTool HandToolButton
     in
     ( updateMeshes model
     , Command.batch
