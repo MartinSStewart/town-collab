@@ -16,7 +16,6 @@ import GridCell exposing (FrontendHistory)
 import Id exposing (Id, UserId)
 import IdDict
 import Point2d
-import Set
 import Test exposing (Test, describe, test)
 import Tile exposing (Tile(..))
 import TileCountBot

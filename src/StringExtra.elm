@@ -1,4 +1,4 @@
-module StringExtra exposing (..)
+module StringExtra exposing (dropPrefix, removeTrailing0s)
 
 import Round
 

@@ -7,6 +7,7 @@ module Ui exposing
     , Padding
     , RowColumn
     , TextInputData
+    , TextInputMultilineData
     , UiEvent(..)
     , bottomCenter
     , bottomLeft

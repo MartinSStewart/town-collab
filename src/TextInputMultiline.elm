@@ -2,15 +2,11 @@ module TextInputMultiline exposing
     ( Model
     , State
     , addLineBreaks
-    , defaultTextScale
     , init
     , keyMsg
     , mouseDown
     , mouseDownMove
-    , padding
     , paste
-    , replaceState
-    , selectAll
     , size
     , view
     , withText
@@ -40,11 +36,6 @@ type alias State =
     }
 
 
-defaultTextScale : number
-defaultTextScale =
-    2
-
-
 init : Model
 init =
     { current = { cursorPosition = 0, cursorSize = 0, text = "" }, undoHistory = [], redoHistory = [], dummyField = () }
@@ -53,18 +44,6 @@ init =
 withText : String -> Model -> Model
 withText text model =
     replaceState (\state -> { state | text = text }) model
-
-
-selectAll : Model -> Model
-selectAll model =
-    replaceState
-        (\state ->
-            { state
-                | cursorPosition = String.length state.text
-                , cursorSize = String.length state.text |> negate
-            }
-        )
-        model
 
 
 pushState : (State -> State) -> Model -> Model
