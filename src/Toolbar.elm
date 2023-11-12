@@ -37,7 +37,9 @@ import Shaders
 import Sound
 import Sprite
 import String.Nonempty
+import StringExtra
 import TextInput
+import TextInputMultiline
 import Tile exposing (Category(..), DefaultColor(..), Tile(..), TileData, TileGroup(..))
 import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
@@ -548,7 +550,7 @@ contextMenuView toolbarHeight contextMenu model =
                                                 else
                                                     " "
                                                )
-                                            ++ diffToString model.time change.time
+                                            ++ durationToString model.time change.time
                                             |> Ui.wrappedText 400
 
                                     Nothing ->
@@ -665,8 +667,8 @@ contextMenuView toolbarHeight contextMenu model =
         )
 
 
-diffToString : Effect.Time.Posix -> Effect.Time.Posix -> String
-diffToString start end =
+durationToString : Effect.Time.Posix -> Effect.Time.Posix -> String
+durationToString start end =
     let
         difference : Duration
         difference =
@@ -710,53 +712,13 @@ diffToString start end =
         String.fromInt hours ++ " hours" ++ suffix
 
     else if Duration.inHours difference >= 1.2 then
-        removeTrailing0s 1 (Duration.inHours difference) ++ " hours" ++ suffix
+        StringExtra.removeTrailing0s 1 (Duration.inHours difference) ++ " hours" ++ suffix
 
     else if minutes > 1 then
         String.fromInt minutes ++ " minutes" ++ suffix
 
     else
         "1 minute" ++ suffix
-
-
-removeTrailing0s : Int -> Float -> String
-removeTrailing0s decimalPoints value =
-    case Round.round decimalPoints value |> String.split "." of
-        [ nonDecimal, decimal ] ->
-            if decimalPoints > 0 then
-                nonDecimal
-                    ++ "."
-                    ++ (String.foldr
-                            (\char ( text, reachedNonZero ) ->
-                                if reachedNonZero || char /= '0' then
-                                    ( text, True )
-
-                                else
-                                    ( String.dropRight 1 text, False )
-                            )
-                            ( decimal, False )
-                            decimal
-                            |> Tuple.first
-                       )
-                    |> dropSuffix "."
-
-            else
-                nonDecimal
-
-        [ nonDecimal ] ->
-            nonDecimal
-
-        _ ->
-            "0"
-
-
-dropSuffix : String -> String -> String
-dropSuffix suffix string =
-    if String.endsWith suffix string then
-        String.dropRight (String.length suffix) string
-
-    else
-        string
 
 
 isDisconnected : FrontendLoaded -> Bool
@@ -1185,6 +1147,7 @@ toolbarUiSize =
         , secondaryColorTextInput = TextInput.init
         , inviteTextInput = TextInput.init
         , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
+        , hyperlinkInput = TextInputMultiline.init
         }
         HandToolButton
         |> Ui.size
@@ -1203,6 +1166,7 @@ toolbarUi :
             , secondaryColorTextInput : TextInput.Model
             , inviteTextInput : TextInput.Model
             , inviteSubmitStatus : SubmitStatus EmailAddress
+            , hyperlinkInput : TextInputMultiline.Model
         }
     -> ToolButton
     -> Ui.Element UiHover
@@ -1310,6 +1274,7 @@ toolbarUi handColor loggedIn model currentToolButton =
                 , TilePickerToolButton
                 , TextToolButton
                 , TilePlacerToolButton EmptyTileGroup
+                , TilePlacerToolButton HyperlinkGroup
                 ]
                 |> List.greedyGroupsOf toolbarRowCount
                 |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
@@ -1367,7 +1332,7 @@ toolbarUi handColor loggedIn model currentToolButton =
             --    |> List.greedyGroupsOf toolbarRowCount
             --    |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
             --    |> Ui.row { spacing = 2, padding = Ui.noPadding }
-            , selectedToolView handColor model.primaryColorTextInput model.secondaryColorTextInput model.tileColors currentToolButton
+            , selectedToolView handColor model currentToolButton
             ]
 
 
@@ -1413,103 +1378,121 @@ inviteUserSprite =
 
 selectedToolView :
     Colors
-    -> TextInput.Model
-    -> TextInput.Model
-    -> AssocList.Dict TileGroup Colors
+    ->
+        { b
+            | tileColors : AssocList.Dict TileGroup Colors
+            , primaryColorTextInput : TextInput.Model
+            , secondaryColorTextInput : TextInput.Model
+            , hyperlinkInput : TextInputMultiline.Model
+        }
     -> ToolButton
     -> Ui.Element UiHover
-selectedToolView handColor primaryColorTextInput secondaryColorTextInput tileColors currentTool =
+selectedToolView handColor model currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
-            showColorTextInputs handColor tileColors currentTool
+            showColorTextInputs handColor model.tileColors currentTool
     in
-    Ui.column
-        { spacing = 6, padding = Ui.paddingXY 12 8 }
-        [ Ui.wrappedText
-            260
-            (case currentTool of
-                HandToolButton ->
-                    "Pointer tool"
-
-                TilePickerToolButton ->
-                    "Tile picker"
-
-                TilePlacerToolButton tileGroup ->
-                    Tile.getTileGroupData tileGroup |> .name
-
-                TextToolButton ->
-                    "Text"
-
-                ReportToolButton ->
-                    "Report vandalism"
-            )
-        , Ui.row
-            { spacing = 10, padding = Ui.noPadding }
-            [ Ui.column
-                { spacing = 10, padding = Ui.noPadding }
-                [ case showPrimaryColorTextInput of
-                    Just color ->
-                        colorTextInput PrimaryColorInput primaryColorTextInput color
-
-                    Nothing ->
-                        Ui.none
-                , case showSecondaryColorTextInput of
-                    Just color ->
-                        colorTextInput SecondaryColorInput secondaryColorTextInput color
-
-                    Nothing ->
-                        Ui.none
-                , Ui.el
-                    { padding =
-                        { topLeft =
-                            Coord.xy
-                                (colorTextInput
-                                    PrimaryColorInput
-                                    primaryColorTextInput
-                                    Color.black
-                                    |> Ui.size
-                                    |> Coord.xRaw
-                                )
-                                0
-                        , bottomRight = Coord.xy 0 0
-                        }
-                    , inFront = []
-                    , borderAndFill = NoBorderOrFill
+    case currentTool of
+        TilePlacerToolButton HyperlinkGroup ->
+            Ui.column
+                { spacing = 6, padding = Ui.paddingXY 8 8 }
+                [ Ui.text "Hyperlink"
+                , Ui.textInputMultiline
+                    { id = HyperlinkInput
+                    , width = 270
+                    , isValid = True
+                    , state = model.hyperlinkInput.current
                     }
-                    Ui.none
                 ]
-            , Ui.center
-                { size = buttonSize }
-                (case currentTool of
-                    TilePlacerToolButton tileGroup ->
-                        case AssocList.get tileGroup tileColors of
+
+        _ ->
+            Ui.column
+                { spacing = 6, padding = Ui.paddingXY 12 8 }
+                [ Ui.wrappedText
+                    260
+                    (case currentTool of
+                        HandToolButton ->
+                            "Pointer tool"
+
+                        TilePickerToolButton ->
+                            "Tile picker"
+
+                        TilePlacerToolButton tileGroup ->
+                            Tile.getTileGroupData tileGroup |> .name
+
+                        TextToolButton ->
+                            "Text"
+
+                        ReportToolButton ->
+                            "Report vandalism"
+                    )
+                , Ui.row
+                    { spacing = 10, padding = Ui.noPadding }
+                    [ Ui.column
+                        { spacing = 10, padding = Ui.noPadding }
+                        [ case showPrimaryColorTextInput of
                             Just color ->
-                                (Tile.getTileGroupData tileGroup).tiles
-                                    |> List.Nonempty.head
-                                    |> tileMesh color
+                                colorTextInput PrimaryColorInput model.primaryColorTextInput color
 
                             Nothing ->
                                 Ui.none
-
-                    TilePickerToolButton ->
-                        Cursor.eyeDropperCursor2
-
-                    HandToolButton ->
-                        Cursor.defaultCursorMesh2 handColor
-
-                    TextToolButton ->
-                        case AssocList.get BigTextGroup tileColors of
+                        , case showSecondaryColorTextInput of
                             Just color ->
-                                tileMesh color (BigText 'A')
+                                colorTextInput SecondaryColorInput model.secondaryColorTextInput color
 
                             Nothing ->
                                 Ui.none
+                        , Ui.el
+                            { padding =
+                                { topLeft =
+                                    Coord.xy
+                                        (colorTextInput
+                                            PrimaryColorInput
+                                            model.primaryColorTextInput
+                                            Color.black
+                                            |> Ui.size
+                                            |> Coord.xRaw
+                                        )
+                                        0
+                                , bottomRight = Coord.xy 0 0
+                                }
+                            , inFront = []
+                            , borderAndFill = NoBorderOrFill
+                            }
+                            Ui.none
+                        ]
+                    , Ui.center
+                        { size = buttonSize }
+                        (case currentTool of
+                            TilePlacerToolButton tileGroup ->
+                                case AssocList.get tileGroup model.tileColors of
+                                    Just color ->
+                                        (Tile.getTileGroupData tileGroup).tiles
+                                            |> List.Nonempty.head
+                                            |> tileMesh color
 
-                    ReportToolButton ->
-                        Cursor.gavelCursor2
-                )
-            ]
-        ]
+                                    Nothing ->
+                                        Ui.none
+
+                            TilePickerToolButton ->
+                                Cursor.eyeDropperCursor2
+
+                            HandToolButton ->
+                                Cursor.defaultCursorMesh2 handColor
+
+                            TextToolButton ->
+                                case AssocList.get BigTextGroup model.tileColors of
+                                    Just color ->
+                                        tileMesh color (BigText 'A')
+
+                                    Nothing ->
+                                        Ui.none
+
+                            ReportToolButton ->
+                                Cursor.gavelCursor2
+                        )
+                    ]
+                ]
 
 
 colorTextInput :
@@ -1690,20 +1673,24 @@ tileMesh colors tile =
             Coord.multiply Units.tileSize data.size
                 |> Coord.minimum buttonSize
 
+        spriteSize : Coord Pixels
         spriteSize =
-            if data.size == Coord.xy 1 1 then
-                Coord.multiplyTuple ( 2, 2 ) size
+            case tile of
+                EmptyTile ->
+                    Coord.tuple ( 28 * 2, 27 * 2 )
 
-            else
-                size
+                HyperlinkTile _ ->
+                    Coord.multiplyTuple ( 2, 2 ) size
+
+                _ ->
+                    if data.size == Coord.xy 1 1 then
+                        Coord.multiplyTuple ( 2, 2 ) size
+
+                    else
+                        size
     in
     Ui.quads
-        { size =
-            if tile == EmptyTile then
-                Coord.tuple ( 28 * 2, 27 * 2 )
-
-            else
-                spriteSize
+        { size = spriteSize
         , vertices =
             if tile == EmptyTile then
                 Sprite.sprite

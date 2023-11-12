@@ -78,6 +78,7 @@ import Sound
 import Sprite exposing (Vertex)
 import Terrain
 import TextInput
+import TextInputMultiline
 import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
@@ -424,6 +425,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastHotkeyChange = Nothing
             , oneTimePasswordInput = TextInput.init
             , loginError = Nothing
+            , hyperlinkInput = TextInputMultiline.init
             }
                 |> setCurrentTool HandToolButton
     in
@@ -601,6 +603,7 @@ updateMeshes newModel =
             in
             { foreground =
                 Grid.foregroundMesh2
+                    []
                     newShowEmptyTiles
                     (case ( newCurrentTile, newMaybeUserId ) of
                         ( Just newCurrentTile_, Just userId ) ->

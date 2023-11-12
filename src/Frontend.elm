@@ -39,6 +39,7 @@ import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
+import Hyperlink
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Json.Decode
@@ -2993,6 +2994,28 @@ uiUpdate audioData id event model =
                                     { cursorPosition = min Id.oneTimePasswordLength a.current.cursorPosition
                                     , cursorSize = a.current.cursorSize
                                     , text = String.left Id.oneTimePasswordLength a.current.text
+                                    }
+                            }
+                    }
+                )
+                event
+                model
+
+        HyperlinkInput ->
+            textInputUpdate
+                2
+                HyperlinkInput
+                (\_ model2 -> ( model2, Command.none ))
+                (\() -> ( model, Command.none ))
+                model.hyperlinkInput
+                (\a ->
+                    { model
+                        | hyperlinkInput =
+                            { a
+                                | current =
+                                    { cursorPosition = min Hyperlink.maxLength a.current.cursorPosition
+                                    , cursorSize = a.current.cursorSize
+                                    , text = String.left Hyperlink.maxLength a.current.text
                                     }
                             }
                     }

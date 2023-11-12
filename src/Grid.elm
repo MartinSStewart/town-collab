@@ -584,7 +584,8 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
 
 
 foregroundMesh2 :
-    Bool
+    List { linkTopLeft : Coord WorldUnit, linkWidth : Quantity Int WorldUnit }
+    -> Bool
     -> Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
     -> Maybe (Id UserId)
@@ -592,7 +593,7 @@ foregroundMesh2 :
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> WebGL.Mesh Vertex
-foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
+foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
     List.concatMap
         (\{ position, userId, tile, colors } ->
             if showEmptyTiles || tile /= EmptyTile then
@@ -604,6 +605,27 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                     data : TileData unit
                     data =
                         Tile.getData tile
+
+                    texturePosition : Coord unit
+                    texturePosition =
+                        case tile of
+                            BigText _ ->
+                                if
+                                    List.any
+                                        (\{ linkTopLeft, linkWidth } ->
+                                            (Coord.yRaw position == Coord.yRaw linkTopLeft)
+                                                && (Coord.xRaw position >= Coord.xRaw linkTopLeft)
+                                                && (Coord.xRaw position <= Coord.xRaw linkTopLeft + Quantity.unwrap linkWidth)
+                                        )
+                                        hyperlinks
+                                then
+                                    Coord.plus (Coord.xy 0 180) data.texturePosition
+
+                                else
+                                    data.texturePosition
+
+                            _ ->
+                                data.texturePosition
 
                     opacity : Float
                     opacity =
@@ -618,6 +640,7 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                             Nothing ->
                                 1
 
+                    opacityAndUserId : Float
                     opacityAndUserId =
                         Shaders.opacityAndUserId opacity userId
                 in
@@ -687,7 +710,7 @@ foregroundMesh2 showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId 
                                     _ ->
                                         1
                                 )
-                                data.texturePosition
+                                texturePosition
                                 data.size
                 --++ List.concatMap
                 --    (\boundingBox ->
