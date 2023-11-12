@@ -222,8 +222,7 @@ allTileGroups =
     , ElmTreeGroup
     , DirtPathGroup
     , BigTextGroup
-
-    --, HyperlinkGroup
+    , HyperlinkGroup
     , BenchGroup
     , ParkingLotGroup
     , ParkingRoadGroup
@@ -349,16 +348,21 @@ roadCategory =
 
 tileToTileGroup : Tile -> Maybe { tileGroup : TileGroup, index : Int }
 tileToTileGroup tile =
-    List.findMap
-        (\tileGroup ->
-            case getTileGroupData tileGroup |> .tiles |> List.Nonempty.toList |> List.findIndex ((==) tile) of
-                Just index ->
-                    Just { tileGroup = tileGroup, index = index }
+    case tile of
+        HyperlinkTile _ ->
+            Just { tileGroup = HyperlinkGroup, index = 0 }
 
-                Nothing ->
-                    Nothing
-        )
-        allTileGroups
+        _ ->
+            List.findMap
+                (\tileGroup ->
+                    case getTileGroupData tileGroup |> .tiles |> List.Nonempty.toList |> List.findIndex ((==) tile) of
+                        Just index ->
+                            Just { tileGroup = tileGroup, index = index }
+
+                        Nothing ->
+                            Nothing
+                )
+                allTileGroups
 
 
 type alias TileGroupData =

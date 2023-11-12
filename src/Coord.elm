@@ -25,9 +25,11 @@ module Coord exposing
     , toVector2d
     , translateMat4
     , tuple
+    , x
     , xOnly
     , xRaw
     , xy
+    , y
     , yOnly
     , yRaw
     )
@@ -170,6 +172,16 @@ toTuple ( Quantity x_, Quantity y_ ) =
 tuple : ( Int, Int ) -> Coord units
 tuple ( x_, y_ ) =
     ( Quantity x_, Quantity y_ )
+
+
+x : Coord units -> Quantity Int units
+x =
+    Tuple.first
+
+
+y : Coord units -> Quantity Int units
+y =
+    Tuple.second
 
 
 xy : Int -> Int -> Coord units

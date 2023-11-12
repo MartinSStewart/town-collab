@@ -1,7 +1,8 @@
-port module Ports exposing (audioPortFromJS, audioPortToJS, copyToClipboard, getDevicePixelRatio, getLocalStorage, gotDevicePixelRatio, gotLocalStorage, gotWebGlFix, mouse_leave, readFromClipboardRequest, readFromClipboardResponse, setLocalStorage, user_agent_from_js, user_agent_to_js, webGlFix)
+port module Ports exposing (audioPortFromJS, audioPortToJS, copyToClipboard, getDevicePixelRatio, getLocalStorage, gotDevicePixelRatio, gotLocalStorage, gotWebGlFix, mouse_leave, openNewTab, readFromClipboardRequest, readFromClipboardResponse, setLocalStorage, user_agent_from_js, user_agent_to_js, webGlFix)
 
 import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.Subscription as Subscription exposing (Subscription)
+import Hyperlink exposing (Hyperlink)
 import Json.Decode
 import Json.Encode
 import Serialize exposing (Codec)
@@ -46,6 +47,14 @@ port webgl_fix_to_js : Json.Encode.Value -> Cmd msg
 
 
 port webgl_fix_from_js : (Json.Decode.Value -> msg) -> Sub msg
+
+
+port open_new_tab_to_js : Json.Encode.Value -> Cmd msg
+
+
+openNewTab : Hyperlink -> Command FrontendOnly toMsg msg
+openNewTab hyperlink =
+    Command.sendToJs "open_new_tab_to_js" open_new_tab_to_js (Json.Encode.string (Hyperlink.toUrl hyperlink))
 
 
 getDevicePixelRatio : Command FrontendOnly toMsg msg

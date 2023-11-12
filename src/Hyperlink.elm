@@ -6,11 +6,11 @@ module Hyperlink exposing
     , fromString
     , maxLength
     , toString
+    , toUrl
     )
 
 import Bytes.Decode
 import Bytes.Encode
-import Parser exposing ((|.), (|=), Parser)
 import StringExtra
 
 
@@ -23,31 +23,13 @@ maxLength =
     255
 
 
-fromString : String -> Result String Hyperlink
+fromString : String -> Hyperlink
 fromString text =
-    let
-        text2 : String
-        text2 =
-            String.trim text
-                |> StringExtra.dropPrefix "https://"
-                |> StringExtra.dropPrefix "http://"
-    in
-    if String.length text2 > maxLength then
-        Err "Link is too long"
-
-    else
-        case Parser.run hyperlinkParser text2 of
-            Ok _ ->
-                Ok (Hyperlink text2)
-
-            Err _ ->
-                Err "Invalid link"
-
-
-hyperlinkParser : Parser ()
-hyperlinkParser =
-    Parser.succeed ()
-        |. Parser.chompUntil "."
+    String.trim text
+        |> StringExtra.dropPrefix "https://"
+        |> StringExtra.dropPrefix "http://"
+        |> String.left maxLength
+        |> Hyperlink
 
 
 encoder : Hyperlink -> Bytes.Encode.Encoder
@@ -65,6 +47,11 @@ decoder =
 
 toString : Hyperlink -> String
 toString (Hyperlink hyperlink) =
+    hyperlink
+
+
+toUrl : Hyperlink -> String
+toUrl (Hyperlink hyperlink) =
     "https://" ++ hyperlink
 
 

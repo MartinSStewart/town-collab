@@ -584,7 +584,7 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
 
 
 foregroundMesh2 :
-    List { linkTopLeft : Coord WorldUnit, linkWidth : Quantity Int WorldUnit }
+    List { linkTopLeft : Coord WorldUnit, linkWidth : Int }
     -> Bool
     -> Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
@@ -606,26 +606,29 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                     data =
                         Tile.getData tile
 
-                    texturePosition : Coord unit
-                    texturePosition =
+                    ( texturePosition, colors2 ) =
                         case tile of
                             BigText _ ->
                                 if
                                     List.any
                                         (\{ linkTopLeft, linkWidth } ->
-                                            (Coord.yRaw position == Coord.yRaw linkTopLeft)
-                                                && (Coord.xRaw position >= Coord.xRaw linkTopLeft)
-                                                && (Coord.xRaw position <= Coord.xRaw linkTopLeft + Quantity.unwrap linkWidth)
+                                            (Coord.yRaw position2 - Coord.yRaw linkTopLeft == 0)
+                                                && (Coord.xRaw position2 >= Coord.xRaw linkTopLeft)
+                                                && (Coord.xRaw position2 <= Coord.xRaw linkTopLeft + linkWidth)
                                         )
                                         hyperlinks
                                 then
-                                    Coord.plus (Coord.xy 0 180) data.texturePosition
+                                    ( Coord.plus (Coord.xy 0 180) data.texturePosition
+                                    , { primaryColor = Color.linkColor
+                                      , secondaryColor = Color.linkColor
+                                      }
+                                    )
 
                                 else
-                                    data.texturePosition
+                                    ( data.texturePosition, colors )
 
                             _ ->
-                                data.texturePosition
+                                ( data.texturePosition, colors )
 
                     opacity : Float
                     opacity =
@@ -649,7 +652,7 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                         if AssocSet.member position railSplitToggled then
                             tileMeshHelper2
                                 opacityAndUserId
-                                colors
+                                colors2
                                 (Coord.multiply Units.tileSize position2)
                                 1
                                 pathData.texturePosition
@@ -658,7 +661,7 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                         else
                             tileMeshHelper2
                                 opacityAndUserId
-                                colors
+                                colors2
                                 (Coord.multiply Units.tileSize position2)
                                 1
                                 data.texturePosition
@@ -670,7 +673,7 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                                 text =
                                     Sprite.textWithZAndOpacityAndUserId
                                         opacityAndUserId
-                                        colors.secondaryColor
+                                        colors2.secondaryColor
                                         1
                                         (case IdDict.get userId users of
                                             Just user ->
@@ -692,7 +695,7 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                             text
                                 ++ tileMeshHelper2
                                     opacityAndUserId
-                                    colors
+                                    colors2
                                     (Coord.multiply Units.tileSize position2)
                                     1
                                     (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
@@ -701,7 +704,7 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                         else
                             tileMeshHelper2
                                 opacityAndUserId
-                                colors
+                                colors2
                                 (Coord.multiply Units.tileSize position2)
                                 (case tile of
                                     BigText _ ->

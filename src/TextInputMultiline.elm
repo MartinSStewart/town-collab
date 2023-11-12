@@ -1,6 +1,5 @@
 module TextInputMultiline exposing
     ( Model
-    , OutMsg(..)
     , State
     , addLineBreaks
     , defaultTextScale
@@ -22,12 +21,14 @@ import Coord exposing (Coord)
 import Keyboard
 import Quantity exposing (Quantity(..))
 import Sprite exposing (Vertex)
+import TextInput exposing (OutMsg(..))
 
 
 type alias Model =
     { current : State
     , undoHistory : List State
     , redoHistory : List State
+    , dummyField : ()
     }
 
 
@@ -45,7 +46,7 @@ defaultTextScale =
 
 init : Model
 init =
-    { current = { cursorPosition = 0, cursorSize = 0, text = "" }, undoHistory = [], redoHistory = [] }
+    { current = { cursorPosition = 0, cursorSize = 0, text = "" }, undoHistory = [], redoHistory = [], dummyField = () }
 
 
 withText : String -> Model -> Model
@@ -67,7 +68,7 @@ selectAll model =
 
 pushState : (State -> State) -> Model -> Model
 pushState changeFunc model =
-    { redoHistory = [], undoHistory = model.current :: model.undoHistory, current = changeFunc model.current }
+    { redoHistory = [], undoHistory = model.current :: model.undoHistory, current = changeFunc model.current, dummyField = () }
 
 
 replaceState : (State -> State) -> Model -> Model
@@ -82,6 +83,7 @@ undo model =
             { undoHistory = rest
             , current = head
             , redoHistory = model.current :: model.redoHistory
+            , dummyField = ()
             }
 
         [] ->
@@ -95,6 +97,7 @@ redo model =
             { redoHistory = rest
             , current = head
             , undoHistory = model.current :: model.undoHistory
+            , dummyField = ()
             }
 
         [] ->
@@ -109,12 +112,6 @@ selectionMin model =
 selectionMax : State -> Int
 selectionMax model =
     max model.cursorPosition (model.cursorPosition + model.cursorSize)
-
-
-type OutMsg
-    = CopyText String
-    | PasteText
-    | NoOutMsg
 
 
 keyMsg : Bool -> Bool -> Keyboard.Key -> Model -> ( Model, OutMsg )

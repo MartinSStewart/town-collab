@@ -428,18 +428,8 @@ notificationsView loggedIn =
         , borderAndFill = Ui.defaultElBorderAndFill
         }
         (Ui.column
-            { spacing = 16
-            , padding = Ui.noPadding
-            }
+            { spacing = 16, padding = Ui.noPadding }
             [ notificationsHeader
-            , Ui.el
-                { padding = Ui.paddingXY 8 0, inFront = [], borderAndFill = NoBorderOrFill }
-                (Ui.button
-                    { id = ClearNotificationsButton
-                    , padding = Ui.paddingXY 10 4
-                    }
-                    (Ui.text "Clear all")
-                )
             , if List.isEmpty loggedIn.notifications then
                 Ui.el
                     { padding = Ui.paddingXY 12 0, inFront = [], borderAndFill = NoBorderOrFill }
@@ -447,28 +437,39 @@ notificationsView loggedIn =
 
               else
                 Ui.column
-                    { spacing = 0
-                    , padding = Ui.noPadding
-                    }
-                    (List.map
-                        (\coord ->
-                            "Change at "
-                                ++ "x="
-                                ++ String.fromInt (Coord.xRaw coord)
-                                ++ "&y="
-                                ++ String.fromInt (Coord.yRaw coord)
-                                |> Ui.underlinedColorText Color.linkColor
-                                |> Ui.customButton
-                                    { id = MapChangeNotification coord
-                                    , padding = Ui.paddingXY 8 4
-                                    , inFront = []
-                                    , borderAndFill = NoBorderOrFill
-                                    , borderAndFillFocus = FillOnly Color.fillColor2
-                                    }
-                                |> Ui.el { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
+                    { spacing = 16, padding = Ui.noPadding }
+                    [ Ui.el
+                        { padding = Ui.paddingXY 8 0, inFront = [], borderAndFill = NoBorderOrFill }
+                        (Ui.button
+                            { id = ClearNotificationsButton
+                            , padding = Ui.paddingXY 10 4
+                            }
+                            (Ui.text "Clear all")
                         )
-                        loggedIn.notifications
-                    )
+                    , Ui.column
+                        { spacing = 0
+                        , padding = Ui.noPadding
+                        }
+                        (List.map
+                            (\coord ->
+                                "Change at "
+                                    ++ "x="
+                                    ++ String.fromInt (Coord.xRaw coord)
+                                    ++ "&y="
+                                    ++ String.fromInt (Coord.yRaw coord)
+                                    |> Ui.underlinedColorText Color.linkColor
+                                    |> Ui.customButton
+                                        { id = MapChangeNotification coord
+                                        , padding = Ui.paddingXY 8 4
+                                        , inFront = []
+                                        , borderAndFill = NoBorderOrFill
+                                        , borderAndFillFocus = FillOnly Color.fillColor2
+                                        }
+                                    |> Ui.el { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
+                            )
+                            loggedIn.notifications
+                        )
+                    ]
             ]
         )
 
@@ -480,7 +481,7 @@ notificationsHeader =
         [ Ui.button { id = CloseNotifications, padding = Ui.paddingXY 10 4 } (Ui.text "Close")
         , Ui.el
             { padding = Ui.paddingXY 4 4, inFront = [], borderAndFill = NoBorderOrFill }
-            (Ui.text "Recent notifications")
+            (Ui.text "Your notifications")
         ]
 
 
@@ -1325,13 +1326,6 @@ toolbarUi handColor loggedIn model currentToolButton =
                     |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
                     |> Ui.row { spacing = 2, padding = Ui.noPadding }
                 ]
-
-            --List.map
-            --    (toolButtonUi model.hasCmdKey handColor model.tileColors model.tileHotkeys currentToolButton)
-            --    buttonTiles
-            --    |> List.greedyGroupsOf toolbarRowCount
-            --    |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
-            --    |> Ui.row { spacing = 2, padding = Ui.noPadding }
             , selectedToolView handColor model currentToolButton
             ]
 
@@ -1395,7 +1389,7 @@ selectedToolView handColor model currentTool =
     case currentTool of
         TilePlacerToolButton HyperlinkGroup ->
             Ui.column
-                { spacing = 6, padding = Ui.paddingXY 8 8 }
+                { spacing = 4, padding = Ui.paddingXY 8 8 }
                 [ Ui.text "Hyperlink"
                 , Ui.textInputMultiline
                     { id = HyperlinkInput
