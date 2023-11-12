@@ -3034,7 +3034,6 @@ uiUpdate audioData id event model =
                 2
                 HyperlinkInput
                 (\_ model2 -> ( model2, Command.none ))
-                (\() -> ( model, Command.none ))
                 model.hyperlinkInput
                 (\a ->
                     { model
@@ -3131,13 +3130,12 @@ textInputMultilineUpdate :
     Int
     -> UiHover
     -> (TextInputMultiline.Model -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
-    -> (() -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> TextInputMultiline.Model
     -> (TextInputMultiline.Model -> FrontendLoaded)
     -> UiEvent
     -> FrontendLoaded
     -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
-textInputMultilineUpdate textScale id textChanged onEnter textInput setTextInput event model =
+textInputMultilineUpdate textScale id textChanged textInput setTextInput event model =
     case event of
         Ui.PastedText text ->
             let
@@ -3159,9 +3157,6 @@ textInputMultilineUpdate textScale id textChanged onEnter textInput setTextInput
 
         Ui.KeyDown _ Keyboard.Escape ->
             ( setFocus Nothing model, Command.none )
-
-        Ui.KeyDown _ Keyboard.Enter ->
-            onEnter ()
 
         Ui.KeyDown _ key ->
             let

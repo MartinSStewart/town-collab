@@ -133,6 +133,17 @@ view model =
             normalView windowSize model
 
 
+easterEgg : List (Ui.Element id)
+easterEgg =
+    [ Ui.el
+        { inFront = []
+        , padding = { topLeft = Coord.xy 32 1400, bottomRight = Coord.origin }
+        , borderAndFill = NoBorderOrFill
+        }
+        (Ui.text "Big fan of the enter key huh?")
+    ]
+
+
 normalView : Coord Pixels -> FrontendLoaded -> Ui.Element UiHover
 normalView windowSize model =
     let
@@ -176,7 +187,7 @@ normalView windowSize model =
             else
                 Ui.el
                     { padding = Ui.noPadding
-                    , inFront = []
+                    , inFront = easterEgg
                     , borderAndFill = Ui.defaultElBorderAndFill
                     }
                     (case localModel.userStatus of

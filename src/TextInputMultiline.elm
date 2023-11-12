@@ -19,6 +19,7 @@ module TextInputMultiline exposing
 import Color
 import Coord exposing (Coord)
 import Keyboard
+import List.Extra
 import Quantity exposing (Quantity(..))
 import Sprite exposing (Vertex)
 import TextInput exposing (OutMsg(..))
@@ -334,6 +335,9 @@ keyMsg ctrlDown shiftDown key model =
             , NoOutMsg
             )
 
+        ( False, False, Keyboard.Enter ) ->
+            ( pushState (insertText "\n") model, NoOutMsg )
+
         _ ->
             ( model, NoOutMsg )
 
@@ -437,7 +441,10 @@ size textScale width current =
     let
         text : List String
         text =
-            addLineBreaks (Coord.xRaw Sprite.charSize * textScale) (Quantity.unwrap width) current.text
+            addLineBreaks
+                (Coord.xRaw Sprite.charSize * textScale)
+                (Quantity.unwrap width - (Coord.xRaw padding + textScale) * 2)
+                current.text
     in
     size2 textScale width (List.length text)
 
@@ -450,16 +457,35 @@ size2 textScale width lineCount =
 view : Int -> Coord units -> Quantity Int units -> Bool -> Bool -> State -> List Vertex
 view textScale offset width hasFocus isValid current =
     let
-        text : List String
-        text =
+        rows : List String
+        rows =
             addLineBreaks
                 (Coord.xRaw Sprite.charSize * textScale)
                 (Quantity.unwrap width - (Coord.xRaw padding + textScale) * 2)
                 current.text
+                |> Debug.log "abc"
 
         lineCount : Int
         lineCount =
-            List.length text
+            List.length rows
+
+        cursorPosition2 : { cursorRow : Int, charsLeft : Int }
+        cursorPosition2 =
+            List.Extra.stoppableFoldl
+                (\row state ->
+                    if String.length row < state.charsLeft then
+                        { cursorRow = state.cursorRow + 1
+                        , charsLeft = state.charsLeft - String.length row - 1
+                        }
+                            |> List.Extra.Continue
+
+                    else
+                        List.Extra.Stop state
+                )
+                { cursorRow = 0, charsLeft = current.cursorPosition }
+                rows
+
+        --|> Debug.log "cursor position"
     in
     Sprite.spriteWithColor
         (if not isValid then
@@ -493,28 +519,34 @@ view textScale offset width hasFocus isValid current =
                 []
 
             else
-                Sprite.spriteWithColor
-                    (Color.rgb255 170 210 255)
-                    (offset
-                        |> Coord.plus
-                            (Coord.xy
-                                (current.cursorPosition * Coord.xRaw Sprite.charSize * textScale + Coord.xRaw padding)
-                                (Coord.yRaw padding)
-                            )
-                    )
-                    (Coord.xy
-                        (Coord.xRaw Sprite.charSize * textScale * current.cursorSize)
-                        (Coord.yRaw Sprite.charSize * textScale)
-                    )
-                    (Coord.xy 508 28)
-                    (Coord.xy 1 1)
+                []
+            --Sprite.spriteWithColor
+            --    (Color.rgb255 170 210 255)
+            --    (offset
+            --        |> Coord.plus
+            --            (Coord.xy
+            --                (cursorPosition2.charsLeft * Coord.xRaw Sprite.charSize * textScale)
+            --                (cursorPosition2.cursorRow * Coord.yRaw Sprite.charSize * textScale)
+            --            )
+            --        |> Coord.plus padding
+            --    )
+            --    (Coord.xy
+            --        (Coord.xRaw Sprite.charSize * textScale * current.cursorSize)
+            --        (Coord.yRaw Sprite.charSize * textScale)
+            --    )
+            --    (Coord.xy 508 28)
+            --    (Coord.xy 1 1)
            )
-        ++ Sprite.text Color.black textScale (String.join "\n" text) (offset |> Coord.plus padding |> Coord.plus (Coord.xy textScale 0))
+        ++ Sprite.text Color.black textScale (String.join "\n" rows) (offset |> Coord.plus padding |> Coord.plus (Coord.xy textScale 0))
         ++ (if hasFocus then
                 Sprite.sprite
                     (offset
                         |> Coord.plus
-                            (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * textScale + Coord.xRaw padding) (Coord.yRaw padding))
+                            (Coord.xy
+                                (cursorPosition2.charsLeft * Coord.xRaw Sprite.charSize * textScale)
+                                (cursorPosition2.cursorRow * Coord.yRaw Sprite.charSize * textScale)
+                            )
+                        |> Coord.plus padding
                     )
                     (Coord.xy
                         textScale

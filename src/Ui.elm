@@ -94,6 +94,16 @@ type alias TextInputData id =
     }
 
 
+type alias TextInputMultilineData id =
+    { id : id
+    , width : Int
+    , isValid : Bool
+    , state : TextInput.State
+    , textScale : Int
+    , dummyField : ()
+    }
+
+
 type UiEvent
     = MouseDown { elementPosition : Coord Pixels }
     | MousePressed
@@ -112,7 +122,7 @@ type Element id
         , cachedSize : Coord Pixels
         }
     | TextInput (TextInputData id)
-    | TextInputMultiline (TextInputData id)
+    | TextInputMultiline (TextInputMultilineData id)
     | Button (ButtonData id) (Element id)
     | Row RowColumn (List (Element id))
     | Column RowColumn (List (Element id))
@@ -339,7 +349,14 @@ textInputScaled =
 
 textInputMultiline : { id : id, width : Int, isValid : Bool, state : TextInput.State } -> Element id
 textInputMultiline data =
-    TextInputMultiline { id = data.id, width = data.width, textScale = 2, isValid = data.isValid, state = data.state }
+    TextInputMultiline
+        { id = data.id
+        , width = data.width
+        , textScale = 2
+        , isValid = data.isValid
+        , state = data.state
+        , dummyField = ()
+        }
 
 
 none : Element id
