@@ -57,7 +57,7 @@ valueEncoder value =
         [ Bytes.Encode.unsignedInt16 BE (Id.toInt value.userId)
         , Bytes.Encode.signedInt8 (Coord.xRaw value.position)
         , Bytes.Encode.signedInt8 (Coord.yRaw value.position)
-        , Bytes.Encode.unsignedInt16 BE (Tile.toInt value.tile)
+        , Tile.encoder value.tile
         , colorsEncoder value.colors
         , Bytes.Encode.float64 BE (Effect.Time.posixToMillis value.time |> toFloat)
         ]
@@ -67,11 +67,11 @@ valueDecoder : Bytes.Decode.Decoder Value
 valueDecoder =
     Bytes.Decode.map5
         (\id ( x, y ) tile colors time ->
-            Value (Id.fromInt id) (Coord.xy x y) (Tile.fromInt tile) colors (Effect.Time.millisToPosix (round time))
+            Value (Id.fromInt id) (Coord.xy x y) tile colors (Effect.Time.millisToPosix (round time))
         )
         (Bytes.Decode.unsignedInt16 BE)
         (Bytes.Decode.map2 Tuple.pair Bytes.Decode.signedInt8 Bytes.Decode.signedInt8)
-        (Bytes.Decode.unsignedInt16 BE)
+        Tile.decoder
         colorsDecoder
         (Bytes.Decode.float64 BE)
 

@@ -1,7 +1,10 @@
 module Tests exposing (tests)
 
 import Animal exposing (AnimalType(..))
+import AssocSet
 import Backend
+import Bytes.Decode
+import Bytes.Encode
 import Color
 import Coord
 import Effect.Test
@@ -181,17 +184,17 @@ tests =
                     |> List.all
                         (\tile ->
                             let
-                                int =
-                                    Tile.toInt tile
+                                tile2 =
+                                    Tile.encoder tile |> Bytes.Encode.encode |> Bytes.Decode.decode Tile.decoder
                             in
-                            Tile.fromInt int == tile
+                            tile2 == Just tile
                         )
                     |> Expect.equal True
         , test "Tiles all have unique ints" <|
             \_ ->
-                List.map Tile.toInt Tile.allTiles
-                    |> Set.fromList
-                    |> Set.size
+                List.map (\a -> Tile.encoder a |> Bytes.Encode.encode |> Bytes.Decode.decode Tile.decoder) Tile.allTiles
+                    |> AssocSet.fromList
+                    |> AssocSet.size
                     |> Expect.equal (List.length Tile.allTiles)
         , test "Undo bot change" <|
             \_ ->

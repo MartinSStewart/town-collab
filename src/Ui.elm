@@ -42,6 +42,7 @@ module Ui exposing
     , table
     , text
     , textInput
+    , textInputMultiline
     , textInputScaled
     , topCenter
     , topLeft
@@ -63,6 +64,7 @@ import Pixels exposing (Pixels)
 import Quantity exposing (Quantity(..))
 import Sprite exposing (Vertex)
 import TextInput
+import TextInputMultiline
 import WebGL
 
 
@@ -92,6 +94,16 @@ type alias TextInputData id =
     }
 
 
+type alias TextInputMultilineData id =
+    { id : id
+    , width : Int
+    , isValid : Bool
+    , state : TextInput.State
+    , textScale : Int
+    , dummyField : ()
+    }
+
+
 type UiEvent
     = MouseDown { elementPosition : Coord Pixels }
     | MousePressed
@@ -110,6 +122,7 @@ type Element id
         , cachedSize : Coord Pixels
         }
     | TextInput (TextInputData id)
+    | TextInputMultiline (TextInputMultilineData id)
     | Button (ButtonData id) (Element id)
     | Row RowColumn (List (Element id))
     | Column RowColumn (List (Element id))
@@ -296,57 +309,6 @@ defaultCharScale =
     2
 
 
-addLineBreaks : Int -> Int -> List String -> String -> List String
-addLineBreaks charWidth maxWidth list text2 =
-    let
-        charCount : Int
-        charCount =
-            String.length text2
-
-        width : Int
-        width =
-            charWidth * charCount
-
-        index : Int
-        index =
-            1 + maxWidth // charWidth
-
-        left =
-            String.left index text2
-
-        ( left2, right ) =
-            if String.contains " " left then
-                String.foldr
-                    (\char ( continue, index3 ) ->
-                        if continue then
-                            if char == ' ' then
-                                ( False, index3 - 1 )
-
-                            else
-                                ( True, index3 - 1 )
-
-                        else
-                            ( False, index3 )
-                    )
-                    ( True, index )
-                    left
-                    |> Tuple.second
-                    |> (\index4 -> ( String.left index4 text2, String.dropLeft (index4 + 1) text2 ))
-
-            else
-                ( left, String.dropLeft index text2 )
-    in
-    if width > maxWidth then
-        addLineBreaks
-            charWidth
-            maxWidth
-            (left2 :: list)
-            right
-
-    else
-        text2 :: list
-
-
 wrappedText : Int -> String -> Element id
 wrappedText maxWidth text2 =
     wrappedColorText maxWidth Color.black text2
@@ -361,10 +323,7 @@ wrappedColorText maxWidth color text2 =
 
         text3 : String
         text3 =
-            List.concatMap
-                (addLineBreaks charWidth maxWidth [] >> List.reverse)
-                (String.split "\n" text2)
-                |> String.join "\n"
+            TextInputMultiline.addLineBreaks charWidth maxWidth text2 |> String.join "\n"
     in
     Text
         { outline = Nothing
@@ -376,9 +335,7 @@ wrappedColorText maxWidth color text2 =
         }
 
 
-textInput :
-    { id : id, width : Int, isValid : Bool, state : TextInput.State }
-    -> Element id
+textInput : { id : id, width : Int, isValid : Bool, state : TextInput.State } -> Element id
 textInput data =
     TextInput { id = data.id, width = data.width, textScale = 2, isValid = data.isValid, state = data.state }
 
@@ -388,6 +345,18 @@ textInputScaled :
     -> Element id
 textInputScaled =
     TextInput
+
+
+textInputMultiline : { id : id, width : Int, isValid : Bool, state : TextInput.State } -> Element id
+textInputMultiline data =
+    TextInputMultiline
+        { id = data.id
+        , width = data.width
+        , textScale = 2
+        , isValid = data.isValid
+        , state = data.state
+        , dummyField = ()
+        }
 
 
 none : Element id
@@ -759,6 +728,18 @@ hoverHelper point elementPosition element2 =
             else
                 NoHover
 
+        TextInputMultiline data ->
+            if
+                Bounds.fromCoordAndSize
+                    elementPosition
+                    (TextInputMultiline.size data.textScale (Quantity data.width) data.state)
+                    |> Bounds.contains point
+            then
+                InputHover { id = data.id, position = elementPosition }
+
+            else
+                NoHover
+
         Button data _ ->
             if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
                 InputHover { id = data.id, position = elementPosition }
@@ -902,6 +883,16 @@ viewHelper focus position vertices element2 =
                 data.state
                 ++ vertices
 
+        TextInputMultiline data ->
+            TextInputMultiline.view
+                data.textScale
+                position
+                (Quantity data.width)
+                (focus == Just data.id)
+                data.isValid
+                data.state
+                ++ vertices
+
         Button data child ->
             borderAndFillView position
                 (if Just data.id == focus then
@@ -1013,6 +1004,9 @@ size element2 =
         TextInput data ->
             TextInput.size data.textScale (Quantity data.width)
 
+        TextInputMultiline data ->
+            TextInputMultiline.size data.textScale (Quantity data.width) data.state
+
         Button data _ ->
             data.cachedSize
 
@@ -1100,6 +1094,13 @@ findInputHelper id position element =
             Nothing
 
         TextInput data ->
+            if data.id == id then
+                TextInputType |> Just
+
+            else
+                Nothing
+
+        TextInputMultiline data ->
             if data.id == id then
                 TextInputType |> Just
 
@@ -1228,6 +1229,16 @@ tabHelper stepForward hasFoundId id element =
                 NotFound
 
         TextInput data ->
+            if hasFoundId then
+                FoundNextId data.id
+
+            else if id == data.id then
+                FoundId
+
+            else
+                NotFound
+
+        TextInputMultiline data ->
             if hasFoundId then
                 FoundNextId data.id
 

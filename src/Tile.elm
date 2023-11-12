@@ -17,13 +17,14 @@ module Tile exposing
     , buildingCategory
     , categoryToString
     , codec
+    , decoder
     , defaultBerryBushColor
     , defaultMushroomColor
     , defaultPineTreeColor
     , defaultPostOfficeColor
     , defaultRockColor
     , defaultToPrimaryAndSecondary
-    , fromInt
+    , encoder
     , getData
     , getTileGroupData
     , hasCollision
@@ -37,7 +38,6 @@ module Tile exposing
     , sceneryCategory
     , texturePositionPixels
     , tileToTileGroup
-    , toInt
     , trainHouseLeftRailPath
     , trainHouseRightRailPath
     , worldMovementBounds
@@ -48,11 +48,15 @@ import Array
 import Axis2d
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
+import Bytes exposing (Endianness(..))
+import Bytes.Decode
+import Bytes.Encode
 import Codec exposing (Codec)
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Dict
 import Direction2d exposing (Direction2d)
+import Hyperlink exposing (Hyperlink)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Pixels exposing (Pixels)
@@ -218,8 +222,7 @@ allTileGroups =
     , ElmTreeGroup
     , DirtPathGroup
     , BigTextGroup
-
-    --, HyperlinkGroup
+    , HyperlinkGroup
     , BenchGroup
     , ParkingLotGroup
     , ParkingRoadGroup
@@ -345,16 +348,21 @@ roadCategory =
 
 tileToTileGroup : Tile -> Maybe { tileGroup : TileGroup, index : Int }
 tileToTileGroup tile =
-    List.findMap
-        (\tileGroup ->
-            case getTileGroupData tileGroup |> .tiles |> List.Nonempty.toList |> List.findIndex ((==) tile) of
-                Just index ->
-                    Just { tileGroup = tileGroup, index = index }
+    case tile of
+        HyperlinkTile _ ->
+            Just { tileGroup = HyperlinkGroup, index = 0 }
 
-                Nothing ->
-                    Nothing
-        )
-        allTileGroups
+        _ ->
+            List.findMap
+                (\tileGroup ->
+                    case getTileGroupData tileGroup |> .tiles |> List.Nonempty.toList |> List.findIndex ((==) tile) of
+                        Just index ->
+                            Just { tileGroup = tileGroup, index = index }
+
+                        Nothing ->
+                            Nothing
+                )
+                allTileGroups
 
 
 type alias TileGroupData =
@@ -597,7 +605,7 @@ getTileGroupData tileGroup =
 
         HyperlinkGroup ->
             { defaultColors = ZeroDefaultColors
-            , tiles = Nonempty Hyperlink []
+            , tiles = Nonempty (HyperlinkTile Hyperlink.exampleCom) []
             , name = "Hyperlink"
             }
 
@@ -797,7 +805,7 @@ type Tile
     | DirtPathHorizontal
     | DirtPathVertical
     | BigText Char
-    | Hyperlink
+    | HyperlinkTile Hyperlink
     | BenchDown
     | BenchLeft
     | BenchUp
@@ -954,7 +962,7 @@ allTiles =
     , ElmTree
     , DirtPathHorizontal
     , DirtPathVertical
-    , Hyperlink
+    , HyperlinkTile Hyperlink.exampleCom
     , BenchDown
     , BenchLeft
     , BenchUp
@@ -1927,8 +1935,8 @@ getData tile =
         BigText char ->
             bigText char
 
-        Hyperlink ->
-            hyperlink
+        HyperlinkTile _ ->
+            hyperlinkTile
 
         BenchDown ->
             benchDown
@@ -3634,8 +3642,8 @@ bigText char =
     }
 
 
-hyperlink : TileData unit
-hyperlink =
+hyperlinkTile : TileData unit
+hyperlinkTile =
     { texturePosition = Coord.xy 700 918
     , size = Coord.xy 1 2
     , tileCollision = DefaultCollision
@@ -4457,846 +4465,855 @@ trainHouseRightRailPath =
     RailPathHorizontal { offsetX = 1, offsetY = 2, length = 3 }
 
 
-toInt : Tile -> Int
-toInt tile =
+encoder : Tile -> Bytes.Encode.Encoder
+encoder tile =
     case tile of
         EmptyTile ->
-            0
+            Bytes.Encode.unsignedInt16 BE 0
 
         HouseDown ->
-            1
+            Bytes.Encode.unsignedInt16 BE 1
 
         HouseRight ->
-            2
+            Bytes.Encode.unsignedInt16 BE 2
 
         HouseUp ->
-            3
+            Bytes.Encode.unsignedInt16 BE 3
 
         HouseLeft ->
-            4
+            Bytes.Encode.unsignedInt16 BE 4
 
         RailHorizontal ->
-            5
+            Bytes.Encode.unsignedInt16 BE 5
 
         RailVertical ->
-            6
+            Bytes.Encode.unsignedInt16 BE 6
 
         RailBottomToRight ->
-            7
+            Bytes.Encode.unsignedInt16 BE 7
 
         RailBottomToLeft ->
-            8
+            Bytes.Encode.unsignedInt16 BE 8
 
         RailTopToRight ->
-            9
+            Bytes.Encode.unsignedInt16 BE 9
 
         RailTopToLeft ->
-            10
+            Bytes.Encode.unsignedInt16 BE 10
 
         RailBottomToRightLarge ->
-            11
+            Bytes.Encode.unsignedInt16 BE 11
 
         RailBottomToLeftLarge ->
-            12
+            Bytes.Encode.unsignedInt16 BE 12
 
         RailTopToRightLarge ->
-            13
+            Bytes.Encode.unsignedInt16 BE 13
 
         RailTopToLeftLarge ->
-            14
+            Bytes.Encode.unsignedInt16 BE 14
 
         RailCrossing ->
-            15
+            Bytes.Encode.unsignedInt16 BE 15
 
         RailStrafeDown ->
-            16
+            Bytes.Encode.unsignedInt16 BE 16
 
         RailStrafeUp ->
-            17
+            Bytes.Encode.unsignedInt16 BE 17
 
         RailStrafeLeft ->
-            18
+            Bytes.Encode.unsignedInt16 BE 18
 
         RailStrafeRight ->
-            19
+            Bytes.Encode.unsignedInt16 BE 19
 
         TrainHouseRight ->
-            20
+            Bytes.Encode.unsignedInt16 BE 20
 
         TrainHouseLeft ->
-            21
+            Bytes.Encode.unsignedInt16 BE 21
 
         RailStrafeDownSmall ->
-            22
+            Bytes.Encode.unsignedInt16 BE 22
 
         RailStrafeUpSmall ->
-            23
+            Bytes.Encode.unsignedInt16 BE 23
 
         RailStrafeLeftSmall ->
-            24
+            Bytes.Encode.unsignedInt16 BE 24
 
         RailStrafeRightSmall ->
-            25
+            Bytes.Encode.unsignedInt16 BE 25
 
         Sidewalk ->
-            26
+            Bytes.Encode.unsignedInt16 BE 26
 
         SidewalkHorizontalRailCrossing ->
-            27
+            Bytes.Encode.unsignedInt16 BE 27
 
         SidewalkVerticalRailCrossing ->
-            28
+            Bytes.Encode.unsignedInt16 BE 28
 
         RailBottomToRight_SplitLeft ->
-            29
+            Bytes.Encode.unsignedInt16 BE 29
 
         RailBottomToLeft_SplitUp ->
-            30
+            Bytes.Encode.unsignedInt16 BE 30
 
         RailTopToRight_SplitDown ->
-            31
+            Bytes.Encode.unsignedInt16 BE 31
 
         RailTopToLeft_SplitRight ->
-            32
+            Bytes.Encode.unsignedInt16 BE 32
 
         RailBottomToRight_SplitUp ->
-            33
+            Bytes.Encode.unsignedInt16 BE 33
 
         RailBottomToLeft_SplitRight ->
-            34
+            Bytes.Encode.unsignedInt16 BE 34
 
         RailTopToRight_SplitLeft ->
-            35
+            Bytes.Encode.unsignedInt16 BE 35
 
         RailTopToLeft_SplitDown ->
-            36
+            Bytes.Encode.unsignedInt16 BE 36
 
         PostOffice ->
-            37
+            Bytes.Encode.unsignedInt16 BE 37
 
         PineTree1 ->
-            38
+            Bytes.Encode.unsignedInt16 BE 38
 
         PineTree2 ->
-            39
+            Bytes.Encode.unsignedInt16 BE 39
 
         BigPineTree ->
-            40
+            Bytes.Encode.unsignedInt16 BE 40
 
         LogCabinDown ->
-            41
+            Bytes.Encode.unsignedInt16 BE 41
 
         LogCabinRight ->
-            42
+            Bytes.Encode.unsignedInt16 BE 42
 
         LogCabinUp ->
-            43
+            Bytes.Encode.unsignedInt16 BE 43
 
         LogCabinLeft ->
-            44
+            Bytes.Encode.unsignedInt16 BE 44
 
         RoadHorizontal ->
-            45
+            Bytes.Encode.unsignedInt16 BE 45
 
         RoadVertical ->
-            46
+            Bytes.Encode.unsignedInt16 BE 46
 
         RoadBottomToLeft ->
-            47
+            Bytes.Encode.unsignedInt16 BE 47
 
         RoadTopToLeft ->
-            48
+            Bytes.Encode.unsignedInt16 BE 48
 
         RoadTopToRight ->
-            49
+            Bytes.Encode.unsignedInt16 BE 49
 
         RoadBottomToRight ->
-            50
+            Bytes.Encode.unsignedInt16 BE 50
 
         Road4Way ->
-            51
+            Bytes.Encode.unsignedInt16 BE 51
 
         RoadSidewalkCrossingHorizontal ->
-            52
+            Bytes.Encode.unsignedInt16 BE 52
 
         RoadSidewalkCrossingVertical ->
-            53
+            Bytes.Encode.unsignedInt16 BE 53
 
         Road3WayDown ->
-            54
+            Bytes.Encode.unsignedInt16 BE 54
 
         Road3WayLeft ->
-            55
+            Bytes.Encode.unsignedInt16 BE 55
 
         Road3WayUp ->
-            56
+            Bytes.Encode.unsignedInt16 BE 56
 
         Road3WayRight ->
-            57
+            Bytes.Encode.unsignedInt16 BE 57
 
         RoadRailCrossingHorizontal ->
-            58
+            Bytes.Encode.unsignedInt16 BE 58
 
         RoadRailCrossingVertical ->
-            59
+            Bytes.Encode.unsignedInt16 BE 59
 
         FenceHorizontal ->
-            60
+            Bytes.Encode.unsignedInt16 BE 60
 
         FenceVertical ->
-            61
+            Bytes.Encode.unsignedInt16 BE 61
 
         FenceDiagonal ->
-            62
+            Bytes.Encode.unsignedInt16 BE 62
 
         FenceAntidiagonal ->
-            63
+            Bytes.Encode.unsignedInt16 BE 63
 
         RoadDeadendUp ->
-            64
+            Bytes.Encode.unsignedInt16 BE 64
 
         RoadDeadendDown ->
-            65
+            Bytes.Encode.unsignedInt16 BE 65
 
         BusStopDown ->
-            66
+            Bytes.Encode.unsignedInt16 BE 66
 
         BusStopLeft ->
-            67
+            Bytes.Encode.unsignedInt16 BE 67
 
         BusStopRight ->
-            68
+            Bytes.Encode.unsignedInt16 BE 68
 
         BusStopUp ->
-            69
+            Bytes.Encode.unsignedInt16 BE 69
 
         Hospital ->
-            70
+            Bytes.Encode.unsignedInt16 BE 70
 
         Statue ->
-            71
+            Bytes.Encode.unsignedInt16 BE 71
 
         HedgeRowDown ->
-            72
+            Bytes.Encode.unsignedInt16 BE 72
 
         HedgeRowLeft ->
-            73
+            Bytes.Encode.unsignedInt16 BE 73
 
         HedgeRowRight ->
-            74
+            Bytes.Encode.unsignedInt16 BE 74
 
         HedgeRowUp ->
-            75
+            Bytes.Encode.unsignedInt16 BE 75
 
         HedgeCornerDownLeft ->
-            76
+            Bytes.Encode.unsignedInt16 BE 76
 
         HedgeCornerDownRight ->
-            77
+            Bytes.Encode.unsignedInt16 BE 77
 
         HedgeCornerUpLeft ->
-            78
+            Bytes.Encode.unsignedInt16 BE 78
 
         HedgeCornerUpRight ->
-            79
+            Bytes.Encode.unsignedInt16 BE 79
 
         HedgePillarDownLeft ->
-            80
+            Bytes.Encode.unsignedInt16 BE 80
 
         HedgePillarDownRight ->
-            81
+            Bytes.Encode.unsignedInt16 BE 81
 
         HedgePillarUpLeft ->
-            82
+            Bytes.Encode.unsignedInt16 BE 82
 
         HedgePillarUpRight ->
-            83
+            Bytes.Encode.unsignedInt16 BE 83
 
         ApartmentDown ->
-            84
+            Bytes.Encode.unsignedInt16 BE 84
 
         ApartmentLeft ->
-            85
+            Bytes.Encode.unsignedInt16 BE 85
 
         ApartmentRight ->
-            86
+            Bytes.Encode.unsignedInt16 BE 86
 
         ApartmentUp ->
-            87
+            Bytes.Encode.unsignedInt16 BE 87
 
         RockDown ->
-            88
+            Bytes.Encode.unsignedInt16 BE 88
 
         RockLeft ->
-            89
+            Bytes.Encode.unsignedInt16 BE 89
 
         RockRight ->
-            90
+            Bytes.Encode.unsignedInt16 BE 90
 
         RockUp ->
-            91
+            Bytes.Encode.unsignedInt16 BE 91
 
         Flowers1 ->
-            92
+            Bytes.Encode.unsignedInt16 BE 92
 
         Flowers2 ->
-            93
+            Bytes.Encode.unsignedInt16 BE 93
 
         ElmTree ->
-            94
+            Bytes.Encode.unsignedInt16 BE 94
 
         DirtPathHorizontal ->
-            95
+            Bytes.Encode.unsignedInt16 BE 95
 
         DirtPathVertical ->
-            96
+            Bytes.Encode.unsignedInt16 BE 96
 
-        Hyperlink ->
-            97
+        HyperlinkTile hyperlink ->
+            Bytes.Encode.sequence
+                [ Bytes.Encode.unsignedInt16 BE 97
+                , Hyperlink.encoder hyperlink
+                ]
 
         BenchDown ->
-            98
+            Bytes.Encode.unsignedInt16 BE 98
 
         BenchLeft ->
-            99
+            Bytes.Encode.unsignedInt16 BE 99
 
         BenchUp ->
-            100
+            Bytes.Encode.unsignedInt16 BE 100
 
         BenchRight ->
-            101
+            Bytes.Encode.unsignedInt16 BE 101
 
         ParkingDown ->
-            102
+            Bytes.Encode.unsignedInt16 BE 102
 
         ParkingLeft ->
-            103
+            Bytes.Encode.unsignedInt16 BE 103
 
         ParkingUp ->
-            104
+            Bytes.Encode.unsignedInt16 BE 104
 
         ParkingRight ->
-            105
+            Bytes.Encode.unsignedInt16 BE 105
 
         ParkingRoad ->
-            106
+            Bytes.Encode.unsignedInt16 BE 106
 
         ParkingRoundabout ->
-            107
+            Bytes.Encode.unsignedInt16 BE 107
 
         CornerHouseUpLeft ->
-            108
+            Bytes.Encode.unsignedInt16 BE 108
 
         CornerHouseUpRight ->
-            109
+            Bytes.Encode.unsignedInt16 BE 109
 
         CornerHouseDownLeft ->
-            110
+            Bytes.Encode.unsignedInt16 BE 110
 
         CornerHouseDownRight ->
-            111
+            Bytes.Encode.unsignedInt16 BE 111
 
         DogHouseDown ->
-            112
+            Bytes.Encode.unsignedInt16 BE 112
 
         DogHouseRight ->
-            113
+            Bytes.Encode.unsignedInt16 BE 113
 
         DogHouseUp ->
-            114
+            Bytes.Encode.unsignedInt16 BE 114
 
         DogHouseLeft ->
-            115
+            Bytes.Encode.unsignedInt16 BE 115
 
         Mushroom1 ->
-            116
+            Bytes.Encode.unsignedInt16 BE 116
 
         Mushroom2 ->
-            117
+            Bytes.Encode.unsignedInt16 BE 117
 
         TreeStump1 ->
-            118
+            Bytes.Encode.unsignedInt16 BE 118
 
         TreeStump2 ->
-            119
+            Bytes.Encode.unsignedInt16 BE 119
 
         Sunflowers ->
-            120
+            Bytes.Encode.unsignedInt16 BE 120
 
         RailDeadEndLeft ->
-            121
+            Bytes.Encode.unsignedInt16 BE 121
 
         RailDeadEndRight ->
-            122
+            Bytes.Encode.unsignedInt16 BE 122
 
         RailStrafeLeftToRight_SplitUp ->
-            123
+            Bytes.Encode.unsignedInt16 BE 123
 
         RailStrafeLeftToRight_SplitDown ->
-            124
+            Bytes.Encode.unsignedInt16 BE 124
 
         RailStrafeRightToLeft_SplitUp ->
-            125
+            Bytes.Encode.unsignedInt16 BE 125
 
         RailStrafeRightToLeft_SplitDown ->
-            126
+            Bytes.Encode.unsignedInt16 BE 126
 
         RailStrafeTopToBottom_SplitLeft ->
-            127
+            Bytes.Encode.unsignedInt16 BE 127
 
         RailStrafeTopToBottom_SplitRight ->
-            128
+            Bytes.Encode.unsignedInt16 BE 128
 
         RailStrafeBottomToTop_SplitLeft ->
-            129
+            Bytes.Encode.unsignedInt16 BE 129
 
         RailStrafeBottomToTop_SplitRight ->
-            130
+            Bytes.Encode.unsignedInt16 BE 130
 
         RoadManholeDown ->
-            131
+            Bytes.Encode.unsignedInt16 BE 131
 
         RoadManholeLeft ->
-            132
+            Bytes.Encode.unsignedInt16 BE 132
 
         RoadManholeUp ->
-            133
+            Bytes.Encode.unsignedInt16 BE 133
 
         RoadManholeRight ->
-            134
+            Bytes.Encode.unsignedInt16 BE 134
 
         BerryBush1 ->
-            135
+            Bytes.Encode.unsignedInt16 BE 135
 
         BerryBush2 ->
-            136
+            Bytes.Encode.unsignedInt16 BE 136
 
         BigText char ->
-            maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
+            maxTileValue
+                - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
+                |> Bytes.Encode.unsignedInt16 BE
 
 
-fromInt : Int -> Tile
-fromInt int =
-    case int of
-        0 ->
-            EmptyTile
+decoder : Bytes.Decode.Decoder Tile
+decoder =
+    Bytes.Decode.andThen
+        (\int ->
+            case int of
+                0 ->
+                    Bytes.Decode.succeed EmptyTile
 
-        1 ->
-            HouseDown
+                1 ->
+                    Bytes.Decode.succeed HouseDown
 
-        2 ->
-            HouseRight
+                2 ->
+                    Bytes.Decode.succeed HouseRight
 
-        3 ->
-            HouseUp
+                3 ->
+                    Bytes.Decode.succeed HouseUp
 
-        4 ->
-            HouseLeft
+                4 ->
+                    Bytes.Decode.succeed HouseLeft
 
-        5 ->
-            RailHorizontal
+                5 ->
+                    Bytes.Decode.succeed RailHorizontal
 
-        6 ->
-            RailVertical
+                6 ->
+                    Bytes.Decode.succeed RailVertical
 
-        7 ->
-            RailBottomToRight
+                7 ->
+                    Bytes.Decode.succeed RailBottomToRight
 
-        8 ->
-            RailBottomToLeft
+                8 ->
+                    Bytes.Decode.succeed RailBottomToLeft
 
-        9 ->
-            RailTopToRight
+                9 ->
+                    Bytes.Decode.succeed RailTopToRight
 
-        10 ->
-            RailTopToLeft
+                10 ->
+                    Bytes.Decode.succeed RailTopToLeft
 
-        11 ->
-            RailBottomToRightLarge
+                11 ->
+                    Bytes.Decode.succeed RailBottomToRightLarge
 
-        12 ->
-            RailBottomToLeftLarge
+                12 ->
+                    Bytes.Decode.succeed RailBottomToLeftLarge
 
-        13 ->
-            RailTopToRightLarge
+                13 ->
+                    Bytes.Decode.succeed RailTopToRightLarge
 
-        14 ->
-            RailTopToLeftLarge
+                14 ->
+                    Bytes.Decode.succeed RailTopToLeftLarge
 
-        15 ->
-            RailCrossing
+                15 ->
+                    Bytes.Decode.succeed RailCrossing
 
-        16 ->
-            RailStrafeDown
+                16 ->
+                    Bytes.Decode.succeed RailStrafeDown
 
-        17 ->
-            RailStrafeUp
+                17 ->
+                    Bytes.Decode.succeed RailStrafeUp
 
-        18 ->
-            RailStrafeLeft
+                18 ->
+                    Bytes.Decode.succeed RailStrafeLeft
 
-        19 ->
-            RailStrafeRight
+                19 ->
+                    Bytes.Decode.succeed RailStrafeRight
 
-        20 ->
-            TrainHouseRight
+                20 ->
+                    Bytes.Decode.succeed TrainHouseRight
 
-        21 ->
-            TrainHouseLeft
+                21 ->
+                    Bytes.Decode.succeed TrainHouseLeft
 
-        22 ->
-            RailStrafeDownSmall
+                22 ->
+                    Bytes.Decode.succeed RailStrafeDownSmall
 
-        23 ->
-            RailStrafeUpSmall
+                23 ->
+                    Bytes.Decode.succeed RailStrafeUpSmall
 
-        24 ->
-            RailStrafeLeftSmall
+                24 ->
+                    Bytes.Decode.succeed RailStrafeLeftSmall
 
-        25 ->
-            RailStrafeRightSmall
+                25 ->
+                    Bytes.Decode.succeed RailStrafeRightSmall
 
-        26 ->
-            Sidewalk
+                26 ->
+                    Bytes.Decode.succeed Sidewalk
 
-        27 ->
-            SidewalkHorizontalRailCrossing
+                27 ->
+                    Bytes.Decode.succeed SidewalkHorizontalRailCrossing
 
-        28 ->
-            SidewalkVerticalRailCrossing
+                28 ->
+                    Bytes.Decode.succeed SidewalkVerticalRailCrossing
 
-        29 ->
-            RailBottomToRight_SplitLeft
+                29 ->
+                    Bytes.Decode.succeed RailBottomToRight_SplitLeft
 
-        30 ->
-            RailBottomToLeft_SplitUp
+                30 ->
+                    Bytes.Decode.succeed RailBottomToLeft_SplitUp
 
-        31 ->
-            RailTopToRight_SplitDown
+                31 ->
+                    Bytes.Decode.succeed RailTopToRight_SplitDown
 
-        32 ->
-            RailTopToLeft_SplitRight
+                32 ->
+                    Bytes.Decode.succeed RailTopToLeft_SplitRight
 
-        33 ->
-            RailBottomToRight_SplitUp
+                33 ->
+                    Bytes.Decode.succeed RailBottomToRight_SplitUp
 
-        34 ->
-            RailBottomToLeft_SplitRight
+                34 ->
+                    Bytes.Decode.succeed RailBottomToLeft_SplitRight
 
-        35 ->
-            RailTopToRight_SplitLeft
+                35 ->
+                    Bytes.Decode.succeed RailTopToRight_SplitLeft
 
-        36 ->
-            RailTopToLeft_SplitDown
+                36 ->
+                    Bytes.Decode.succeed RailTopToLeft_SplitDown
 
-        37 ->
-            PostOffice
+                37 ->
+                    Bytes.Decode.succeed PostOffice
 
-        38 ->
-            PineTree1
+                38 ->
+                    Bytes.Decode.succeed PineTree1
 
-        39 ->
-            PineTree2
+                39 ->
+                    Bytes.Decode.succeed PineTree2
 
-        40 ->
-            BigPineTree
+                40 ->
+                    Bytes.Decode.succeed BigPineTree
 
-        41 ->
-            LogCabinDown
+                41 ->
+                    Bytes.Decode.succeed LogCabinDown
 
-        42 ->
-            LogCabinRight
+                42 ->
+                    Bytes.Decode.succeed LogCabinRight
 
-        43 ->
-            LogCabinUp
+                43 ->
+                    Bytes.Decode.succeed LogCabinUp
 
-        44 ->
-            LogCabinLeft
+                44 ->
+                    Bytes.Decode.succeed LogCabinLeft
 
-        45 ->
-            RoadHorizontal
+                45 ->
+                    Bytes.Decode.succeed RoadHorizontal
 
-        46 ->
-            RoadVertical
+                46 ->
+                    Bytes.Decode.succeed RoadVertical
 
-        47 ->
-            RoadBottomToLeft
+                47 ->
+                    Bytes.Decode.succeed RoadBottomToLeft
 
-        48 ->
-            RoadTopToLeft
+                48 ->
+                    Bytes.Decode.succeed RoadTopToLeft
 
-        49 ->
-            RoadTopToRight
+                49 ->
+                    Bytes.Decode.succeed RoadTopToRight
 
-        50 ->
-            RoadBottomToRight
+                50 ->
+                    Bytes.Decode.succeed RoadBottomToRight
 
-        51 ->
-            Road4Way
+                51 ->
+                    Bytes.Decode.succeed Road4Way
 
-        52 ->
-            RoadSidewalkCrossingHorizontal
+                52 ->
+                    Bytes.Decode.succeed RoadSidewalkCrossingHorizontal
 
-        53 ->
-            RoadSidewalkCrossingVertical
+                53 ->
+                    Bytes.Decode.succeed RoadSidewalkCrossingVertical
 
-        54 ->
-            Road3WayDown
+                54 ->
+                    Bytes.Decode.succeed Road3WayDown
 
-        55 ->
-            Road3WayLeft
+                55 ->
+                    Bytes.Decode.succeed Road3WayLeft
 
-        56 ->
-            Road3WayUp
+                56 ->
+                    Bytes.Decode.succeed Road3WayUp
 
-        57 ->
-            Road3WayRight
+                57 ->
+                    Bytes.Decode.succeed Road3WayRight
 
-        58 ->
-            RoadRailCrossingHorizontal
+                58 ->
+                    Bytes.Decode.succeed RoadRailCrossingHorizontal
 
-        59 ->
-            RoadRailCrossingVertical
+                59 ->
+                    Bytes.Decode.succeed RoadRailCrossingVertical
 
-        60 ->
-            FenceHorizontal
+                60 ->
+                    Bytes.Decode.succeed FenceHorizontal
 
-        61 ->
-            FenceVertical
+                61 ->
+                    Bytes.Decode.succeed FenceVertical
 
-        62 ->
-            FenceDiagonal
+                62 ->
+                    Bytes.Decode.succeed FenceDiagonal
 
-        63 ->
-            FenceAntidiagonal
+                63 ->
+                    Bytes.Decode.succeed FenceAntidiagonal
 
-        64 ->
-            RoadDeadendUp
+                64 ->
+                    Bytes.Decode.succeed RoadDeadendUp
 
-        65 ->
-            RoadDeadendDown
+                65 ->
+                    Bytes.Decode.succeed RoadDeadendDown
 
-        66 ->
-            BusStopDown
+                66 ->
+                    Bytes.Decode.succeed BusStopDown
 
-        67 ->
-            BusStopLeft
+                67 ->
+                    Bytes.Decode.succeed BusStopLeft
 
-        68 ->
-            BusStopRight
+                68 ->
+                    Bytes.Decode.succeed BusStopRight
 
-        69 ->
-            BusStopUp
+                69 ->
+                    Bytes.Decode.succeed BusStopUp
 
-        70 ->
-            Hospital
+                70 ->
+                    Bytes.Decode.succeed Hospital
 
-        71 ->
-            Statue
+                71 ->
+                    Bytes.Decode.succeed Statue
 
-        72 ->
-            HedgeRowDown
+                72 ->
+                    Bytes.Decode.succeed HedgeRowDown
 
-        73 ->
-            HedgeRowLeft
+                73 ->
+                    Bytes.Decode.succeed HedgeRowLeft
 
-        74 ->
-            HedgeRowRight
+                74 ->
+                    Bytes.Decode.succeed HedgeRowRight
 
-        75 ->
-            HedgeRowUp
+                75 ->
+                    Bytes.Decode.succeed HedgeRowUp
 
-        76 ->
-            HedgeCornerDownLeft
+                76 ->
+                    Bytes.Decode.succeed HedgeCornerDownLeft
 
-        77 ->
-            HedgeCornerDownRight
+                77 ->
+                    Bytes.Decode.succeed HedgeCornerDownRight
 
-        78 ->
-            HedgeCornerUpLeft
+                78 ->
+                    Bytes.Decode.succeed HedgeCornerUpLeft
 
-        79 ->
-            HedgeCornerUpRight
+                79 ->
+                    Bytes.Decode.succeed HedgeCornerUpRight
 
-        80 ->
-            HedgePillarDownLeft
+                80 ->
+                    Bytes.Decode.succeed HedgePillarDownLeft
 
-        81 ->
-            HedgePillarDownRight
+                81 ->
+                    Bytes.Decode.succeed HedgePillarDownRight
 
-        82 ->
-            HedgePillarUpLeft
+                82 ->
+                    Bytes.Decode.succeed HedgePillarUpLeft
 
-        83 ->
-            HedgePillarUpRight
+                83 ->
+                    Bytes.Decode.succeed HedgePillarUpRight
 
-        84 ->
-            ApartmentDown
+                84 ->
+                    Bytes.Decode.succeed ApartmentDown
 
-        85 ->
-            ApartmentLeft
+                85 ->
+                    Bytes.Decode.succeed ApartmentLeft
 
-        86 ->
-            ApartmentRight
+                86 ->
+                    Bytes.Decode.succeed ApartmentRight
 
-        87 ->
-            ApartmentUp
+                87 ->
+                    Bytes.Decode.succeed ApartmentUp
 
-        88 ->
-            RockDown
+                88 ->
+                    Bytes.Decode.succeed RockDown
 
-        89 ->
-            RockLeft
+                89 ->
+                    Bytes.Decode.succeed RockLeft
 
-        90 ->
-            RockRight
+                90 ->
+                    Bytes.Decode.succeed RockRight
 
-        91 ->
-            RockUp
+                91 ->
+                    Bytes.Decode.succeed RockUp
 
-        92 ->
-            Flowers1
+                92 ->
+                    Bytes.Decode.succeed Flowers1
 
-        93 ->
-            Flowers2
+                93 ->
+                    Bytes.Decode.succeed Flowers2
 
-        94 ->
-            ElmTree
+                94 ->
+                    Bytes.Decode.succeed ElmTree
 
-        95 ->
-            DirtPathHorizontal
+                95 ->
+                    Bytes.Decode.succeed DirtPathHorizontal
 
-        96 ->
-            DirtPathVertical
+                96 ->
+                    Bytes.Decode.succeed DirtPathVertical
 
-        97 ->
-            Hyperlink
+                97 ->
+                    Bytes.Decode.map HyperlinkTile Hyperlink.decoder
 
-        98 ->
-            BenchDown
+                98 ->
+                    Bytes.Decode.succeed BenchDown
 
-        99 ->
-            BenchLeft
+                99 ->
+                    Bytes.Decode.succeed BenchLeft
 
-        100 ->
-            BenchUp
+                100 ->
+                    Bytes.Decode.succeed BenchUp
 
-        101 ->
-            BenchRight
+                101 ->
+                    Bytes.Decode.succeed BenchRight
 
-        102 ->
-            ParkingDown
+                102 ->
+                    Bytes.Decode.succeed ParkingDown
 
-        103 ->
-            ParkingLeft
+                103 ->
+                    Bytes.Decode.succeed ParkingLeft
 
-        104 ->
-            ParkingUp
+                104 ->
+                    Bytes.Decode.succeed ParkingUp
 
-        105 ->
-            ParkingRight
+                105 ->
+                    Bytes.Decode.succeed ParkingRight
 
-        106 ->
-            ParkingRoad
+                106 ->
+                    Bytes.Decode.succeed ParkingRoad
 
-        107 ->
-            ParkingRoundabout
+                107 ->
+                    Bytes.Decode.succeed ParkingRoundabout
 
-        108 ->
-            CornerHouseUpLeft
+                108 ->
+                    Bytes.Decode.succeed CornerHouseUpLeft
 
-        109 ->
-            CornerHouseUpRight
+                109 ->
+                    Bytes.Decode.succeed CornerHouseUpRight
 
-        110 ->
-            CornerHouseDownLeft
+                110 ->
+                    Bytes.Decode.succeed CornerHouseDownLeft
 
-        111 ->
-            CornerHouseDownRight
+                111 ->
+                    Bytes.Decode.succeed CornerHouseDownRight
 
-        112 ->
-            DogHouseDown
+                112 ->
+                    Bytes.Decode.succeed DogHouseDown
 
-        113 ->
-            DogHouseRight
+                113 ->
+                    Bytes.Decode.succeed DogHouseRight
 
-        114 ->
-            DogHouseUp
+                114 ->
+                    Bytes.Decode.succeed DogHouseUp
 
-        115 ->
-            DogHouseLeft
+                115 ->
+                    Bytes.Decode.succeed DogHouseLeft
 
-        116 ->
-            Mushroom1
+                116 ->
+                    Bytes.Decode.succeed Mushroom1
 
-        117 ->
-            Mushroom2
+                117 ->
+                    Bytes.Decode.succeed Mushroom2
 
-        118 ->
-            TreeStump1
+                118 ->
+                    Bytes.Decode.succeed TreeStump1
 
-        119 ->
-            TreeStump2
+                119 ->
+                    Bytes.Decode.succeed TreeStump2
 
-        120 ->
-            Sunflowers
+                120 ->
+                    Bytes.Decode.succeed Sunflowers
 
-        121 ->
-            RailDeadEndLeft
+                121 ->
+                    Bytes.Decode.succeed RailDeadEndLeft
 
-        122 ->
-            RailDeadEndRight
+                122 ->
+                    Bytes.Decode.succeed RailDeadEndRight
 
-        123 ->
-            RailStrafeLeftToRight_SplitUp
+                123 ->
+                    Bytes.Decode.succeed RailStrafeLeftToRight_SplitUp
 
-        124 ->
-            RailStrafeLeftToRight_SplitDown
+                124 ->
+                    Bytes.Decode.succeed RailStrafeLeftToRight_SplitDown
 
-        125 ->
-            RailStrafeRightToLeft_SplitUp
+                125 ->
+                    Bytes.Decode.succeed RailStrafeRightToLeft_SplitUp
 
-        126 ->
-            RailStrafeRightToLeft_SplitDown
+                126 ->
+                    Bytes.Decode.succeed RailStrafeRightToLeft_SplitDown
 
-        127 ->
-            RailStrafeTopToBottom_SplitLeft
+                127 ->
+                    Bytes.Decode.succeed RailStrafeTopToBottom_SplitLeft
 
-        128 ->
-            RailStrafeTopToBottom_SplitRight
+                128 ->
+                    Bytes.Decode.succeed RailStrafeTopToBottom_SplitRight
 
-        129 ->
-            RailStrafeBottomToTop_SplitLeft
+                129 ->
+                    Bytes.Decode.succeed RailStrafeBottomToTop_SplitLeft
 
-        130 ->
-            RailStrafeBottomToTop_SplitRight
+                130 ->
+                    Bytes.Decode.succeed RailStrafeBottomToTop_SplitRight
 
-        131 ->
-            RoadManholeDown
+                131 ->
+                    Bytes.Decode.succeed RoadManholeDown
 
-        132 ->
-            RoadManholeLeft
+                132 ->
+                    Bytes.Decode.succeed RoadManholeLeft
 
-        133 ->
-            RoadManholeUp
+                133 ->
+                    Bytes.Decode.succeed RoadManholeUp
 
-        134 ->
-            RoadManholeRight
+                134 ->
+                    Bytes.Decode.succeed RoadManholeRight
 
-        135 ->
-            BerryBush1
+                135 ->
+                    Bytes.Decode.succeed BerryBush1
 
-        136 ->
-            BerryBush2
+                136 ->
+                    Bytes.Decode.succeed BerryBush2
 
-        _ ->
-            --maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
-            case Array.get (maxTileValue - int) Sprite.intToChar of
-                Just char ->
-                    BigText char
+                _ ->
+                    --maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
+                    case Array.get (maxTileValue - int) Sprite.intToChar of
+                        Just char ->
+                            BigText char |> Bytes.Decode.succeed
 
-                Nothing ->
-                    BigText '?'
+                        Nothing ->
+                            BigText '?' |> Bytes.Decode.succeed
+        )
+        (Bytes.Decode.unsignedInt16 BE)
 
 
 maxTileValue : number

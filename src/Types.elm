@@ -79,6 +79,7 @@ import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
 import Sprite exposing (Vertex)
 import TextInput
+import TextInputMultiline
 import Tile exposing (Category, Tile, TileGroup)
 import TileCountBot
 import Time
@@ -229,6 +230,7 @@ type alias FrontendLoaded =
     , selectedTileCategory : Category
     , lastHotkeyChange : Maybe Time.Posix
     , loginError : Maybe LoginError
+    , hyperlinkInput : TextInputMultiline.Model
     }
 
 
@@ -360,6 +362,7 @@ type UiHover
     | LogoutButton
     | ClearNotificationsButton
     | OneTimePasswordInput
+    | HyperlinkInput
 
 
 type alias BackendModel =

@@ -39,6 +39,7 @@ import Html.Attributes
 import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
+import Hyperlink
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Json.Decode
@@ -67,6 +68,7 @@ import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData)
 import Sound exposing (Sound(..))
 import Sprite exposing (Vertex)
 import TextInput exposing (OutMsg(..))
+import TextInputMultiline
 import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Time
 import TimeOfDay exposing (TimeOfDay(..))
@@ -2081,6 +2083,23 @@ tileInteraction currentUserId2 { tile, userId, position } model =
         RailStrafeBottomToTop_SplitRight ->
             handleRailSplit
 
+        BigText _ ->
+            let
+                ( cellPos, startPos ) =
+                    Grid.worldToCellAndLocalCoord position
+            in
+            case Grid.getCell cellPos (LocalGrid.localModel model.localModel).grid of
+                Just cell ->
+                    case LoadingPage.findHyperlink startPos (GridCell.flatten cell) of
+                        Just hyperlink ->
+                            (\() -> ( model, Ports.openNewTab hyperlink )) |> Just
+
+                        Nothing ->
+                            Nothing
+
+                Nothing ->
+                    Nothing
+
         _ ->
             Nothing
 
@@ -2236,7 +2255,17 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                                                 }
                                                             )
                                                             colors
-                                                            model2
+                                                            { model2
+                                                                | hyperlinkInput =
+                                                                    case tile of
+                                                                        HyperlinkTile hyperlink ->
+                                                                            TextInputMultiline.withText
+                                                                                (Hyperlink.toString hyperlink)
+                                                                                TextInputMultiline.init
+
+                                                                        _ ->
+                                                                            model2.hyperlinkInput
+                                                            }
 
                                                     Nothing ->
                                                         model2
@@ -3000,6 +3029,27 @@ uiUpdate audioData id event model =
                 event
                 model
 
+        HyperlinkInput ->
+            textInputMultilineUpdate
+                2
+                HyperlinkInput
+                (\_ model2 -> ( model2, Command.none ))
+                model.hyperlinkInput
+                (\a ->
+                    { model
+                        | hyperlinkInput =
+                            { a
+                                | current =
+                                    { cursorPosition = min Hyperlink.maxLength a.current.cursorPosition
+                                    , cursorSize = a.current.cursorSize
+                                    , text = String.left Hyperlink.maxLength a.current.text
+                                    }
+                            }
+                    }
+                )
+                event
+                model
+
 
 textInputUpdate :
     Int
@@ -3068,6 +3118,77 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
             case model.mouseLeft of
                 MouseButtonDown { current } ->
                     ( TextInput.mouseDownMove textScale (Coord.roundPoint current) elementPosition textInput
+                        |> setTextInput
+                    , Command.none
+                    )
+
+                MouseButtonUp _ ->
+                    ( model, Command.none )
+
+
+textInputMultilineUpdate :
+    Int
+    -> UiHover
+    -> (TextInputMultiline.Model -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
+    -> TextInputMultiline.Model
+    -> (TextInputMultiline.Model -> FrontendLoaded)
+    -> UiEvent
+    -> FrontendLoaded
+    -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
+textInputMultilineUpdate textScale id textChanged textInput setTextInput event model =
+    case event of
+        Ui.PastedText text ->
+            let
+                textInput2 =
+                    TextInputMultiline.paste text textInput
+            in
+            setTextInput textInput2 |> textChanged textInput2
+
+        Ui.MouseDown { elementPosition } ->
+            ( TextInputMultiline.mouseDown
+                textScale
+                (LoadingPage.mouseScreenPosition model |> Coord.roundPoint)
+                elementPosition
+                textInput
+                |> setTextInput
+                |> setFocus (Just id)
+            , Command.none
+            )
+
+        Ui.KeyDown _ Keyboard.Escape ->
+            ( setFocus Nothing model, Command.none )
+
+        Ui.KeyDown _ key ->
+            let
+                ( newTextInput, outMsg ) =
+                    TextInputMultiline.keyMsg
+                        (LocalGrid.ctrlOrMeta model)
+                        (LocalGrid.keyDown Keyboard.Shift model)
+                        key
+                        textInput
+
+                ( model2, cmd ) =
+                    setTextInput newTextInput |> textChanged newTextInput
+            in
+            ( model2
+            , case outMsg of
+                CopyText text ->
+                    Command.batch [ cmd, Ports.copyToClipboard text ]
+
+                PasteText ->
+                    Command.batch [ cmd, Ports.readFromClipboardRequest ]
+
+                NoOutMsg ->
+                    cmd
+            )
+
+        Ui.MousePressed ->
+            ( model, Command.none )
+
+        Ui.MouseMove { elementPosition } ->
+            case model.mouseLeft of
+                MouseButtonDown { current } ->
+                    ( TextInputMultiline.mouseDownMove textScale (Coord.roundPoint current) elementPosition textInput
                         |> setTextInput
                     , Command.none
                     )
@@ -3256,24 +3377,35 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
     case LocalGrid.currentUserId model of
         Just userId ->
             let
+                tile : Tile
                 tile =
                     Toolbar.getTileGroupTile tileGroup index
+
+                tile2 : Tile
+                tile2 =
+                    case tileGroup of
+                        HyperlinkGroup ->
+                            model.hyperlinkInput.current.text |> Hyperlink.fromString |> HyperlinkTile
+
+                        _ ->
+                            tile
 
                 hasCollision : Bool
                 hasCollision =
                     case model.lastTilePlaced of
                         Just lastPlaced ->
-                            Tile.hasCollision cursorPosition_ tile lastPlaced.position lastPlaced.tile
+                            Tile.hasCollision cursorPosition_ tile2 lastPlaced.position lastPlaced.tile
 
                         Nothing ->
                             False
 
+                colors : Colors
                 colors =
                     LoadingPage.getTileColor tileGroup model
 
                 change =
                     { position = cursorPosition_
-                    , change = tile
+                    , change = tile2
                     , userId = userId
                     , colors = colors
                     , time = model.time
@@ -3287,7 +3419,7 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                 model
 
             else if not (LoadingPage.canPlaceTile model.time change model.trains grid) then
-                if tile == EmptyTile then
+                if tile2 == EmptyTile then
                     { model
                         | lastTilePlaced =
                             Just
@@ -3306,7 +3438,7 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                                         Nothing ->
                                             model.time
                                 , overwroteTiles = False
-                                , tile = tile
+                                , tile = tile2
                                 , position = cursorPosition_
                                 }
                     }
@@ -3339,7 +3471,7 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                         LoadingPage.updateLocalModel
                             (Change.LocalGridChange
                                 { position = cursorPosition_
-                                , change = tile
+                                , change = tile2
                                 , colors = colors
                                 , time = model.time
                                 }
@@ -3386,13 +3518,13 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                                     Nothing ->
                                         model.time
                             , overwroteTiles = List.isEmpty removedTiles |> not
-                            , tile = tile
+                            , tile = tile2
                             , position = cursorPosition_
                             }
                     , removedTileParticles = removedTiles ++ model3.removedTileParticles
                     , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
                     , trains =
-                        case Train.handleAddingTrain model3.trains userId tile cursorPosition_ of
+                        case Train.handleAddingTrain model3.trains userId tile2 cursorPosition_ of
                             Just ( trainId, train ) ->
                                 IdDict.insert trainId train model.trains
 
@@ -4161,6 +4293,7 @@ canvasView audioData model =
                 hoverAt2 =
                     LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
 
+                showMousePointer : { cursorType : CursorType, scale : Int }
                 showMousePointer =
                     cursorSprite hoverAt2 model
 

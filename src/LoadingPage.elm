@@ -5,6 +5,7 @@ module LoadingPage exposing
     , cursorActualPosition
     , cursorPosition
     , devicePixelRatioChanged
+    , findHyperlink
     , getAdminReports
     , getHandColor
     , getReports
@@ -55,6 +56,7 @@ import GridCell exposing (FrontendHistory)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
+import Hyperlink exposing (Hyperlink)
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Image
@@ -78,6 +80,7 @@ import Sound
 import Sprite exposing (Vertex)
 import Terrain
 import TextInput
+import TextInputMultiline
 import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
@@ -424,8 +427,11 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , lastHotkeyChange = Nothing
             , oneTimePasswordInput = TextInput.init
             , loginError = Nothing
+            , hyperlinkInput = TextInputMultiline.init |> TextInputMultiline.withText "example.com"
             }
-                |> setCurrentTool HandToolButton
+                |> setCurrentTool (TilePlacerToolButton HyperlinkGroup)
+
+        --|> setCurrentTool HandToolButton
     in
     ( updateMeshes model
     , Command.batch
@@ -518,6 +524,63 @@ canPlaceTile time change trains grid =
         False
 
 
+expandHyperlink : Coord Units.CellLocalUnit -> List GridCell.Value -> Coord Units.CellLocalUnit
+expandHyperlink startPos flattenedValues =
+    let
+        nextPos =
+            Coord.plus (Coord.xy -1 0) startPos
+    in
+    if
+        List.any
+            (\value ->
+                case value.tile of
+                    BigText _ ->
+                        nextPos == value.position
+
+                    _ ->
+                        False
+            )
+            flattenedValues
+    then
+        expandHyperlink nextPos flattenedValues
+
+    else
+        startPos
+
+
+findHyperlink : Coord Units.CellLocalUnit -> List GridCell.Value -> Maybe Hyperlink
+findHyperlink startPos flattenedValues =
+    let
+        nextPos =
+            Coord.plus (Coord.xy 1 0) startPos
+    in
+    case
+        List.find
+            (\value ->
+                case value.tile of
+                    BigText _ ->
+                        nextPos == value.position
+
+                    HyperlinkTile _ ->
+                        nextPos == value.position
+
+                    _ ->
+                        False
+            )
+            flattenedValues
+    of
+        Just value ->
+            case value.tile of
+                HyperlinkTile hyperlink ->
+                    Just hyperlink
+
+                _ ->
+                    findHyperlink nextPos flattenedValues
+
+        Nothing ->
+            Nothing
+
+
 updateMeshes : FrontendLoaded -> FrontendLoaded
 updateMeshes newModel =
     let
@@ -592,15 +655,41 @@ updateMeshes newModel =
         newMaybeUserId =
             LocalGrid.currentUserId newModel
 
-        newMesh : Maybe (Effect.WebGL.Mesh Vertex) -> GridCell.Cell FrontendHistory -> ( Int, Int ) -> { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
+        newMesh :
+            Maybe (Effect.WebGL.Mesh Vertex)
+            -> GridCell.Cell FrontendHistory
+            -> ( Int, Int )
+            -> { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
         newMesh backgroundMesh newCell rawCoord =
             let
                 coord : Coord CellUnit
                 coord =
                     Coord.tuple rawCoord
+
+                flattened : List GridCell.Value
+                flattened =
+                    GridCell.flatten newCell
             in
             { foreground =
                 Grid.foregroundMesh2
+                    (List.filterMap
+                        (\value ->
+                            case value.tile of
+                                HyperlinkTile _ ->
+                                    let
+                                        linkPos =
+                                            expandHyperlink value.position flattened
+                                    in
+                                    Just
+                                        { linkTopLeft = Grid.cellAndLocalCoordToWorld ( coord, linkPos )
+                                        , linkWidth = Coord.xRaw value.position - Coord.xRaw linkPos
+                                        }
+
+                                _ ->
+                                    Nothing
+                        )
+                        flattened
+                    )
                     newShowEmptyTiles
                     (case ( newCurrentTile, newMaybeUserId ) of
                         ( Just newCurrentTile_, Just userId ) ->
@@ -628,7 +717,7 @@ updateMeshes newModel =
                     newMaybeUserId
                     (LocalGrid.localModel newModel.localModel |> .users)
                     (GridCell.getToggledRailSplit newCell)
-                    (GridCell.flatten newCell)
+                    flattened
             , background =
                 case backgroundMesh of
                     Just background ->
