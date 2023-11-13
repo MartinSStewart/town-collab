@@ -324,7 +324,7 @@ wrappedColorText maxWidth color text2 =
 
         text3 : String
         text3 =
-            TextInputMultiline.addLineBreaks charWidth maxWidth text2 |> String.join "\n"
+            TextInputMultiline.addLineBreaks charWidth maxWidth text2 |> List.concat |> String.join "\n"
     in
     Text
         { outline = Nothing

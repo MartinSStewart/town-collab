@@ -424,6 +424,7 @@ size textScale width current =
                 (Coord.xRaw Sprite.charSize * textScale)
                 (Quantity.unwrap width - (Coord.xRaw padding + textScale) * 2)
                 current.text
+                |> List.concat
     in
     size2 textScale width (List.length text)
 
@@ -436,7 +437,7 @@ size2 textScale width lineCount =
 view : Int -> Coord units -> Quantity Int units -> Bool -> Bool -> State -> List Vertex
 view textScale offset width hasFocus isValid current =
     let
-        rows : List String
+        rows : List (List String)
         rows =
             addLineBreaks
                 (Coord.xRaw Sprite.charSize * textScale)
@@ -462,7 +463,11 @@ view textScale offset width hasFocus isValid current =
                         List.Extra.Stop state
                 )
                 { cursorRow = 0, charsLeft = current.cursorPosition }
-                rows
+                (List.concat rows)
+
+        text : String
+        text =
+            List.concat rows |> String.join "\n"
 
         --|> Debug.log "cursor position"
     in
@@ -516,7 +521,7 @@ view textScale offset width hasFocus isValid current =
             --    (Coord.xy 508 28)
             --    (Coord.xy 1 1)
            )
-        ++ Sprite.text Color.black textScale (String.join "\n" rows) (offset |> Coord.plus padding |> Coord.plus (Coord.xy textScale 0))
+        ++ Sprite.text Color.black textScale text (offset |> Coord.plus padding |> Coord.plus (Coord.xy textScale 0))
         ++ (if hasFocus then
                 Sprite.sprite
                     (offset
@@ -539,9 +544,9 @@ view textScale offset width hasFocus isValid current =
            )
 
 
-addLineBreaks : Int -> Int -> String -> List String
+addLineBreaks : Int -> Int -> String -> List (List String)
 addLineBreaks charWidth maxWidth text2 =
-    List.concatMap
+    List.map
         (\text -> addLineBreaksHelper charWidth maxWidth [] text |> List.reverse)
         (String.split "\n" text2)
 

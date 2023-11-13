@@ -122,6 +122,11 @@ type TileGroup
     | RailStrafeSplitMirrorGroup
     | RoadStraightManholeGroup
     | BerryBushGroup
+    | SmallHouseGroup
+    | OfficeGroup
+    | FireTruckGarageGroup
+    | TownHouseGroup
+    | RowHouseGroup
 
 
 codec : Codec TileGroup
@@ -180,6 +185,11 @@ codec =
         , ( "RailStrafeSplitMirror", RailStrafeSplitMirrorGroup )
         , ( "RoadManhole", RoadStraightManholeGroup )
         , ( "Bush", BerryBushGroup )
+        , ( "SmallHouseGroup", SmallHouseGroup )
+        , ( "OfficeGroup", OfficeGroup )
+        , ( "FireTruckHouseGroup", FireTruckGarageGroup )
+        , ( "BrickApartmentGroup", TownHouseGroup )
+        , ( "RowHouseGroup", RowHouseGroup )
         ]
 
 
@@ -237,6 +247,11 @@ allTileGroups =
     , RailStrafeSplitMirrorGroup
     , RoadStraightManholeGroup
     , BerryBushGroup
+    , SmallHouseGroup
+    , OfficeGroup
+    , FireTruckGarageGroup
+    , TownHouseGroup
+    , RowHouseGroup
     ]
 
 
@@ -306,6 +321,11 @@ buildingCategory =
     , ApartmentGroup
     , CornerHouseGroup
     , DogHouseGroup
+    , SmallHouseGroup
+    , OfficeGroup
+    , FireTruckGarageGroup
+    , TownHouseGroup
+    , RowHouseGroup
     ]
 
 
@@ -705,6 +725,36 @@ getTileGroupData tileGroup =
             , name = "Berry bush"
             }
 
+        SmallHouseGroup ->
+            { defaultColors = defaultSmallHouseColor
+            , tiles = Nonempty SmallHouseDown [ SmallHouseLeft, SmallHouseUp, SmallHouseRight ]
+            , name = "Small house"
+            }
+
+        OfficeGroup ->
+            { defaultColors = defaultOfficeColor
+            , tiles = Nonempty OfficeDown [ OfficeUp ]
+            , name = "Office"
+            }
+
+        FireTruckGarageGroup ->
+            { defaultColors = defaultFireTruckHouseColor
+            , tiles = Nonempty FireTruckGarage []
+            , name = "Fire truck garage"
+            }
+
+        TownHouseGroup ->
+            { defaultColors = defaultTownHouseColor
+            , tiles = Nonempty TownHouse []
+            , name = "Town house"
+            }
+
+        RowHouseGroup ->
+            { defaultColors = defaultRowHouseColor
+            , tiles = Nonempty RowHouse []
+            , name = "Row house"
+            }
+
 
 type Tile
     = EmptyTile
@@ -845,6 +895,15 @@ type Tile
     | RoadManholeRight
     | BerryBush1
     | BerryBush2
+    | SmallHouseDown
+    | SmallHouseLeft
+    | SmallHouseUp
+    | SmallHouseRight
+    | OfficeDown
+    | OfficeUp
+    | FireTruckGarage
+    | TownHouse
+    | RowHouse
 
 
 aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
@@ -1001,6 +1060,15 @@ allTiles =
     , RoadManholeRight
     , BerryBush1
     , BerryBush2
+    , SmallHouseDown
+    , SmallHouseLeft
+    , SmallHouseUp
+    , SmallHouseRight
+    , OfficeDown
+    , OfficeUp
+    , FireTruckGarage
+    , TownHouse
+    , RowHouse
     ]
         ++ List.map BigText (List.Nonempty.toList Sprite.asciiChars)
 
@@ -1626,6 +1694,31 @@ defaultCornerHouseColor =
     TwoDefaultColors { primaryColor = Color.rgb255 101 108 124, secondaryColor = Color.rgb255 103 157 236 }
 
 
+defaultSmallHouseColor : DefaultColor
+defaultSmallHouseColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 113 201 139, secondaryColor = Color.rgb255 222 156 66 }
+
+
+defaultOfficeColor : DefaultColor
+defaultOfficeColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 162 168 216, secondaryColor = Color.rgb255 215 215 215 }
+
+
+defaultTownHouseColor : DefaultColor
+defaultTownHouseColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 231 120 91, secondaryColor = Color.rgb255 171 185 83 }
+
+
+defaultFireTruckHouseColor : DefaultColor
+defaultFireTruckHouseColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 234 183 106, secondaryColor = Color.rgb255 187 66 34 }
+
+
+defaultRowHouseColor : DefaultColor
+defaultRowHouseColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 171 111 40, secondaryColor = Color.rgb255 189 166 118 }
+
+
 worldMovementBounds : Vector2d WorldUnit WorldUnit -> Tile -> Coord WorldUnit -> List (BoundingBox2d WorldUnit WorldUnit)
 worldMovementBounds expandBoundsBy tile worldPos =
     List.map
@@ -2054,6 +2147,33 @@ getData tile =
 
         BerryBush2 ->
             berryBush2
+
+        SmallHouseDown ->
+            smallHouseDown
+
+        SmallHouseLeft ->
+            smallHouseLeft
+
+        SmallHouseUp ->
+            smallHouseUp
+
+        SmallHouseRight ->
+            smallHouseRight
+
+        OfficeDown ->
+            officeDown
+
+        OfficeUp ->
+            officeUp
+
+        FireTruckGarage ->
+            fireTruckGarage
+
+        TownHouse ->
+            townHouse
+
+        RowHouse ->
+            rowHouse
 
 
 emptyTile : TileData units
@@ -4287,6 +4407,96 @@ berryBush2 =
     }
 
 
+smallHouseDown : TileData units
+smallHouseDown =
+    { texturePosition = Coord.xy 820 504
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 0 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+smallHouseLeft : TileData units
+smallHouseLeft =
+    { texturePosition = Coord.xy 940 648
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 0 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+smallHouseUp : TileData units
+smallHouseUp =
+    { texturePosition = Coord.xy 940 504
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 1 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+smallHouseRight : TileData units
+smallHouseRight =
+    { texturePosition = Coord.xy 880 504
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 1 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+officeDown : TileData units
+officeDown =
+    { texturePosition = Coord.xy 820 558
+    , size = Coord.xy 4 5
+    , tileCollision = collisionRectangle 0 3 4 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+officeUp : TileData units
+officeUp =
+    { texturePosition = Coord.xy 900 558
+    , size = Coord.xy 4 5
+    , tileCollision = collisionRectangle 0 3 4 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+fireTruckGarage : TileData units
+fireTruckGarage =
+    { texturePosition = Coord.xy 820 648
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 0 1 3 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+townHouse : TileData units
+townHouse =
+    { texturePosition = Coord.xy 880 648
+    , size = Coord.xy 2 3
+    , tileCollision = collisionRectangle 0 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+rowHouse : TileData units
+rowHouse =
+    { texturePosition = Coord.xy 920 648
+    , size = Coord.xy 1 3
+    , tileCollision = collisionRectangle 0 1 1 2
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
 collisionRectangle : Int -> Int -> Int -> Int -> CollisionMask
 collisionRectangle x y width height =
     List.range x (x + width - 1)
@@ -4882,6 +5092,33 @@ encoder tile =
         BerryBush2 ->
             Bytes.Encode.unsignedInt16 BE 136
 
+        SmallHouseDown ->
+            Bytes.Encode.unsignedInt16 BE 137
+
+        SmallHouseLeft ->
+            Bytes.Encode.unsignedInt16 BE 138
+
+        SmallHouseUp ->
+            Bytes.Encode.unsignedInt16 BE 139
+
+        SmallHouseRight ->
+            Bytes.Encode.unsignedInt16 BE 140
+
+        OfficeDown ->
+            Bytes.Encode.unsignedInt16 BE 141
+
+        OfficeUp ->
+            Bytes.Encode.unsignedInt16 BE 142
+
+        FireTruckGarage ->
+            Bytes.Encode.unsignedInt16 BE 143
+
+        TownHouse ->
+            Bytes.Encode.unsignedInt16 BE 144
+
+        RowHouse ->
+            Bytes.Encode.unsignedInt16 BE 145
+
         BigText char ->
             maxTileValue
                 - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
@@ -5304,8 +5541,34 @@ decoder =
                 136 ->
                     Bytes.Decode.succeed BerryBush2
 
+                137 ->
+                    Bytes.Decode.succeed SmallHouseDown
+
+                138 ->
+                    Bytes.Decode.succeed SmallHouseLeft
+
+                139 ->
+                    Bytes.Decode.succeed SmallHouseUp
+
+                140 ->
+                    Bytes.Decode.succeed SmallHouseRight
+
+                141 ->
+                    Bytes.Decode.succeed OfficeDown
+
+                142 ->
+                    Bytes.Decode.succeed OfficeUp
+
+                143 ->
+                    Bytes.Decode.succeed FireTruckGarage
+
+                144 ->
+                    Bytes.Decode.succeed TownHouse
+
+                145 ->
+                    Bytes.Decode.succeed RowHouse
+
                 _ ->
-                    --maxTileValue - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
                     case Array.get (maxTileValue - int) Sprite.intToChar of
                         Just char ->
                             BigText char |> Bytes.Decode.succeed
