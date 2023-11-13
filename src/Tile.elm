@@ -4413,7 +4413,7 @@ smallHouseDown =
     , size = Coord.xy 3 3
     , tileCollision = collisionRectangle 0 1 2 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 11 26) (Coord.xy 29 28) ]
     }
 
 
@@ -4423,7 +4423,7 @@ smallHouseLeft =
     , size = Coord.xy 3 3
     , tileCollision = collisionRectangle 0 1 2 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 11 26) (Coord.xy 29 28) ]
     }
 
 
@@ -4433,7 +4433,7 @@ smallHouseUp =
     , size = Coord.xy 3 3
     , tileCollision = collisionRectangle 1 1 2 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 26) (Coord.xy 29 28) ]
     }
 
 
@@ -4443,7 +4443,7 @@ smallHouseRight =
     , size = Coord.xy 3 3
     , tileCollision = collisionRectangle 1 1 2 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 20 26) (Coord.xy 29 28) ]
     }
 
 
@@ -4453,7 +4453,11 @@ officeDown =
     , size = Coord.xy 4 5
     , tileCollision = collisionRectangle 0 3 4 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 0 54) (Coord.xy 30 36)
+        , Bounds.fromCoordAndSize (Coord.xy 50 54) (Coord.xy 30 36)
+        , Bounds.fromCoordAndSize (Coord.xy 30 54) (Coord.xy 20 29)
+        ]
     }
 
 
@@ -4463,7 +4467,7 @@ officeUp =
     , size = Coord.xy 4 5
     , tileCollision = collisionRectangle 0 3 4 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 54) (Coord.xy 80 36) ]
     }
 
 
@@ -4473,7 +4477,7 @@ fireTruckGarage =
     , size = Coord.xy 3 3
     , tileCollision = collisionRectangle 0 1 3 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 31) (Coord.xy 60 23) ]
     }
 
 
@@ -4483,7 +4487,7 @@ townHouse =
     , size = Coord.xy 2 3
     , tileCollision = collisionRectangle 0 1 2 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 28) (Coord.xy 40 26) ]
     }
 
 
@@ -4493,7 +4497,7 @@ rowHouse =
     , size = Coord.xy 1 3
     , tileCollision = collisionRectangle 0 1 1 2
     , railPath = NoRailPath
-    , movementCollision = []
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 31) (Coord.xy 20 23) ]
     }
 
 
