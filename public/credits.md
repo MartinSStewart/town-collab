@@ -3,3 +3,7 @@
 [Alma](https://soundcloud.com/willowswillows) - music and ambience
 
 [Mario](https://github.com/supermario/) - technical support
+
+Thea - art
+
+[Jacob](https://jacobrogaishio.com/) - art
