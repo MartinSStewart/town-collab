@@ -565,7 +565,7 @@ getTileGroupData tileGroup =
 
         HospitalGroup ->
             { defaultColors = defaultHospitalColor
-            , tiles = Nonempty Hospital []
+            , tiles = Nonempty HospitalDown [ HospitalLeft, HospitalUp, HospitalRight ]
             , name = "Hospital"
             }
 
@@ -745,13 +745,13 @@ getTileGroupData tileGroup =
 
         TownHouseGroup ->
             { defaultColors = defaultTownHouseColor
-            , tiles = Nonempty TownHouse []
+            , tiles = Nonempty TownHouse0 [ TownHouse1, TownHouse2, TownHouse3, TownHouse4 ]
             , name = "Town house"
             }
 
         RowHouseGroup ->
             { defaultColors = defaultRowHouseColor
-            , tiles = Nonempty RowHouse []
+            , tiles = Nonempty RowHouse0 [ RowHouse1, RowHouse2, RowHouse3 ]
             , name = "Row house"
             }
 
@@ -827,7 +827,10 @@ type Tile
     | BusStopLeft
     | BusStopRight
     | BusStopUp
-    | Hospital
+    | HospitalDown
+    | HospitalLeft
+    | HospitalUp
+    | HospitalRight
     | Statue
     | HedgeRowDown
     | HedgeRowLeft
@@ -902,8 +905,15 @@ type Tile
     | OfficeDown
     | OfficeUp
     | FireTruckGarage
-    | TownHouse
-    | RowHouse
+    | TownHouse0
+    | TownHouse1
+    | TownHouse2
+    | TownHouse3
+    | TownHouse4
+    | RowHouse0
+    | RowHouse1
+    | RowHouse2
+    | RowHouse3
 
 
 aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
@@ -994,7 +1004,7 @@ allTiles =
     , BusStopLeft
     , BusStopRight
     , BusStopUp
-    , Hospital
+    , HospitalDown
     , Statue
     , HedgeRowDown
     , HedgeRowLeft
@@ -1067,8 +1077,12 @@ allTiles =
     , OfficeDown
     , OfficeUp
     , FireTruckGarage
-    , TownHouse
-    , RowHouse
+    , TownHouse0
+    , TownHouse1
+    , TownHouse2
+    , TownHouse3
+    , TownHouse4
+    , RowHouse0
     ]
         ++ List.map BigText (List.Nonempty.toList Sprite.asciiChars)
 
@@ -1944,8 +1958,17 @@ getData tile =
         BusStopUp ->
             busStopUp
 
-        Hospital ->
-            hospital
+        HospitalDown ->
+            hospitalDown
+
+        HospitalLeft ->
+            hospitalLeft
+
+        HospitalUp ->
+            hospitalUp
+
+        HospitalRight ->
+            hospitalRight
 
         Statue ->
             statue
@@ -2169,11 +2192,32 @@ getData tile =
         FireTruckGarage ->
             fireTruckGarage
 
-        TownHouse ->
-            townHouse
+        TownHouse0 ->
+            townHouse0
 
-        RowHouse ->
-            rowHouse
+        TownHouse1 ->
+            townHouse1
+
+        TownHouse2 ->
+            townHouse2
+
+        TownHouse3 ->
+            townHouse3
+
+        TownHouse4 ->
+            townHouse4
+
+        RowHouse0 ->
+            rowHouse0
+
+        RowHouse1 ->
+            rowHouse1
+
+        RowHouse2 ->
+            rowHouse2
+
+        RowHouse3 ->
+            rowHouse3
 
 
 emptyTile : TileData units
@@ -3363,23 +3407,41 @@ busStopUp =
     }
 
 
-hospital : TileData units
-hospital =
+hospitalDown : TileData units
+hospitalDown =
     { texturePosition = Coord.xy 14 46 |> Coord.multiply Units.tileSize
     , size = Coord.xy 3 5
-    , tileCollision =
-        [ ( 0, 2 )
-        , ( 1, 2 )
-        , ( 2, 2 )
-        , ( 0, 3 )
-        , ( 1, 3 )
-        , ( 2, 3 )
-        , ( 0, 4 )
-        , ( 1, 4 )
-        , ( 2, 4 )
-        ]
-            |> Set.fromList
-            |> CustomCollision
+    , tileCollision = collisionRectangle 0 2 3 3
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 54) ]
+    }
+
+
+hospitalLeft : TileData units
+hospitalLeft =
+    { texturePosition = Coord.xy 820 846
+    , size = Coord.xy 2 6
+    , tileCollision = collisionRectangle 0 3 2 3
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 54) ]
+    }
+
+
+hospitalUp : TileData units
+hospitalUp =
+    { texturePosition = Coord.xy 860 846
+    , size = Coord.xy 3 6
+    , tileCollision = collisionRectangle 0 3 3 3
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 54) ]
+    }
+
+
+hospitalRight : TileData units
+hospitalRight =
+    { texturePosition = Coord.xy 920 846
+    , size = Coord.xy 2 6
+    , tileCollision = collisionRectangle 0 3 2 3
     , railPath = NoRailPath
     , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 54) ]
     }
@@ -4481,8 +4543,8 @@ fireTruckGarage =
     }
 
 
-townHouse : TileData units
-townHouse =
+townHouse0 : TileData units
+townHouse0 =
     { texturePosition = Coord.xy 880 648
     , size = Coord.xy 2 3
     , tileCollision = collisionRectangle 0 1 2 2
@@ -4491,9 +4553,79 @@ townHouse =
     }
 
 
-rowHouse : TileData units
-rowHouse =
+townHouse1 : TileData units
+townHouse1 =
+    { texturePosition = Coord.xy 840 702
+    , size = Coord.xy 2 3
+    , tileCollision = collisionRectangle 0 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 28) (Coord.xy 40 26) ]
+    }
+
+
+townHouse2 : TileData units
+townHouse2 =
+    { texturePosition = Coord.xy 880 702
+    , size = Coord.xy 2 3
+    , tileCollision = collisionRectangle 0 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 28) (Coord.xy 40 26) ]
+    }
+
+
+townHouse3 : TileData units
+townHouse3 =
+    { texturePosition = Coord.xy 920 702
+    , size = Coord.xy 2 3
+    , tileCollision = collisionRectangle 0 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 28) (Coord.xy 40 26) ]
+    }
+
+
+townHouse4 : TileData units
+townHouse4 =
+    { texturePosition = Coord.xy 960 702
+    , size = Coord.xy 2 3
+    , tileCollision = collisionRectangle 0 1 2 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 28) (Coord.xy 40 26) ]
+    }
+
+
+rowHouse0 : TileData units
+rowHouse0 =
     { texturePosition = Coord.xy 920 648
+    , size = Coord.xy 1 3
+    , tileCollision = collisionRectangle 0 1 1 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 31) (Coord.xy 20 23) ]
+    }
+
+
+rowHouse1 : TileData units
+rowHouse1 =
+    { texturePosition = Coord.xy 760 648
+    , size = Coord.xy 1 3
+    , tileCollision = collisionRectangle 0 1 1 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 31) (Coord.xy 20 23) ]
+    }
+
+
+rowHouse2 : TileData units
+rowHouse2 =
+    { texturePosition = Coord.xy 780 648
+    , size = Coord.xy 1 3
+    , tileCollision = collisionRectangle 0 1 1 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 31) (Coord.xy 20 23) ]
+    }
+
+
+rowHouse3 : TileData units
+rowHouse3 =
+    { texturePosition = Coord.xy 800 648
     , size = Coord.xy 1 3
     , tileCollision = collisionRectangle 0 1 1 2
     , railPath = NoRailPath
@@ -4682,6 +4814,11 @@ trainHouseRightRailPath =
 encoder : Tile -> Bytes.Encode.Encoder
 encoder tile =
     case tile of
+        BigText char ->
+            maxTileValue
+                - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
+                |> Bytes.Encode.unsignedInt16 BE
+
         EmptyTile ->
             Bytes.Encode.unsignedInt16 BE 0
 
@@ -4892,7 +5029,7 @@ encoder tile =
         BusStopUp ->
             Bytes.Encode.unsignedInt16 BE 69
 
-        Hospital ->
+        HospitalDown ->
             Bytes.Encode.unsignedInt16 BE 70
 
         Statue ->
@@ -5117,16 +5254,41 @@ encoder tile =
         FireTruckGarage ->
             Bytes.Encode.unsignedInt16 BE 143
 
-        TownHouse ->
+        TownHouse0 ->
             Bytes.Encode.unsignedInt16 BE 144
 
-        RowHouse ->
+        RowHouse0 ->
             Bytes.Encode.unsignedInt16 BE 145
 
-        BigText char ->
-            maxTileValue
-                - Maybe.withDefault 0 (Dict.get char Sprite.charToInt)
-                |> Bytes.Encode.unsignedInt16 BE
+        TownHouse1 ->
+            Bytes.Encode.unsignedInt16 BE 146
+
+        TownHouse2 ->
+            Bytes.Encode.unsignedInt16 BE 147
+
+        TownHouse3 ->
+            Bytes.Encode.unsignedInt16 BE 148
+
+        TownHouse4 ->
+            Bytes.Encode.unsignedInt16 BE 149
+
+        HospitalLeft ->
+            Bytes.Encode.unsignedInt16 BE 150
+
+        HospitalUp ->
+            Bytes.Encode.unsignedInt16 BE 151
+
+        HospitalRight ->
+            Bytes.Encode.unsignedInt16 BE 152
+
+        RowHouse1 ->
+            Bytes.Encode.unsignedInt16 BE 153
+
+        RowHouse2 ->
+            Bytes.Encode.unsignedInt16 BE 154
+
+        RowHouse3 ->
+            Bytes.Encode.unsignedInt16 BE 155
 
 
 decoder : Bytes.Decode.Decoder Tile
@@ -5345,7 +5507,7 @@ decoder =
                     Bytes.Decode.succeed BusStopUp
 
                 70 ->
-                    Bytes.Decode.succeed Hospital
+                    Bytes.Decode.succeed HospitalDown
 
                 71 ->
                     Bytes.Decode.succeed Statue
@@ -5567,10 +5729,40 @@ decoder =
                     Bytes.Decode.succeed FireTruckGarage
 
                 144 ->
-                    Bytes.Decode.succeed TownHouse
+                    Bytes.Decode.succeed TownHouse0
 
                 145 ->
-                    Bytes.Decode.succeed RowHouse
+                    Bytes.Decode.succeed RowHouse0
+
+                146 ->
+                    Bytes.Decode.succeed TownHouse1
+
+                147 ->
+                    Bytes.Decode.succeed TownHouse2
+
+                148 ->
+                    Bytes.Decode.succeed TownHouse3
+
+                149 ->
+                    Bytes.Decode.succeed TownHouse4
+
+                150 ->
+                    Bytes.Decode.succeed HospitalLeft
+
+                151 ->
+                    Bytes.Decode.succeed HospitalUp
+
+                152 ->
+                    Bytes.Decode.succeed HospitalRight
+
+                153 ->
+                    Bytes.Decode.succeed RowHouse1
+
+                154 ->
+                    Bytes.Decode.succeed RowHouse2
+
+                155 ->
+                    Bytes.Decode.succeed RowHouse3
 
                 _ ->
                     case Array.get (maxTileValue - int) Sprite.intToChar of
