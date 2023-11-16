@@ -127,6 +127,7 @@ type TileGroup
     | FireTruckGarageGroup
     | TownHouseGroup
     | RowHouseGroup
+    | WideParkingLotGroup
 
 
 codec : Codec TileGroup
@@ -190,6 +191,7 @@ codec =
         , ( "FireTruckHouseGroup", FireTruckGarageGroup )
         , ( "BrickApartmentGroup", TownHouseGroup )
         , ( "RowHouseGroup", RowHouseGroup )
+        , ( "WideParkingLotGroup", WideParkingLotGroup )
         ]
 
 
@@ -252,6 +254,7 @@ allTileGroups =
     , FireTruckGarageGroup
     , TownHouseGroup
     , RowHouseGroup
+    , WideParkingLotGroup
     ]
 
 
@@ -363,6 +366,7 @@ roadCategory =
     , ParkingLotGroup
     , ParkingRoadGroup
     , ParkingRoundaboutGroup
+    , WideParkingLotGroup
     ]
 
 
@@ -641,6 +645,12 @@ getTileGroupData tileGroup =
             , name = "Parking lot"
             }
 
+        WideParkingLotGroup ->
+            { defaultColors = OneDefaultColor (Color.rgb255 243 243 243)
+            , tiles = Nonempty WideParkingDown [ WideParkingLeft, WideParkingUp, WideParkingRight ]
+            , name = "Parking lot"
+            }
+
         ParkingRoadGroup ->
             { defaultColors = ZeroDefaultColors
             , tiles = Nonempty ParkingRoad []
@@ -914,6 +924,10 @@ type Tile
     | RowHouse1
     | RowHouse2
     | RowHouse3
+    | WideParkingDown
+    | WideParkingLeft
+    | WideParkingUp
+    | WideParkingRight
 
 
 aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
@@ -2218,6 +2232,18 @@ getData tile =
 
         RowHouse3 ->
             rowHouse3
+
+        WideParkingDown ->
+            wideParkingDown
+
+        WideParkingLeft ->
+            wideParkingLeft
+
+        WideParkingUp ->
+            wideParkingUp
+
+        WideParkingRight ->
+            wideParkingRight
 
 
 emptyTile : TileData units
@@ -3914,6 +3940,46 @@ parkingUp =
     }
 
 
+wideParkingDown : TileData unit
+wideParkingDown =
+    { texturePosition = Coord.xy 720 648
+    , size = Coord.xy 2 1
+    , tileCollision = DefaultCollision
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+wideParkingLeft : TileData unit
+wideParkingLeft =
+    { texturePosition = Coord.xy 720 666
+    , size = Coord.xy 1 2
+    , tileCollision = DefaultCollision
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+wideParkingRight : TileData unit
+wideParkingRight =
+    { texturePosition = Coord.xy 740 666
+    , size = Coord.xy 1 2
+    , tileCollision = DefaultCollision
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+wideParkingUp : TileData unit
+wideParkingUp =
+    { texturePosition = Coord.xy 720 630
+    , size = Coord.xy 2 1
+    , tileCollision = DefaultCollision
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
 parkingRoad : TileData unit
 parkingRoad =
     { texturePosition = Coord.xy 640 684
@@ -5290,6 +5356,18 @@ encoder tile =
         RowHouse3 ->
             Bytes.Encode.unsignedInt16 BE 155
 
+        WideParkingDown ->
+            Bytes.Encode.unsignedInt16 BE 156
+
+        WideParkingLeft ->
+            Bytes.Encode.unsignedInt16 BE 157
+
+        WideParkingUp ->
+            Bytes.Encode.unsignedInt16 BE 158
+
+        WideParkingRight ->
+            Bytes.Encode.unsignedInt16 BE 159
+
 
 decoder : Bytes.Decode.Decoder Tile
 decoder =
@@ -5763,6 +5841,18 @@ decoder =
 
                 155 ->
                     Bytes.Decode.succeed RowHouse3
+
+                156 ->
+                    Bytes.Decode.succeed WideParkingDown
+
+                157 ->
+                    Bytes.Decode.succeed WideParkingLeft
+
+                158 ->
+                    Bytes.Decode.succeed WideParkingUp
+
+                159 ->
+                    Bytes.Decode.succeed WideParkingRight
 
                 _ ->
                     case Array.get (maxTileValue - int) Sprite.intToChar of
