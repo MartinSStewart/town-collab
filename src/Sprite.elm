@@ -162,7 +162,7 @@ spriteWithTwoColors { primaryColor, secondaryColor } position size texturePositi
 
 textureWidth : number
 textureWidth =
-    1024
+    2048
 
 
 opaque : number
