@@ -17,6 +17,7 @@ import Id exposing (Id, UserId)
 import IdDict
 import Point2d
 import Test exposing (Test, describe, test)
+import TextInputMultiline
 import Tile exposing (Tile(..))
 import TileCountBot
 import Units
@@ -240,6 +241,24 @@ tests =
 
                     Nothing ->
                         Expect.fail "User not found"
+        , describe
+            "Multiline cursor roundtrips"
+            (List.indexedMap
+                (\index { cursorIndex, lines } ->
+                    test (String.fromInt index) <|
+                        \_ ->
+                            TextInputMultiline.indexToCoord lines cursorIndex
+                                |> Debug.log "abc"
+                                |> TextInputMultiline.coordToIndex lines
+                                |> Expect.equal cursorIndex
+                )
+                [ { cursorIndex = 6, lines = [ [ "test test test" ] ] }
+                , { cursorIndex = 6, lines = [ [ "test", "test test" ] ] }
+                , { cursorIndex = 10, lines = [ [ "test", "test", "test" ] ] }
+                , { cursorIndex = 11, lines = [ [ "test" ], [ "abcd", "1234" ] ] }
+                , { cursorIndex = 25, lines = [ [ "test" ], [ "abcd", "1234" ], [ "1", "2" ], [ "123" ], [ "qwer", "tyuuiop" ] ] }
+                ]
+            )
         ]
 
 

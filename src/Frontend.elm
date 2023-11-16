@@ -3032,6 +3032,7 @@ uiUpdate audioData id event model =
         HyperlinkInput ->
             textInputMultilineUpdate
                 2
+                Toolbar.hyperlinkInputWidth
                 HyperlinkInput
                 (\_ model2 -> ( model2, Command.none ))
                 model.hyperlinkInput
@@ -3040,7 +3041,7 @@ uiUpdate audioData id event model =
                         | hyperlinkInput =
                             { a
                                 | current =
-                                    { cursorPosition = min Hyperlink.maxLength a.current.cursorPosition
+                                    { cursorIndex = min Hyperlink.maxLength a.current.cursorIndex
                                     , cursorSize = a.current.cursorSize
                                     , text = String.left Hyperlink.maxLength a.current.text
                                     }
@@ -3128,6 +3129,7 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
 
 textInputMultilineUpdate :
     Int
+    -> Int
     -> UiHover
     -> (TextInputMultiline.Model -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> TextInputMultiline.Model
@@ -3135,7 +3137,7 @@ textInputMultilineUpdate :
     -> UiEvent
     -> FrontendLoaded
     -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
-textInputMultilineUpdate textScale id textChanged textInput setTextInput event model =
+textInputMultilineUpdate textScale width id textChanged textInput setTextInput event model =
     case event of
         Ui.PastedText text ->
             let
@@ -3162,6 +3164,8 @@ textInputMultilineUpdate textScale id textChanged textInput setTextInput event m
             let
                 ( newTextInput, outMsg ) =
                     TextInputMultiline.keyMsg
+                        textScale
+                        width
                         (LocalGrid.ctrlOrMeta model)
                         (LocalGrid.keyDown Keyboard.Shift model)
                         key

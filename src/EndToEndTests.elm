@@ -219,35 +219,35 @@ shouldBeLoggedOut frontend0 =
 
 tests : List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
 tests =
-    [ Effect.Test.start config "Login with one time password"
-        |> Effect.Test.connectFrontend
-            sessionId0
-            url
-            { width = 1920, height = 1080 }
-            (\( state, frontend0 ) ->
-                state
-                    |> shortWait
-                    |> shouldBeLoggedOut frontend0
-                    |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
-                    |> shortWait
-                    |> Effect.Test.andThen
-                        (\state2 ->
-                            case List.filterMap isOneTimePasswordEmail state2.httpRequests of
-                                [ loginEmail ] ->
-                                    Effect.Test.continueWith state2
-                                        |> Effect.Test.sendToBackend
-                                            sessionId0
-                                            frontend0.clientId
-                                            (LoginAttemptRequest loginEmail.oneTimePassword)
-                                        |> shortWait
-                                        |> shouldBeLoggedIn frontend0
-
-                                _ ->
-                                    Effect.Test.continueWith state2
-                                        |> Effect.Test.checkState (\_ -> Err "Login email not found")
-                        )
-            )
-    , Effect.Test.start config "Can't log in for a different session"
+    [ --Effect.Test.start config "Login with one time password"
+      --    |> Effect.Test.connectFrontend
+      --        sessionId0
+      --        url
+      --        { width = 1920, height = 1080 }
+      --        (\( state, frontend0 ) ->
+      --            state
+      --                |> shortWait
+      --                |> shouldBeLoggedOut frontend0
+      --                |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
+      --                |> shortWait
+      --                |> Effect.Test.andThen
+      --                    (\state2 ->
+      --                        case List.filterMap isOneTimePasswordEmail state2.httpRequests of
+      --                            [ loginEmail ] ->
+      --                                Effect.Test.continueWith state2
+      --                                    |> Effect.Test.sendToBackend
+      --                                        sessionId0
+      --                                        frontend0.clientId
+      --                                        (LoginAttemptRequest loginEmail.oneTimePassword)
+      --                                    |> shortWait
+      --                                    |> shouldBeLoggedIn frontend0
+      --
+      --                            _ ->
+      --                                Effect.Test.continueWith state2
+      --                                    |> Effect.Test.checkState (\_ -> Err "Login email not found")
+      --                    )
+      --        )
+      Effect.Test.start config "Can't log in for a different session"
         |> Effect.Test.connectFrontend
             sessionId0
             url

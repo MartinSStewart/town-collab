@@ -99,7 +99,7 @@ type alias TextInputMultilineData id =
     { id : id
     , width : Int
     , isValid : Bool
-    , state : TextInput.State
+    , state : TextInputMultiline.State
     , textScale : Int
     , dummyField : ()
     }
@@ -318,13 +318,9 @@ wrappedText maxWidth text2 =
 wrappedColorText : Int -> Color -> String -> Element id
 wrappedColorText maxWidth color text2 =
     let
-        charWidth : Int
-        charWidth =
-            Coord.xRaw Sprite.charSize * defaultCharScale
-
         text3 : String
         text3 =
-            TextInputMultiline.addLineBreaks charWidth maxWidth text2 |> List.concat |> String.join "\n"
+            TextInputMultiline.addLineBreaks defaultCharScale maxWidth text2 |> List.concat |> String.join "\n"
     in
     Text
         { outline = Nothing
@@ -348,7 +344,7 @@ textInputScaled =
     TextInput
 
 
-textInputMultiline : { id : id, width : Int, isValid : Bool, state : TextInput.State } -> Element id
+textInputMultiline : { id : id, width : Int, isValid : Bool, state : TextInputMultiline.State } -> Element id
 textInputMultiline data =
     TextInputMultiline
         { id = data.id

@@ -2,6 +2,8 @@ module TextInputMultiline exposing
     ( Model
     , State
     , addLineBreaks
+    , coordToIndex
+    , indexToCoord
     , init
     , keyMsg
     , mouseDown
@@ -15,7 +17,6 @@ module TextInputMultiline exposing
 import Color
 import Coord exposing (Coord)
 import Keyboard
-import List.Extra
 import Quantity exposing (Quantity(..))
 import Sprite exposing (Vertex)
 import TextInput exposing (OutMsg(..))
@@ -30,7 +31,7 @@ type alias Model =
 
 
 type alias State =
-    { cursorPosition : Int
+    { cursorIndex : Int
     , cursorSize : Int
     , text : String
     }
@@ -38,7 +39,7 @@ type alias State =
 
 init : Model
 init =
-    { current = { cursorPosition = 0, cursorSize = 0, text = "" }, undoHistory = [], redoHistory = [], dummyField = () }
+    { current = { cursorIndex = 0, cursorSize = 0, text = "" }, undoHistory = [], redoHistory = [], dummyField = () }
 
 
 withText : String -> Model -> Model
@@ -86,16 +87,16 @@ redo model =
 
 selectionMin : State -> Int
 selectionMin model =
-    min model.cursorPosition (model.cursorPosition + model.cursorSize)
+    min model.cursorIndex (model.cursorIndex + model.cursorSize)
 
 
 selectionMax : State -> Int
 selectionMax model =
-    max model.cursorPosition (model.cursorPosition + model.cursorSize)
+    max model.cursorIndex (model.cursorIndex + model.cursorSize)
 
 
-keyMsg : Bool -> Bool -> Keyboard.Key -> Model -> ( Model, OutMsg )
-keyMsg ctrlDown shiftDown key model =
+keyMsg : Int -> Int -> Bool -> Bool -> Keyboard.Key -> Model -> ( Model, OutMsg )
+keyMsg textScale width ctrlDown shiftDown key model =
     case ( ctrlDown, shiftDown, key ) of
         ( True, False, Keyboard.Character "c" ) ->
             ( model
@@ -127,7 +128,7 @@ keyMsg ctrlDown shiftDown key model =
             ( replaceState
                 (\state ->
                     { state
-                        | cursorPosition = String.length state.text
+                        | cursorIndex = String.length state.text
                         , cursorSize = String.length state.text |> negate
                     }
                 )
@@ -145,7 +146,7 @@ keyMsg ctrlDown shiftDown key model =
             ( replaceState
                 (\state ->
                     { state
-                        | cursorPosition =
+                        | cursorIndex =
                             if state.cursorSize == 0 then
                                 0
 
@@ -162,10 +163,10 @@ keyMsg ctrlDown shiftDown key model =
             ( replaceState
                 (\state ->
                     { state
-                        | cursorPosition = state.cursorPosition - 1 |> max 0
+                        | cursorIndex = state.cursorIndex - 1 |> max 0
                     }
                         |> setCursorSize
-                            (if state.cursorPosition > 0 then
+                            (if state.cursorIndex > 0 then
                                 state.cursorSize + 1
 
                              else
@@ -180,9 +181,9 @@ keyMsg ctrlDown shiftDown key model =
             ( replaceState
                 (\state ->
                     { state
-                        | cursorPosition =
+                        | cursorIndex =
                             if state.cursorSize == 0 then
-                                state.cursorPosition - 1 |> max 0
+                                state.cursorIndex - 1 |> max 0
 
                             else
                                 selectionMin state
@@ -197,7 +198,7 @@ keyMsg ctrlDown shiftDown key model =
             ( replaceState
                 (\state ->
                     { state
-                        | cursorPosition =
+                        | cursorIndex =
                             if state.cursorSize == 0 then
                                 String.length state.text
 
@@ -214,10 +215,10 @@ keyMsg ctrlDown shiftDown key model =
             ( replaceState
                 (\state ->
                     { state
-                        | cursorPosition = state.cursorPosition + 1 |> min (String.length state.text)
+                        | cursorIndex = state.cursorIndex + 1 |> min (String.length state.text)
                     }
                         |> setCursorSize
-                            (if state.cursorPosition < String.length state.text then
+                            (if state.cursorIndex < String.length state.text then
                                 state.cursorSize - 1
 
                              else
@@ -232,9 +233,9 @@ keyMsg ctrlDown shiftDown key model =
             ( replaceState
                 (\state ->
                     { state
-                        | cursorPosition =
+                        | cursorIndex =
                             (if state.cursorSize == 0 then
-                                state.cursorPosition + 1
+                                state.cursorIndex + 1
 
                              else
                                 selectionMax state
@@ -249,14 +250,40 @@ keyMsg ctrlDown shiftDown key model =
 
         ( False, False, Keyboard.ArrowUp ) ->
             ( replaceState
-                (\state -> { state | cursorPosition = 0, cursorSize = 0 })
+                (\state ->
+                    let
+                        lines : List (List String)
+                        lines =
+                            addLineBreaks textScale width state.text
+                    in
+                    { state
+                        | cursorIndex =
+                            indexToCoord lines state.cursorIndex
+                                |> Coord.plus (Coord.xy 0 -1)
+                                |> coordToIndex lines
+                    }
+                )
                 model
             , NoOutMsg
             )
 
         ( False, False, Keyboard.ArrowDown ) ->
             ( replaceState
-                (\state -> { state | cursorPosition = String.length state.text, cursorSize = 0 })
+                (\state ->
+                    let
+                        lines : List (List String)
+                        lines =
+                            addLineBreaks textScale width state.text
+                                |> Debug.log "down"
+                    in
+                    { state
+                        | cursorIndex =
+                            indexToCoord lines state.cursorIndex
+                                |> Coord.plus (Coord.xy 0 1)
+                                |> coordToIndex lines
+                                |> min (String.length state.text)
+                    }
+                )
                 model
             , NoOutMsg
             )
@@ -266,8 +293,8 @@ keyMsg ctrlDown shiftDown key model =
                 (\state ->
                     if state.cursorSize == 0 then
                         { state
-                            | text = String.dropLeft state.cursorPosition state.text
-                            , cursorPosition = 0
+                            | text = String.dropLeft state.cursorIndex state.text
+                            , cursorIndex = 0
                             , cursorSize = 0
                         }
 
@@ -284,9 +311,9 @@ keyMsg ctrlDown shiftDown key model =
                     if state.cursorSize == 0 then
                         { state
                             | text =
-                                String.left (state.cursorPosition - 1) state.text
-                                    ++ String.dropLeft state.cursorPosition state.text
-                            , cursorPosition = state.cursorPosition - 1 |> max 0
+                                String.left (state.cursorIndex - 1) state.text
+                                    ++ String.dropLeft state.cursorIndex state.text
+                            , cursorIndex = state.cursorIndex - 1 |> max 0
                             , cursorSize = 0
                         }
 
@@ -303,8 +330,8 @@ keyMsg ctrlDown shiftDown key model =
                     if state.cursorSize == 0 then
                         { state
                             | text =
-                                String.left state.cursorPosition state.text
-                                    ++ String.dropLeft (state.cursorPosition + 1) state.text
+                                String.left state.cursorIndex state.text
+                                    ++ String.dropLeft (state.cursorIndex + 1) state.text
                         }
 
                     else
@@ -326,10 +353,10 @@ setCursorSize newCursorSize state =
     { state
         | cursorSize =
             if newCursorSize > 0 then
-                min (String.length state.text - state.cursorPosition) newCursorSize
+                min (String.length state.text - state.cursorIndex) newCursorSize
 
             else
-                max -state.cursorPosition newCursorSize
+                max -state.cursorIndex newCursorSize
     }
 
 
@@ -349,7 +376,7 @@ insertText text state =
             String.left (selectionMin state) state.text
                 ++ text
                 ++ String.dropLeft (selectionMax state) state.text
-        , cursorPosition = selectionMin state + String.length text
+        , cursorIndex = selectionMin state + String.length text
         , cursorSize = 0
     }
 
@@ -358,7 +385,7 @@ deleteSelection : State -> State
 deleteSelection state =
     { state
         | text = String.left (selectionMin state) state.text ++ String.dropLeft (selectionMax state) state.text
-        , cursorPosition = selectionMin state
+        , cursorIndex = selectionMin state
         , cursorSize = 0
     }
 
@@ -368,7 +395,7 @@ mouseDown textScale mousePosition position model =
     replaceState
         (\state ->
             { state
-                | cursorPosition = cursorPosition textScale mousePosition position state
+                | cursorIndex = cursorPosition textScale mousePosition position state
                 , cursorSize = 0
             }
         )
@@ -404,8 +431,8 @@ mouseDownMove textScale mousePosition position model =
                 cursorPosition2 =
                     cursorPosition textScale mousePosition position state
             in
-            { state | cursorPosition = cursorPosition2 }
-                |> setCursorSize (state.cursorSize + (state.cursorPosition - cursorPosition2))
+            { state | cursorIndex = cursorPosition2 }
+                |> setCursorSize (state.cursorSize + (state.cursorIndex - cursorPosition2))
         )
         model
 
@@ -421,7 +448,7 @@ size textScale width current =
         text : List String
         text =
             addLineBreaks
-                (Coord.xRaw Sprite.charSize * textScale)
+                textScale
                 (Quantity.unwrap width - (Coord.xRaw padding + textScale) * 2)
                 current.text
                 |> List.concat
@@ -440,30 +467,16 @@ view textScale offset width hasFocus isValid current =
         rows : List (List String)
         rows =
             addLineBreaks
-                (Coord.xRaw Sprite.charSize * textScale)
+                textScale
                 (Quantity.unwrap width - (Coord.xRaw padding + textScale) * 2)
                 current.text
-                |> Debug.log "abc"
 
         lineCount : Int
         lineCount =
-            List.length rows
+            List.length (List.concat rows)
 
-        cursorPosition2 : { cursorRow : Int, charsLeft : Int }
         cursorPosition2 =
-            List.Extra.stoppableFoldl
-                (\row state ->
-                    if String.length row < state.charsLeft then
-                        { cursorRow = state.cursorRow + 1
-                        , charsLeft = state.charsLeft - String.length row - 1
-                        }
-                            |> List.Extra.Continue
-
-                    else
-                        List.Extra.Stop state
-                )
-                { cursorRow = 0, charsLeft = current.cursorPosition }
-                (List.concat rows)
+            indexToCoord rows current.cursorIndex
 
         text : String
         text =
@@ -525,11 +538,7 @@ view textScale offset width hasFocus isValid current =
         ++ (if hasFocus then
                 Sprite.sprite
                     (offset
-                        |> Coord.plus
-                            (Coord.xy
-                                (cursorPosition2.charsLeft * Coord.xRaw Sprite.charSize * textScale)
-                                (cursorPosition2.cursorRow * Coord.yRaw Sprite.charSize * textScale)
-                            )
+                        |> Coord.plus (Coord.multiply Sprite.charSize cursorPosition2 |> Coord.scalar textScale)
                         |> Coord.plus padding
                     )
                     (Coord.xy
@@ -545,9 +554,9 @@ view textScale offset width hasFocus isValid current =
 
 
 addLineBreaks : Int -> Int -> String -> List (List String)
-addLineBreaks charWidth maxWidth text2 =
+addLineBreaks textScale maxWidth text2 =
     List.map
-        (\text -> addLineBreaksHelper charWidth maxWidth [] text |> List.reverse)
+        (\text -> addLineBreaksHelper (Coord.xRaw Sprite.charSize * textScale) maxWidth [] text |> List.reverse)
         (String.split "\n" text2)
 
 
@@ -601,3 +610,83 @@ addLineBreaksHelper charWidth maxWidth list text2 =
 
     else
         text2 :: list
+
+
+indexToCoord : List (List String) -> Int -> Coord units
+indexToCoord rows cursorIndex =
+    List.foldl
+        (\row state ->
+            if state.stopped == True then
+                state
+
+            else
+                List.foldl
+                    (\rowPart state2 ->
+                        if state2.stopped == True then
+                            state2
+
+                        else if String.length rowPart < state2.charsLeft then
+                            { cursorRow = state2.cursorRow + 1
+                            , charsLeft = state2.charsLeft - String.length rowPart
+                            , stopped = False
+                            }
+
+                        else
+                            { cursorRow = state2.cursorRow, charsLeft = state2.charsLeft, stopped = True }
+                    )
+                    { cursorRow = state.cursorRow
+                    , charsLeft = state.charsLeft - 1
+                    , stopped = state.stopped
+                    }
+                    row
+        )
+        { cursorRow = 0, charsLeft = cursorIndex + 1, stopped = False }
+        rows
+        |> (\{ cursorRow, charsLeft } -> Coord.xy charsLeft cursorRow)
+
+
+coordToIndex : List (List String) -> Coord units -> Int
+coordToIndex rows coord =
+    if Coord.yRaw coord < 0 then
+        0
+
+    else
+        List.foldl
+            (\row state ->
+                if state.stopped then
+                    state
+
+                else
+                    List.foldl
+                        (\rowPart state2 ->
+                            if state2.stopped then
+                                state2
+
+                            else if state2.cursorRow > 0 then
+                                { cursorRow = state2.cursorRow - 1
+                                , charsLeft = state2.charsLeft + String.length rowPart
+                                , stopped = False
+                                }
+
+                            else
+                                { cursorRow = state2.cursorRow
+                                , charsLeft = state2.charsLeft + min (Coord.xRaw coord) (String.length rowPart)
+                                , stopped = True
+                                }
+                        )
+                        state
+                        row
+                        |> (\state2 ->
+                                if state2.stopped then
+                                    state2
+
+                                else
+                                    { cursorRow = state2.cursorRow
+                                    , charsLeft = state2.charsLeft + 1
+                                    , stopped = state2.stopped
+                                    }
+                           )
+            )
+            { cursorRow = Coord.yRaw coord, charsLeft = 0, stopped = False }
+            rows
+            |> .charsLeft

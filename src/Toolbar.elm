@@ -2,6 +2,7 @@ module Toolbar exposing
     ( actualViewPoint
     , canDragView
     , getTileGroupTile
+    , hyperlinkInputWidth
     , isDisconnected
     , mapSize
     , notificationsViewWidth
@@ -1380,6 +1381,11 @@ inviteUserSprite =
         }
 
 
+hyperlinkInputWidth : number
+hyperlinkInputWidth =
+    270
+
+
 selectedToolView :
     Colors
     ->
@@ -1403,7 +1409,7 @@ selectedToolView handColor model currentTool =
                 [ Ui.text "Hyperlink"
                 , Ui.textInputMultiline
                     { id = HyperlinkInput
-                    , width = 270
+                    , width = hyperlinkInputWidth
                     , isValid = True
                     , state = model.hyperlinkInput.current
                     }
