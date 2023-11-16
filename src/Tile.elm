@@ -128,6 +128,7 @@ type TileGroup
     | TownHouseGroup
     | RowHouseGroup
     | WideParkingLotGroup
+    | GazeboGroup
 
 
 codec : Codec TileGroup
@@ -192,6 +193,7 @@ codec =
         , ( "BrickApartmentGroup", TownHouseGroup )
         , ( "RowHouseGroup", RowHouseGroup )
         , ( "WideParkingLotGroup", WideParkingLotGroup )
+        , ( "GazeboGroup", GazeboGroup )
         ]
 
 
@@ -255,6 +257,7 @@ allTileGroups =
     , TownHouseGroup
     , RowHouseGroup
     , WideParkingLotGroup
+    , GazeboGroup
     ]
 
 
@@ -310,6 +313,7 @@ sceneryCategory =
     , DogHouseGroup
     , MushroomGroup
     , BerryBushGroup
+    , GazeboGroup
     ]
 
 
@@ -329,6 +333,7 @@ buildingCategory =
     , FireTruckGarageGroup
     , TownHouseGroup
     , RowHouseGroup
+    , GazeboGroup
     ]
 
 
@@ -765,6 +770,12 @@ getTileGroupData tileGroup =
             , name = "Row house"
             }
 
+        GazeboGroup ->
+            { defaultColors = defaultGazeboColor
+            , tiles = Nonempty Gazebo []
+            , name = "Gazebo"
+            }
+
 
 type Tile
     = EmptyTile
@@ -928,6 +939,7 @@ type Tile
     | WideParkingLeft
     | WideParkingUp
     | WideParkingRight
+    | Gazebo
 
 
 aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
@@ -1747,6 +1759,11 @@ defaultRowHouseColor =
     TwoDefaultColors { primaryColor = Color.rgb255 171 111 40, secondaryColor = Color.rgb255 189 166 118 }
 
 
+defaultGazeboColor : DefaultColor
+defaultGazeboColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 77 124 86, secondaryColor = Color.rgb255 204 204 204 }
+
+
 worldMovementBounds : Vector2d WorldUnit WorldUnit -> Tile -> Coord WorldUnit -> List (BoundingBox2d WorldUnit WorldUnit)
 worldMovementBounds expandBoundsBy tile worldPos =
     List.map
@@ -2244,6 +2261,9 @@ getData tile =
 
         WideParkingRight ->
             wideParkingRight
+
+        Gazebo ->
+            gazebo
 
 
 emptyTile : TileData units
@@ -4699,6 +4719,16 @@ rowHouse3 =
     }
 
 
+gazebo : TileData units
+gazebo =
+    { texturePosition = Coord.xy 760 702
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 1 2 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 31) (Coord.xy 20 23) ]
+    }
+
+
 collisionRectangle : Int -> Int -> Int -> Int -> CollisionMask
 collisionRectangle x y width height =
     List.range x (x + width - 1)
@@ -5368,6 +5398,9 @@ encoder tile =
         WideParkingRight ->
             Bytes.Encode.unsignedInt16 BE 159
 
+        Gazebo ->
+            Bytes.Encode.unsignedInt16 BE 160
+
 
 decoder : Bytes.Decode.Decoder Tile
 decoder =
@@ -5853,6 +5886,9 @@ decoder =
 
                 159 ->
                     Bytes.Decode.succeed WideParkingRight
+
+                160 ->
+                    Bytes.Decode.succeed Gazebo
 
                 _ ->
                     case Array.get (maxTileValue - int) Sprite.intToChar of
