@@ -19,10 +19,12 @@ module Tile exposing
     , codec
     , decoder
     , defaultBerryBushColor
+    , defaultIronFenceColor
     , defaultMushroomColor
     , defaultPineTreeColor
     , defaultPostOfficeColor
     , defaultRockColor
+    , defaultStoreColor
     , defaultToPrimaryAndSecondary
     , encoder
     , getData
@@ -129,6 +131,13 @@ type TileGroup
     | RowHouseGroup
     | WideParkingLotGroup
     | GazeboGroup
+    | ConvenienceStoreGroup
+    | BeautySalonGroup
+    | CheckmartGroup
+    | TreeStoreGroup
+    | IronFenceGroup
+    | IronGateGroup
+    | DeadTreeGroup
 
 
 codec : Codec TileGroup
@@ -174,7 +183,6 @@ codec =
         , ( "BigText", BigTextGroup )
         , ( "Hyperlink", HyperlinkGroup )
         , ( "Bench", BenchGroup )
-        , ( "ParkingLot", ParkingLotGroup )
         , ( "ParkingRoad", ParkingRoadGroup )
         , ( "ParkingRoundabout", ParkingRoundaboutGroup )
         , ( "CornerHouse", CornerHouseGroup )
@@ -194,6 +202,13 @@ codec =
         , ( "RowHouseGroup", RowHouseGroup )
         , ( "WideParkingLotGroup", WideParkingLotGroup )
         , ( "GazeboGroup", GazeboGroup )
+        , ( "ConvenienceStoreGroup", ConvenienceStoreGroup )
+        , ( "BeautySalonGroup", BeautySalonGroup )
+        , ( "CheckmartGroup", CheckmartGroup )
+        , ( "TreeStoreGroup", TreeStoreGroup )
+        , ( "IronFenceGroup", IronFenceGroup )
+        , ( "IronGateGroup", IronGateGroup )
+        , ( "DeadTreeGroup", DeadTreeGroup )
         ]
 
 
@@ -258,6 +273,13 @@ allTileGroups =
     , RowHouseGroup
     , WideParkingLotGroup
     , GazeboGroup
+    , ConvenienceStoreGroup
+    , BeautySalonGroup
+    , CheckmartGroup
+    , TreeStoreGroup
+    , IronFenceGroup
+    , IronGateGroup
+    , DeadTreeGroup
     ]
 
 
@@ -314,6 +336,9 @@ sceneryCategory =
     , MushroomGroup
     , BerryBushGroup
     , GazeboGroup
+    , IronFenceGroup
+    , IronGateGroup
+    , DeadTreeGroup
     ]
 
 
@@ -334,6 +359,10 @@ buildingCategory =
     , TownHouseGroup
     , RowHouseGroup
     , GazeboGroup
+    , ConvenienceStoreGroup
+    , BeautySalonGroup
+    , CheckmartGroup
+    , TreeStoreGroup
     ]
 
 
@@ -368,7 +397,6 @@ roadCategory =
     , Road3WayGroup
     , RoadRailCrossingGroup
     , RoadDeadendGroup
-    , ParkingLotGroup
     , ParkingRoadGroup
     , ParkingRoundaboutGroup
     , WideParkingLotGroup
@@ -776,6 +804,48 @@ getTileGroupData tileGroup =
             , name = "Gazebo"
             }
 
+        ConvenienceStoreGroup ->
+            { defaultColors = defaultStoreColor
+            , tiles = Nonempty ConvenienceStoreDown [ ConvenienceStoreUp ]
+            , name = "Convenience store"
+            }
+
+        BeautySalonGroup ->
+            { defaultColors = defaultStoreColor
+            , tiles = Nonempty BeautySalonDown [ BeautySalonUp ]
+            , name = "Beauty salon"
+            }
+
+        CheckmartGroup ->
+            { defaultColors = defaultStoreColor
+            , tiles = Nonempty CheckmartDown [ CheckmartUp ]
+            , name = "Checkmart"
+            }
+
+        TreeStoreGroup ->
+            { defaultColors = defaultStoreColor
+            , tiles = Nonempty TreeStoreDown [ TreeStoreUp ]
+            , name = "Tree store"
+            }
+
+        IronFenceGroup ->
+            { defaultColors = defaultIronFenceColor
+            , tiles = Nonempty IronFenceHorizontal [ IronFenceDiagonal, IronFenceVertical, IronFenceAntidiagonal ]
+            , name = "Iron fence"
+            }
+
+        IronGateGroup ->
+            { defaultColors = defaultIronFenceColor
+            , tiles = Nonempty IronGate []
+            , name = "Iron gate"
+            }
+
+        DeadTreeGroup ->
+            { defaultColors = deadTreeColor
+            , tiles = Nonempty DeadTree []
+            , name = "Dead tree"
+            }
+
 
 type Tile
     = EmptyTile
@@ -940,6 +1010,20 @@ type Tile
     | WideParkingUp
     | WideParkingRight
     | Gazebo
+    | ConvenienceStoreDown
+    | ConvenienceStoreUp
+    | BeautySalonDown
+    | BeautySalonUp
+    | CheckmartDown
+    | CheckmartUp
+    | TreeStoreDown
+    | TreeStoreUp
+    | IronFenceHorizontal
+    | IronFenceDiagonal
+    | IronFenceVertical
+    | IronFenceAntidiagonal
+    | IronGate
+    | DeadTree
 
 
 aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
@@ -1532,9 +1616,11 @@ type CollisionMask
 hasCollision : Coord c -> Tile -> Coord c -> Tile -> Bool
 hasCollision positionA tileA positionB tileB =
     let
+        tileDataA : TileData unit
         tileDataA =
             getData tileA
 
+        tileDataB : TileData unit
         tileDataB =
             getData tileB
 
@@ -1550,10 +1636,7 @@ hasCollision positionA tileA positionB tileB =
         ( Quantity width2, Quantity height2 ) =
             tileDataB.size
     in
-    if
-        ((isFence tileA && tileA == tileB) && positionA /= positionB)
-            || (isFence tileA && isFence tileB && tileA /= tileB)
-    then
+    if isFence tileA && isFence tileB && (positionA /= positionB || tileDataA.size /= tileDataB.size) then
         False
 
     else
@@ -1591,7 +1674,17 @@ hasCollision positionA tileA positionB tileB =
 
 isFence : Tile -> Bool
 isFence tile =
-    tile == FenceHorizontal || tile == FenceVertical || tile == FenceDiagonal || tile == FenceAntidiagonal || tile == DirtPathHorizontal || tile == DirtPathVertical
+    (tile == FenceHorizontal)
+        || (tile == FenceVertical)
+        || (tile == FenceDiagonal)
+        || (tile == FenceAntidiagonal)
+        || (tile == DirtPathHorizontal)
+        || (tile == DirtPathVertical)
+        || (tile == IronFenceHorizontal)
+        || (tile == IronFenceVertical)
+        || (tile == IronFenceDiagonal)
+        || (tile == IronFenceAntidiagonal)
+        || (tile == IronGate)
 
 
 hasCollisionWithCoord : Coord CellLocalUnit -> Coord CellLocalUnit -> TileData unit -> Bool
@@ -1762,6 +1855,21 @@ defaultRowHouseColor =
 defaultGazeboColor : DefaultColor
 defaultGazeboColor =
     TwoDefaultColors { primaryColor = Color.rgb255 77 124 86, secondaryColor = Color.rgb255 204 204 204 }
+
+
+defaultStoreColor : DefaultColor
+defaultStoreColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 219 210 197, secondaryColor = Color.rgb255 174 194 204 }
+
+
+defaultIronFenceColor : DefaultColor
+defaultIronFenceColor =
+    TwoDefaultColors { primaryColor = Color.rgb255 65 65 65, secondaryColor = Color.rgb255 201 212 210 }
+
+
+deadTreeColor : DefaultColor
+deadTreeColor =
+    OneDefaultColor (Color.rgb255 169 123 63)
 
 
 worldMovementBounds : Vector2d WorldUnit WorldUnit -> Tile -> Coord WorldUnit -> List (BoundingBox2d WorldUnit WorldUnit)
@@ -2264,6 +2372,48 @@ getData tile =
 
         Gazebo ->
             gazebo
+
+        ConvenienceStoreDown ->
+            convenienceStoreDown
+
+        ConvenienceStoreUp ->
+            convenienceStoreUp
+
+        BeautySalonDown ->
+            beautySalonDown
+
+        BeautySalonUp ->
+            beautySalonUp
+
+        CheckmartDown ->
+            checkmartDown
+
+        CheckmartUp ->
+            checkmartUp
+
+        TreeStoreDown ->
+            treeStoreDown
+
+        TreeStoreUp ->
+            treeStoreUp
+
+        IronFenceHorizontal ->
+            ironFenceHorizontal
+
+        IronFenceDiagonal ->
+            ironFenceDiagonal
+
+        IronFenceVertical ->
+            ironFenceVertical
+
+        IronFenceAntidiagonal ->
+            ironFenceAntidiagonal
+
+        IronGate ->
+            ironGate
+
+        DeadTree ->
+            deadTree
 
 
 emptyTile : TileData units
@@ -4725,7 +4875,163 @@ gazebo =
     , size = Coord.xy 3 3
     , tileCollision = collisionRectangle 1 2 1 1
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 14 13) (Coord.xy 32 21) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 14 31) (Coord.xy 32 21) ]
+    }
+
+
+convenienceStoreDown : TileData units
+convenienceStoreDown =
+    { texturePosition = Coord.xy 140 1008
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 0 1 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 25) (Coord.xy 60 29) ]
+    }
+
+
+convenienceStoreUp : TileData units
+convenienceStoreUp =
+    { texturePosition = Coord.xy 140 1080
+    , size = Coord.xy 3 4
+    , tileCollision = collisionRectangle 0 2 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 29) ]
+    }
+
+
+beautySalonDown : TileData units
+beautySalonDown =
+    { texturePosition = Coord.xy 200 1008
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 0 1 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 25) (Coord.xy 60 29) ]
+    }
+
+
+beautySalonUp : TileData units
+beautySalonUp =
+    { texturePosition = Coord.xy 200 1080
+    , size = Coord.xy 3 4
+    , tileCollision = collisionRectangle 0 2 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 29) ]
+    }
+
+
+checkmartDown : TileData units
+checkmartDown =
+    { texturePosition = Coord.xy 260 1008
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 0 1 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 25) (Coord.xy 60 29) ]
+    }
+
+
+checkmartUp : TileData units
+checkmartUp =
+    { texturePosition = Coord.xy 260 1080
+    , size = Coord.xy 3 4
+    , tileCollision = collisionRectangle 0 2 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 29) ]
+    }
+
+
+treeStoreDown : TileData units
+treeStoreDown =
+    { texturePosition = Coord.xy 320 1008
+    , size = Coord.xy 3 3
+    , tileCollision = collisionRectangle 0 1 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 25) (Coord.xy 60 29) ]
+    }
+
+
+treeStoreUp : TileData units
+treeStoreUp =
+    { texturePosition = Coord.xy 320 1080
+    , size = Coord.xy 3 4
+    , tileCollision = collisionRectangle 0 2 3 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 36) (Coord.xy 60 29) ]
+    }
+
+
+ironFenceHorizontal : TileData units
+ironFenceHorizontal =
+    { texturePosition = Coord.xy 0 1026
+    , size = Coord.xy 2 1
+    , tileCollision = collisionRectangle 0 0 2 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 7) (Coord.xy 24 5) ]
+    }
+
+
+ironFenceDiagonal : TileData units
+ironFenceDiagonal =
+    { texturePosition = Coord.xy 0 1080
+    , size = Coord.xy 2 2
+    , tileCollision =
+        [ ( 0, 1 )
+        , ( 1, 0 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 8 16) (Coord.xy 14 14)
+        , Bounds.fromCoordAndSize (Coord.xy 18 7) (Coord.xy 14 14)
+        ]
+    }
+
+
+ironFenceVertical : TileData units
+ironFenceVertical =
+    { texturePosition = Coord.xy 40 1026
+    , size = Coord.xy 1 2
+    , tileCollision = collisionRectangle 0 0 1 2
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 7) (Coord.xy 4 23) ]
+    }
+
+
+ironFenceAntidiagonal : TileData units
+ironFenceAntidiagonal =
+    { texturePosition = Coord.xy 0 1044
+    , size = Coord.xy 2 2
+    , tileCollision =
+        [ ( 0, 0 )
+        , ( 1, 1 )
+        ]
+            |> Set.fromList
+            |> CustomCollision
+    , railPath = NoRailPath
+    , movementCollision =
+        [ Bounds.fromCoordAndSize (Coord.xy 8 7) (Coord.xy 14 14)
+        , Bounds.fromCoordAndSize (Coord.xy 18 16) (Coord.xy 14 14)
+        ]
+    }
+
+
+ironGate : TileData units
+ironGate =
+    { texturePosition = Coord.xy 40 1062
+    , size = Coord.xy 3 2
+    , tileCollision = collisionRectangle 0 1 3 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 25) (Coord.xy 44 5) ]
+    }
+
+
+deadTree : TileData units
+deadTree =
+    { texturePosition = Coord.xy 100 990
+    , size = Coord.xy 2 3
+    , tileCollision = collisionRectangle 0 2 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 14 45) (Coord.xy 5 5) ]
     }
 
 
@@ -5401,6 +5707,48 @@ encoder tile =
         Gazebo ->
             Bytes.Encode.unsignedInt16 BE 160
 
+        ConvenienceStoreDown ->
+            Bytes.Encode.unsignedInt16 BE 161
+
+        ConvenienceStoreUp ->
+            Bytes.Encode.unsignedInt16 BE 162
+
+        BeautySalonDown ->
+            Bytes.Encode.unsignedInt16 BE 163
+
+        BeautySalonUp ->
+            Bytes.Encode.unsignedInt16 BE 164
+
+        CheckmartDown ->
+            Bytes.Encode.unsignedInt16 BE 165
+
+        CheckmartUp ->
+            Bytes.Encode.unsignedInt16 BE 166
+
+        TreeStoreDown ->
+            Bytes.Encode.unsignedInt16 BE 167
+
+        TreeStoreUp ->
+            Bytes.Encode.unsignedInt16 BE 168
+
+        IronFenceHorizontal ->
+            Bytes.Encode.unsignedInt16 BE 169
+
+        IronFenceDiagonal ->
+            Bytes.Encode.unsignedInt16 BE 170
+
+        IronFenceVertical ->
+            Bytes.Encode.unsignedInt16 BE 171
+
+        IronFenceAntidiagonal ->
+            Bytes.Encode.unsignedInt16 BE 172
+
+        IronGate ->
+            Bytes.Encode.unsignedInt16 BE 173
+
+        DeadTree ->
+            Bytes.Encode.unsignedInt16 BE 174
+
 
 decoder : Bytes.Decode.Decoder Tile
 decoder =
@@ -5889,6 +6237,48 @@ decoder =
 
                 160 ->
                     Bytes.Decode.succeed Gazebo
+
+                161 ->
+                    Bytes.Decode.succeed ConvenienceStoreDown
+
+                162 ->
+                    Bytes.Decode.succeed ConvenienceStoreUp
+
+                163 ->
+                    Bytes.Decode.succeed BeautySalonDown
+
+                164 ->
+                    Bytes.Decode.succeed BeautySalonUp
+
+                165 ->
+                    Bytes.Decode.succeed CheckmartDown
+
+                166 ->
+                    Bytes.Decode.succeed CheckmartUp
+
+                167 ->
+                    Bytes.Decode.succeed TreeStoreDown
+
+                168 ->
+                    Bytes.Decode.succeed TreeStoreUp
+
+                169 ->
+                    Bytes.Decode.succeed IronFenceHorizontal
+
+                170 ->
+                    Bytes.Decode.succeed IronFenceDiagonal
+
+                171 ->
+                    Bytes.Decode.succeed IronFenceVertical
+
+                172 ->
+                    Bytes.Decode.succeed IronFenceAntidiagonal
+
+                173 ->
+                    Bytes.Decode.succeed IronGate
+
+                174 ->
+                    Bytes.Decode.succeed DeadTree
 
                 _ ->
                     case Array.get (maxTileValue - int) Sprite.intToChar of
