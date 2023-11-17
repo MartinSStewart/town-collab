@@ -4725,7 +4725,7 @@ gazebo =
     , size = Coord.xy 3 3
     , tileCollision = collisionRectangle 1 2 1 1
     , railPath = NoRailPath
-    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 0 31) (Coord.xy 20 23) ]
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 14 13) (Coord.xy 32 21) ]
     }
 
 

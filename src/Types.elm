@@ -193,7 +193,6 @@ type alias FrontendLoaded =
     , lastPlacementError : Maybe Effect.Time.Posix
     , ui : Ui.Element UiHover
     , uiMesh : WebGL.Mesh Vertex
-    , previousTileHover : Maybe TileGroup
     , lastHouseClick : Maybe Effect.Time.Posix
     , eventIdCounter : Id EventId
     , pingData : Maybe PingData

@@ -1,6 +1,7 @@
 module Toolbar exposing
     ( actualViewPoint
     , canDragView
+    , findHyperlink
     , getTileGroupTile
     , hyperlinkInputWidth
     , isDisconnected
@@ -24,6 +25,9 @@ import DisplayName
 import Duration exposing (Duration)
 import Effect.Time
 import EmailAddress exposing (EmailAddress)
+import Grid
+import GridCell
+import Hyperlink exposing (Hyperlink(..))
 import Id
 import IdDict exposing (IdDict)
 import List.Extra as List
@@ -52,8 +56,8 @@ import User
 import Vector2d exposing (Vector2d)
 
 
-view : FrontendLoaded -> Ui.Element UiHover
-view model =
+view : FrontendLoaded -> Hover -> Ui.Element UiHover
+view model hover =
     let
         localModel : LocalGrid.LocalGrid_
         localModel =
@@ -89,7 +93,7 @@ view model =
                         localModel
 
                 Nothing ->
-                    normalView windowSize model
+                    normalView windowSize model hover
 
         ( _, InviteTreePage ) ->
             Ui.el
@@ -130,7 +134,7 @@ view model =
                 )
 
         _ ->
-            normalView windowSize model
+            normalView windowSize model hover
 
 
 easterEgg : List (Ui.Element id)
@@ -144,8 +148,41 @@ easterEgg =
     ]
 
 
-normalView : Coord Pixels -> FrontendLoaded -> Ui.Element UiHover
-normalView windowSize model =
+findHyperlink : Coord Units.CellLocalUnit -> List GridCell.Value -> Maybe Hyperlink
+findHyperlink startPos flattenedValues =
+    let
+        nextPos =
+            Coord.plus (Coord.xy 1 0) startPos
+    in
+    case
+        List.find
+            (\value ->
+                case value.tile of
+                    BigText _ ->
+                        nextPos == value.position
+
+                    HyperlinkTile _ ->
+                        nextPos == value.position
+
+                    _ ->
+                        False
+            )
+            flattenedValues
+    of
+        Just value ->
+            case value.tile of
+                HyperlinkTile hyperlink ->
+                    Just hyperlink
+
+                _ ->
+                    findHyperlink nextPos flattenedValues
+
+        Nothing ->
+            Nothing
+
+
+normalView : Coord Pixels -> FrontendLoaded -> Hover -> Ui.Element UiHover
+normalView windowSize model hover =
     let
         maybeCurrentUserId =
             LocalGrid.currentUserId model
@@ -226,6 +263,36 @@ normalView windowSize model =
                                 model.oneTimePasswordInput
                                 model.loginError
                     )
+
+        maybeHyperlink =
+            case hover of
+                TileHover tileHover ->
+                    case tileHover.tile of
+                        HyperlinkTile hyperlink ->
+                            Just hyperlink
+
+                        BigText _ ->
+                            let
+                                ( cellPos, startPos ) =
+                                    Grid.worldToCellAndLocalCoord tileHover.position
+                            in
+                            case Grid.getCell cellPos (LocalGrid.localModel model.localModel).grid of
+                                Just cell ->
+                                    case findHyperlink startPos (GridCell.flatten cell) of
+                                        Just hyperlink ->
+                                            Just hyperlink
+
+                                        Nothing ->
+                                            Nothing
+
+                                Nothing ->
+                                    Nothing
+
+                        _ ->
+                            Nothing
+
+                _ ->
+                    Nothing
     in
     Ui.bottomCenter
         { size = windowSize
@@ -234,7 +301,21 @@ normalView windowSize model =
                 []
 
              else
-                [ case model.contextMenu of
+                [ case maybeHyperlink of
+                    Just hyperlink ->
+                        Ui.bottomLeft
+                            { size = windowSize }
+                            (Ui.el
+                                { padding = Ui.paddingXY 8 4
+                                , borderAndFill = Ui.defaultElBorderAndFill
+                                , inFront = []
+                                }
+                                (Ui.text (Hyperlink.toUrl hyperlink))
+                            )
+
+                    Nothing ->
+                        Ui.none
+                , case model.contextMenu of
                     Just contextMenu ->
                         contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
 

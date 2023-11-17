@@ -970,15 +970,6 @@ updateLoaded audioData msg model =
 
         MouseMove mousePosition ->
             let
-                tileHover_ : Maybe TileGroup
-                tileHover_ =
-                    case LoadingPage.hoverAt model mousePosition of
-                        UiHover (ToolButtonHover (TilePlacerToolButton tile)) _ ->
-                            Just tile
-
-                        _ ->
-                            Nothing
-
                 placeTileHelper model2 =
                     case LocalGrid.currentTool model2 of
                         TilePlacerTool { tileGroup, index } ->
@@ -1011,7 +1002,6 @@ updateLoaded audioData msg model =
 
                         MouseButtonUp _ ->
                             MouseButtonUp { current = mousePosition }
-                , previousTileHover = tileHover_
             }
                 |> (\model2 ->
                         case model2.mouseLeft of
@@ -1211,7 +1201,7 @@ updateLoaded audioData msg model =
                     LoadingPage.updateMeshes model3
 
                 newUi =
-                    Toolbar.view model4
+                    Toolbar.view model4 (LoadingPage.hoverAt model4 (LoadingPage.mouseScreenPosition model4))
 
                 visuallyEqual =
                     Ui.visuallyEqual newUi model4.ui
@@ -2083,6 +2073,13 @@ tileInteraction currentUserId2 { tile, userId, position } model =
         RailStrafeBottomToTop_SplitRight ->
             handleRailSplit
 
+        HyperlinkTile hyperlink ->
+            (\() ->
+                LoadingPage.updateLocalModel (Change.VisitedHyperlink hyperlink) model
+                    |> LoadingPage.handleOutMsg False
+            )
+                |> Just
+
         BigText _ ->
             let
                 ( cellPos, startPos ) =
@@ -2090,7 +2087,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
             in
             case Grid.getCell cellPos (LocalGrid.localModel model.localModel).grid of
                 Just cell ->
-                    case LoadingPage.findHyperlink startPos (GridCell.flatten cell) of
+                    case Toolbar.findHyperlink startPos (GridCell.flatten cell) of
                         Just hyperlink ->
                             (\() ->
                                 LoadingPage.updateLocalModel (Change.VisitedHyperlink hyperlink) model
