@@ -636,6 +636,7 @@ vec3 primaryColor = vec3(1.0, 0.0, 1.0);
 vec3 primaryColorMidShade = vec3(233.0 / 255.0, 45.0 / 255.0, 231.0 / 255.0);
 vec3 primaryColorShade = vec3(209.0 / 255.0, 64.0 / 255.0, 206.0 / 255.0);
 vec3 secondaryColor = vec3(0.0, 1.0, 1.0);
+vec3 secondaryColorMidShade = vec3(0.0 / 255.0, 229.0 / 255.0, 229.0 / 255.0);
 vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 
 void main () {
@@ -658,9 +659,11 @@ void main () {
                     ? vec4(primaryColor2 * 0.8, opacity)
                     : textureColor.xyz == secondaryColor
                         ? vec4(secondaryColor2, opacity)
-                        : textureColor.xyz == secondaryColorShade
-                            ? vec4(secondaryColor2 * 0.8, opacity)
-                            : vec4(textureColor.xyz, opacity);
+                        : textureColor.xyz == secondaryColorMidShade
+                            ? vec4(secondaryColor2 * 0.9, opacity)
+                            : textureColor.xyz == secondaryColorShade
+                                ? vec4(secondaryColor2 * 0.8, opacity)
+                                : vec4(textureColor.xyz, opacity);
 
     vec3 nightColor = vec3(1.0, 1.0, 1.0) * (1.0 - night) + vec3(0.33, 0.4, 0.645) * night;
 
