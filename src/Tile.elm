@@ -19,12 +19,10 @@ module Tile exposing
     , codec
     , decoder
     , defaultBerryBushColor
-    , defaultIronFenceColor
     , defaultMushroomColor
     , defaultPineTreeColor
     , defaultPostOfficeColor
     , defaultRockColor
-    , defaultStoreColor
     , defaultToPrimaryAndSecondary
     , encoder
     , getData

@@ -55,7 +55,7 @@ import GridCell exposing (FrontendHistory)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
-import Hyperlink exposing (Hyperlink)
+import Hyperlink
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Image
@@ -609,7 +609,7 @@ hardUpdateMeshes newModel =
                 LoggedIn loggedIn ->
                     loggedIn.hyperlinksVisited
 
-                NotLoggedIn notLoggedIn ->
+                NotLoggedIn _ ->
                     Set.empty
 
         newMesh :
@@ -792,7 +792,7 @@ updateMeshes newModel =
                 LoggedIn loggedIn ->
                     loggedIn.hyperlinksVisited
 
-                NotLoggedIn notLoggedIn ->
+                NotLoggedIn _ ->
                     Set.empty
 
         newMesh :

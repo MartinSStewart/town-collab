@@ -27,7 +27,7 @@ import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
-import Hyperlink exposing (Hyperlink(..))
+import Hyperlink exposing (Hyperlink)
 import Id
 import IdDict exposing (IdDict)
 import List.Extra as List
