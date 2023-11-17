@@ -37,6 +37,7 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import Grid exposing (Grid)
 import GridCell exposing (BackendHistory)
+import Hyperlink
 import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
@@ -2115,6 +2116,23 @@ updateLocalChange sessionId clientId time change model =
                     )
                 )
 
+        VisitedHyperlink hyperlink ->
+            asUser2
+                (\userId user ->
+                    ( updateHumanUser
+                        (\a ->
+                            { a
+                                | hyperlinksVisited = Set.insert (Hyperlink.toString hyperlink) a.hyperlinksVisited
+                            }
+                        )
+                        userId
+                        user
+                        model
+                    , OriginalChange
+                    , BroadcastToNoOne
+                    )
+                )
+
 
 updateHumanUser : (HumanUserData -> HumanUserData) -> Id UserId -> BackendUserData -> BackendModel -> BackendModel
 updateHumanUser updateFunc userId user model =
@@ -2386,6 +2404,7 @@ getLoggedInData userId user humanUser model =
         Grid.latestChanges humanUser.notificationsClearedAt userId model.grid
             |> List.foldl LocalGrid.addNotification []
     , notificationsClearedAt = humanUser.notificationsClearedAt
+    , hyperlinksVisited = humanUser.hyperlinksVisited
     }
 
 
@@ -2423,6 +2442,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                     Grid.latestChanges humanUser.notificationsClearedAt userId model.grid
                                         |> List.foldl LocalGrid.addNotification []
                                 , notificationsClearedAt = humanUser.notificationsClearedAt
+                                , hyperlinksVisited = humanUser.hyperlinksVisited
                                 }
 
                         BotUser ->
@@ -2462,6 +2482,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                                         Grid.latestChanges humanUser.notificationsClearedAt data.userId model.grid
                                                             |> List.foldl LocalGrid.addNotification []
                                                     , notificationsClearedAt = humanUser.notificationsClearedAt
+                                                    , hyperlinksVisited = humanUser.hyperlinksVisited
                                                     }
                                                 , { model | pendingLoginTokens = AssocList.remove loginToken model.pendingLoginTokens }
                                                 )
@@ -2512,6 +2533,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                         , showNotifications = humanUser.showNotifications
                                         , notifications = []
                                         , notificationsClearedAt = humanUser.notificationsClearedAt
+                                        , hyperlinksVisited = humanUser.hyperlinksVisited
                                         }
                                     , { model4
                                         | invites = AssocList.remove inviteToken model.invites
@@ -2724,6 +2746,7 @@ createHumanUser userId emailAddress model =
                     , tileHotkeys = AssocList.empty
                     , showNotifications = False
                     , notificationsClearedAt = Effect.Time.millisToPosix 0
+                    , hyperlinksVisited = Set.empty
                     }
             }
     in

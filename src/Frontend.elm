@@ -2092,7 +2092,11 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                 Just cell ->
                     case LoadingPage.findHyperlink startPos (GridCell.flatten cell) of
                         Just hyperlink ->
-                            (\() -> ( model, Ports.openNewTab hyperlink )) |> Just
+                            (\() ->
+                                LoadingPage.updateLocalModel (Change.VisitedHyperlink hyperlink) model
+                                    |> LoadingPage.handleOutMsg False
+                            )
+                                |> Just
 
                         Nothing ->
                             Nothing

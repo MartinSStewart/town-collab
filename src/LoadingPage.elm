@@ -579,6 +579,334 @@ findHyperlink startPos flattenedValues =
             Nothing
 
 
+
+--updateMesh : Coord CellUnit -> FrontendLoaded -> FrontendLoaded
+--updateMesh coord2 newModel =
+--    let
+--        coord =
+--            Coord.toTuple coord2
+--
+--        localModel : LocalGrid_
+--        localModel =
+--            LocalGrid.localModel newModel.localModel
+--
+--        currentTile model =
+--            case LocalGrid.currentTool model of
+--                TilePlacerTool { tileGroup, index } ->
+--                    let
+--                        tile =
+--                            Toolbar.getTileGroupTile tileGroup index
+--
+--                        position : Coord WorldUnit
+--                        position =
+--                            cursorPosition (Tile.getData tile) model
+--
+--                        ( cellPosition, localPosition ) =
+--                            Grid.worldToCellAndLocalCoord position
+--                    in
+--                    { tile = tile
+--                    , position = position
+--                    , cellPosition =
+--                        Grid.closeNeighborCells cellPosition localPosition
+--                            |> List.map Tuple.first
+--                            |> (::) cellPosition
+--                            |> List.map Coord.toTuple
+--                            |> Set.fromList
+--                    , colors =
+--                        { primaryColor = Color.rgb255 0 0 0
+--                        , secondaryColor = Color.rgb255 255 255 255
+--                        }
+--                    }
+--                        |> Just
+--
+--                HandTool ->
+--                    Nothing
+--
+--                TilePickerTool ->
+--                    Nothing
+--
+--                TextTool _ ->
+--                    Nothing
+--
+--                ReportTool ->
+--                    Nothing
+--
+--        newCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
+--        newCurrentTile =
+--            currentTile newModel
+--
+--        newMaybeUserId =
+--            LocalGrid.currentUserId newModel
+--
+--        hyperlinksVisited : Set String
+--        hyperlinksVisited =
+--            case localModel.userStatus of
+--                LoggedIn loggedIn ->
+--                    loggedIn.hyperlinksVisited
+--
+--                NotLoggedIn _ ->
+--                    Set.empty
+--
+--        newMesh :
+--            Maybe (Effect.WebGL.Mesh Vertex)
+--            -> GridCell.Cell FrontendHistory
+--            -> { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
+--        newMesh backgroundMesh newCell =
+--            let
+--                flattened : List GridCell.Value
+--                flattened =
+--                    GridCell.flatten newCell
+--            in
+--            { foreground =
+--                Grid.foregroundMesh2
+--                    (List.filterMap
+--                        (\value ->
+--                            case value.tile of
+--                                HyperlinkTile hyperlink ->
+--                                    let
+--                                        linkPos =
+--                                            expandHyperlink value.position flattened
+--                                    in
+--                                    Just
+--                                        { linkTopLeft = Grid.cellAndLocalCoordToWorld ( coord2, linkPos )
+--                                        , linkWidth = Coord.xRaw value.position - Coord.xRaw linkPos
+--                                        , isVisited = Set.member (Hyperlink.toString hyperlink) hyperlinksVisited
+--                                        }
+--
+--                                _ ->
+--                                    Nothing
+--                        )
+--                        flattened
+--                    )
+--                    newShowEmptyTiles
+--                    (case ( newCurrentTile, newMaybeUserId ) of
+--                        ( Just newCurrentTile_, Just userId ) ->
+--                            if
+--                                canPlaceTile
+--                                    newModel.time
+--                                    { userId = userId
+--                                    , position = newCurrentTile_.position
+--                                    , change = newCurrentTile_.tile
+--                                    , colors = newCurrentTile_.colors
+--                                    , time = newModel.time
+--                                    }
+--                                    newModel.trains
+--                                    localModel.grid
+--                            then
+--                                newCurrentTile
+--
+--                            else
+--                                Nothing
+--
+--                        _ ->
+--                            Nothing
+--                    )
+--                    coord2
+--                    newMaybeUserId
+--                    (LocalGrid.localModel newModel.localModel |> .users)
+--                    (GridCell.getToggledRailSplit newCell)
+--                    flattened
+--            , background =
+--                case backgroundMesh of
+--                    Just background ->
+--                        background
+--
+--                    Nothing ->
+--                        Grid.backgroundMesh coord2
+--            }
+--
+--        newShowEmptyTiles =
+--            newModel.currentTool == ReportTool
+--    in
+--    case Grid.getCell coord2 localModel.grid of
+--        Just cell ->
+--            { newModel
+--                | meshes =
+--                    Dict.update
+--                        coord
+--                        (\maybeMesh ->
+--                            case maybeMesh of
+--                                Just { background } ->
+--                                    newMesh (Just background) cell |> Just
+--
+--                                Nothing ->
+--                                    newMesh Nothing cell |> Just
+--                        )
+--                        newModel.meshes
+--            }
+--
+--        Nothing ->
+--            newModel
+
+
+hardUpdateMeshes : FrontendLoaded -> FrontendLoaded
+hardUpdateMeshes newModel =
+    let
+        localModel : LocalGrid_
+        localModel =
+            LocalGrid.localModel newModel.localModel
+
+        newCells : Dict ( Int, Int ) (GridCell.Cell FrontendHistory)
+        newCells =
+            localModel.grid |> Grid.allCellsDict
+
+        currentTile model =
+            case LocalGrid.currentTool model of
+                TilePlacerTool { tileGroup, index } ->
+                    let
+                        tile =
+                            Toolbar.getTileGroupTile tileGroup index
+
+                        position : Coord WorldUnit
+                        position =
+                            cursorPosition (Tile.getData tile) model
+
+                        ( cellPosition, localPosition ) =
+                            Grid.worldToCellAndLocalCoord position
+                    in
+                    { tile = tile
+                    , position = position
+                    , cellPosition =
+                        Grid.closeNeighborCells cellPosition localPosition
+                            |> List.map Tuple.first
+                            |> (::) cellPosition
+                            |> List.map Coord.toTuple
+                            |> Set.fromList
+                    , colors =
+                        { primaryColor = Color.rgb255 0 0 0
+                        , secondaryColor = Color.rgb255 255 255 255
+                        }
+                    }
+                        |> Just
+
+                HandTool ->
+                    Nothing
+
+                TilePickerTool ->
+                    Nothing
+
+                TextTool _ ->
+                    Nothing
+
+                ReportTool ->
+                    Nothing
+
+        newCurrentTile : Maybe { tile : Tile, position : Coord WorldUnit, cellPosition : Set ( Int, Int ), colors : Colors }
+        newCurrentTile =
+            currentTile newModel
+
+        newMaybeUserId =
+            LocalGrid.currentUserId newModel
+
+        hyperlinksVisited : Set String
+        hyperlinksVisited =
+            case localModel.userStatus of
+                LoggedIn loggedIn ->
+                    loggedIn.hyperlinksVisited
+
+                NotLoggedIn notLoggedIn ->
+                    Set.empty
+
+        newMesh :
+            Maybe (Effect.WebGL.Mesh Vertex)
+            -> GridCell.Cell FrontendHistory
+            -> ( Int, Int )
+            -> { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
+        newMesh backgroundMesh newCell rawCoord =
+            let
+                coord : Coord CellUnit
+                coord =
+                    Coord.tuple rawCoord
+
+                flattened : List GridCell.Value
+                flattened =
+                    GridCell.flatten newCell
+            in
+            { foreground =
+                Grid.foregroundMesh2
+                    (List.filterMap
+                        (\value ->
+                            case value.tile of
+                                HyperlinkTile hyperlink ->
+                                    let
+                                        linkPos =
+                                            expandHyperlink value.position flattened
+                                    in
+                                    Just
+                                        { linkTopLeft = Grid.cellAndLocalCoordToWorld ( coord, linkPos )
+                                        , linkWidth = Coord.xRaw value.position - Coord.xRaw linkPos
+                                        , isVisited = Set.member (Hyperlink.toString hyperlink) hyperlinksVisited
+                                        }
+
+                                _ ->
+                                    Nothing
+                        )
+                        flattened
+                    )
+                    newShowEmptyTiles
+                    (case ( newCurrentTile, newMaybeUserId ) of
+                        ( Just newCurrentTile_, Just userId ) ->
+                            if
+                                canPlaceTile
+                                    newModel.time
+                                    { userId = userId
+                                    , position = newCurrentTile_.position
+                                    , change = newCurrentTile_.tile
+                                    , colors = newCurrentTile_.colors
+                                    , time = newModel.time
+                                    }
+                                    newModel.trains
+                                    localModel.grid
+                            then
+                                newCurrentTile
+
+                            else
+                                Nothing
+
+                        _ ->
+                            Nothing
+                    )
+                    coord
+                    newMaybeUserId
+                    (LocalGrid.localModel newModel.localModel |> .users)
+                    (GridCell.getToggledRailSplit newCell)
+                    flattened
+            , background =
+                case backgroundMesh of
+                    Just background ->
+                        background
+
+                    Nothing ->
+                        Grid.backgroundMesh coord
+            }
+
+        newShowEmptyTiles =
+            newModel.currentTool == ReportTool
+    in
+    { newModel
+        | meshes =
+            Dict.map
+                (\coord newCell ->
+                    newMesh (Dict.get coord newModel.meshes |> Maybe.map .background) newCell coord
+                )
+                newCells
+        , previousUpdateMeshData =
+            { localModel = newModel.localModel
+            , pressedKeys = newModel.pressedKeys
+            , currentTool = newModel.currentTool
+            , mouseLeft = newModel.mouseLeft
+            , windowSize = newModel.windowSize
+            , devicePixelRatio = newModel.devicePixelRatio
+            , zoomFactor = newModel.zoomFactor
+            , page = newModel.page
+            , mouseMiddle = newModel.mouseMiddle
+            , viewPoint = newModel.viewPoint
+            , trains = newModel.trains
+            , time = newModel.time
+            }
+    }
+
+
 updateMeshes : FrontendLoaded -> FrontendLoaded
 updateMeshes newModel =
     let
@@ -653,6 +981,15 @@ updateMeshes newModel =
         newMaybeUserId =
             LocalGrid.currentUserId newModel
 
+        hyperlinksVisited : Set String
+        hyperlinksVisited =
+            case localModel.userStatus of
+                LoggedIn loggedIn ->
+                    loggedIn.hyperlinksVisited
+
+                NotLoggedIn notLoggedIn ->
+                    Set.empty
+
         newMesh :
             Maybe (Effect.WebGL.Mesh Vertex)
             -> GridCell.Cell FrontendHistory
@@ -673,7 +1010,7 @@ updateMeshes newModel =
                     (List.filterMap
                         (\value ->
                             case value.tile of
-                                HyperlinkTile _ ->
+                                HyperlinkTile hyperlink ->
                                     let
                                         linkPos =
                                             expandHyperlink value.position flattened
@@ -681,6 +1018,7 @@ updateMeshes newModel =
                                     Just
                                         { linkTopLeft = Grid.cellAndLocalCoordToWorld ( coord, linkPos )
                                         , linkWidth = Coord.xRaw value.position - Coord.xRaw linkPos
+                                        , isVisited = Set.member (Hyperlink.toString hyperlink) hyperlinksVisited
                                         }
 
                                 _ ->
@@ -1384,6 +1722,15 @@ handleOutMsg isFromBackend ( model, outMsg ) =
                 , inviteSubmitStatus = NotSubmitted { pressedSubmit = False }
               }
             , Command.none
+            )
+
+        LocalGrid.VisitedHyperlinkOutMsg hyperlink ->
+            ( hardUpdateMeshes model
+            , if isFromBackend then
+                Command.none
+
+              else
+                Ports.openNewTab hyperlink
             )
 
 

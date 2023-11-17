@@ -580,7 +580,7 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
 
 
 foregroundMesh2 :
-    List { linkTopLeft : Coord WorldUnit, linkWidth : Int }
+    List { linkTopLeft : Coord WorldUnit, linkWidth : Int, isVisited : Bool }
     -> Bool
     -> Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
@@ -605,23 +605,30 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                     ( texturePosition, colors2 ) =
                         case tile of
                             BigText _ ->
-                                if
-                                    List.any
+                                case
+                                    List.find
                                         (\{ linkTopLeft, linkWidth } ->
                                             (Coord.yRaw position2 - Coord.yRaw linkTopLeft == 0)
                                                 && (Coord.xRaw position2 >= Coord.xRaw linkTopLeft)
                                                 && (Coord.xRaw position2 <= Coord.xRaw linkTopLeft + linkWidth)
                                         )
                                         hyperlinks
-                                then
-                                    ( Coord.plus (Coord.xy 0 180) data.texturePosition
-                                    , { primaryColor = Color.linkColor
-                                      , secondaryColor = Color.linkColor
-                                      }
-                                    )
+                                of
+                                    Just { isVisited } ->
+                                        ( Coord.plus (Coord.xy 0 180) data.texturePosition
+                                        , if isVisited then
+                                            { primaryColor = Color.visitedLinkColor
+                                            , secondaryColor = Color.visitedLinkColor
+                                            }
 
-                                else
-                                    ( data.texturePosition, colors )
+                                          else
+                                            { primaryColor = Color.linkColor
+                                            , secondaryColor = Color.linkColor
+                                            }
+                                        )
+
+                                    Nothing ->
+                                        ( data.texturePosition, colors )
 
                             _ ->
                                 ( data.texturePosition, colors )

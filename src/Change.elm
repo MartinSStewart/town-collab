@@ -30,11 +30,13 @@ import Effect.Time
 import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
+import Hyperlink exposing (Hyperlink)
 import Id exposing (AnimalId, EventId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (BackendMail, MailStatus)
 import Point2d exposing (Point2d)
+import Set exposing (Set)
 import Tile exposing (TileGroup)
 import TimeOfDay exposing (TimeOfDay)
 import Train exposing (TrainDiff)
@@ -75,6 +77,7 @@ type LocalChange
     | Logout
     | ViewBoundsChange ViewBoundsChange2
     | ClearNotifications Effect.Time.Posix
+    | VisitedHyperlink Hyperlink
 
 
 type alias ViewBoundsChange2 =
@@ -205,6 +208,7 @@ type alias LoggedIn_ =
     , showNotifications : Bool
     , notifications : List (Coord WorldUnit)
     , notificationsClearedAt : Effect.Time.Posix
+    , hyperlinksVisited : Set String
     }
 
 

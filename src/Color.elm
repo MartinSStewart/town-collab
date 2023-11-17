@@ -18,6 +18,7 @@ module Color exposing
     , toVec4
     , unsafe
     , unwrap
+    , visitedLinkColor
     , white
     )
 
@@ -115,6 +116,11 @@ highlightColor =
 linkColor : Color
 linkColor =
     rgb255 20 100 255
+
+
+visitedLinkColor : Color
+visitedLinkColor =
+    rgb255 150 50 200
 
 
 unwrap : Color -> Int

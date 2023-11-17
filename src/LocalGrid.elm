@@ -40,6 +40,7 @@ import Duration exposing (Duration)
 import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell exposing (FrontendHistory)
+import Hyperlink exposing (Hyperlink)
 import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
@@ -51,6 +52,7 @@ import Maybe.Extra as Maybe
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
+import Set
 import Terrain exposing (TerrainType(..))
 import Tile exposing (Tile, TileGroup)
 import Tool exposing (Tool(..))
@@ -197,6 +199,7 @@ type OutMsg
     | ExportMail (List MailEditor.Content)
     | ImportMail
     | LoggedOut
+    | VisitedHyperlinkOutMsg Hyperlink
 
 
 updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
@@ -620,6 +623,17 @@ updateLocalChange localChange model =
         ClearNotifications time ->
             ( updateLoggedIn model (\loggedIn -> { loggedIn | notifications = [], notificationsClearedAt = time })
             , NoOutMsg
+            )
+
+        VisitedHyperlink hyperlink ->
+            ( updateLoggedIn
+                model
+                (\loggedIn ->
+                    { loggedIn
+                        | hyperlinksVisited = Set.insert (Hyperlink.toString hyperlink) loggedIn.hyperlinksVisited
+                    }
+                )
+            , VisitedHyperlinkOutMsg hyperlink
             )
 
 

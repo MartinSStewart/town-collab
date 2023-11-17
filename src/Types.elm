@@ -75,6 +75,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
 import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, PageRoute)
+import Set exposing (Set)
 import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
 import Sprite exposing (Vertex)
@@ -458,6 +459,7 @@ type alias HumanUserData =
     , showNotifications : Bool
     , notificationsClearedAt : Effect.Time.Posix
     , allowEmailNotifications : Bool
+    , hyperlinksVisited : Set String
     }
 
 
