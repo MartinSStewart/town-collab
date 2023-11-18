@@ -156,7 +156,7 @@ drawHighscore isFirstDraw time model =
                                 Coord.yRaw tileSize |> max 2
 
                             ( x2, y2, columnWidth ) =
-                                if state.y + height - Coord.yRaw position > 33 then
+                                if state.y + height - Coord.yRaw position > 30 then
                                     ( state.x + state.columnWidth + 1, Coord.yRaw position + 3, 0 )
 
                                 else
@@ -201,4 +201,4 @@ drawHighscore isFirstDraw time model =
 
 position : Coord WorldUnit
 position =
-    Coord.xy 329 -32
+    Coord.xy 203 -92
