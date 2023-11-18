@@ -157,7 +157,10 @@ drawHighscore isFirstDraw time model =
 
                             ( x2, y2, columnWidth ) =
                                 if state.y + height - Coord.yRaw position > 31 then
-                                    ( state.x + state.columnWidth + 1, Coord.yRaw position + 3, 0 )
+                                    ( state.x + state.columnWidth + 1
+                                    , Coord.yRaw position + 3
+                                    , String.length text + Coord.xRaw tileSize
+                                    )
 
                                 else
                                     ( state.x
