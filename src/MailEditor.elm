@@ -1331,7 +1331,7 @@ scaleForScreenToWorld windowSize =
 
 
 backgroundLayer : RenderData -> Effect.WebGL.Entity
-backgroundLayer { lights, nightFactor, texture, depth, time } =
+backgroundLayer { lights, nightFactor, texture, depth, time, screenSize } =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -1346,6 +1346,7 @@ backgroundLayer { lights, nightFactor, texture, depth, time } =
         , time = time
         , night = nightFactor
         , depth = depth
+        , screenSize = screenSize
         }
 
 
@@ -1359,7 +1360,7 @@ drawMail :
     -> { a | windowSize : Coord Pixels, time : Effect.Time.Posix, zoomFactor : Int }
     -> Model
     -> List Effect.WebGL.Entity
-drawMail { lights, nightFactor, texture, depth, time } mailPosition mailSize2 mousePosition windowWidth windowHeight config model =
+drawMail { lights, nightFactor, texture, depth, time, screenSize } mailPosition mailSize2 mousePosition windowWidth windowHeight config model =
     let
         zoomFactor : Float
         zoomFactor =
@@ -1426,6 +1427,7 @@ drawMail { lights, nightFactor, texture, depth, time } mailPosition mailSize2 mo
             , time = time
             , night = nightFactor
             , depth = depth
+            , screenSize = screenSize
             }
         ]
 

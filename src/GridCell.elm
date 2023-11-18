@@ -47,7 +47,7 @@ type CellData
         { history : Bytes
         , undoPoint : IdDict UserId Int
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
-        , cache : List Value
+        , cache : Cache
         }
 
 
@@ -251,7 +251,7 @@ tileMapValue value =
             2
 
 
-updateMapPixelData : List Value -> Vec2
+updateMapPixelData : Cache -> Vec2
 updateMapPixelData cache =
     List.foldl
         (\{ tile, position } { lowBit, highBit } ->
@@ -286,7 +286,7 @@ updateMapPixelData cache =
             }
         )
         { lowBit = 0, highBit = 0 }
-        cache
+        cache.values
         |> (\{ lowBit, highBit } -> Vec2.vec2 (toFloat lowBit) (toFloat highBit))
 
 
@@ -361,10 +361,14 @@ type Cell a
     = Cell
         { history : a
         , undoPoint : IdDict UserId Int
-        , cache : List Value
+        , cache : Cache
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
         , mapCache : Vec2
         }
+
+
+type alias Cache =
+    { values : List Value, adjacentHyperlinks : List (Quantity Int CellLocalUnit) }
 
 
 type alias Value =
@@ -460,13 +464,16 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
         history =
             getHistory cell.history
 
-        cache : List Value
+        cache : Cache
         cache =
-            List.foldr
-                stepCache
-                { list = addTrees cellPosition, undoPoint = cell.undoPoint }
-                history
-                |> .list
+            { values =
+                List.foldr
+                    stepCache
+                    { list = addTrees cellPosition, undoPoint = cell.undoPoint }
+                    history
+                    |> .list
+            , adjacentHyperlinks = []
+            }
     in
     { history = setHistory history cell.history
     , undoPoint = cell.undoPoint
@@ -512,7 +519,7 @@ stepCacheHelper ({ position, tile } as item) cache =
             cache
 
 
-stepCacheHelperWithRemoved : Value -> List Value -> { remaining : List Value, removed : List Value }
+stepCacheHelperWithRemoved : Value -> Cache -> { remaining : Cache, removed : List Value }
 stepCacheHelperWithRemoved ({ position, tile } as item) cache =
     let
         ( remaining, removed ) =
@@ -521,16 +528,19 @@ stepCacheHelperWithRemoved ({ position, tile } as item) cache =
                     Tile.hasCollision position tile item2.position item2.tile
                         |> not
                 )
-                cache
+                cache.values
     in
     { remaining =
-        (if Bounds.contains position cellBounds then
-            [ item ]
+        { values =
+            (if Bounds.contains position cellBounds then
+                [ item ]
 
-         else
-            []
-        )
-            ++ remaining
+             else
+                []
+            )
+                ++ remaining
+        , adjacentHyperlinks = cache.adjacentHyperlinks
+        }
     , removed = removed
     }
 
@@ -549,7 +559,7 @@ moveUndoPoint getHistory setHistory userId moveAmount cellPosition (Cell cell) =
 
 flatten : Cell a -> List Value
 flatten (Cell cell) =
-    cell.cache
+    cell.cache.values
 
 
 hasUserChanges : Cell BackendHistory -> Bool
@@ -567,7 +577,7 @@ empty emptyHistory cellPosition =
     Cell
         { history = emptyHistory
         , undoPoint = IdDict.empty
-        , cache = addTrees cellPosition
+        , cache = { values = addTrees cellPosition, adjacentHyperlinks = [] }
         , railSplitToggled = AssocSet.empty
         , mapCache = Vec2.vec2 0 0
         }

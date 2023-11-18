@@ -63,6 +63,7 @@ type alias RenderData =
     , viewMatrix : Mat4
     , time : Float
     , scissors : ScissorBox
+    , screenSize : Vec2
     }
 
 
@@ -145,7 +146,7 @@ sunMesh =
         (Coord.xy -24 -24)
         reflectionDepth
         (Coord.xy 48 48)
-        (Coord.xy 639 24)
+        (Coord.xy 640 23)
         (Coord.xy 48 48)
         |> Sprite.toMesh
 
@@ -159,7 +160,7 @@ moonMesh =
         (Coord.xy -21 -21)
         reflectionDepth
         (Coord.xy 42 42)
-        (Coord.xy 591 144)
+        (Coord.xy 591 145)
         (Coord.xy 42 42)
         |> Sprite.toMesh
 
@@ -253,7 +254,7 @@ drawBackground :
     RenderData
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors } meshes =
+drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors, screenSize } meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -275,6 +276,7 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors
                     , night = nightFactor
                     , lights = lights
                     , depth = depth
+                    , screenSize = screenSize
                     }
             )
 
@@ -294,7 +296,7 @@ scissorBox { left, bottom, width, height } =
 
 
 drawWaterReflection : Bool -> RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
-drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors } model =
+drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors, screenSize } model =
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
         , depthTest
@@ -313,6 +315,7 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
         , night = nightFactor
         , lights = lights
         , depth = depth
+        , screenSize = screenSize
         }
         :: (if includeSunOrMoon then
                 [ Effect.WebGL.entityWith
@@ -338,6 +341,7 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
                     , night = nightFactor
                     , lights = lights
                     , depth = depth
+                    , screenSize = screenSize
                     }
                 ]
 
@@ -605,6 +609,7 @@ fragmentShader :
             , time : Float
             , color : Vec4
             , night : Float
+            , screenSize : Vec2
         }
         { vcoord : Vec2
         , opacity : Float
@@ -624,6 +629,7 @@ uniform sampler2D depth;
 uniform float time;
 uniform vec4 color;
 uniform float night;
+uniform vec2 screenSize;
 varying vec2 vcoord;
 varying float opacity;
 varying vec3 primaryColor2;
@@ -640,9 +646,13 @@ vec3 secondaryColorMidShade = vec3(0.0 / 255.0, 229.0 / 255.0, 229.0 / 255.0);
 vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 
 void main () {
-    vec4 textureColor = texture2D(texture, vcoord);
+    vec2 vcoord2 = vcoord + vec2(
+        floor(0.4 * sin(1.0 + time * 3.0 + gl_FragCoord.y / 20.0 )) / 2048.0,
+        floor(0.8 * sin(time * 3.0 +  gl_FragCoord.y / 20.0 )) / 2048.0);
 
-    gl_FragDepthEXT = texture2D(depth, vcoord).x + z2;
+    vec4 textureColor = texture2D(texture, vcoord2);
+
+    gl_FragDepthEXT = texture2D(depth, vcoord2).x + z2;
 
     if (textureColor.a == 0.0) {
         discard;
@@ -671,9 +681,10 @@ void main () {
 
     vec3 light =
         night > 0.5
-            ? (texture2D(lights, vcoord).xyz * vec3(2.0, 2.0, 1.5) + 1.0) * lightHdrAdjustment
+            ? (texture2D(lights, vcoord2).xyz * vec3(2.0, 2.0, 1.5) + 1.0) * lightHdrAdjustment
             : vec3(1.0, 1.0, 1.0);
 
+    //gl_FragColor = gl_FragCoord / vec4(screenSize.xy, 1.0, 1.0);
     gl_FragColor = textureColor2 * vec4(nightColor, 1.0) * vec4(max(light, vec3(1.0, 1.0, 1.0)), 1.0) * color + 0.6 * isSelected * highlight;
 }|]
 

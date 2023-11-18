@@ -4265,6 +4265,7 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
                         0
             , time = renderData.time
             , scissors = scissors
+            , screenSize = renderData.screenSize
             }
             MapHover
             viewBounds
@@ -4320,6 +4321,7 @@ canvasView audioData model =
                                 0
                     , time = shaderTime model
                     , scissors = { left = 0, bottom = 0, width = windowWidth, height = windowHeight }
+                    , screenSize = Coord.toVec2 model.windowSize
                     }
 
                 textureSize : Vec2
@@ -4366,6 +4368,7 @@ canvasView audioData model =
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime model
                             , night = renderData.nightFactor * uiNightFactorScaling
+                            , screenSize = renderData.screenSize
                             }
                        ]
                     ++ (case LoadingPage.showWorldPreview hoverAt2 of
@@ -4476,6 +4479,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                         , staticViewMatrix = renderData.staticViewMatrix
                         , time = renderData.time
                         , scissors = renderData.scissors
+                        , screenSize = renderData.screenSize
                         }
                         (case model.contextMenu of
                             Just contextMenu ->
@@ -4508,6 +4512,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                 , time2 = renderData.time
                 , color = Vec4.vec4 1 1 1 1
                 , night = renderData.nightFactor
+                , screenSize = renderData.screenSize
                 }
            , drawReports renderData model.reportsMesh
            ]
@@ -4516,7 +4521,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
 
 
 drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
-drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
+drawReports { nightFactor, lights, texture, viewMatrix, depth, screenSize } reportsMesh =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -4531,11 +4536,12 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
         , userId = Shaders.noUserIdSelected
         , time = 0
         , night = nightFactor
+        , screenSize = screenSize
         }
 
 
 drawAnimals : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
+drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors, screenSize } model =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -4616,6 +4622,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                                     * Coord.yRaw texturePos
                                     |> toFloat
                             , night = nightFactor
+                            , screenSize = screenSize
                             }
                             |> Just
 
@@ -4629,7 +4636,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
 
 
 drawFlags : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
+drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors, screenSize } model =
     List.filterMap
         (\flag ->
             let
@@ -4669,6 +4676,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } mo
                         , userId = Shaders.noUserIdSelected
                         , time = time
                         , night = nightFactor
+                        , screenSize = screenSize
                         }
                         |> Just
 
@@ -4679,7 +4687,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } mo
 
 
 drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioData model =
+drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time, screenSize } audioData model =
     let
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -4775,6 +4783,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                 , userId = Shaders.noUserIdSelected
                 , time = time
                 , night = nightFactor
+                , screenSize = screenSize
                 }
             ]
 
@@ -4815,6 +4824,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                 , userId = Shaders.noUserIdSelected
                 , time = time
                 , night = nightFactor
+                , screenSize = screenSize
                 }
             ]
 
@@ -4988,7 +4998,7 @@ lastPlacementOffset audioData model =
 
 
 drawOtherCursors : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
+drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors, screenSize } model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -5047,6 +5057,7 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                             , userId = Shaders.noUserIdSelected
                             , time = time
                             , night = nightFactor
+                            , screenSize = screenSize
                             }
                             |> Just
 
@@ -5061,7 +5072,7 @@ drawCursor :
     -> Id UserId
     -> FrontendLoaded
     -> List Effect.WebGL.Entity
-drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePointer userId model =
+drawCursor { nightFactor, lights, texture, viewMatrix, depth, time, screenSize } showMousePointer userId model =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -5103,6 +5114,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                                 , userId = Shaders.noUserIdSelected
                                 , time = time
                                 , night = nightFactor
+                                , screenSize = screenSize
                                 }
                             ]
 
@@ -5193,7 +5205,7 @@ drawForeground :
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors } maybeContextMenu currentTool2 hoverAt2 meshes =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors, screenSize } maybeContextMenu currentTool2 hoverAt2 meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5236,6 +5248,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                                         -3
                     , time = time
                     , night = nightFactor
+                    , screenSize = screenSize
                     }
             )
 
