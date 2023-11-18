@@ -201,4 +201,4 @@ drawHighscore isFirstDraw time model =
 
 position : Coord WorldUnit
 position =
-    Coord.xy 190 -91
+    Coord.xy 190 -93
