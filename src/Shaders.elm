@@ -63,7 +63,6 @@ type alias RenderData =
     , viewMatrix : Mat4
     , time : Float
     , scissors : ScissorBox
-    , screenSize : Vec2
     }
 
 
@@ -254,7 +253,7 @@ drawBackground :
     RenderData
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors, screenSize } meshes =
+drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors } meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -276,7 +275,6 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors
                     , night = nightFactor
                     , lights = lights
                     , depth = depth
-                    , screenSize = screenSize
                     , waterReflection = 0
                     }
             )
@@ -297,7 +295,7 @@ scissorBox { left, bottom, width, height } =
 
 
 drawWaterReflection : Bool -> RenderData -> { a | windowSize : Coord Pixels, zoomFactor : Int } -> List Effect.WebGL.Entity
-drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors, screenSize } model =
+drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, lights, depth, time, scissors } model =
     Effect.WebGL.entityWith
         [ Effect.WebGL.Settings.cullFace Effect.WebGL.Settings.back
         , depthTest
@@ -316,7 +314,6 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
         , night = nightFactor
         , lights = lights
         , depth = depth
-        , screenSize = screenSize
         , waterReflection = 1
         }
         :: (if includeSunOrMoon then
@@ -343,7 +340,6 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
                     , night = nightFactor
                     , lights = lights
                     , depth = depth
-                    , screenSize = screenSize
                     , waterReflection = 1
                     }
                 ]
@@ -612,7 +608,6 @@ fragmentShader :
             , time : Float
             , color : Vec4
             , night : Float
-            , screenSize : Vec2
             , waterReflection : Float
         }
         { vcoord : Vec2
@@ -633,7 +628,6 @@ uniform sampler2D depth;
 uniform float time;
 uniform vec4 color;
 uniform float night;
-uniform vec2 screenSize;
 uniform float waterReflection;
 varying vec2 vcoord;
 varying float opacity;

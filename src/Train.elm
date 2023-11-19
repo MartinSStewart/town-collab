@@ -1259,7 +1259,7 @@ type alias TrainEntity =
 
 
 trainEntity : RenderData -> Maybe (Id UserId) -> TrainEntity -> Effect.WebGL.Entity
-trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors, screenSize } maybeUserId trainData =
+trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors } maybeUserId trainData =
     let
         ( tileW, tileH ) =
             Coord.toTuple Units.tileSize
@@ -1318,7 +1318,6 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors, s
         , primaryColor0 = Color.unwrap trainData.color |> toFloat
         , secondaryColor0 = 0
         , night = nightFactor
-        , screenSize = screenSize
         , waterReflection = 0
         }
 
@@ -1583,7 +1582,7 @@ drawSpeechBubble :
     -> Effect.Time.Posix
     -> IdDict TrainId Train
     -> List Effect.WebGL.Entity
-drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scissors, screenSize } time2 trains =
+drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scissors } time2 trains =
     List.filterMap
         (\{ position, isRadio } ->
             let
@@ -1634,7 +1633,6 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scisso
                         , userId = Shaders.noUserIdSelected
                         , time = time
                         , night = nightFactor
-                        , screenSize = screenSize
                         , waterReflection = 0
                         }
                         |> Just

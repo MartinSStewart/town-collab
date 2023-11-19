@@ -4265,7 +4265,6 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
                         0
             , time = renderData.time
             , scissors = scissors
-            , screenSize = renderData.screenSize
             }
             MapHover
             viewBounds
@@ -4321,7 +4320,6 @@ canvasView audioData model =
                                 0
                     , time = shaderTime model
                     , scissors = { left = 0, bottom = 0, width = windowWidth, height = windowHeight }
-                    , screenSize = Coord.toVec2 model.windowSize
                     }
 
                 textureSize : Vec2
@@ -4368,7 +4366,6 @@ canvasView audioData model =
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime model
                             , night = renderData.nightFactor * uiNightFactorScaling
-                            , screenSize = renderData.screenSize
                             , waterReflection = 0
                             }
                        ]
@@ -4480,7 +4477,6 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                         , staticViewMatrix = renderData.staticViewMatrix
                         , time = renderData.time
                         , scissors = renderData.scissors
-                        , screenSize = renderData.screenSize
                         }
                         (case model.contextMenu of
                             Just contextMenu ->
@@ -4513,7 +4509,6 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                 , time2 = renderData.time
                 , color = Vec4.vec4 1 1 1 1
                 , night = renderData.nightFactor
-                , screenSize = renderData.screenSize
                 , waterReflection = 0
                 }
            , drawReports renderData model.reportsMesh
@@ -4523,7 +4518,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
 
 
 drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
-drawReports { nightFactor, lights, texture, viewMatrix, depth, screenSize } reportsMesh =
+drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
     Effect.WebGL.entityWith
         [ Shaders.blend ]
         Shaders.vertexShader
@@ -4538,13 +4533,12 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth, screenSize } repo
         , userId = Shaders.noUserIdSelected
         , time = 0
         , night = nightFactor
-        , screenSize = screenSize
         , waterReflection = 0
         }
 
 
 drawAnimals : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors, screenSize } model =
+drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid : LocalGrid_
         localGrid =
@@ -4625,7 +4619,6 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                                     * Coord.yRaw texturePos
                                     |> toFloat
                             , night = nightFactor
-                            , screenSize = screenSize
                             , waterReflection = 0
                             }
                             |> Just
@@ -4640,7 +4633,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
 
 
 drawFlags : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors, screenSize } model =
+drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     List.filterMap
         (\flag ->
             let
@@ -4680,7 +4673,6 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors, scr
                         , userId = Shaders.noUserIdSelected
                         , time = time
                         , night = nightFactor
-                        , screenSize = screenSize
                         , waterReflection = 0
                         }
                         |> Just
@@ -4692,7 +4684,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors, scr
 
 
 drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time, screenSize } audioData model =
+drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioData model =
     let
         textureSize =
             WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -4788,7 +4780,6 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time, screenSi
                 , userId = Shaders.noUserIdSelected
                 , time = time
                 , night = nightFactor
-                , screenSize = screenSize
                 , waterReflection = 0
                 }
             ]
@@ -4830,7 +4821,6 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time, screenSi
                 , userId = Shaders.noUserIdSelected
                 , time = time
                 , night = nightFactor
-                , screenSize = screenSize
                 , waterReflection = 0
                 }
             ]
@@ -5005,7 +4995,7 @@ lastPlacementOffset audioData model =
 
 
 drawOtherCursors : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors, screenSize } model =
+drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid =
             LocalGrid.localModel model.localModel
@@ -5064,7 +5054,6 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                             , userId = Shaders.noUserIdSelected
                             , time = time
                             , night = nightFactor
-                            , screenSize = screenSize
                             , waterReflection = 0
                             }
                             |> Just
@@ -5080,7 +5069,7 @@ drawCursor :
     -> Id UserId
     -> FrontendLoaded
     -> List Effect.WebGL.Entity
-drawCursor { nightFactor, lights, texture, viewMatrix, depth, time, screenSize } showMousePointer userId model =
+drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePointer userId model =
     case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -5122,7 +5111,6 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time, screenSize }
                                 , userId = Shaders.noUserIdSelected
                                 , time = time
                                 , night = nightFactor
-                                , screenSize = screenSize
                                 , waterReflection = 0
                                 }
                             ]
@@ -5214,7 +5202,7 @@ drawForeground :
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors, screenSize } maybeContextMenu currentTool2 hoverAt2 meshes =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors } maybeContextMenu currentTool2 hoverAt2 meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5257,7 +5245,6 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                                         -3
                     , time = time
                     , night = nightFactor
-                    , screenSize = screenSize
                     , waterReflection = 0
                     }
             )

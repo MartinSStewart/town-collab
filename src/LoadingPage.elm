@@ -1715,9 +1715,6 @@ loadingCanvasView model =
         ( windowWidth, windowHeight ) =
             Coord.toTuple model.windowSize
 
-        screenSize =
-            Coord.toVec2 model.windowSize
-
         ( cssWindowWidth, cssWindowHeight ) =
             Coord.toTuple model.cssCanvasSize
 
@@ -1780,7 +1777,6 @@ loadingCanvasView model =
                     , userId = Shaders.noUserIdSelected
                     , time = 0
                     , night = 0
-                    , screenSize = screenSize
                     , waterReflection = 0
                     }
                     :: (case tryLoading model of
@@ -1810,7 +1806,6 @@ loadingCanvasView model =
                                     , userId = Shaders.noUserIdSelected
                                     , time = 0
                                     , night = 0
-                                    , screenSize = screenSize
                                     , waterReflection = 0
                                     }
                                 ]
@@ -1837,7 +1832,6 @@ loadingCanvasView model =
                                     , userId = Shaders.noUserIdSelected
                                     , time = 0
                                     , night = 0
-                                    , screenSize = screenSize
                                     , waterReflection = 0
                                     }
                                 ]
