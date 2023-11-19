@@ -3052,6 +3052,49 @@ uiUpdate audioData id event model =
                 event
                 model
 
+        CategoryNextPageButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    ( { model
+                        | tileCategoryPageIndex =
+                            AssocList.update
+                                model.selectedTileCategory
+                                (\maybe ->
+                                    Maybe.withDefault 0 maybe
+                                        |> (+) 1
+                                        |> min
+                                            (Tile.categoryToTiles model.selectedTileCategory
+                                                |> List.length
+                                                |> (\a -> a // Toolbar.toolbarTileGroupsMaxPerPage)
+                                            )
+                                        |> Just
+                                )
+                                model.tileCategoryPageIndex
+                      }
+                    , Command.none
+                    )
+                )
+                model
+
+        CategoryPreviousPageButton ->
+            onPress
+                audioData
+                event
+                (\() ->
+                    ( { model
+                        | tileCategoryPageIndex =
+                            AssocList.update
+                                model.selectedTileCategory
+                                (\maybe -> Maybe.withDefault 0 maybe |> (+) -1 |> max 0 |> Just)
+                                model.tileCategoryPageIndex
+                      }
+                    , Command.none
+                    )
+                )
+                model
+
 
 textInputUpdate :
     Int

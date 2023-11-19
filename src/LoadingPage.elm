@@ -422,6 +422,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , hideUi = False
             , lightsSwitched = Nothing
             , selectedTileCategory = Buildings
+            , tileCategoryPageIndex = AssocList.empty
             , lastHotkeyChange = Nothing
             , oneTimePasswordInput = TextInput.init
             , loginError = Nothing

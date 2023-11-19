@@ -10,6 +10,7 @@ module Toolbar exposing
     , offsetViewPoint
     , oneTimePasswordTextScale
     , screenToWorld
+    , toolbarTileGroupsMaxPerPage
     , validateInviteEmailAddress
     , view
     )
@@ -1236,6 +1237,7 @@ toolbarUiSize =
         , hasCmdKey = False
         , tileColors = AssocList.empty
         , selectedTileCategory = Scenery
+        , tileCategoryPageIndex = AssocList.empty
         , primaryColorTextInput = TextInput.init
         , secondaryColorTextInput = TextInput.init
         , inviteTextInput = TextInput.init
@@ -1255,6 +1257,7 @@ toolbarUi :
             , hasCmdKey : Bool
             , tileColors : AssocList.Dict TileGroup Colors
             , selectedTileCategory : Category
+            , tileCategoryPageIndex : AssocList.Dict Category Int
             , primaryColorTextInput : TextInput.Model
             , secondaryColorTextInput : TextInput.Model
             , inviteTextInput : TextInput.Model
@@ -1396,30 +1399,105 @@ toolbarUi handColor loggedIn model currentToolButton =
                     )
                     Tile.allCategories
                     |> Ui.row { spacing = 4, padding = Ui.noPadding }
-                , (case model.selectedTileCategory of
-                    Buildings ->
-                        Tile.buildingCategory
+                , let
+                    pageIndex : Int
+                    pageIndex =
+                        case AssocList.get model.selectedTileCategory model.tileCategoryPageIndex of
+                            Just index ->
+                                index
 
-                    Scenery ->
-                        Tile.sceneryCategory
+                            Nothing ->
+                                0
 
-                    Rail ->
-                        Tile.railCategory
+                    ( tileGroups, remainingTileGroups ) =
+                        List.drop
+                            (pageIndex * toolbarTileGroupsMaxPerPage)
+                            (Tile.categoryToTiles model.selectedTileCategory)
+                            |> List.splitAt toolbarTileGroupsMaxPerPage
 
-                    Road ->
-                        Tile.roadCategory
-                  )
-                    |> List.map
-                        (\a ->
-                            TilePlacerToolButton a
-                                |> toolButtonUi model.hasCmdKey handColor model.tileColors loggedIn.tileHotkeys currentToolButton
-                        )
-                    |> List.greedyGroupsOf toolbarRowCount
-                    |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
-                    |> Ui.row { spacing = 2, padding = Ui.noPadding }
+                    content =
+                        toolbarTileGroups tileGroups loggedIn.tileHotkeys currentToolButton handColor model
+                  in
+                  Ui.row
+                    { spacing = -2, padding = Ui.noPadding }
+                    [ nextPreviousTilesButton (pageIndex > 0) False (Coord.yRaw toolbarTileGroupsSize)
+                    , Ui.topLeft { size = toolbarTileGroupsSize } content
+                    , nextPreviousTilesButton
+                        (List.isEmpty remainingTileGroups |> not)
+                        True
+                        (Coord.yRaw toolbarTileGroupsSize)
+                    ]
                 ]
             , selectedToolView handColor model currentToolButton
             ]
+
+
+toolbarTileGroupsSize : Coord Pixels
+toolbarTileGroupsSize =
+    toolbarTileGroups
+        (List.repeat (toolbarRowCount * toolbarColumnCount) HouseGroup)
+        AssocList.empty
+        HandToolButton
+        { primaryColor = Color.black, secondaryColor = Color.black }
+        { hasCmdKey = False, tileColors = AssocList.empty }
+        |> Ui.size
+
+
+toolbarTileGroupsMaxPerPage : number
+toolbarTileGroupsMaxPerPage =
+    toolbarRowCount * toolbarColumnCount
+
+
+toolbarTileGroups :
+    List TileGroup
+    -> AssocList.Dict Change.TileHotkey TileGroup
+    -> ToolButton
+    -> Colors
+    -> { a | hasCmdKey : Bool, tileColors : AssocList.Dict TileGroup Colors }
+    -> Ui.Element UiHover
+toolbarTileGroups category tileHotkeys currentToolButton handColor model =
+    category
+        |> List.map
+            (\a ->
+                TilePlacerToolButton a
+                    |> toolButtonUi model.hasCmdKey handColor model.tileColors tileHotkeys currentToolButton
+            )
+        |> List.greedyGroupsOf toolbarRowCount
+        |> List.map (Ui.column { spacing = 2, padding = Ui.noPadding })
+        |> Ui.row { spacing = 2, padding = Ui.noPadding }
+
+
+nextPreviousTilesButton : Bool -> Bool -> Int -> Ui.Element UiHover
+nextPreviousTilesButton isEnabled isNext height =
+    Ui.colorSprite
+        { colors =
+            { primaryColor =
+                if isEnabled then
+                    Color.black
+
+                else
+                    Color.rgb255 124 115 110
+            , secondaryColor = Color.black
+            }
+        , size = Coord.xy 20 36
+        , texturePosition =
+            if isNext then
+                Coord.xy 557 109
+
+            else
+                Coord.xy 546 109
+        , textureSize = Coord.xy 10 18
+        }
+        |> Ui.center { size = Coord.xy 40 height }
+        |> Ui.button
+            { id =
+                if isNext then
+                    CategoryNextPageButton
+
+                else
+                    CategoryPreviousPageButton
+            , padding = Ui.noPadding
+            }
 
 
 smallToolButtonPadding : Ui.Padding
@@ -1751,6 +1829,11 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
 toolbarRowCount : number
 toolbarRowCount =
     3
+
+
+toolbarColumnCount : number
+toolbarColumnCount =
+    7
 
 
 tileMesh : Colors -> Tile -> Ui.Element id

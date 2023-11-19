@@ -228,6 +228,7 @@ type alias FrontendLoaded =
     , lightsSwitched : Maybe Time.Posix
     , page : Page
     , selectedTileCategory : Category
+    , tileCategoryPageIndex : AssocList.Dict Category Int
     , lastHotkeyChange : Maybe Time.Posix
     , loginError : Maybe LoginError
     , hyperlinkInput : TextInputMultiline.Model
@@ -363,6 +364,8 @@ type UiHover
     | ClearNotificationsButton
     | OneTimePasswordInput
     | HyperlinkInput
+    | CategoryNextPageButton
+    | CategoryPreviousPageButton
 
 
 type alias BackendModel =

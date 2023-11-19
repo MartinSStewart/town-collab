@@ -16,6 +16,7 @@ module Tile exposing
     , allTiles
     , buildingCategory
     , categoryToString
+    , categoryToTiles
     , codec
     , decoder
     , defaultBerryBushColor
@@ -302,6 +303,22 @@ type Category
     | Buildings
     | Rail
     | Road
+
+
+categoryToTiles : Category -> List TileGroup
+categoryToTiles category =
+    case category of
+        Buildings ->
+            buildingCategory
+
+        Scenery ->
+            sceneryCategory
+
+        Rail ->
+            railCategory
+
+        Road ->
+            roadCategory
 
 
 allCategories : List Category
