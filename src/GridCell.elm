@@ -286,7 +286,7 @@ updateMapPixelData cache =
             }
         )
         { lowBit = 0, highBit = 0 }
-        cache.values
+        cache
         |> (\{ lowBit, highBit } -> Vec2.vec2 (toFloat lowBit) (toFloat highBit))
 
 
@@ -368,7 +368,7 @@ type Cell a
 
 
 type alias Cache =
-    { values : List Value, adjacentHyperlinks : List (Quantity Int CellLocalUnit) }
+    List Value
 
 
 type alias Value =
@@ -466,14 +466,11 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
 
         cache : Cache
         cache =
-            { values =
-                List.foldr
-                    stepCache
-                    { list = addTrees cellPosition, undoPoint = cell.undoPoint }
-                    history
-                    |> .list
-            , adjacentHyperlinks = []
-            }
+            List.foldr
+                stepCache
+                { list = addTrees cellPosition, undoPoint = cell.undoPoint }
+                history
+                |> .list
     in
     { history = setHistory history cell.history
     , undoPoint = cell.undoPoint
@@ -528,19 +525,16 @@ stepCacheHelperWithRemoved ({ position, tile } as item) cache =
                     Tile.hasCollision position tile item2.position item2.tile
                         |> not
                 )
-                cache.values
+                cache
     in
     { remaining =
-        { values =
-            (if Bounds.contains position cellBounds then
-                [ item ]
+        (if Bounds.contains position cellBounds then
+            [ item ]
 
-             else
-                []
-            )
-                ++ remaining
-        , adjacentHyperlinks = cache.adjacentHyperlinks
-        }
+         else
+            []
+        )
+            ++ remaining
     , removed = removed
     }
 
@@ -559,7 +553,7 @@ moveUndoPoint getHistory setHistory userId moveAmount cellPosition (Cell cell) =
 
 flatten : Cell a -> List Value
 flatten (Cell cell) =
-    cell.cache.values
+    cell.cache
 
 
 hasUserChanges : Cell BackendHistory -> Bool
@@ -577,7 +571,7 @@ empty emptyHistory cellPosition =
     Cell
         { history = emptyHistory
         , undoPoint = IdDict.empty
-        , cache = { values = addTrees cellPosition, adjacentHyperlinks = [] }
+        , cache = addTrees cellPosition
         , railSplitToggled = AssocSet.empty
         , mapCache = Vec2.vec2 0 0
         }
