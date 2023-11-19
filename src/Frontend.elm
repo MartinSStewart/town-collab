@@ -4369,6 +4369,7 @@ canvasView audioData model =
                             , time = shaderTime model
                             , night = renderData.nightFactor * uiNightFactorScaling
                             , screenSize = renderData.screenSize
+                            , waterReflection = 0
                             }
                        ]
                     ++ (case LoadingPage.showWorldPreview hoverAt2 of
@@ -4513,6 +4514,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                 , color = Vec4.vec4 1 1 1 1
                 , night = renderData.nightFactor
                 , screenSize = renderData.screenSize
+                , waterReflection = 0
                 }
            , drawReports renderData model.reportsMesh
            ]
@@ -4537,6 +4539,7 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth, screenSize } repo
         , time = 0
         , night = nightFactor
         , screenSize = screenSize
+        , waterReflection = 0
         }
 
 
@@ -4623,6 +4626,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                                     |> toFloat
                             , night = nightFactor
                             , screenSize = screenSize
+                            , waterReflection = 0
                             }
                             |> Just
 
@@ -4677,6 +4681,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors, scr
                         , time = time
                         , night = nightFactor
                         , screenSize = screenSize
+                        , waterReflection = 0
                         }
                         |> Just
 
@@ -4784,6 +4789,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time, screenSi
                 , time = time
                 , night = nightFactor
                 , screenSize = screenSize
+                , waterReflection = 0
                 }
             ]
 
@@ -4825,6 +4831,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time, screenSi
                 , time = time
                 , night = nightFactor
                 , screenSize = screenSize
+                , waterReflection = 0
                 }
             ]
 
@@ -5058,6 +5065,7 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                             , time = time
                             , night = nightFactor
                             , screenSize = screenSize
+                            , waterReflection = 0
                             }
                             |> Just
 
@@ -5115,6 +5123,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time, screenSize }
                                 , time = time
                                 , night = nightFactor
                                 , screenSize = screenSize
+                                , waterReflection = 0
                                 }
                             ]
 
@@ -5249,6 +5258,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                     , time = time
                     , night = nightFactor
                     , screenSize = screenSize
+                    , waterReflection = 0
                     }
             )
 

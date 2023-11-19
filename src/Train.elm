@@ -1319,6 +1319,7 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors, s
         , secondaryColor0 = 0
         , night = nightFactor
         , screenSize = screenSize
+        , waterReflection = 0
         }
 
 
@@ -1634,6 +1635,7 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scisso
                         , time = time
                         , night = nightFactor
                         , screenSize = screenSize
+                        , waterReflection = 0
                         }
                         |> Just
 

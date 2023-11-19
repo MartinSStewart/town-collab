@@ -1347,6 +1347,7 @@ backgroundLayer { lights, nightFactor, texture, depth, time, screenSize } =
         , night = nightFactor
         , depth = depth
         , screenSize = screenSize
+        , waterReflection = 0
         }
 
 
@@ -1428,6 +1429,7 @@ drawMail { lights, nightFactor, texture, depth, time, screenSize } mailPosition 
             , night = nightFactor
             , depth = depth
             , screenSize = screenSize
+            , waterReflection = 0
             }
         ]
 

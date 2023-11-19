@@ -277,6 +277,7 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors
                     , lights = lights
                     , depth = depth
                     , screenSize = screenSize
+                    , waterReflection = 0
                     }
             )
 
@@ -316,6 +317,7 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
         , lights = lights
         , depth = depth
         , screenSize = screenSize
+        , waterReflection = 1
         }
         :: (if includeSunOrMoon then
                 [ Effect.WebGL.entityWith
@@ -342,6 +344,7 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
                     , lights = lights
                     , depth = depth
                     , screenSize = screenSize
+                    , waterReflection = 1
                     }
                 ]
 
@@ -610,6 +613,7 @@ fragmentShader :
             , color : Vec4
             , night : Float
             , screenSize : Vec2
+            , waterReflection : Float
         }
         { vcoord : Vec2
         , opacity : Float
@@ -630,6 +634,7 @@ uniform float time;
 uniform vec4 color;
 uniform float night;
 uniform vec2 screenSize;
+uniform float waterReflection;
 varying vec2 vcoord;
 varying float opacity;
 varying vec3 primaryColor2;
@@ -646,9 +651,12 @@ vec3 secondaryColorMidShade = vec3(0.0 / 255.0, 229.0 / 255.0, 229.0 / 255.0);
 vec3 secondaryColorShade = vec3(96.0 / 255.0, 209.0 / 255.0, 209.0 / 255.0);
 
 void main () {
-    vec2 vcoord2 = vcoord + vec2(
-        floor(0.4 * sin(1.0 + time * 3.0 + gl_FragCoord.y / 20.0 )) / 2048.0,
-        floor(0.8 * sin(time * 3.0 +  gl_FragCoord.y / 20.0 )) / 2048.0);
+    vec2 vcoord2 =
+        waterReflection == 1.0
+            ? vcoord + vec2(
+                floor(0.8 * sin(2.0 + time * 3.0 + floor(gl_FragCoord.y / 6.0) * 6.0 / 30.0 )) / 2048.0,
+                floor(0.6 * sin(time * 3.0 +  floor(gl_FragCoord.y / 6.0) * 6.0  / 30.0 )) / 2048.0)
+            : vcoord;
 
     vec4 textureColor = texture2D(texture, vcoord2);
 
@@ -684,7 +692,6 @@ void main () {
             ? (texture2D(lights, vcoord2).xyz * vec3(2.0, 2.0, 1.5) + 1.0) * lightHdrAdjustment
             : vec3(1.0, 1.0, 1.0);
 
-    //gl_FragColor = gl_FragCoord / vec4(screenSize.xy, 1.0, 1.0);
     gl_FragColor = textureColor2 * vec4(nightColor, 1.0) * vec4(max(light, vec3(1.0, 1.0, 1.0)), 1.0) * color + 0.6 * isSelected * highlight;
 }|]
 

@@ -1781,6 +1781,7 @@ loadingCanvasView model =
                     , time = 0
                     , night = 0
                     , screenSize = screenSize
+                    , waterReflection = 0
                     }
                     :: (case tryLoading model of
                             Just _ ->
@@ -1810,6 +1811,7 @@ loadingCanvasView model =
                                     , time = 0
                                     , night = 0
                                     , screenSize = screenSize
+                                    , waterReflection = 0
                                     }
                                 ]
 
@@ -1836,6 +1838,7 @@ loadingCanvasView model =
                                     , time = 0
                                     , night = 0
                                     , screenSize = screenSize
+                                    , waterReflection = 0
                                     }
                                 ]
                        )
