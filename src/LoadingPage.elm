@@ -1777,6 +1777,7 @@ loadingCanvasView model =
                     , userId = Shaders.noUserIdSelected
                     , time = 0
                     , night = 0
+                    , waterReflection = 0
                     }
                     :: (case tryLoading model of
                             Just _ ->
@@ -1805,6 +1806,7 @@ loadingCanvasView model =
                                     , userId = Shaders.noUserIdSelected
                                     , time = 0
                                     , night = 0
+                                    , waterReflection = 0
                                     }
                                 ]
 
@@ -1830,6 +1832,7 @@ loadingCanvasView model =
                                     , userId = Shaders.noUserIdSelected
                                     , time = 0
                                     , night = 0
+                                    , waterReflection = 0
                                     }
                                 ]
                        )

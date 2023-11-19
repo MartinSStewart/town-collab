@@ -47,7 +47,7 @@ type CellData
         { history : Bytes
         , undoPoint : IdDict UserId Int
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
-        , cache : List Value
+        , cache : Cache
         }
 
 
@@ -251,7 +251,7 @@ tileMapValue value =
             2
 
 
-updateMapPixelData : List Value -> Vec2
+updateMapPixelData : Cache -> Vec2
 updateMapPixelData cache =
     List.foldl
         (\{ tile, position } { lowBit, highBit } ->
@@ -361,10 +361,14 @@ type Cell a
     = Cell
         { history : a
         , undoPoint : IdDict UserId Int
-        , cache : List Value
+        , cache : Cache
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
         , mapCache : Vec2
         }
+
+
+type alias Cache =
+    List Value
 
 
 type alias Value =
@@ -460,7 +464,7 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
         history =
             getHistory cell.history
 
-        cache : List Value
+        cache : Cache
         cache =
             List.foldr
                 stepCache
@@ -512,7 +516,7 @@ stepCacheHelper ({ position, tile } as item) cache =
             cache
 
 
-stepCacheHelperWithRemoved : Value -> List Value -> { remaining : List Value, removed : List Value }
+stepCacheHelperWithRemoved : Value -> Cache -> { remaining : Cache, removed : List Value }
 stepCacheHelperWithRemoved ({ position, tile } as item) cache =
     let
         ( remaining, removed ) =

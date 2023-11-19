@@ -4366,6 +4366,7 @@ canvasView audioData model =
                             , userId = Shaders.noUserIdSelected
                             , time = shaderTime model
                             , night = renderData.nightFactor * uiNightFactorScaling
+                            , waterReflection = 0
                             }
                        ]
                     ++ (case LoadingPage.showWorldPreview hoverAt2 of
@@ -4508,6 +4509,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                 , time2 = renderData.time
                 , color = Vec4.vec4 1 1 1 1
                 , night = renderData.nightFactor
+                , waterReflection = 0
                 }
            , drawReports renderData model.reportsMesh
            ]
@@ -4531,6 +4533,7 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
         , userId = Shaders.noUserIdSelected
         , time = 0
         , night = nightFactor
+        , waterReflection = 0
         }
 
 
@@ -4616,6 +4619,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                                     * Coord.yRaw texturePos
                                     |> toFloat
                             , night = nightFactor
+                            , waterReflection = 0
                             }
                             |> Just
 
@@ -4669,6 +4673,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } mo
                         , userId = Shaders.noUserIdSelected
                         , time = time
                         , night = nightFactor
+                        , waterReflection = 0
                         }
                         |> Just
 
@@ -4775,6 +4780,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                 , userId = Shaders.noUserIdSelected
                 , time = time
                 , night = nightFactor
+                , waterReflection = 0
                 }
             ]
 
@@ -4815,6 +4821,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                 , userId = Shaders.noUserIdSelected
                 , time = time
                 , night = nightFactor
+                , waterReflection = 0
                 }
             ]
 
@@ -5047,6 +5054,7 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                             , userId = Shaders.noUserIdSelected
                             , time = time
                             , night = nightFactor
+                            , waterReflection = 0
                             }
                             |> Just
 
@@ -5103,6 +5111,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                                 , userId = Shaders.noUserIdSelected
                                 , time = time
                                 , night = nightFactor
+                                , waterReflection = 0
                                 }
                             ]
 
@@ -5236,6 +5245,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                                         -3
                     , time = time
                     , night = nightFactor
+                    , waterReflection = 0
                     }
             )
 

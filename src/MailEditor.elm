@@ -1346,6 +1346,7 @@ backgroundLayer { lights, nightFactor, texture, depth, time } =
         , time = time
         , night = nightFactor
         , depth = depth
+        , waterReflection = 0
         }
 
 
@@ -1426,6 +1427,7 @@ drawMail { lights, nightFactor, texture, depth, time } mailPosition mailSize2 mo
             , time = time
             , night = nightFactor
             , depth = depth
+            , waterReflection = 0
             }
         ]
 

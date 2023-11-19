@@ -1318,6 +1318,7 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors } 
         , primaryColor0 = Color.unwrap trainData.color |> toFloat
         , secondaryColor0 = 0
         , night = nightFactor
+        , waterReflection = 0
         }
 
 
@@ -1632,6 +1633,7 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scisso
                         , userId = Shaders.noUserIdSelected
                         , time = time
                         , night = nightFactor
+                        , waterReflection = 0
                         }
                         |> Just
 
