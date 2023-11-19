@@ -11,6 +11,7 @@ module Bounds exposing
     , fromCoords
     , maximum
     , minimum
+    , size
     )
 
 import BoundingBox2d exposing (BoundingBox2d)
@@ -73,6 +74,11 @@ from2Coords first second =
 fromCoordAndSize : Coord unit -> Coord unit -> Bounds unit
 fromCoordAndSize coord size_ =
     fromCoords (Nonempty coord [ Coord.plus coord size_ ])
+
+
+size : Bounds unit -> Coord unit
+size (Bounds bounds2) =
+    bounds2.max |> Coord.minus bounds2.min
 
 
 contains : Coord unit -> Bounds unit -> Bool

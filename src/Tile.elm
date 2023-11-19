@@ -137,6 +137,8 @@ type TileGroup
     | IronFenceGroup
     | IronGateGroup
     | DeadTreeGroup
+    | PumpkinGroup
+    | GraveStoneGroup
 
 
 codec : Codec TileGroup
@@ -208,6 +210,8 @@ codec =
         , ( "IronFenceGroup", IronFenceGroup )
         , ( "IronGateGroup", IronGateGroup )
         , ( "DeadTreeGroup", DeadTreeGroup )
+        , ( "PumpkinGroup", PumpkinGroup )
+        , ( "GraveStoneGroup", GraveStoneGroup )
         ]
 
 
@@ -279,6 +283,8 @@ allTileGroups =
     , IronFenceGroup
     , IronGateGroup
     , DeadTreeGroup
+    , PumpkinGroup
+    , GraveStoneGroup
     ]
 
 
@@ -354,6 +360,8 @@ sceneryCategory =
     , IronFenceGroup
     , IronGateGroup
     , DeadTreeGroup
+    , PumpkinGroup
+    , GraveStoneGroup
     ]
 
 
@@ -861,6 +869,28 @@ getTileGroupData tileGroup =
             , name = "Dead tree"
             }
 
+        PumpkinGroup ->
+            { defaultColors = ZeroDefaultColors
+            , tiles = Nonempty PumpkinDown [ PumpkinUp ]
+            , name = "Pumpkin"
+            }
+
+        GraveStoneGroup ->
+            { defaultColors = OneDefaultColor (Color.rgb255 100 110 110)
+            , tiles =
+                Nonempty
+                    GraveStone0
+                    [ GraveStone1
+                    , GraveStone2
+                    , GraveStone3
+                    , GraveStone4
+                    , GraveStone5
+                    , GraveStone6
+                    , GraveStone7
+                    ]
+            , name = "Grave stone"
+            }
+
 
 type Tile
     = EmptyTile
@@ -1039,6 +1069,16 @@ type Tile
     | IronFenceAntidiagonal
     | IronGate
     | DeadTree
+    | PumpkinDown
+    | PumpkinUp
+    | GraveStone0
+    | GraveStone1
+    | GraveStone2
+    | GraveStone3
+    | GraveStone4
+    | GraveStone5
+    | GraveStone6
+    | GraveStone7
 
 
 aggregateMovementCollision : BoundingBox2d WorldUnit WorldUnit
@@ -2429,6 +2469,36 @@ getData tile =
 
         DeadTree ->
             deadTree
+
+        PumpkinDown ->
+            pumpkinDown
+
+        PumpkinUp ->
+            pumpkinUp
+
+        GraveStone0 ->
+            graveStone0
+
+        GraveStone1 ->
+            graveStone1
+
+        GraveStone2 ->
+            graveStone2
+
+        GraveStone3 ->
+            graveStone3
+
+        GraveStone4 ->
+            graveStone4
+
+        GraveStone5 ->
+            graveStone5
+
+        GraveStone6 ->
+            graveStone6
+
+        GraveStone7 ->
+            graveStone7
 
 
 emptyTile : TileData units
@@ -5050,6 +5120,106 @@ deadTree =
     }
 
 
+pumpkinDown : TileData units
+pumpkinDown =
+    { texturePosition = Coord.xy 60 1098
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+pumpkinUp : TileData units
+pumpkinUp =
+    { texturePosition = Coord.xy 40 1098
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+graveStone0 : TileData units
+graveStone0 =
+    { texturePosition = Coord.xy 0 990
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 13) (Coord.xy 5 2) ]
+    }
+
+
+graveStone1 : TileData units
+graveStone1 =
+    { texturePosition = Coord.xy 20 990
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 13) (Coord.xy 5 2) ]
+    }
+
+
+graveStone2 : TileData units
+graveStone2 =
+    { texturePosition = Coord.xy 40 990
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+graveStone3 : TileData units
+graveStone3 =
+    { texturePosition = Coord.xy 60 990
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 2 13) (Coord.xy 16 2) ]
+    }
+
+
+graveStone4 : TileData units
+graveStone4 =
+    { texturePosition = Coord.xy 80 990
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = []
+    }
+
+
+graveStone5 : TileData units
+graveStone5 =
+    { texturePosition = Coord.xy 0 1008
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 8 13) (Coord.xy 4 2) ]
+    }
+
+
+graveStone6 : TileData units
+graveStone6 =
+    { texturePosition = Coord.xy 20 1008
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 5 13) (Coord.xy 9 2) ]
+    }
+
+
+graveStone7 : TileData units
+graveStone7 =
+    { texturePosition = Coord.xy 40 1008
+    , size = Coord.xy 1 1
+    , tileCollision = collisionRectangle 0 0 1 1
+    , railPath = NoRailPath
+    , movementCollision = [ Bounds.fromCoordAndSize (Coord.xy 7 12) (Coord.xy 7 3) ]
+    }
+
+
 collisionRectangle : Int -> Int -> Int -> Int -> CollisionMask
 collisionRectangle x y width height =
     List.range x (x + width - 1)
@@ -5764,6 +5934,36 @@ encoder tile =
         DeadTree ->
             Bytes.Encode.unsignedInt16 BE 174
 
+        PumpkinDown ->
+            Bytes.Encode.unsignedInt16 BE 175
+
+        PumpkinUp ->
+            Bytes.Encode.unsignedInt16 BE 176
+
+        GraveStone0 ->
+            Bytes.Encode.unsignedInt16 BE 177
+
+        GraveStone1 ->
+            Bytes.Encode.unsignedInt16 BE 178
+
+        GraveStone2 ->
+            Bytes.Encode.unsignedInt16 BE 179
+
+        GraveStone3 ->
+            Bytes.Encode.unsignedInt16 BE 180
+
+        GraveStone4 ->
+            Bytes.Encode.unsignedInt16 BE 181
+
+        GraveStone5 ->
+            Bytes.Encode.unsignedInt16 BE 182
+
+        GraveStone6 ->
+            Bytes.Encode.unsignedInt16 BE 183
+
+        GraveStone7 ->
+            Bytes.Encode.unsignedInt16 BE 184
+
 
 decoder : Bytes.Decode.Decoder Tile
 decoder =
@@ -6294,6 +6494,36 @@ decoder =
 
                 174 ->
                     Bytes.Decode.succeed DeadTree
+
+                175 ->
+                    Bytes.Decode.succeed PumpkinDown
+
+                176 ->
+                    Bytes.Decode.succeed PumpkinUp
+
+                177 ->
+                    Bytes.Decode.succeed GraveStone0
+
+                178 ->
+                    Bytes.Decode.succeed GraveStone1
+
+                179 ->
+                    Bytes.Decode.succeed GraveStone2
+
+                180 ->
+                    Bytes.Decode.succeed GraveStone3
+
+                181 ->
+                    Bytes.Decode.succeed GraveStone4
+
+                182 ->
+                    Bytes.Decode.succeed GraveStone5
+
+                183 ->
+                    Bytes.Decode.succeed GraveStone6
+
+                184 ->
+                    Bytes.Decode.succeed GraveStone7
 
                 _ ->
                     case Array.get (maxTileValue - int) Sprite.intToChar of
