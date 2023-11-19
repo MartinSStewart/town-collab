@@ -360,6 +360,7 @@ vertexShader :
         , isSelected : Float
         , position2 : Vec2
         , z2 : Float
+        , textureSize2 : Vec2
         }
 vertexShader =
     [glsl|
@@ -380,6 +381,7 @@ varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
 varying float z2;
+varying vec2 textureSize2;
 
 int OR(int n1, int n2){
 
@@ -463,6 +465,7 @@ void main () {
     secondaryColor2 = floatColorToVec3(secondaryColor);
     position2 = vec2(x, y);
     z2 = z;
+    textureSize2 = textureSize;
 }|]
 
 
@@ -487,6 +490,7 @@ instancedVertexShader :
         , isSelected : Float
         , position2 : Vec2
         , z2 : Float
+        , textureSize2 : Vec2
         }
 instancedVertexShader =
     [glsl|
@@ -508,6 +512,7 @@ varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
 varying float z2;
+varying vec2 textureSize2;
 
 int OR(int n1, int n2){
 
@@ -595,6 +600,7 @@ void main () {
     secondaryColor2 = floatColorToVec3(secondaryColor0);
     position2 = position0.xy + localPosition2;
     z2 = 0.0;
+    textureSize2 = textureSize;
 }|]
 
 
@@ -603,6 +609,7 @@ fragmentShader :
         {}
         { u
             | texture : WebGL.Texture.Texture
+            , textureSize : Vec2
             , lights : WebGL.Texture.Texture
             , depth : WebGL.Texture.Texture
             , time : Float
@@ -617,6 +624,7 @@ fragmentShader :
         , isSelected : Float
         , position2 : Vec2
         , z2 : Float
+        , textureSize2 : Vec2
         }
 fragmentShader =
     [glsl|
@@ -636,6 +644,7 @@ varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
 varying float z2;
+varying vec2 textureSize2;
 
 vec3 primaryColor = vec3(1.0, 0.0, 1.0);
 vec3 primaryColorMidShade = vec3(233.0 / 255.0, 45.0 / 255.0, 231.0 / 255.0);
@@ -648,8 +657,9 @@ void main () {
     vec2 vcoord2 =
         waterReflection == 1.0
             ? vcoord + vec2(
-                floor(0.8 * sin(2.0 + time * 3.0 + floor(gl_FragCoord.y / 6.0) * 6.0 / 30.0 )) / 2048.0,
-                floor(0.6 * sin(time * 3.0 +  floor(gl_FragCoord.y / 6.0) * 6.0  / 30.0 )) / 2048.0)
+                floor(0.8 * sin(2.0 + time * 3.0 + floor(gl_FragCoord.y / 6.0) * 6.0 / 30.0 )),
+                floor(0.6 * sin(time * 3.0 +  floor(gl_FragCoord.y / 6.0) * 6.0  / 30.0 )))
+                / textureSize2
             : vcoord;
 
     vec4 textureColor = texture2D(texture, vcoord2);
@@ -711,6 +721,7 @@ debrisVertexShader :
         , isSelected : Float
         , position2 : Vec2
         , z2 : Float
+        , textureSize2 : Vec2
         }
 debrisVertexShader =
     [glsl|
@@ -730,6 +741,7 @@ varying vec3 secondaryColor2;
 varying float isSelected;
 varying vec2 position2;
 varying float z2;
+varying vec2 textureSize2;
 
 int OR(int n1, int n2){
 
@@ -811,6 +823,7 @@ void main () {
     secondaryColor2 = floatColorToVec3(secondaryColor);
     position2 = position;
     z2 = 0.0;
+    textureSize2 = textureSize;
 }|]
 
 
