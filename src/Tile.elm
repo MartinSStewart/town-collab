@@ -14,7 +14,6 @@ module Tile exposing
     , allCategories
     , allTileGroups
     , allTiles
-    , buildingCategory
     , categoryToString
     , categoryToTiles
     , codec
@@ -31,12 +30,9 @@ module Tile exposing
     , hasCollision
     , hasCollisionWithCoord
     , pathDirection
-    , railCategory
     , railDataReverse
     , railPathData
     , reverseDirection
-    , roadCategory
-    , sceneryCategory
     , texturePositionPixels
     , tileToTileGroup
     , trainHouseLeftRailPath

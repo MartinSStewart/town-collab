@@ -1,5 +1,6 @@
 module GridCell exposing
     ( BackendHistory(..)
+    , Cache
     , Cell(..)
     , CellData(..)
     , FrontendHistory(..)
