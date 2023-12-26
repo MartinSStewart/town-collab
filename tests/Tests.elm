@@ -11,16 +11,19 @@ import Effect.Test
 import Effect.Time
 import EndToEndTests
 import Expect
-import Grid exposing (IntersectionType(..))
+import Grid exposing (Grid, IntersectionType(..))
 import GridCell exposing (FrontendHistory)
 import Id exposing (Id, UserId)
 import IdDict
-import Point2d
+import Point2d exposing (Point2d)
+import Quantity exposing (Quantity(..))
 import Test exposing (Test, describe, test)
 import TextInputMultiline
 import Tile exposing (Tile(..))
 import TileCountBot
-import Units
+import Time
+import Train exposing (Train)
+import Units exposing (WorldUnit)
 import Vector2d
 
 
@@ -88,6 +91,67 @@ tests =
 
                     Nothing ->
                         Expect.fail "Cell not found"
+        , test "Move train" <|
+            \_ ->
+                let
+                    addHorizontalRail : Int -> Grid FrontendHistory -> Grid FrontendHistory
+                    addHorizontalRail x gridA =
+                        Grid.addChangeFrontend
+                            { position = Coord.tuple ( x, 0 )
+                            , change = RailHorizontal
+                            , userId = user0
+                            , colors = { primaryColor = Color.white, secondaryColor = Color.white }
+                            , time = Effect.Time.millisToPosix 0
+                            }
+                            gridA
+                            |> .grid
+
+                    grid : Grid FrontendHistory
+                    grid =
+                        List.range 0 16 |> List.foldl addHorizontalRail Grid.empty
+
+                    train : Train
+                    train =
+                        Train.Train
+                            { position = Coord.xy 0 0
+                            , path = Tile.RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 }
+                            , previousPaths = []
+                            , t = 0.5
+                            , speed = Quantity Train.defaultMaxSpeed
+                            , home = Coord.xy -5 -5
+                            , homePath = Tile.trainHouseLeftRailPath
+                            , isStuckOrDerailed = Train.IsNotStuckOrDerailed
+                            , status = Train.Travelling
+                            , owner = Id.fromInt 0
+                            , color = Color.rgb255 80 80 80
+                            }
+
+                    endTime =
+                        Time.millisToPosix 992
+
+                    moveTrainBy : Int -> Int -> Train -> Train
+                    moveTrainBy start end a =
+                        Train.moveTrains
+                            (Time.millisToPosix end)
+                            (Time.millisToPosix start)
+                            (IdDict.fromList [ ( Id.fromInt 0, a ) ])
+                            { grid = grid, mail = IdDict.empty }
+                            |> IdDict.get (Id.fromInt 0)
+                            |> Maybe.withDefault train
+
+                    trainA : Point2d WorldUnit WorldUnit
+                    trainA =
+                        List.range 0 61
+                            |> List.foldl (\index a -> moveTrainBy (index * 16) ((index + 1) * 16) a) train
+                            |> Train.trainPosition endTime
+
+                    trainB : Point2d WorldUnit WorldUnit
+                    trainB =
+                        moveTrainBy 0 (Time.posixToMillis endTime) train |> Train.trainPosition endTime
+                in
+                Point2d.distanceFrom trainA trainB
+                    |> Quantity.unwrap
+                    |> Expect.lessThan 0.0001
         , test "Add house overlaps neighbor" <|
             \_ ->
                 let
