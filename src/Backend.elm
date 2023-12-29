@@ -467,7 +467,7 @@ handleWorldUpdate isProduction oldTime time model =
                     let
                         diff : IdDict TrainId TrainDiff
                         diff =
-                            IdDict.insert trainId (Train.diff oldTrain newTrain) state.diff
+                            IdDict.insert trainId (Train.diff newTrain) state.diff
                     in
                     case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
                         ( TeleportingHome _, WaitingAtHome ) ->

@@ -1,6 +1,5 @@
 module Train exposing
     ( Coach
-    , FieldChanged(..)
     , IsStuckOrDerailed(..)
     , PreviousPath
     , Status(..)
@@ -94,38 +93,26 @@ type IsStuckOrDerailed
 type TrainDiff
     = NewTrain Train
     | TrainChanged
-        { position :
-            FieldChanged
-                { position : Coord WorldUnit
-                , path : RailPath
-                , previousPaths : List PreviousPath
-                , t : Float
-                , speed : Quantity Float (Rate TileLocalUnit Seconds)
-                }
-        , isStuckOrDerailed : FieldChanged IsStuckOrDerailed
-        , status : FieldChanged Status
+        { position : Coord WorldUnit
+        , path : RailPath
+        , previousPaths : List PreviousPath
+        , t : Float
+        , speed : Quantity Float (Rate TileLocalUnit Seconds)
+        , isStuckOrDerailed : IsStuckOrDerailed
+        , status : Status
         }
 
 
-diff : Train -> Train -> TrainDiff
-diff (Train trainOld) (Train trainNew) =
+diff : Train -> TrainDiff
+diff (Train trainNew) =
     TrainChanged
-        { position =
-            diffField
-                { position = trainOld.position
-                , path = trainOld.path
-                , previousPaths = trainOld.previousPaths
-                , t = trainOld.t
-                , speed = trainOld.speed
-                }
-                { position = trainNew.position
-                , path = trainNew.path
-                , previousPaths = trainNew.previousPaths
-                , t = trainNew.t
-                , speed = trainNew.speed
-                }
-        , isStuckOrDerailed = diffField trainOld.isStuckOrDerailed trainNew.isStuckOrDerailed
-        , status = diffField trainOld.status trainNew.status
+        { position = trainNew.position
+        , path = trainNew.path
+        , previousPaths = trainNew.previousPaths
+        , t = trainNew.t
+        , speed = trainNew.speed
+        , isStuckOrDerailed = trainNew.isStuckOrDerailed
+        , status = trainNew.status
         }
 
 
@@ -141,51 +128,20 @@ applyDiff trainDiff maybeTrain =
             Just newTrain
 
         ( TrainChanged diff_, Just (Train train) ) ->
-            let
-                position =
-                    applyDiffField
-                        diff_.position
-                        { position = train.position
-                        , path = train.path
-                        , previousPaths = train.previousPaths
-                        , t = train.t
-                        , speed = train.speed
-                        }
-            in
             { train
-                | position = position.position
-                , path = position.path
-                , previousPaths = position.previousPaths
-                , t = position.t
-                , speed = position.speed
-                , isStuckOrDerailed = applyDiffField diff_.isStuckOrDerailed train.isStuckOrDerailed
-                , status = applyDiffField diff_.status train.status
+                | position = diff_.position
+                , path = diff_.path
+                , previousPaths = diff_.previousPaths
+                , t = diff_.t
+                , speed = diff_.speed
+                , isStuckOrDerailed = diff_.isStuckOrDerailed
+                , status = diff_.status
             }
                 |> Train
                 |> Just
 
         ( TrainChanged _, Nothing ) ->
             Nothing
-
-
-diffField : a -> a -> FieldChanged a
-diffField _ new =
-    --if old == new then
-    --    Unchanged
-    --
-    --else
-    FieldChanged new
-
-
-applyDiffField : FieldChanged a -> a -> a
-applyDiffField fieldChanged _ =
-    case fieldChanged of
-        FieldChanged new ->
-            new
-
-
-type FieldChanged a
-    = FieldChanged a
 
 
 type alias PreviousPath =

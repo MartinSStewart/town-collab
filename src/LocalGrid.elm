@@ -28,6 +28,7 @@ module LocalGrid exposing
 import Animal exposing (Animal, AnimalType(..))
 import Array exposing (Array)
 import AssocList
+import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
 import Bounds exposing (Bounds)
@@ -93,7 +94,7 @@ currentUserId model =
 
 
 currentTool :
-    { a | localModel : LocalModel Change LocalGrid, pressedKeys : List Keyboard.Key, currentTool : Tool }
+    { a | localModel : LocalModel Change LocalGrid, pressedKeys : AssocSet.Set Keyboard.Key, currentTool : Tool }
     -> Tool
 currentTool model =
     case currentUserId model of
@@ -108,14 +109,14 @@ currentTool model =
             HandTool
 
 
-ctrlOrMeta : { a | pressedKeys : List Keyboard.Key } -> Bool
+ctrlOrMeta : { a | pressedKeys : AssocSet.Set Keyboard.Key } -> Bool
 ctrlOrMeta model =
     keyDown Keyboard.Control model || keyDown Keyboard.Meta model
 
 
-keyDown : Keyboard.Key -> { a | pressedKeys : List Keyboard.Key } -> Bool
+keyDown : Keyboard.Key -> { a | pressedKeys : AssocSet.Set Keyboard.Key } -> Bool
 keyDown key { pressedKeys } =
-    List.any ((==) key) pressedKeys
+    AssocSet.member key pressedKeys
 
 
 localModel : LocalModel a LocalGrid -> LocalGrid_

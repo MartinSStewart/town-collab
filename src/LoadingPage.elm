@@ -32,6 +32,7 @@ import AdminPage
 import Animal exposing (Animal)
 import Array
 import AssocList
+import AssocSet
 import Audio exposing (AudioCmd)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
@@ -293,7 +294,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
         previousUpdateMeshData : UpdateMeshesData
         previousUpdateMeshData =
             { localModel = loadedLocalModel.localModel
-            , pressedKeys = []
+            , pressedKeys = AssocSet.empty
             , currentTool = currentTool2
             , mouseLeft = mouseLeft
             , mouseMiddle = mouseMiddle
@@ -321,7 +322,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , trainTexture = Nothing
             , trainLightsTexture = Nothing
             , trainDepthTexture = Nothing
-            , pressedKeys = []
+            , pressedKeys = AssocSet.empty
             , windowSize = loading.windowSize
             , cssWindowSize = loading.cssWindowSize
             , cssCanvasSize = loading.cssCanvasSize
