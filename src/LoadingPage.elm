@@ -403,6 +403,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/trains.png"
             |> Effect.Task.attempt TrainTextureLoaded
@@ -412,6 +413,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/train-lights.png"
             |> Effect.Task.attempt TrainLightsTextureLoaded
@@ -421,6 +423,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/train-depth.png"
             |> Effect.Task.attempt TrainDepthTextureLoaded

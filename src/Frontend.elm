@@ -578,6 +578,7 @@ init url key =
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/texture.png"
             |> Effect.Task.attempt TextureLoaded
@@ -587,6 +588,7 @@ init url key =
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/lights.png"
             |> Effect.Task.attempt LightsTextureLoaded
@@ -596,6 +598,7 @@ init url key =
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/depth.png"
             |> Effect.Task.attempt DepthTextureLoaded
@@ -623,6 +626,7 @@ loadSimplexTexture =
         , horizontalWrap = Effect.WebGL.Texture.clampToEdge
         , verticalWrap = Effect.WebGL.Texture.clampToEdge
         , flipY = False
+        , premultiplyAlpha = False
         }
         (Image.fromList2d
             [ Array.toList table.perm
