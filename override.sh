@@ -28,5 +28,5 @@ rebuildPackZip() {
 rm -rf ~/.elm
 
 # Rebuild the pack.zip and endpoint.json for select overriden packages
-rebuildPackZip "lamdera/codecs" "1.0.0"
-rebuildPackZip "lamdera/webgl-extra" "1.0.0"
+#rebuildPackZip "lamdera/codecs" "1.0.0"
+#rebuildPackZip "elm-explorations/webgl" "1.1.3"

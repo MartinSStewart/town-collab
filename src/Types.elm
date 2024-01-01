@@ -500,7 +500,6 @@ type FrontendMsg_
     | PastedText String
     | GotUserAgentPlatform String
     | LoadedUserSettings UserSettings
-    | GotWebGlFix
     | ImportedMail File
     | ImportedMail2 (Result () (List MailEditor.Content))
 

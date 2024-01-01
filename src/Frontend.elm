@@ -42,6 +42,7 @@ import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Hyperlink
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
+import Image
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -67,6 +68,7 @@ import Route exposing (PageRoute(..))
 import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData)
 import Sound exposing (Sound(..))
 import Sprite exposing (Vertex)
+import Terrain
 import TextInput exposing (OutMsg(..))
 import TextInputMultiline
 import Tile exposing (Category(..), Tile(..), TileGroup(..))
@@ -570,9 +572,65 @@ init url key =
         , Effect.Task.perform (\time -> Duration.addTo time (PingData.pingOffset { pingData = Nothing }) |> ShortIntervalElapsed) Effect.Time.now
         , cmd
         , Ports.getLocalStorage
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/texture.png"
+            |> Effect.Task.attempt TextureLoaded
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/lights.png"
+            |> Effect.Task.attempt LightsTextureLoaded
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            }
+            "/depth.png"
+            |> Effect.Task.attempt DepthTextureLoaded
+        , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
         ]
     , Audio.cmdNone
     )
+
+
+loadSimplexTexture : Effect.Task.Task FrontendOnly Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture
+loadSimplexTexture =
+    let
+        table =
+            Terrain.permutationTable
+
+        {- Copied from Simplex.grad3 -}
+        grad3 : List Int
+        grad3 =
+            [ 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1 ]
+                |> List.map (\a -> a + 1)
+    in
+    Effect.WebGL.Texture.loadWith
+        { magnify = Effect.WebGL.Texture.nearest
+        , minify = Effect.WebGL.Texture.nearest
+        , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+        , verticalWrap = Effect.WebGL.Texture.clampToEdge
+        , flipY = False
+        }
+        (Image.fromList2d
+            [ Array.toList table.perm
+            , Array.toList table.permMod12
+            , grad3 ++ List.repeat (512 - List.length grad3) 0
+            ]
+            |> Image.toPngUrl
+        )
 
 
 update : AudioData -> FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
@@ -1267,9 +1325,6 @@ updateLoaded audioData msg model =
             ( { model | musicVolume = userSettings.musicVolume, soundEffectVolume = userSettings.soundEffectVolume }
             , Command.none
             )
-
-        GotWebGlFix ->
-            ( model, Command.none )
 
         ImportedMail file ->
             ( model
@@ -5312,7 +5367,6 @@ subscriptions _ model =
                                 |> Result.withDefault ""
                                 |> GotUserAgentPlatform
                         )
-                    , Ports.gotWebGlFix GotWebGlFix
                     ]
 
             Loaded loaded ->
