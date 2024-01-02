@@ -2,7 +2,7 @@
 
 import Elm.Kernel.Utils exposing (Tuple2)
 import Elm.Kernel.Scheduler exposing (binding, succeed, fail)
-import WebGL.Texture as Texture exposing (LoadError, SizeError)
+import WebGLFix.Texture as Texture exposing (LoadError, SizeError)
 
 */
 

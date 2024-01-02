@@ -1,11 +1,11 @@
-module WebGL.Internal exposing
+module WebGLFix.Internal exposing
     ( Option(..)
     , Setting(..)
     , enableOption
     , enableSetting
     )
 
-import Elm.Kernel.WebGL
+import Elm.Kernel.WebGLFix
 
 
 type Option

@@ -44,7 +44,7 @@ module Effect.WebGL.Texture exposing
 import Effect.Command exposing (FrontendOnly)
 import Effect.Internal
 import Effect.Task exposing (Task)
-import WebGL.Texture
+import WebGLFix.Texture
 
 
 {-| Use `Texture` to pass the `sampler2D` uniform value to the shader.
@@ -52,7 +52,7 @@ You can create a texture with [`load`](#load) or [`loadWith`](#loadWith)
 and measure its dimensions with [`size`](#size).
 -}
 type Texture
-    = RealTexture WebGL.Texture.Texture
+    = RealTexture WebGLFix.Texture.Texture
     | MockTexture Int Int
 
 
@@ -69,7 +69,7 @@ fromInternalFile file =
 {-| Unfortunately in order to make this API work with Shaders, you need call this function to get the actual native Texture.
 This will return Nothing when running in a test and Just when running in a browser.
 -}
-unwrap : Texture -> Maybe WebGL.Texture.Texture
+unwrap : Texture -> Maybe WebGLFix.Texture.Texture
 unwrap texture =
     case texture of
         RealTexture texture_ ->
@@ -128,10 +128,10 @@ loadWith options texturePath =
                 Ok ok ->
                     Effect.Internal.Succeed (fromInternalFile ok)
 
-                Err WebGL.Texture.LoadError ->
+                Err WebGLFix.Texture.LoadError ->
                     Effect.Internal.Fail LoadError
 
-                Err (WebGL.Texture.SizeError width height) ->
+                Err (WebGLFix.Texture.SizeError width height) ->
                     Effect.Internal.Fail (SizeError width height)
         )
 
@@ -329,7 +329,7 @@ size : Texture -> ( Int, Int )
 size texture =
     case texture of
         RealTexture texture_ ->
-            WebGL.Texture.size texture_
+            WebGLFix.Texture.size texture_
 
         MockTexture width height ->
             ( width, height )

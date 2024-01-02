@@ -49,8 +49,8 @@ before trying to do too much with just the documentation provided here.
 -}
 
 import Html exposing (Attribute, Html)
-import WebGL
-import WebGL.Settings exposing (Setting)
+import WebGLFix
+import WebGLFix.Settings exposing (Setting)
 
 
 {-| Mesh forms geometry from the specified vertices. Each vertex contains a
@@ -70,7 +70,7 @@ Do not generate meshes in `view`, [read more about this here](https://package.el
 
 -}
 type alias Mesh attributes =
-    WebGL.Mesh attributes
+    WebGLFix.Mesh attributes
 
 
 {-| Triangles are the basic building blocks of a mesh. You can put them together
@@ -82,7 +82,7 @@ that describe the corners of each triangle.
 -}
 triangles : List ( attributes, attributes, attributes ) -> Mesh attributes
 triangles =
-    WebGL.triangles
+    WebGLFix.triangles
 
 
 {-| Creates a strip of triangles where each additional vertex creates an
@@ -90,7 +90,7 @@ additional triangle once the first three vertices have been drawn.
 -}
 triangleStrip : List attributes -> Mesh attributes
 triangleStrip =
-    WebGL.triangleStrip
+    WebGLFix.triangleStrip
 
 
 {-| Similar to [`triangleStrip`](#triangleStrip), but creates a fan shaped
@@ -98,7 +98,7 @@ output.
 -}
 triangleFan : List attributes -> Mesh attributes
 triangleFan =
-    WebGL.triangleFan
+    WebGLFix.triangleFan
 
 
 {-| Create triangles from vertices and indices, grouped in sets of three to
@@ -127,21 +127,21 @@ This will use two vertices less:
 -}
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Mesh attributes
 indexedTriangles =
-    WebGL.indexedTriangles
+    WebGLFix.indexedTriangles
 
 
 {-| Connects each pair of vertices with a line.
 -}
 lines : List ( attributes, attributes ) -> Mesh attributes
 lines =
-    WebGL.lines
+    WebGLFix.lines
 
 
 {-| Connects each two subsequent vertices with a line.
 -}
 lineStrip : List attributes -> Mesh attributes
 lineStrip =
-    WebGL.lineStrip
+    WebGLFix.lineStrip
 
 
 {-| Similar to [`lineStrip`](#lineStrip), but connects the last vertex back to
@@ -149,14 +149,14 @@ the first.
 -}
 lineLoop : List attributes -> Mesh attributes
 lineLoop =
-    WebGL.lineLoop
+    WebGLFix.lineLoop
 
 
 {-| Draws a single dot per vertex.
 -}
 points : List attributes -> Mesh attributes
 points =
-    WebGL.points
+    WebGLFix.points
 
 
 {-| Shaders are programs for running many computations on the GPU in parallel.
@@ -180,13 +180,13 @@ package.
 
 -}
 type alias Shader attributes uniforms varyings =
-    WebGL.Shader attributes uniforms varyings
+    WebGLFix.Shader attributes uniforms varyings
 
 
 {-| Conceptually, an encapsulation of the instructions to render something.
 -}
 type alias Entity =
-    WebGL.Entity
+    WebGLFix.Entity
 
 
 {-| Packages a vertex shader, a fragment shader, a mesh, and uniforms
@@ -238,7 +238,7 @@ entity :
     -> uniforms
     -> Entity
 entity =
-    WebGL.entity
+    WebGLFix.entity
 
 
 {-| The same as [`entity`](#entity), but allows to configure an entity with
@@ -252,7 +252,7 @@ entityWith :
     -> uniforms
     -> Entity
 entityWith =
-    WebGL.entityWith
+    WebGLFix.entityWith
 
 
 {-| Render a WebGL scene with the given html attributes, and entities.
@@ -274,7 +274,7 @@ are enabled. Use [`toHtmlWith`](#toHtmlWith) for custom options.
 -}
 toHtml : List (Attribute msg) -> List Entity -> Html msg
 toHtml =
-    WebGL.toHtml
+    WebGLFix.toHtml
 
 
 {-| Render a WebGL scene with the given options, html attributes, and entities.
@@ -285,14 +285,14 @@ when the canvas is created for the first time.
 -}
 toHtmlWith : List Option -> List (Attribute msg) -> List Entity -> Html msg
 toHtmlWith =
-    WebGL.toHtmlWith
+    WebGLFix.toHtmlWith
 
 
 {-| Provides a way to enable features and change the scene behavior
 in [`toHtmlWith`](#toHtmlWith).
 -}
 type alias Option =
-    WebGL.Option
+    WebGLFix.Option
 
 
 {-| Enable alpha channel in the drawing buffer. If the argument is `True`, then
@@ -301,7 +301,7 @@ premultiplied alpha `(r * a, g * a, b * a, a)`.
 -}
 alpha : Bool -> Option
 alpha =
-    WebGL.alpha
+    WebGLFix.alpha
 
 
 {-| Enable the depth buffer, and prefill it with given value each time before
@@ -309,7 +309,7 @@ the scene is rendered. The value is clamped between 0 and 1.
 -}
 depth : Float -> Option
 depth =
-    WebGL.depth
+    WebGLFix.depth
 
 
 {-| Enable the stencil buffer, specifying the index used to fill the
@@ -318,7 +318,7 @@ where m >= 8 is the number of bits in the stencil buffer. The default is 0.
 -}
 stencil : Int -> Option
 stencil =
-    WebGL.stencil
+    WebGLFix.stencil
 
 
 {-| Enable multisample antialiasing of the drawing buffer, if supported by
@@ -328,7 +328,7 @@ then scaling down with CSS transform).
 -}
 antialias : Option
 antialias =
-    WebGL.antialias
+    WebGLFix.antialias
 
 
 {-| Set the red, green, blue and alpha channels, that will be used to
@@ -337,7 +337,7 @@ clamped between 0 and 1. The default is all 0's.
 -}
 clearColor : Float -> Float -> Float -> Float -> Option
 clearColor =
-    WebGL.clearColor
+    WebGLFix.clearColor
 
 
 {-| By default, WebGL canvas swaps the drawing and display buffers.
@@ -350,4 +350,4 @@ to worry about synchronization between frames.
 -}
 preserveDrawingBuffer : Option
 preserveDrawingBuffer =
-    WebGL.preserveDrawingBuffer
+    WebGLFix.preserveDrawingBuffer

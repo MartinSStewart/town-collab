@@ -1,4 +1,4 @@
-module WebGL.Settings.DepthTest exposing
+module WebGLFix.Settings.DepthTest exposing
     ( default
     , Options, less, never, always, equal, greater, notEqual
     , lessOrEqual, greaterOrEqual
@@ -21,8 +21,8 @@ or [OpenGL docs](https://www.opengl.org/sdk/docs/man2/xhtml/glDepthFunc.xml).
 
 -}
 
-import WebGL.Internal as I
-import WebGL.Settings exposing (Setting)
+import WebGLFix.Internal as I
+import WebGLFix.Settings exposing (Setting)
 
 
 {-| With every pixel, we have to figure out which color to show.

@@ -1,4 +1,4 @@
-module WebGL exposing
+module WebGLFix exposing
     ( Mesh, triangles
     , Shader
     , Entity, entity
@@ -48,11 +48,12 @@ before trying to do too much with just the documentation provided here.
 
 -}
 
-import Elm.Kernel.WebGL
+import Elm.Kernel.WebGLFix
 import Html exposing (Attribute, Html)
-import WebGL.Internal as I
-import WebGL.Settings exposing (Setting)
-import WebGL.Settings.DepthTest as DepthTest
+import WebGL
+import WebGLFix.Internal as I
+import WebGLFix.Settings exposing (Setting)
+import WebGLFix.Settings.DepthTest as DepthTest
 
 
 {-| Mesh forms geometry from the specified vertices. Each vertex contains a
@@ -191,14 +192,14 @@ following types: `Int`, `Float`, [`Texture`](#Texture) and `Vec2`, `Vec3`, `Vec4
 package.
 
 -}
-type Shader attributes uniforms varyings
-    = Shader
+type alias Shader attributes uniforms varyings =
+    WebGL.Shader attributes uniforms varyings
 
 
 {-| Conceptually, an encapsulation of the instructions to render something.
 -}
-type Entity
-    = Entity
+type alias Entity =
+    WebGL.Entity
 
 
 {-| Packages a vertex shader, a fragment shader, a mesh, and uniforms

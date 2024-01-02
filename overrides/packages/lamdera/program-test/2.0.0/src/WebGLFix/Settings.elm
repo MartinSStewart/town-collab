@@ -1,17 +1,8 @@
-module WebGL.Settings
-    exposing
-        ( FaceMode
-        , Setting
-        , back
-        , colorMask
-        , cullFace
-        , front
-        , frontAndBack
-        , polygonOffset
-        , sampleAlphaToCoverage
-        , sampleCoverage
-        , scissor
-        )
+module WebGLFix.Settings exposing
+    ( Setting, scissor, colorMask, polygonOffset, sampleAlphaToCoverage
+    , sampleCoverage, cullFace
+    , FaceMode, front, back, frontAndBack
+    )
 
 {-|
 
@@ -28,7 +19,7 @@ module WebGL.Settings
 
 -}
 
-import WebGL.Internal as I
+import WebGLFix.Internal as I
 
 
 {-| Lets you customize how an [`Entity`](WebGL#Entity) is rendered. So if you

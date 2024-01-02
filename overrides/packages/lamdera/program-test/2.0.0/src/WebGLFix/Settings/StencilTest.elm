@@ -1,4 +1,4 @@
-module WebGL.Settings.StencilTest exposing
+module WebGLFix.Settings.StencilTest exposing
     ( test
     , Test, always, equal, never, less, greater, notEqual
     , lessOrEqual, greaterOrEqual
@@ -35,8 +35,8 @@ or [OpenGL docs](https://www.opengl.org/sdk/docs/man2/xhtml/glStencilFunc.xml).
 
 -}
 
-import WebGL.Internal as I
-import WebGL.Settings exposing (Setting)
+import WebGLFix.Internal as I
+import WebGLFix.Settings exposing (Setting)
 
 
 {-| When you need to draw an intercection of two entities, e.g. a reflection in

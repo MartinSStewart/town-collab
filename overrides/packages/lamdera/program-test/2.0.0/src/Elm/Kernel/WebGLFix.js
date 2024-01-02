@@ -1,7 +1,7 @@
 /*
 
 import Elm.Kernel.VirtualDom exposing (custom, doc)
-import WebGL.Internal as WI exposing (enableSetting, enableOption)
+import WebGLFix.Internal as WI exposing (enableSetting, enableOption)
 
 */
 

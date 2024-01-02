@@ -35,7 +35,7 @@ import Process
 import Task
 import Time
 import Url
-import WebGL.Texture
+import WebGLFix.Texture
 
 
 {-| Create a Lamdera frontend application
@@ -450,46 +450,46 @@ toTask simulatedTask =
                 convertWrap wrap =
                     case wrap of
                         Effect.Internal.Repeat ->
-                            WebGL.Texture.repeat
+                            WebGLFix.Texture.repeat
 
                         Effect.Internal.ClampToEdge ->
-                            WebGL.Texture.clampToEdge
+                            WebGLFix.Texture.clampToEdge
 
                         Effect.Internal.MirroredRepeat ->
-                            WebGL.Texture.mirroredRepeat
+                            WebGLFix.Texture.mirroredRepeat
             in
-            WebGL.Texture.load
-                --{ magnify =
-                --    case options.magnify of
-                --        Effect.Internal.Linear ->
-                --            WebGL.Texture.linear
-                --
-                --        _ ->
-                --            WebGL.Texture.nearest
-                --, minify =
-                --    case options.minify of
-                --        Effect.Internal.Linear ->
-                --            WebGL.Texture.linear
-                --
-                --        Effect.Internal.Nearest ->
-                --            WebGL.Texture.nearest
-                --
-                --        Effect.Internal.NearestMipmapNearest ->
-                --            WebGL.Texture.nearestMipmapNearest
-                --
-                --        Effect.Internal.LinearMipmapNearest ->
-                --            WebGL.Texture.linearMipmapNearest
-                --
-                --        Effect.Internal.NearestMipmapLinear ->
-                --            WebGL.Texture.nearestMipmapLinear
-                --
-                --        Effect.Internal.LinearMipmapLinear ->
-                --            WebGL.Texture.linearMipmapLinear
-                --, horizontalWrap = convertWrap options.horizontalWrap
-                --, verticalWrap = convertWrap options.verticalWrap
-                --, flipY = options.flipY
-                --, premultiplyAlpha = options.premultiplyAlpha
-                --}
+            WebGLFix.Texture.loadWith
+                { magnify =
+                    case options.magnify of
+                        Effect.Internal.Linear ->
+                            WebGLFix.Texture.linear
+
+                        _ ->
+                            WebGLFix.Texture.nearest
+                , minify =
+                    case options.minify of
+                        Effect.Internal.Linear ->
+                            WebGLFix.Texture.linear
+
+                        Effect.Internal.Nearest ->
+                            WebGLFix.Texture.nearest
+
+                        Effect.Internal.NearestMipmapNearest ->
+                            WebGLFix.Texture.nearestMipmapNearest
+
+                        Effect.Internal.LinearMipmapNearest ->
+                            WebGLFix.Texture.linearMipmapNearest
+
+                        Effect.Internal.NearestMipmapLinear ->
+                            WebGLFix.Texture.nearestMipmapLinear
+
+                        Effect.Internal.LinearMipmapLinear ->
+                            WebGLFix.Texture.linearMipmapLinear
+                , horizontalWrap = convertWrap options.horizontalWrap
+                , verticalWrap = convertWrap options.verticalWrap
+                , flipY = options.flipY
+                , premultiplyAlpha = options.premultiplyAlpha
+                }
                 string
                 |> Task.map (Effect.Internal.RealTexture >> Ok)
                 |> Task.onError (Err >> Task.succeed)

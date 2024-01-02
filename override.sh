@@ -29,8 +29,4 @@ rm -rf ~/.elm
 
 # Rebuild the pack.zip and endpoint.json for select overriden packages
 rebuildPackZip "lamdera/codecs" "1.0.0"
-rebuildPackZip "elm-explorations/webgl" "1.1.3"
-LOVR="~/Desktop/town-collab/overrides"
-EXPERIMENTAL=1
-LDEBUG=1
 rebuildPackZip "lamdera/program-test" "2.0.0"

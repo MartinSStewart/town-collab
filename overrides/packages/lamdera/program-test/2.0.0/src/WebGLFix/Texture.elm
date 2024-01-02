@@ -1,27 +1,13 @@
-module WebGL.Texture
-    exposing
-        ( Bigger
-        , Error(..)
-        , Options
-        , Resize
-        , Smaller
-        , Texture
-        , Wrap
-        , clampToEdge
-        , defaultOptions
-        , linear
-        , linearMipmapLinear
-        , linearMipmapNearest
-        , load
-        , loadWith
-        , mirroredRepeat
-        , nearest
-        , nearestMipmapLinear
-        , nearestMipmapNearest
-        , nonPowerOfTwoOptions
-        , repeat
-        , size
-        )
+module WebGLFix.Texture exposing
+    ( Texture, load, Error(..), size
+    , loadWith, Options, defaultOptions
+    , Resize, linear, nearest
+    , nearestMipmapLinear, nearestMipmapNearest
+    , linearMipmapNearest, linearMipmapLinear
+    , Bigger, Smaller
+    , Wrap, repeat, clampToEdge, mirroredRepeat
+    , nonPowerOfTwoOptions
+    )
 
 {-|
 
@@ -55,16 +41,17 @@ module WebGL.Texture
 
 -}
 
-import Elm.Kernel.Texture
+import Elm.Kernel.TextureFix
 import Task exposing (Task)
+import WebGL.Texture
 
 
 {-| Use `Texture` to pass the `sampler2D` uniform value to the shader.
 You can create a texture with [`load`](#load) or [`loadWith`](#loadWith)
 and measure its dimensions with [`size`](#size).
 -}
-type Texture
-    = Texture
+type alias Texture =
+    WebGL.Texture.Texture
 
 
 {-| Loads a texture from the given url with default options.

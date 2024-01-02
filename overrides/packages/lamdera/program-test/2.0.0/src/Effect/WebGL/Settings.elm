@@ -19,7 +19,7 @@ module Effect.WebGL.Settings exposing
 
 -}
 
-import WebGL.Settings
+import WebGLFix.Settings
 
 
 {-| Lets you customize how an [`Entity`](WebGL#Entity) is rendered. So if you
@@ -36,7 +36,7 @@ only want to see the red part of your entity, you would use
 
 -}
 type alias Setting =
-    WebGL.Settings.Setting
+    WebGLFix.Settings.Setting
 
 
 {-| Set the scissor box, which limits the drawing of fragments to the
@@ -47,7 +47,7 @@ The arguments are the coordinates of the lower left corner, width and height.
 -}
 scissor : Int -> Int -> Int -> Int -> Setting
 scissor =
-    WebGL.Settings.scissor
+    WebGLFix.Settings.scissor
 
 
 {-| Specify whether or not each channel (red, green, blue, alpha) should be
@@ -55,7 +55,7 @@ output on the screen.
 -}
 colorMask : Bool -> Bool -> Bool -> Bool -> Setting
 colorMask =
-    WebGL.Settings.colorMask
+    WebGLFix.Settings.colorMask
 
 
 {-| When you want to draw the highlighting wireframe on top of the solid
@@ -93,7 +93,7 @@ such as `0.75` or `1.0` should be enough to generate distinct depth values:
 -}
 polygonOffset : Float -> Float -> Setting
 polygonOffset =
-    WebGL.Settings.polygonOffset
+    WebGLFix.Settings.polygonOffset
 
 
 {-| When you render overlapping transparent entities, like grass or hair, you
@@ -111,7 +111,7 @@ Requires [`WebGL.antialias`](WebGL#antialias) option.
 -}
 sampleAlphaToCoverage : Setting
 sampleAlphaToCoverage =
-    WebGL.Settings.sampleAlphaToCoverage
+    WebGLFix.Settings.sampleAlphaToCoverage
 
 
 {-| Specifies multisample coverage parameters. The fragment's coverage is ANDed
@@ -126,7 +126,7 @@ Requires [`WebGL.antialias`](WebGL#antialias) option.
 -}
 sampleCoverage : Float -> Bool -> Setting
 sampleCoverage =
-    WebGL.Settings.sampleCoverage
+    WebGLFix.Settings.sampleCoverage
 
 
 {-| Excludes polygons based on winding (the order of the vertices) in window
@@ -134,28 +134,28 @@ coordinates. Polygons with counter-clock-wise winding are front-facing.
 -}
 cullFace : FaceMode -> Setting
 cullFace =
-    WebGL.Settings.cullFace
+    WebGLFix.Settings.cullFace
 
 
 {-| Targets the polygons based on their facing.
 -}
 type alias FaceMode =
-    WebGL.Settings.FaceMode
+    WebGLFix.Settings.FaceMode
 
 
 {-| -}
 front : FaceMode
 front =
-    WebGL.Settings.front
+    WebGLFix.Settings.front
 
 
 {-| -}
 back : FaceMode
 back =
-    WebGL.Settings.back
+    WebGLFix.Settings.back
 
 
 {-| -}
 frontAndBack : FaceMode
 frontAndBack =
-    WebGL.Settings.frontAndBack
+    WebGLFix.Settings.frontAndBack

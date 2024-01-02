@@ -1,30 +1,12 @@
-module WebGL.Settings.Blend
-    exposing
-        ( Blender
-        , Factor
-        , add
-        , constantAlpha
-        , constantColor
-        , custom
-        , customAdd
-        , customReverseSubtract
-        , customSubtract
-        , dstAlpha
-        , dstColor
-        , one
-        , oneMinusConstantAlpha
-        , oneMinusConstantColor
-        , oneMinusDstAlpha
-        , oneMinusDstColor
-        , oneMinusSrcAlpha
-        , oneMinusSrcColor
-        , reverseSubtract
-        , srcAlpha
-        , srcAlphaSaturate
-        , srcColor
-        , subtract
-        , zero
-        )
+module WebGLFix.Settings.Blend exposing
+    ( add, subtract, reverseSubtract
+    , Factor, zero, one, srcColor, oneMinusSrcColor, dstColor
+    , oneMinusDstColor, srcAlpha, oneMinusSrcAlpha, dstAlpha
+    , oneMinusDstAlpha, srcAlphaSaturate
+    , custom, Blender, customAdd, customSubtract, customReverseSubtract
+    , constantColor, oneMinusConstantColor, constantAlpha
+    , oneMinusConstantAlpha
+    )
 
 {-|
 
@@ -49,8 +31,8 @@ module WebGL.Settings.Blend
 
 -}
 
-import WebGL.Internal as I
-import WebGL.Settings exposing (Setting)
+import WebGLFix.Internal as I
+import WebGLFix.Settings exposing (Setting)
 
 
 {-| Add the color of the current `Renderable` (the source color)
