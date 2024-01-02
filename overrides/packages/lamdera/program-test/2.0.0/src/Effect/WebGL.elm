@@ -49,6 +49,7 @@ before trying to do too much with just the documentation provided here.
 -}
 
 import Html exposing (Attribute, Html)
+import WebGL
 import WebGLFix
 import WebGLFix.Settings exposing (Setting)
 
@@ -70,7 +71,7 @@ Do not generate meshes in `view`, [read more about this here](https://package.el
 
 -}
 type alias Mesh attributes =
-    WebGLFix.Mesh attributes
+    WebGL.Mesh attributes
 
 
 {-| Triangles are the basic building blocks of a mesh. You can put them together
@@ -82,7 +83,7 @@ that describe the corners of each triangle.
 -}
 triangles : List ( attributes, attributes, attributes ) -> Mesh attributes
 triangles =
-    WebGLFix.triangles
+    WebGL.triangles
 
 
 {-| Creates a strip of triangles where each additional vertex creates an
@@ -90,7 +91,7 @@ additional triangle once the first three vertices have been drawn.
 -}
 triangleStrip : List attributes -> Mesh attributes
 triangleStrip =
-    WebGLFix.triangleStrip
+    WebGL.triangleStrip
 
 
 {-| Similar to [`triangleStrip`](#triangleStrip), but creates a fan shaped
@@ -98,7 +99,7 @@ output.
 -}
 triangleFan : List attributes -> Mesh attributes
 triangleFan =
-    WebGLFix.triangleFan
+    WebGL.triangleFan
 
 
 {-| Create triangles from vertices and indices, grouped in sets of three to
@@ -127,21 +128,21 @@ This will use two vertices less:
 -}
 indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Mesh attributes
 indexedTriangles =
-    WebGLFix.indexedTriangles
+    WebGL.indexedTriangles
 
 
 {-| Connects each pair of vertices with a line.
 -}
 lines : List ( attributes, attributes ) -> Mesh attributes
 lines =
-    WebGLFix.lines
+    WebGL.lines
 
 
 {-| Connects each two subsequent vertices with a line.
 -}
 lineStrip : List attributes -> Mesh attributes
 lineStrip =
-    WebGLFix.lineStrip
+    WebGL.lineStrip
 
 
 {-| Similar to [`lineStrip`](#lineStrip), but connects the last vertex back to
@@ -149,14 +150,14 @@ the first.
 -}
 lineLoop : List attributes -> Mesh attributes
 lineLoop =
-    WebGLFix.lineLoop
+    WebGL.lineLoop
 
 
 {-| Draws a single dot per vertex.
 -}
 points : List attributes -> Mesh attributes
 points =
-    WebGLFix.points
+    WebGL.points
 
 
 {-| Shaders are programs for running many computations on the GPU in parallel.

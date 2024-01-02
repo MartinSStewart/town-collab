@@ -97,7 +97,7 @@ loadWith : Options -> String -> Task Error Texture
 loadWith { magnify, minify, horizontalWrap, verticalWrap, flipY, premultiplyAlpha } url =
     let
         expand (Resize mag) (Resize min) (Wrap hor) (Wrap vert) =
-            Elm.Kernel.Texture.load mag min hor vert flipY premultiplyAlpha url
+            Elm.Kernel.TextureFix.load mag min hor vert flipY premultiplyAlpha url
     in
     expand magnify minify horizontalWrap verticalWrap
 
@@ -295,4 +295,4 @@ or other times you may want to use only a potion of a texture image.
 -}
 size : Texture -> ( Int, Int )
 size =
-    Elm.Kernel.Texture.size
+    Elm.Kernel.TextureFix.size

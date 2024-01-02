@@ -1,23 +1,15 @@
 module WebGLFix exposing
-    ( Mesh, triangles
-    , Shader
+    ( Shader
     , Entity, entity
     , toHtml
     , entityWith, toHtmlWith, Option, alpha, depth, stencil, antialias
     , clearColor, preserveDrawingBuffer
-    , indexedTriangles, lines, lineStrip, lineLoop, points, triangleFan
-    , triangleStrip
     )
 
 {-| The WebGL API is for high performance rendering. Definitely read about
 [how WebGL works](https://package.elm-lang.org/packages/elm-explorations/webgl/latest)
 and look at [some examples](https://github.com/elm-explorations/webgl/tree/main/examples)
 before trying to do too much with just the documentation provided here.
-
-
-# Mesh
-
-@docs Mesh, triangles
 
 
 # Shaders
@@ -40,12 +32,6 @@ before trying to do too much with just the documentation provided here.
 @docs entityWith, toHtmlWith, Option, alpha, depth, stencil, antialias
 @docs clearColor, preserveDrawingBuffer
 
-
-# Meshes
-
-@docs indexedTriangles, lines, lineStrip, lineLoop, points, triangleFan
-@docs triangleStrip
-
 -}
 
 import Elm.Kernel.WebGLFix
@@ -54,122 +40,6 @@ import WebGL
 import WebGLFix.Internal as I
 import WebGLFix.Settings exposing (Setting)
 import WebGLFix.Settings.DepthTest as DepthTest
-
-
-{-| Mesh forms geometry from the specified vertices. Each vertex contains a
-bunch of attributes, defined as a custom record type, e.g.:
-
-    type alias Attributes =
-        { position : Vec3
-        , color : Vec3
-        }
-
-The supported types in attributes are: `Int`, `Float`, `Texture`
-and `Vec2`, `Vec3`, `Vec4`, `Mat4` from the
-[linear-algebra](https://package.elm-lang.org/packages/elm-explorations/linear-algebra/latest)
-package.
-
-Do not generate meshes in `view`, [read more about this here](https://package.elm-lang.org/packages/elm-explorations/webgl/latest#making-the-most-of-the-gpu).
-
--}
-type Mesh attributes
-    = Mesh1 RenderInfo (List attributes)
-    | Mesh2 RenderInfo (List ( attributes, attributes ))
-    | Mesh3 RenderInfo (List ( attributes, attributes, attributes ))
-    | MeshIndexed3 RenderInfo (List attributes) (List ( Int, Int, Int ))
-
-
-type alias RenderInfo =
-    { mode : Int
-    , elemSize : Int
-    , indexSize : Int
-    }
-
-
-{-| Triangles are the basic building blocks of a mesh. You can put them together
-to form any shape.
-
-So when you create `triangles` you are really providing three sets of attributes
-that describe the corners of each triangle.
-
--}
-triangles : List ( attributes, attributes, attributes ) -> Mesh attributes
-triangles =
-    Mesh3 { mode = 0x04, elemSize = 3, indexSize = 0 }
-
-
-{-| Creates a strip of triangles where each additional vertex creates an
-additional triangle once the first three vertices have been drawn.
--}
-triangleStrip : List attributes -> Mesh attributes
-triangleStrip =
-    Mesh1 { mode = 0x05, elemSize = 1, indexSize = 0 }
-
-
-{-| Similar to [`triangleStrip`](#triangleStrip), but creates a fan shaped
-output.
--}
-triangleFan : List attributes -> Mesh attributes
-triangleFan =
-    Mesh1 { mode = 0x06, elemSize = 1, indexSize = 0 }
-
-
-{-| Create triangles from vertices and indices, grouped in sets of three to
-define each triangle by refering the vertices. This helps to avoid duplicated vertices whenever two triangles share an
-edge.
-
-    -- v2 +---+ v1
-    --    |\  |
-    --    | \ |
-    --    |  \|
-    -- v3 +---+ v0
-
-
-
-For example, if you want to define a rectangle using
-[`triangles`](#triangles), `v0` and `v2` will have to be duplicated:
-
-    rectangle =
-        triangles [ ( v0, v1, v2 ), ( v2, v3, v0 ) ]
-
-This will use two vertices less:
-
-    rectangle =
-        indexedTriangles [ v0, v1, v2, v3 ] [ ( 0, 1, 2 ), ( 2, 3, 0 ) ]
-
--}
-indexedTriangles : List attributes -> List ( Int, Int, Int ) -> Mesh attributes
-indexedTriangles =
-    MeshIndexed3 { mode = 0x04, elemSize = 1, indexSize = 3 }
-
-
-{-| Connects each pair of vertices with a line.
--}
-lines : List ( attributes, attributes ) -> Mesh attributes
-lines =
-    Mesh2 { mode = 0x01, elemSize = 2, indexSize = 0 }
-
-
-{-| Connects each two subsequent vertices with a line.
--}
-lineStrip : List attributes -> Mesh attributes
-lineStrip =
-    Mesh1 { mode = 0x03, elemSize = 1, indexSize = 0 }
-
-
-{-| Similar to [`lineStrip`](#lineStrip), but connects the last vertex back to
-the first.
--}
-lineLoop : List attributes -> Mesh attributes
-lineLoop =
-    Mesh1 { mode = 0x02, elemSize = 1, indexSize = 0 }
-
-
-{-| Draws a single dot per vertex.
--}
-points : List attributes -> Mesh attributes
-points =
-    Mesh1 { mode = 0x00, elemSize = 1, indexSize = 0 }
 
 
 {-| Shaders are programs for running many computations on the GPU in parallel.
@@ -247,7 +117,7 @@ then use [`entityWith`](#entityWith).
 entity :
     Shader attributes uniforms varyings
     -> Shader {} uniforms varyings
-    -> Mesh attributes
+    -> WebGL.Mesh attributes
     -> uniforms
     -> Entity
 entity =
@@ -261,11 +131,11 @@ entityWith :
     List Setting
     -> Shader attributes uniforms varyings
     -> Shader {} uniforms varyings
-    -> Mesh attributes
+    -> WebGL.Mesh attributes
     -> uniforms
     -> Entity
 entityWith =
-    Elm.Kernel.WebGL.entity
+    Elm.Kernel.WebGLFix.entity
 
 
 {-| Render a WebGL scene with the given html attributes, and entities.
@@ -298,7 +168,7 @@ when the canvas is created for the first time.
 -}
 toHtmlWith : List Option -> List (Attribute msg) -> List Entity -> Html msg
 toHtmlWith options attributes entities =
-    Elm.Kernel.WebGL.toHtml options attributes entities
+    Elm.Kernel.WebGLFix.toHtml options attributes entities
 
 
 {-| Provides a way to enable features and change the scene behavior

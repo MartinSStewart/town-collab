@@ -21,22 +21,22 @@ enableOption : () -> Option -> ()
 enableOption ctx option =
     case option of
         Alpha _ ->
-            Elm.Kernel.WebGL.enableAlpha ctx option
+            Elm.Kernel.WebGLFix.enableAlpha ctx option
 
         Depth _ ->
-            Elm.Kernel.WebGL.enableDepth ctx option
+            Elm.Kernel.WebGLFix.enableDepth ctx option
 
         Stencil _ ->
-            Elm.Kernel.WebGL.enableStencil ctx option
+            Elm.Kernel.WebGLFix.enableStencil ctx option
 
         Antialias ->
-            Elm.Kernel.WebGL.enableAntialias ctx option
+            Elm.Kernel.WebGLFix.enableAntialias ctx option
 
         ClearColor _ _ _ _ ->
-            Elm.Kernel.WebGL.enableClearColor ctx option
+            Elm.Kernel.WebGLFix.enableClearColor ctx option
 
         PreserveDrawingBuffer ->
-            Elm.Kernel.WebGL.enablePreserveDrawingBuffer ctx option
+            Elm.Kernel.WebGLFix.enablePreserveDrawingBuffer ctx option
 
 
 type Setting
@@ -55,28 +55,28 @@ enableSetting : () -> Setting -> ()
 enableSetting cache setting =
     case setting of
         Blend _ _ _ _ _ _ _ _ _ _ ->
-            Elm.Kernel.WebGL.enableBlend cache setting
+            Elm.Kernel.WebGLFix.enableBlend cache setting
 
         DepthTest _ _ _ _ ->
-            Elm.Kernel.WebGL.enableDepthTest cache setting
+            Elm.Kernel.WebGLFix.enableDepthTest cache setting
 
         StencilTest _ _ _ _ _ _ _ _ _ _ _ ->
-            Elm.Kernel.WebGL.enableStencilTest cache setting
+            Elm.Kernel.WebGLFix.enableStencilTest cache setting
 
         Scissor _ _ _ _ ->
-            Elm.Kernel.WebGL.enableScissor cache setting
+            Elm.Kernel.WebGLFix.enableScissor cache setting
 
         ColorMask _ _ _ _ ->
-            Elm.Kernel.WebGL.enableColorMask cache setting
+            Elm.Kernel.WebGLFix.enableColorMask cache setting
 
         CullFace _ ->
-            Elm.Kernel.WebGL.enableCullFace cache setting
+            Elm.Kernel.WebGLFix.enableCullFace cache setting
 
         PolygonOffset _ _ ->
-            Elm.Kernel.WebGL.enablePolygonOffset cache setting
+            Elm.Kernel.WebGLFix.enablePolygonOffset cache setting
 
         SampleCoverage _ _ ->
-            Elm.Kernel.WebGL.enableSampleCoverage cache setting
+            Elm.Kernel.WebGLFix.enableSampleCoverage cache setting
 
         SampleAlphaToCoverage ->
-            Elm.Kernel.WebGL.enableSampleAlphaToCoverage cache
+            Elm.Kernel.WebGLFix.enableSampleAlphaToCoverage cache

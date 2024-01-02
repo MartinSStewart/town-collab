@@ -2,12 +2,12 @@
 
 import Elm.Kernel.Utils exposing (Tuple2)
 import Elm.Kernel.Scheduler exposing (binding, succeed, fail)
-import WebGLFix.Texture as Texture exposing (LoadError, SizeError)
+import WebGLFix.Texture as TextureFix exposing (LoadError, SizeError)
 
 */
 
 // eslint-disable-next-line no-unused-vars
-var _Texture_load = F7(function (magnify, mininify, horizontalWrap, verticalWrap, flipY, premultiplyAlpha, url) {
+var _TextureFix_load = F7(function (magnify, mininify, horizontalWrap, verticalWrap, flipY, premultiplyAlpha, url) {
   var isMipmap = mininify !== 9728 && mininify !== 9729;
   return __Scheduler_binding(function (callback) {
     var img = new Image();
@@ -47,14 +47,14 @@ var _Texture_load = F7(function (magnify, mininify, horizontalWrap, verticalWrap
         }));
       } else {
         callback(__Scheduler_fail(A2(
-          __Texture_SizeError,
+          __TextureFix_SizeError,
           width,
           height
         )));
       }
     };
     img.onerror = function () {
-      callback(__Scheduler_fail(__Texture_LoadError));
+      callback(__Scheduler_fail(__TextureFix_LoadError));
     };
     if (url.slice(0, 5) !== 'data:') {
       img.crossOrigin = 'Anonymous';
@@ -64,6 +64,6 @@ var _Texture_load = F7(function (magnify, mininify, horizontalWrap, verticalWrap
 });
 
 // eslint-disable-next-line no-unused-vars
-var _Texture_size = function (texture) {
+var _TextureFix_size = function (texture) {
   return __Utils_Tuple2(texture.__width, texture.__height);
 };

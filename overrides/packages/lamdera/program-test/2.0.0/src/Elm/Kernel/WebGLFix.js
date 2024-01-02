@@ -5,15 +5,15 @@ import WebGLFix.Internal as WI exposing (enableSetting, enableOption)
 
 */
 
-var _WebGL_guid = 0;
+var _WebGLFix_guid = 0;
 
-function _WebGL_listEach(fn, list) {
+function _WebGLFix_listEach(fn, list) {
   for (; list.b; list = list.b) {
     fn(list.a);
   }
 }
 
-function _WebGL_listLength(list) {
+function _WebGLFix_listLength(list) {
   var length = 0;
   for (; list.b; list = list.b) {
     length++;
@@ -21,12 +21,12 @@ function _WebGL_listLength(list) {
   return length;
 }
 
-var _WebGL_rAF = typeof requestAnimationFrame !== 'undefined' ?
+var _WebGLFix_rAF = typeof requestAnimationFrame !== 'undefined' ?
   requestAnimationFrame :
   function (cb) { setTimeout(cb, 1000 / 60); };
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_entity = F5(function (settings, vert, frag, mesh, uniforms) {
+var _WebGLFix_entity = F5(function (settings, vert, frag, mesh, uniforms) {
   return {
     $: __0_ENTITY,
     __settings: settings,
@@ -38,7 +38,7 @@ var _WebGL_entity = F5(function (settings, vert, frag, mesh, uniforms) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableBlend = F2(function (cache, setting) {
+var _WebGLFix_enableBlend = F2(function (cache, setting) {
   var blend = cache.blend;
   blend.toggle = cache.toggle;
 
@@ -71,7 +71,7 @@ var _WebGL_enableBlend = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableDepthTest = F2(function (cache, setting) {
+var _WebGLFix_enableDepthTest = F2(function (cache, setting) {
   var depthTest = cache.depthTest;
   depthTest.toggle = cache.toggle;
 
@@ -98,7 +98,7 @@ var _WebGL_enableDepthTest = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableStencilTest = F2(function (cache, setting) {
+var _WebGLFix_enableStencilTest = F2(function (cache, setting) {
   var stencilTest = cache.stencilTest;
   stencilTest.toggle = cache.toggle;
 
@@ -139,7 +139,7 @@ var _WebGL_enableStencilTest = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableScissor = F2(function (cache, setting) {
+var _WebGLFix_enableScissor = F2(function (cache, setting) {
   var scissor = cache.scissor;
   scissor.toggle = cache.toggle;
 
@@ -158,7 +158,7 @@ var _WebGL_enableScissor = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableColorMask = F2(function (cache, setting) {
+var _WebGLFix_enableColorMask = F2(function (cache, setting) {
   var colorMask = cache.colorMask;
   colorMask.toggle = cache.toggle;
   colorMask.enabled = true;
@@ -173,7 +173,7 @@ var _WebGL_enableColorMask = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableCullFace = F2(function (cache, setting) {
+var _WebGLFix_enableCullFace = F2(function (cache, setting) {
   var cullFace = cache.cullFace;
   cullFace.toggle = cache.toggle;
 
@@ -189,7 +189,7 @@ var _WebGL_enableCullFace = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enablePolygonOffset = F2(function (cache, setting) {
+var _WebGLFix_enablePolygonOffset = F2(function (cache, setting) {
   var polygonOffset = cache.polygonOffset;
   polygonOffset.toggle = cache.toggle;
 
@@ -206,7 +206,7 @@ var _WebGL_enablePolygonOffset = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableSampleCoverage = F2(function (cache, setting) {
+var _WebGLFix_enableSampleCoverage = F2(function (cache, setting) {
   var sampleCoverage = cache.sampleCoverage;
   sampleCoverage.toggle = cache.toggle;
 
@@ -223,7 +223,7 @@ var _WebGL_enableSampleCoverage = F2(function (cache, setting) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableSampleAlphaToCoverage = function (cache) {
+var _WebGLFix_enableSampleAlphaToCoverage = function (cache) {
   var sampleAlphaToCoverage = cache.sampleAlphaToCoverage;
   sampleAlphaToCoverage.toggle = cache.toggle;
 
@@ -233,35 +233,35 @@ var _WebGL_enableSampleAlphaToCoverage = function (cache) {
   }
 };
 
-var _WebGL_disableBlend = function (cache) {
+var _WebGLFix_disableBlend = function (cache) {
   if (cache.blend.enabled) {
     cache.gl.disable(cache.gl.BLEND);
     cache.blend.enabled = false;
   }
 };
 
-var _WebGL_disableDepthTest = function (cache) {
+var _WebGLFix_disableDepthTest = function (cache) {
   if (cache.depthTest.enabled) {
     cache.gl.disable(cache.gl.DEPTH_TEST);
     cache.depthTest.enabled = false;
   }
 };
 
-var _WebGL_disableStencilTest = function (cache) {
+var _WebGLFix_disableStencilTest = function (cache) {
   if (cache.stencilTest.enabled) {
     cache.gl.disable(cache.gl.STENCIL_TEST);
     cache.stencilTest.enabled = false;
   }
 };
 
-var _WebGL_disableScissor = function (cache) {
+var _WebGLFix_disableScissor = function (cache) {
   if (cache.scissor.enabled) {
     cache.gl.disable(cache.gl.SCISSOR_TEST);
     cache.scissor.enabled = false;
   }
 };
 
-var _WebGL_disableColorMask = function (cache) {
+var _WebGLFix_disableColorMask = function (cache) {
   var colorMask = cache.colorMask;
   if (!colorMask.a || !colorMask.b || !colorMask.c || !colorMask.d) {
     cache.gl.colorMask(true, true, true, true);
@@ -272,26 +272,26 @@ var _WebGL_disableColorMask = function (cache) {
   }
 };
 
-var _WebGL_disableCullFace = function (cache) {
+var _WebGLFix_disableCullFace = function (cache) {
   cache.gl.disable(cache.gl.CULL_FACE);
 };
 
-var _WebGL_disablePolygonOffset = function (cache) {
+var _WebGLFix_disablePolygonOffset = function (cache) {
   cache.gl.disable(cache.gl.POLYGON_OFFSET_FILL);
 };
 
-var _WebGL_disableSampleCoverage = function (cache) {
+var _WebGLFix_disableSampleCoverage = function (cache) {
   cache.gl.disable(cache.gl.SAMPLE_COVERAGE);
 };
 
-var _WebGL_disableSampleAlphaToCoverage = function (cache) {
+var _WebGLFix_disableSampleAlphaToCoverage = function (cache) {
   cache.gl.disable(cache.gl.SAMPLE_ALPHA_TO_COVERAGE);
 };
 
-var _WebGL_settings = ['blend', 'depthTest', 'stencilTest', 'scissor', 'colorMask', 'cullFace', 'polygonOffset', 'sampleCoverage', 'sampleAlphaToCoverage'];
-var _WebGL_disableFunctions = [_WebGL_disableBlend, _WebGL_disableDepthTest, _WebGL_disableStencilTest, _WebGL_disableScissor, _WebGL_disableColorMask, _WebGL_disableCullFace, _WebGL_disablePolygonOffset, _WebGL_disableSampleCoverage, _WebGL_disableSampleAlphaToCoverage];
+var _WebGLFix_settings = ['blend', 'depthTest', 'stencilTest', 'scissor', 'colorMask', 'cullFace', 'polygonOffset', 'sampleCoverage', 'sampleAlphaToCoverage'];
+var _WebGLFix_disableFunctions = [_WebGLFix_disableBlend, _WebGLFix_disableDepthTest, _WebGLFix_disableStencilTest, _WebGLFix_disableScissor, _WebGLFix_disableColorMask, _WebGLFix_disableCullFace, _WebGLFix_disablePolygonOffset, _WebGLFix_disableSampleCoverage, _WebGLFix_disableSampleAlphaToCoverage];
 
-function _WebGL_doCompile(gl, src, type) {
+function _WebGLFix_doCompile(gl, src, type) {
   var shader = gl.createShader(type);
   // Enable OES_standard_derivatives extension
   gl.shaderSource(shader, '#extension GL_OES_standard_derivatives : enable\n' + src);
@@ -299,7 +299,7 @@ function _WebGL_doCompile(gl, src, type) {
   return shader;
 }
 
-function _WebGL_doLink(gl, vshader, fshader) {
+function _WebGLFix_doLink(gl, vshader, fshader) {
   var program = gl.createProgram();
 
   gl.attachShader(program, vshader);
@@ -314,7 +314,7 @@ function _WebGL_doLink(gl, vshader, fshader) {
   return program;
 }
 
-function _WebGL_getAttributeInfo(gl, type) {
+function _WebGLFix_getAttributeInfo(gl, type) {
   switch (type) {
     case gl.FLOAT:
       return { size: 1, arraySize: 1, type: Float32Array, baseType: gl.FLOAT };
@@ -342,7 +342,7 @@ function _WebGL_getAttributeInfo(gl, type) {
  *  @param {Object} attributes The mapping between the attribute names and Elm fields
  *  @return {WebGLBuffer}
  */
-function _WebGL_doBindAttribute(gl, attribute, mesh, attributes) {
+function _WebGLFix_doBindAttribute(gl, attribute, mesh, attributes) {
   // The length of the number of vertices that
   // complete one 'thing' based on the drawing mode.
   // ie, 2 for Lines, 3 for Triangles, etc.
@@ -368,7 +368,7 @@ function _WebGL_doBindAttribute(gl, attribute, mesh, attributes) {
     }
   }
 
-  var attributeInfo = _WebGL_getAttributeInfo(gl, attribute.type);
+  var attributeInfo = _WebGLFix_getAttributeInfo(gl, attribute.type);
 
   if (attributeInfo === undefined) {
     throw new Error('No info available for: ' + attribute.type);
@@ -376,9 +376,9 @@ function _WebGL_doBindAttribute(gl, attribute, mesh, attributes) {
 
   var dataIdx = 0;
   var dataOffset = attributeInfo.size * attributeInfo.arraySize * elemSize;
-  var array = new attributeInfo.type(_WebGL_listLength(mesh.b) * dataOffset);
+  var array = new attributeInfo.type(_WebGLFix_listLength(mesh.b) * dataOffset);
 
-  _WebGL_listEach(function (elem) {
+  _WebGLFix_listEach(function (elem) {
     dataFill(array, attributeInfo.size * attributeInfo.arraySize, dataIdx, elem, attributes[attribute.name] || attribute.name);
     dataIdx += dataOffset;
   }, mesh.b);
@@ -406,10 +406,10 @@ function _WebGL_doBindAttribute(gl, attribute, mesh, attributes) {
  *  @return {WebGLBuffer|null} buffer.indexBuffer - optional index buffer
  *  @return {Object} buffer.buffers - will be used to buffer attributes
  */
-function _WebGL_doBindSetup(gl, mesh) {
+function _WebGLFix_doBindSetup(gl, mesh) {
   if (mesh.a.__$indexSize > 0) {
     var indexBuffer = gl.createBuffer();
-    var indices = _WebGL_makeIndexedBuffer(mesh.c, mesh.a.__$indexSize);
+    var indices = _WebGLFix_makeIndexedBuffer(mesh.c, mesh.a.__$indexSize);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     return {
@@ -419,7 +419,7 @@ function _WebGL_doBindSetup(gl, mesh) {
     };
   } else {
     return {
-      numIndices: mesh.a.__$elemSize * _WebGL_listLength(mesh.b),
+      numIndices: mesh.a.__$elemSize * _WebGLFix_listLength(mesh.b),
       indexBuffer: null,
       buffers: {}
     };
@@ -434,11 +434,11 @@ function _WebGL_doBindSetup(gl, mesh) {
  *  @param {Number} indexSize the size of the index
  *  @return {Uint32Array} indices
  */
-function _WebGL_makeIndexedBuffer(indicesList, indexSize) {
-  var indices = new Uint32Array(_WebGL_listLength(indicesList) * indexSize);
+function _WebGLFix_makeIndexedBuffer(indicesList, indexSize) {
+  var indices = new Uint32Array(_WebGLFix_listLength(indicesList) * indexSize);
   var fillOffset = 0;
   var i;
-  _WebGL_listEach(function (elem) {
+  _WebGLFix_listEach(function (elem) {
     if (indexSize === 1) {
       indices[fillOffset++] = elem;
     } else {
@@ -450,11 +450,11 @@ function _WebGL_makeIndexedBuffer(indicesList, indexSize) {
   return indices;
 }
 
-function _WebGL_getProgID(vertID, fragID) {
+function _WebGLFix_getProgID(vertID, fragID) {
   return vertID + '#' + fragID;
 }
 
-var _WebGL_drawGL = F2(function (model, domNode) {
+var _WebGLFix_drawGL = F2(function (model, domNode) {
   var cache = model.__cache;
   var gl = cache.gl;
 
@@ -472,8 +472,8 @@ var _WebGL_drawGL = F2(function (model, domNode) {
     gl.stencilMask(cache.STENCIL_WRITEMASK);
     cache.stencilTest.c = cache.STENCIL_WRITEMASK;
   }
-  _WebGL_disableScissor(cache);
-  _WebGL_disableColorMask(cache);
+  _WebGLFix_disableScissor(cache);
+  _WebGLFix_disableColorMask(cache);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT | gl.STENCIL_BUFFER_BIT);
 
   function drawEntity(entity) {
@@ -486,7 +486,7 @@ var _WebGL_drawGL = F2(function (model, domNode) {
     var i;
 
     if (entity.__vert.id && entity.__frag.id) {
-      progid = _WebGL_getProgID(entity.__vert.id, entity.__frag.id);
+      progid = _WebGLFix_getProgID(entity.__vert.id, entity.__frag.id);
       program = cache.programs[progid];
     }
 
@@ -496,11 +496,11 @@ var _WebGL_drawGL = F2(function (model, domNode) {
       if (entity.__vert.id) {
         vshader = cache.shaders[entity.__vert.id];
       } else {
-        entity.__vert.id = _WebGL_guid++;
+        entity.__vert.id = _WebGLFix_guid++;
       }
 
       if (!vshader) {
-        vshader = _WebGL_doCompile(gl, entity.__vert.src, gl.VERTEX_SHADER);
+        vshader = _WebGLFix_doCompile(gl, entity.__vert.src, gl.VERTEX_SHADER);
         cache.shaders[entity.__vert.id] = vshader;
       }
 
@@ -508,15 +508,15 @@ var _WebGL_drawGL = F2(function (model, domNode) {
       if (entity.__frag.id) {
         fshader = cache.shaders[entity.__frag.id];
       } else {
-        entity.__frag.id = _WebGL_guid++;
+        entity.__frag.id = _WebGLFix_guid++;
       }
 
       if (!fshader) {
-        fshader = _WebGL_doCompile(gl, entity.__frag.src, gl.FRAGMENT_SHADER);
+        fshader = _WebGLFix_doCompile(gl, entity.__frag.src, gl.FRAGMENT_SHADER);
         cache.shaders[entity.__frag.id] = fshader;
       }
 
-      var glProgram = _WebGL_doLink(gl, vshader, fshader);
+      var glProgram = _WebGLFix_doLink(gl, vshader, fshader);
 
       program = {
         glProgram: glProgram,
@@ -526,7 +526,7 @@ var _WebGL_drawGL = F2(function (model, domNode) {
         activeAttributeLocations: []
       };
 
-      program.uniformSetters = _WebGL_createUniformSetters(
+      program.uniformSetters = _WebGLFix_createUniformSetters(
         gl,
         model,
         program,
@@ -541,7 +541,7 @@ var _WebGL_drawGL = F2(function (model, domNode) {
         program.activeAttributeLocations.push(attribLocation);
       }
 
-      progid = _WebGL_getProgID(entity.__vert.id, entity.__frag.id);
+      progid = _WebGLFix_getProgID(entity.__vert.id, entity.__frag.id);
       cache.programs[progid] = program;
     }
 
@@ -550,12 +550,12 @@ var _WebGL_drawGL = F2(function (model, domNode) {
       cache.lastProgId = progid;
     }
 
-    _WebGL_setUniforms(program.uniformSetters, entity.__uniforms);
+    _WebGLFix_setUniforms(program.uniformSetters, entity.__uniforms);
 
     var buffer = cache.buffers.get(entity.__mesh);
 
     if (!buffer) {
-      buffer = _WebGL_doBindSetup(gl, entity.__mesh);
+      buffer = _WebGLFix_doBindSetup(gl, entity.__mesh);
       cache.buffers.set(entity.__mesh, buffer);
     }
 
@@ -564,11 +564,11 @@ var _WebGL_drawGL = F2(function (model, domNode) {
       attribLocation = program.activeAttributeLocations[i];
 
       if (buffer.buffers[attribute.name] === undefined) {
-        buffer.buffers[attribute.name] = _WebGL_doBindAttribute(gl, attribute, entity.__mesh, program.attributes);
+        buffer.buffers[attribute.name] = _WebGLFix_doBindAttribute(gl, attribute, entity.__mesh, program.attributes);
       }
       gl.bindBuffer(gl.ARRAY_BUFFER, buffer.buffers[attribute.name]);
 
-      var attributeInfo = _WebGL_getAttributeInfo(gl, attribute.type);
+      var attributeInfo = _WebGLFix_getAttributeInfo(gl, attribute.type);
       if (attributeInfo.arraySize === 1) {
         gl.enableVertexAttribArray(attribLocation);
         gl.vertexAttribPointer(attribLocation, attributeInfo.size, attributeInfo.baseType, false, 0, 0);
@@ -585,12 +585,12 @@ var _WebGL_drawGL = F2(function (model, domNode) {
 
     // Apply all the new settings
     cache.toggle = !cache.toggle;
-    _WebGL_listEach(__WI_enableSetting(cache), entity.__settings);
+    _WebGLFix_listEach(__WI_enableSetting(cache), entity.__settings);
     // Disable the settings that were applied in the previous draw call
-    for (i = 0; i < _WebGL_settings.length; i++) {
-      var setting = cache[_WebGL_settings[i]];
+    for (i = 0; i < _WebGLFix_settings.length; i++) {
+      var setting = cache[_WebGLFix_settings[i]];
       if (setting.toggle !== cache.toggle && setting.enabled) {
-        _WebGL_disableFunctions[i](cache);
+        _WebGLFix_disableFunctions[i](cache);
         setting.enabled = false;
         setting.toggle = cache.toggle;
       }
@@ -604,11 +604,11 @@ var _WebGL_drawGL = F2(function (model, domNode) {
     }
   }
 
-  _WebGL_listEach(drawEntity, model.__entities);
+  _WebGLFix_listEach(drawEntity, model.__entities);
   return domNode;
 });
 
-function _WebGL_createUniformSetters(gl, model, program, uniformsMap) {
+function _WebGLFix_createUniformSetters(gl, model, program, uniformsMap) {
   var glProgram = program.glProgram;
   var currentUniforms = program.currentUniforms;
   var textureCounter = 0;
@@ -696,7 +696,7 @@ function _WebGL_createUniformSetters(gl, model, program, uniformsMap) {
   return uniformSetters;
 }
 
-function _WebGL_setUniforms(setters, values) {
+function _WebGLFix_setUniforms(setters, values) {
   Object.keys(values).forEach(function (name) {
     var setter = setters[name];
     if (setter) {
@@ -708,7 +708,7 @@ function _WebGL_setUniforms(setters, values) {
 // VIRTUAL-DOM WIDGET
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_toHtml = F3(function (options, factList, entities) {
+var _WebGLFix_toHtml = F3(function (options, factList, entities) {
   return __VirtualDom_custom(
     factList,
     {
@@ -716,19 +716,19 @@ var _WebGL_toHtml = F3(function (options, factList, entities) {
       __cache: {},
       __options: options
     },
-    _WebGL_render,
-    _WebGL_diff
+    _WebGLFix_render,
+    _WebGLFix_diff
   );
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableAlpha = F2(function (options, option) {
+var _WebGLFix_enableAlpha = F2(function (options, option) {
   options.contextAttributes.alpha = true;
   options.contextAttributes.premultipliedAlpha = option.a;
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableDepth = F2(function (options, option) {
+var _WebGLFix_enableDepth = F2(function (options, option) {
   options.contextAttributes.depth = true;
   options.sceneSettings.push(function (gl) {
     gl.clearDepth(option.a);
@@ -736,7 +736,7 @@ var _WebGL_enableDepth = F2(function (options, option) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableStencil = F2(function (options, option) {
+var _WebGLFix_enableStencil = F2(function (options, option) {
   options.contextAttributes.stencil = true;
   options.sceneSettings.push(function (gl) {
     gl.clearStencil(option.a);
@@ -744,24 +744,24 @@ var _WebGL_enableStencil = F2(function (options, option) {
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableAntialias = F2(function (options, option) {
+var _WebGLFix_enableAntialias = F2(function (options, option) {
   options.contextAttributes.antialias = true;
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enableClearColor = F2(function (options, option) {
+var _WebGLFix_enableClearColor = F2(function (options, option) {
   options.sceneSettings.push(function (gl) {
     gl.clearColor(option.a, option.b, option.c, option.d);
   });
 });
 
 // eslint-disable-next-line no-unused-vars
-var _WebGL_enablePreserveDrawingBuffer = F2(function (options, option) {
+var _WebGLFix_enablePreserveDrawingBuffer = F2(function (options, option) {
   options.contextAttributes.preserveDrawingBuffer = true;
 });
 
 /**
- *  Creates canvas and schedules initial _WebGL_drawGL
+ *  Creates canvas and schedules initial _WebGLFix_drawGL
  *  @param {Object} model
  *  @param {Object} model.__cache that may contain the following properties:
            gl, shaders, programs, buffers, textures
@@ -769,7 +769,7 @@ var _WebGL_enablePreserveDrawingBuffer = F2(function (options, option) {
  *  @param {List<Entity>} model.__entities list of entities coming from Elm
  *  @return {HTMLElement} <canvas> if WebGL is supported, otherwise a <div>
  */
-function _WebGL_render(model) {
+function _WebGLFix_render(model) {
   var options = {
     contextAttributes: {
       alpha: false,
@@ -782,7 +782,7 @@ function _WebGL_render(model) {
     sceneSettings: []
   };
 
-  _WebGL_listEach(function (option) {
+  _WebGLFix_listEach(function (option) {
     return A2(__WI_enableOption, options, option);
   }, model.__options);
 
@@ -829,8 +829,8 @@ function _WebGL_render(model) {
     // Render for the first time.
     // This has to be done in animation frame,
     // because the canvas is not in the DOM yet
-    _WebGL_rAF(function () {
-      return A2(_WebGL_drawGL, model, canvas);
+    _WebGLFix_rAF(function () {
+      return A2(_WebGLFix_drawGL, model, canvas);
     });
 
   } else {
@@ -841,7 +841,7 @@ function _WebGL_render(model) {
   return canvas;
 }
 
-function _WebGL_diff(oldModel, newModel) {
+function _WebGLFix_diff(oldModel, newModel) {
   newModel.__cache = oldModel.__cache;
-  return _WebGL_drawGL(newModel);
+  return _WebGLFix_drawGL(newModel);
 }
