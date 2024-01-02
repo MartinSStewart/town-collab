@@ -344,10 +344,10 @@ unsafeLoad :
     -> Format
     -> Bytes
     -> Texture
-unsafeLoad { magnify, minify, horizontalWrap, verticalWrap, flipY } ( w, h ) (Format format _) b =
+unsafeLoad { magnify, minify, horizontalWrap, verticalWrap, flipY, premultiplyAlpha } ( w, h ) (Format format _) b =
     let
         expand (Resize mag) (Resize min) (Wrap hor) (Wrap vert) =
-            Elm.Kernel.TextureFix.loadBytes mag min hor vert flipY w h format b
+            Elm.Kernel.TextureFix.loadBytes mag min hor vert flipY w h ( format, premultiplyAlpha ) b
     in
     expand magnify minify horizontalWrap verticalWrap
 
