@@ -7,6 +7,7 @@ module Effect.WebGL.Texture exposing
     , Bigger, Smaller
     , Wrap, repeat, clampToEdge, mirroredRepeat
     , nonPowerOfTwoOptions
+    , alpha, loadBytesWith, luminance, luminanceAlpha, rgb, rgba
     )
 
 {-|
@@ -41,6 +42,7 @@ module Effect.WebGL.Texture exposing
 
 -}
 
+import Bytes exposing (Bytes)
 import Effect.Command exposing (FrontendOnly)
 import Effect.Internal
 import Effect.Task exposing (Task)
@@ -333,3 +335,97 @@ size texture =
 
         MockTexture width height ->
             ( width, height )
+
+
+loadBytesWith : Options -> ( Int, Int ) -> Format -> Bytes -> Result Error Texture
+loadBytesWith options textureSize format bytes =
+    let
+        convertWrap wrap =
+            case wrap of
+                Effect.Internal.Repeat ->
+                    WebGLFix.Texture.repeat
+
+                Effect.Internal.ClampToEdge ->
+                    WebGLFix.Texture.clampToEdge
+
+                Effect.Internal.MirroredRepeat ->
+                    WebGLFix.Texture.mirroredRepeat
+
+        result : Result WebGLFix.Texture.Error WebGLFix.Texture.Texture
+        result =
+            WebGLFix.Texture.loadBytesWith
+                { magnify =
+                    case options.magnify of
+                        Effect.Internal.Linear ->
+                            WebGLFix.Texture.linear
+
+                        _ ->
+                            WebGLFix.Texture.nearest
+                , minify =
+                    case options.minify of
+                        Effect.Internal.Linear ->
+                            WebGLFix.Texture.linear
+
+                        Effect.Internal.Nearest ->
+                            WebGLFix.Texture.nearest
+
+                        Effect.Internal.NearestMipmapNearest ->
+                            WebGLFix.Texture.nearestMipmapNearest
+
+                        Effect.Internal.LinearMipmapNearest ->
+                            WebGLFix.Texture.linearMipmapNearest
+
+                        Effect.Internal.NearestMipmapLinear ->
+                            WebGLFix.Texture.nearestMipmapLinear
+
+                        Effect.Internal.LinearMipmapLinear ->
+                            WebGLFix.Texture.linearMipmapLinear
+                , horizontalWrap = convertWrap options.horizontalWrap
+                , verticalWrap = convertWrap options.verticalWrap
+                , flipY = options.flipY
+                , premultiplyAlpha = options.premultiplyAlpha
+                }
+                textureSize
+                format
+                bytes
+    in
+    case result of
+        Ok texture ->
+            RealTexture texture |> Ok
+
+        Err error ->
+            case error of
+                WebGLFix.Texture.LoadError ->
+                    Err LoadError
+
+                WebGLFix.Texture.SizeError w h ->
+                    SizeError w h |> Err
+
+
+type alias Format =
+    WebGLFix.Texture.Format
+
+
+rgb : WebGLFix.Texture.Format
+rgb =
+    WebGLFix.Texture.rgb
+
+
+rgba : WebGLFix.Texture.Format
+rgba =
+    WebGLFix.Texture.rgba
+
+
+luminanceAlpha : WebGLFix.Texture.Format
+luminanceAlpha =
+    WebGLFix.Texture.luminanceAlpha
+
+
+luminance : WebGLFix.Texture.Format
+luminance =
+    WebGLFix.Texture.luminance
+
+
+alpha : WebGLFix.Texture.Format
+alpha =
+    WebGLFix.Texture.alpha

@@ -480,7 +480,6 @@ type FrontendMsg_
     | TextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | LightsTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | DepthTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
-    | SimplexLookupTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainLightsTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainDepthTextureLoaded (Result Effect.WebGL.Texture.Error Texture)

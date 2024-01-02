@@ -9,6 +9,8 @@ import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
+import Bytes exposing (Bytes, Endianness(..))
+import Bytes.Encode
 import Change exposing (AreTrainsAndAnimalsDisabled(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
@@ -559,7 +561,13 @@ init url key =
         , texture = Nothing
         , lightsTexture = Nothing
         , depthTexture = Nothing
-        , simplexNoiseLookup = Nothing
+        , simplexNoiseLookup =
+            case loadSimplexTexture of
+                Ok texture ->
+                    Just texture
+
+                Err _ ->
+                    Nothing
         , localModel = LoadingLocalModel []
         , hasCmdKey = False
         }
@@ -602,13 +610,12 @@ init url key =
             }
             "/depth.png"
             |> Effect.Task.attempt DepthTextureLoaded
-        , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
         ]
     , Audio.cmdNone
     )
 
 
-loadSimplexTexture : Effect.Task.Task FrontendOnly Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture
+loadSimplexTexture : Result Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture
 loadSimplexTexture =
     let
         table =
@@ -619,8 +626,18 @@ loadSimplexTexture =
         grad3 =
             [ 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1 ]
                 |> List.map (\a -> a + 1)
+
+        image : Bytes
+        image =
+            [ Array.toList table.perm ++ List.repeat (512 - Array.length table.perm) 0
+            , Array.toList table.permMod12 ++ List.repeat (512 - Array.length table.permMod12) 0
+            , grad3 ++ List.repeat (512 - List.length grad3) 0
+            ]
+                |> List.concatMap (List.map (Bytes.Encode.signedInt16 BE))
+                |> Bytes.Encode.sequence
+                |> Bytes.Encode.encode
     in
-    Effect.WebGL.Texture.loadWith
+    Effect.WebGL.Texture.loadBytesWith
         { magnify = Effect.WebGL.Texture.nearest
         , minify = Effect.WebGL.Texture.nearest
         , horizontalWrap = Effect.WebGL.Texture.clampToEdge
@@ -628,13 +645,9 @@ loadSimplexTexture =
         , flipY = False
         , premultiplyAlpha = False
         }
-        (Image.fromList2d
-            [ Array.toList table.perm
-            , Array.toList table.permMod12
-            , grad3 ++ List.repeat (512 - List.length grad3) 0
-            ]
-            |> Image.toPngUrl
-        )
+        ( 512, 3 )
+        Effect.WebGL.Texture.luminanceAlpha
+        image
 
 
 update : AudioData -> FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
@@ -763,9 +776,6 @@ updateLoaded audioData msg model =
             ( model, Command.none )
 
         LightsTextureLoaded _ ->
-            ( model, Command.none )
-
-        SimplexLookupTextureLoaded _ ->
             ( model, Command.none )
 
         KeyMsg keyMsg ->

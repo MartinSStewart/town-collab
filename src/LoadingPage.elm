@@ -134,14 +134,6 @@ update msg loadingModel =
                 Err _ ->
                     ( Loading loadingModel, Command.none, Audio.cmdNone )
 
-        SimplexLookupTextureLoaded result ->
-            case result of
-                Ok texture ->
-                    ( Loading { loadingModel | simplexNoiseLookup = Just texture }, Command.none, Audio.cmdNone )
-
-                Err _ ->
-                    ( Loading loadingModel, Command.none, Audio.cmdNone )
-
         MouseMove mousePosition ->
             ( Loading { loadingModel | mousePosition = mousePosition }, Command.none, Audio.cmdNone )
 

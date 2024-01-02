@@ -1,6 +1,6 @@
 module WebGLFix.Texture exposing
     ( Texture, load, Error(..), size
-    , loadWith, Options, defaultOptions
+    , loadWith, Options, defaultOptions, loadBytesWith, Format, rgb, rgba, luminanceAlpha, luminance, alpha
     , Resize, linear, nearest
     , nearestMipmapLinear, nearestMipmapNearest
     , linearMipmapNearest, linearMipmapLinear
@@ -19,7 +19,7 @@ module WebGLFix.Texture exposing
 
 # Custom Loading
 
-@docs loadWith, Options, defaultOptions
+@docs loadWith, Options, defaultOptions, loadBytesWith, Format, rgb, rgba, luminanceAlpha, luminance, alpha
 
 
 ## Resizing
@@ -41,6 +41,8 @@ module WebGLFix.Texture exposing
 
 -}
 
+import Bitwise
+import Bytes exposing (Bytes)
 import Elm.Kernel.TextureFix
 import Task exposing (Task)
 import WebGL.Texture
@@ -296,3 +298,108 @@ or other times you may want to use only a potion of a texture image.
 size : Texture -> ( Int, Int )
 size =
     Elm.Kernel.TextureFix.size
+
+
+{-| Building [`Texture`](#Texture) from bytes
+
+  - [`Options`](#Options) - same as for [`loadWith`](#loadWith)
+  - `(width, height)` - dimensions of new created texture
+  - [`Format`](#Format) - pixel format in bytes
+  - Bytes - encoded pixels, where `Bytes.width` > `width` \* `height` \* `Bytes per pixe`or you get `SizeError`
+    Do not generate texture in `view`, [read more about this here](https://package.elm-lang.org/packages/elm-explorations/webgl/latest#making-the-most-of-the-gpu).
+
+-}
+loadBytesWith :
+    Options
+    -> ( Int, Int )
+    -> Format
+    -> Bytes
+    -> Result Error Texture
+loadBytesWith ({ magnify, minify, horizontalWrap, verticalWrap, flipY } as opt) ( w, h ) ((Format _ bytesPerPixel) as format) b =
+    let
+        isMipmap =
+            minify /= nearest && minify /= linear
+
+        widthPowerOfTwo =
+            Bitwise.and (w - 1) w == 0
+
+        heightPowerOfTwo =
+            Bitwise.and (h - 1) h == 0
+
+        isSizeValid =
+            (widthPowerOfTwo && heightPowerOfTwo) || (not isMipmap && horizontalWrap == clampToEdge && verticalWrap == clampToEdge)
+    in
+    if w > 0 && h > 0 && isSizeValid && Bytes.width b >= w * h * bytesPerPixel then
+        Ok (unsafeLoad opt ( w, h ) format b)
+
+    else
+        Err (SizeError w h)
+
+
+{-| It is intended specifically for library writers who want to create custom texture loaders.
+-}
+unsafeLoad :
+    Options
+    -> ( Int, Int )
+    -> Format
+    -> Bytes
+    -> Texture
+unsafeLoad { magnify, minify, horizontalWrap, verticalWrap, flipY } ( w, h ) (Format format _) b =
+    let
+        expand (Resize mag) (Resize min) (Wrap hor) (Wrap vert) =
+            Elm.Kernel.TextureFix.loadBytes mag min hor vert flipY w h format b
+    in
+    expand magnify minify horizontalWrap verticalWrap
+
+
+{-| How to read bytes into pixel
+
+
+## | Format | Channels | Bytes per pixel |
+
+| rgba | 4 | 4 |
+| rgb | 3 | 3 |
+| luminanceAlpha | 2 | 2 |
+| luminance | 1 | 1 |
+
+
+## | alpha | 1 | 1 |
+
+-}
+type Format
+    = Format Int Int
+
+
+{-| Single pixel is 4 bytes long and have 4 channels
+-}
+rgba : Format
+rgba =
+    Format 6408 4
+
+
+{-| Single pixel is 3 bytes long and have 3 channels
+-}
+rgb : Format
+rgb =
+    Format 6407 3
+
+
+{-| Single pixel is 2 bytes long and have 2 channels
+-}
+luminanceAlpha : Format
+luminanceAlpha =
+    Format 6410 2
+
+
+{-| Single pixel is 1 bytes long and have 1 channels
+-}
+luminance : Format
+luminance =
+    Format 6409 1
+
+
+{-| Single pixel is 1 bytes long and have 1 channels
+-}
+alpha : Format
+alpha =
+    Format 6406 1
