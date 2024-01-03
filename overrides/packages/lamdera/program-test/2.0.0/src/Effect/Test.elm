@@ -39,11 +39,13 @@ import Effect.Internal exposing (Command(..), File, NavigationKey(..), Task(..))
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Snapshot exposing (Snapshot)
 import Effect.Subscription exposing (Subscription)
+import Effect.WebGL.Texture
 import Expect exposing (Expectation)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Http
+import Image
 import Json.Decode
 import Json.Encode
 import List.Nonempty exposing (Nonempty)
@@ -59,6 +61,7 @@ import Test.Html.Selector
 import Test.Runner
 import Time
 import Url exposing (Url)
+import WebGL.Texture
 import WebGLFix.Texture
 
 
@@ -1992,8 +1995,28 @@ runTask maybeClientId frontendApp state task =
         SetViewportOf htmlId _ _ function ->
             getDomTask frontendApp maybeClientId state htmlId function ()
 
-        LoadTexture options _ function ->
+        LoadTexture options url function ->
             let
+                response : Effect.Http.Response Bytes
+                response =
+                    state.handleHttpRequest
+                        { currentRequest =
+                            { requestedBy =
+                                case maybeClientId of
+                                    Just clientId ->
+                                        RequestedByFrontend clientId
+
+                                    Nothing ->
+                                        RequestedByBackend
+                            , method = "GET"
+                            , url = url
+                            , body = EmptyBody
+                            , headers = []
+                            }
+                        , pastRequests = state.httpRequests
+                        }
+
+                convertWrap : Effect.Internal.Wrap -> WebGLFix.Texture.Wrap
                 convertWrap wrap =
                     case wrap of
                         Effect.Internal.Repeat ->
@@ -2005,45 +2028,65 @@ runTask maybeClientId frontendApp state task =
                         Effect.Internal.MirroredRepeat ->
                             WebGLFix.Texture.mirroredRepeat
             in
-            WebGLFix.Texture.loadBytesWith
-                { magnify =
-                    case options.magnify of
-                        Effect.Internal.Linear ->
-                            WebGLFix.Texture.linear
+            (case response of
+                Effect.Http.GoodStatus_ _ bytes ->
+                    case Image.decode bytes of
+                        Just image ->
+                            WebGLFix.Texture.loadBytesWith
+                                { magnify =
+                                    case options.magnify of
+                                        Effect.Internal.Linear ->
+                                            WebGLFix.Texture.linear
 
-                        _ ->
-                            WebGLFix.Texture.nearest
-                , minify =
-                    case options.minify of
-                        Effect.Internal.Linear ->
-                            WebGLFix.Texture.linear
+                                        _ ->
+                                            WebGLFix.Texture.nearest
+                                , minify =
+                                    case options.minify of
+                                        Effect.Internal.Linear ->
+                                            WebGLFix.Texture.linear
 
-                        Effect.Internal.Nearest ->
-                            WebGLFix.Texture.nearest
+                                        Effect.Internal.Nearest ->
+                                            WebGLFix.Texture.nearest
 
-                        Effect.Internal.NearestMipmapNearest ->
-                            WebGLFix.Texture.nearestMipmapNearest
+                                        Effect.Internal.NearestMipmapNearest ->
+                                            WebGLFix.Texture.nearestMipmapNearest
 
-                        Effect.Internal.LinearMipmapNearest ->
-                            WebGLFix.Texture.linearMipmapNearest
+                                        Effect.Internal.LinearMipmapNearest ->
+                                            WebGLFix.Texture.linearMipmapNearest
 
-                        Effect.Internal.NearestMipmapLinear ->
-                            WebGLFix.Texture.nearestMipmapLinear
+                                        Effect.Internal.NearestMipmapLinear ->
+                                            WebGLFix.Texture.nearestMipmapLinear
 
-                        Effect.Internal.LinearMipmapLinear ->
-                            WebGLFix.Texture.linearMipmapLinear
-                , horizontalWrap = convertWrap options.horizontalWrap
-                , verticalWrap = convertWrap options.verticalWrap
-                , flipY = options.flipY
-                , premultiplyAlpha = options.premultiplyAlpha
-                }
-                ( 64, 64 )
-                WebGLFix.Texture.rgba
-                (List.range 1 (64 * 64)
-                    |> List.map (Bytes.Encode.signedInt32 BE)
-                    |> Bytes.Encode.sequence
-                    |> Bytes.Encode.encode
-                )
+                                        Effect.Internal.LinearMipmapLinear ->
+                                            WebGLFix.Texture.linearMipmapLinear
+                                , horizontalWrap = convertWrap options.horizontalWrap
+                                , verticalWrap = convertWrap options.verticalWrap
+                                , flipY = options.flipY
+                                , premultiplyAlpha = options.premultiplyAlpha
+                                }
+                                (Image.dimensions image |> (\{ width, height } -> ( width, height )))
+                                WebGLFix.Texture.rgba
+                                (Image.toList image
+                                    |> List.map (Bytes.Encode.unsignedInt32 BE)
+                                    |> Bytes.Encode.sequence
+                                    |> Bytes.Encode.encode
+                                )
+
+                        Nothing ->
+                            Err WebGLFix.Texture.LoadError
+
+                Effect.Http.BadUrl_ _ ->
+                    Err WebGLFix.Texture.LoadError
+
+                Effect.Http.Timeout_ ->
+                    Err WebGLFix.Texture.LoadError
+
+                Effect.Http.NetworkError_ ->
+                    Err WebGLFix.Texture.LoadError
+
+                Effect.Http.BadStatus_ _ _ ->
+                    Err WebGLFix.Texture.LoadError
+            )
                 |> function
                 |> runTask maybeClientId frontendApp state
 
