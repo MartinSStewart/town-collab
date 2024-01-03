@@ -1,7 +1,7 @@
 module Keyboard exposing
     ( Msg, subscriptions, update
     , updateWithParser, KeyChange(..), updateWithKeyChange
-    , RawKey, KeyParser
+    , RawKey(..), KeyParser
     , anyKeyUpper, anyKeyOriginal, characterKeyUpper, characterKeyOriginal, modifierKey, whitespaceKey, navigationKey, editingKey, functionKey, phoneKey, mediaKey
     , oneOf
     , downs, ups

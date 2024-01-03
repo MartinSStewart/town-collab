@@ -4,6 +4,7 @@ import AdminPage
 import Animal
 import Array
 import AssocList
+import AssocSet
 import Audio exposing (Audio, AudioCmd, AudioData)
 import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
@@ -776,57 +777,66 @@ updateLoaded audioData msg model =
         LightsTextureLoaded _ ->
             ( model, Command.none )
 
-        KeyMsg keyMsg ->
-            ( { model | pressedKeys = Keyboard.update keyMsg model.pressedKeys }, Command.none )
+        KeyUp keyMsg ->
+            case Keyboard.anyKeyOriginal keyMsg of
+                Just key ->
+                    ( { model | pressedKeys = AssocSet.remove key model.pressedKeys }, Command.none )
+
+                Nothing ->
+                    ( model, Command.none )
 
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
-                    case model.page of
+                    let
+                        model2 =
+                            { model | pressedKeys = AssocSet.insert key model.pressedKeys }
+                    in
+                    case model2.page of
                         MailPage mailEditor ->
-                            case MailEditor.handleKeyDown model.time (LocalGrid.ctrlOrMeta model) key mailEditor of
+                            case MailEditor.handleKeyDown model2.time (LocalGrid.ctrlOrMeta model2) key mailEditor of
                                 Just ( newMailEditor, outMsg ) ->
-                                    { model
+                                    { model2
                                         | page = MailPage newMailEditor
-                                        , lastMailEditorToggle = model.lastMailEditorToggle
+                                        , lastMailEditorToggle = model2.lastMailEditorToggle
                                     }
                                         |> handleMailEditorOutMsg outMsg
 
                                 Nothing ->
-                                    ( { model
+                                    ( { model2
                                         | page = WorldPage LoadingPage.initWorldPage
-                                        , lastMailEditorToggle = Just model.time
+                                        , lastMailEditorToggle = Just model2.time
                                       }
                                     , Command.none
                                     )
 
                         _ ->
-                            case ( model.focus, key ) of
+                            case ( model2.focus, key ) of
                                 ( _, Keyboard.Tab ) ->
                                     ( setFocus
-                                        (if LocalGrid.keyDown Keyboard.Shift model then
-                                            previousFocus model
+                                        (if LocalGrid.keyDown Keyboard.Shift model2 then
+                                            previousFocus model2
 
                                          else
-                                            nextFocus model
+                                            nextFocus model2
                                         )
-                                        model
+                                        model2
                                     , Command.none
                                     )
 
                                 ( _, Keyboard.F1 ) ->
-                                    ( { model | hideUi = not model.hideUi }, Command.none )
+                                    ( { model2 | hideUi = not model2.hideUi }, Command.none )
 
                                 ( Just id, _ ) ->
-                                    case model.currentTool of
+                                    case model2.currentTool of
                                         TextTool (Just _) ->
-                                            keyMsgCanvasUpdate audioData rawKey key model
+                                            keyMsgCanvasUpdate audioData rawKey key model2
 
                                         _ ->
-                                            uiUpdate audioData id (Ui.KeyDown rawKey key) model
+                                            uiUpdate audioData id (Ui.KeyDown rawKey key) model2
 
                                 _ ->
-                                    keyMsgCanvasUpdate audioData rawKey key model
+                                    keyMsgCanvasUpdate audioData rawKey key model2
 
                 Nothing ->
                     ( model, Command.none )
@@ -1188,14 +1198,14 @@ updateLoaded audioData msg model =
                 newViewPoint : Point2d WorldUnit WorldUnit
                 newViewPoint =
                     Point2d.translateBy
-                        (Keyboard.Arrows.arrows model.pressedKeys
+                        (Keyboard.Arrows.arrows (AssocSet.toList model.pressedKeys)
                             |> (\{ x, y } -> Vector2d.unsafe { x = toFloat x, y = toFloat -y })
                         )
                         oldViewPoint
 
                 movedViewWithArrowKeys : Bool
                 movedViewWithArrowKeys =
-                    canMoveWithArrowKeys && Keyboard.Arrows.arrows model.pressedKeys /= { x = 0, y = 0 }
+                    canMoveWithArrowKeys && Keyboard.Arrows.arrows (AssocSet.toList model.pressedKeys) /= { x = 0, y = 0 }
 
                 canMoveWithArrowKeys : Bool
                 canMoveWithArrowKeys =
@@ -1207,7 +1217,7 @@ updateLoaded audioData msg model =
                             case model.focus of
                                 Just uiHover ->
                                     case Ui.findInput uiHover model.ui of
-                                        Just Ui.TextInputType ->
+                                        Just (Ui.TextInputType _) ->
                                             False
 
                                         Just (Ui.ButtonType _) ->
@@ -1267,6 +1277,11 @@ updateLoaded audioData msg model =
                         _ ->
                             model2
 
+                --_ =
+                --    Debug.log "frontend"
+                --        ( Duration.from model.time time |> Duration.inSeconds
+                --        , IdDict.values model2.trains |> List.map (Train.trainPosition time)
+                --        )
                 model4 =
                     LoadingPage.updateMeshes model3
 
@@ -1304,7 +1319,7 @@ updateLoaded audioData msg model =
             ( { model | sounds = AssocList.insert sound result model.sounds }, Command.none )
 
         VisibilityChanged ->
-            ( LoadingPage.setCurrentTool HandToolButton { model | pressedKeys = [] }, Command.none )
+            ( LoadingPage.setCurrentTool HandToolButton { model | pressedKeys = AssocSet.empty }, Command.none )
 
         TrainTextureLoaded result ->
             case result of
@@ -1788,7 +1803,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                             )
 
                         _ ->
-                            if List.member Keyboard.Shift model.pressedKeys then
+                            if LocalGrid.keyDown Keyboard.Shift model then
                                 setHokeyForTile rawKey model
 
                             else
@@ -1810,7 +1825,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                             )
 
                         _ ->
-                            if List.member Keyboard.Shift model.pressedKeys then
+                            if LocalGrid.keyDown Keyboard.Shift model then
                                 setHokeyForTile rawKey model
 
                             else
@@ -5352,6 +5367,7 @@ subscriptions _ model =
         , Effect.Browser.Events.onResize (\width height -> WindowResized (Coord.xy width height))
         , Effect.Browser.Events.onAnimationFrame AnimationFrame
         , Keyboard.downs KeyDown
+        , Keyboard.ups KeyUp
         , Ports.readFromClipboardResponse PastedText
         , case model of
             Loading _ ->
@@ -5368,8 +5384,7 @@ subscriptions _ model =
 
             Loaded loaded ->
                 Subscription.batch
-                    [ Subscription.map KeyMsg Keyboard.subscriptions
-                    , Effect.Time.every
+                    [ Effect.Time.every
                         LoadingPage.shortDelayDuration
                         (\time -> Duration.addTo time (PingData.pingOffset loaded) |> ShortIntervalElapsed)
                     , Effect.Browser.Events.onVisibilityChange (\_ -> VisibilityChanged)

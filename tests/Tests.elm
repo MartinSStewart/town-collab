@@ -117,7 +117,7 @@ tests =
                             , path = Tile.RailPathHorizontal { offsetX = 0, offsetY = 0, length = 1 }
                             , previousPaths = []
                             , t = 0.5
-                            , speed = Quantity Train.defaultMaxSpeed
+                            , speed = Train.stoppedSpeed
                             , home = Coord.xy -5 -5
                             , homePath = Tile.trainHouseLeftRailPath
                             , isStuckOrDerailed = Train.IsNotStuckOrDerailed
@@ -139,19 +139,27 @@ tests =
                             |> IdDict.get (Id.fromInt 0)
                             |> Maybe.withDefault train
 
-                    trainA : Point2d WorldUnit WorldUnit
+                    trainA : Train
                     trainA =
                         List.range 0 61
                             |> List.foldl (\index a -> moveTrainBy (index * 16) ((index + 1) * 16) a) train
-                            |> Train.trainPosition endTime
 
-                    trainB : Point2d WorldUnit WorldUnit
+                    trainB : Train
                     trainB =
-                        moveTrainBy 0 (Time.posixToMillis endTime) train |> Train.trainPosition endTime
+                        moveTrainBy 0 (Time.posixToMillis endTime) train
                 in
-                Point2d.distanceFrom trainA trainB
-                    |> Quantity.unwrap
-                    |> Expect.lessThan 0.0001
+                Expect.all
+                    [ \_ ->
+                        Point2d.distanceFrom (Train.trainPosition endTime trainA) (Train.trainPosition endTime trainB)
+                            |> Quantity.unwrap
+                            |> Expect.lessThan 0.0001
+                    , \_ ->
+                        Quantity.difference (Train.speed endTime trainA) (Train.speed endTime trainB)
+                            |> Quantity.unwrap
+                            |> abs
+                            |> Expect.lessThan 0.0001
+                    ]
+                    ()
         , test "Add house overlaps neighbor" <|
             \_ ->
                 let

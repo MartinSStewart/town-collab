@@ -31,6 +31,7 @@ module LoadingPage exposing
 import AdminPage
 import Animal exposing (Animal)
 import AssocList
+import AssocSet
 import Audio exposing (AudioCmd)
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds exposing (Bounds)
@@ -93,6 +94,9 @@ update :
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
 update msg loadingModel =
     case msg of
+        ShortIntervalElapsed time ->
+            ( Loading { loadingModel | time = Just time }, Command.none, Audio.cmdNone )
+
         WindowResized windowSize ->
             windowResizedUpdate windowSize loadingModel |> (\( a, b ) -> ( Loading a, b, Audio.cmdNone ))
 
@@ -246,7 +250,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
         previousUpdateMeshData : UpdateMeshesData
         previousUpdateMeshData =
             { localModel = loadedLocalModel.localModel
-            , pressedKeys = []
+            , pressedKeys = AssocSet.empty
             , currentTool = currentTool2
             , mouseLeft = mouseLeft
             , mouseMiddle = mouseMiddle
@@ -274,7 +278,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , trainTexture = Nothing
             , trainLightsTexture = Nothing
             , trainDepthTexture = Nothing
-            , pressedKeys = []
+            , pressedKeys = AssocSet.empty
             , windowSize = loading.windowSize
             , cssWindowSize = loading.cssWindowSize
             , cssCanvasSize = loading.cssCanvasSize

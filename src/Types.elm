@@ -40,6 +40,7 @@ import AdminPage
 import Animal exposing (Animal)
 import Array exposing (Array)
 import AssocList
+import AssocSet
 import Audio
 import Bounds exposing (Bounds)
 import Browser
@@ -166,7 +167,7 @@ type alias FrontendLoaded =
     , trainTexture : Maybe Texture
     , trainLightsTexture : Maybe Texture
     , trainDepthTexture : Maybe Texture
-    , pressedKeys : List Keyboard.Key
+    , pressedKeys : AssocSet.Set Keyboard.Key
     , windowSize : Coord Pixels
     , cssWindowSize : Coord CssPixels
     , cssCanvasSize : Coord CssPixels
@@ -250,7 +251,7 @@ type alias WorldPage2 =
 
 type alias UpdateMeshesData =
     { localModel : LocalModel Change LocalGrid
-    , pressedKeys : List Keyboard.Key
+    , pressedKeys : AssocSet.Set Keyboard.Key
     , currentTool : Tool
     , mouseLeft : MouseButtonState
     , windowSize : Coord Pixels
@@ -483,7 +484,7 @@ type FrontendMsg_
     | TrainTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainLightsTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
     | TrainDepthTextureLoaded (Result Effect.WebGL.Texture.Error Texture)
-    | KeyMsg Keyboard.Msg
+    | KeyUp Keyboard.RawKey
     | KeyDown Keyboard.RawKey
     | WindowResized (Coord CssPixels)
     | GotDevicePixelRatio Float

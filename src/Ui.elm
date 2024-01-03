@@ -1075,8 +1075,8 @@ columnSize data children =
 
 
 type InputType id
-    = ButtonType { data : ButtonData id, position : Coord Pixels }
-    | TextInputType
+    = ButtonType { data : ButtonData id, position : Coord Pixels, size : Coord Pixels }
+    | TextInputType { position : Coord Pixels, size : Coord Pixels }
 
 
 findInput : id -> Element id -> Maybe (InputType id)
@@ -1092,21 +1092,29 @@ findInputHelper id position element =
 
         TextInput data ->
             if data.id == id then
-                TextInputType |> Just
+                TextInputType
+                    { position = position
+                    , size = TextInput.size data.textScale (Pixels.pixels data.width)
+                    }
+                    |> Just
 
             else
                 Nothing
 
         TextInputMultiline data ->
             if data.id == id then
-                TextInputType |> Just
+                TextInputType
+                    { position = position
+                    , size = TextInput.size data.textScale (Pixels.pixels data.width)
+                    }
+                    |> Just
 
             else
                 Nothing
 
         Button data _ ->
             if data.id == id then
-                ButtonType { data = data, position = position } |> Just
+                ButtonType { data = data, position = position, size = data.cachedSize } |> Just
 
             else
                 Nothing
