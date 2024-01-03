@@ -30,7 +30,6 @@ module LoadingPage exposing
 
 import AdminPage
 import Animal exposing (Animal)
-import Array
 import AssocList
 import AssocSet
 import Audio exposing (AudioCmd)
@@ -59,7 +58,6 @@ import Html.Events.Extra.Mouse exposing (Button(..))
 import Hyperlink
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
-import Image
 import Keyboard
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
@@ -78,7 +76,6 @@ import Set exposing (Set)
 import Shaders
 import Sound
 import Sprite exposing (Vertex)
-import Terrain
 import TextInput
 import TextInputMultiline
 import Tile exposing (Category(..), Tile(..), TileGroup(..))
@@ -89,7 +86,6 @@ import Types exposing (CssPixels, FrontendLoaded, FrontendLoading, FrontendModel
 import Ui
 import Units exposing (CellUnit, WorldUnit)
 import Vector2d
-import WebGL.Texture
 
 
 update :
@@ -1687,7 +1683,7 @@ loadingCanvasView model =
             ( Just texture, Just lightsTexture, Just depth ) ->
                 let
                     textureSize =
-                        WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                        Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                 in
                 Effect.WebGL.entityWith
                     [ Shaders.blend ]

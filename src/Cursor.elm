@@ -35,7 +35,6 @@ import Point2d exposing (Point2d)
 import Sprite exposing (Vertex)
 import Ui
 import Units exposing (WorldUnit)
-import WebGL
 
 
 type alias Cursor =
@@ -63,14 +62,14 @@ type OtherUsersTool
 
 
 type alias CursorMeshes =
-    { defaultSprite : WebGL.Mesh Vertex
-    , pointerSprite : WebGL.Mesh Vertex
-    , dragScreenSprite : WebGL.Mesh Vertex
-    , pinchSprite : WebGL.Mesh Vertex
-    , eyeDropperSprite : WebGL.Mesh Vertex
-    , eraserSprite : WebGL.Mesh Vertex
-    , textSprite : WebGL.Mesh Vertex
-    , gavelSprite : WebGL.Mesh Vertex
+    { defaultSprite : Effect.WebGL.Mesh Vertex
+    , pointerSprite : Effect.WebGL.Mesh Vertex
+    , dragScreenSprite : Effect.WebGL.Mesh Vertex
+    , pinchSprite : Effect.WebGL.Mesh Vertex
+    , eyeDropperSprite : Effect.WebGL.Mesh Vertex
+    , eraserSprite : Effect.WebGL.Mesh Vertex
+    , textSprite : Effect.WebGL.Mesh Vertex
+    , gavelSprite : Effect.WebGL.Mesh Vertex
     }
 
 
@@ -161,7 +160,7 @@ type CursorSprite
     | GavelSpriteCursor
 
 
-getSpriteMesh : CursorSprite -> CursorMeshes -> WebGL.Mesh Vertex
+getSpriteMesh : CursorSprite -> CursorMeshes -> Effect.WebGL.Mesh Vertex
 getSpriteMesh cursorSprite cursorMeshes =
     case cursorSprite of
         DefaultSpriteCursor ->
@@ -238,7 +237,7 @@ pinchCursorTextureSize =
     Coord.xy 31 20
 
 
-dragScreenCursorMesh : Colors -> WebGL.Mesh Vertex
+dragScreenCursorMesh : Colors -> Effect.WebGL.Mesh Vertex
 dragScreenCursorMesh colors =
     Sprite.spriteWithTwoColors
         colors

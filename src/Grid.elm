@@ -55,6 +55,7 @@ import Dict exposing (Dict)
 import DisplayName
 import Duration
 import Effect.Time
+import Effect.WebGL
 import GridCell exposing (BackendHistory(..), Cell, CellData, FrontendHistory(..))
 import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
@@ -73,7 +74,6 @@ import Tile exposing (RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit, TileLocalUnit, WorldUnit)
 import User exposing (FrontendUser)
 import Vector2d exposing (Vector2d)
-import WebGL
 
 
 type GridData
@@ -588,7 +588,7 @@ foregroundMesh2 :
     -> IdDict UserId FrontendUser
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
-    -> WebGL.Mesh Vertex
+    -> Effect.WebGL.Mesh Vertex
 foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
     List.concatMap
         (\{ position, userId, tile, colors } ->
@@ -751,7 +751,6 @@ getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
             Ground
 
 
-backgroundMesh : Coord CellUnit -> WebGL.Mesh Vertex
 backgroundMesh cellPosition =
     let
         lookup : Array2D TerrainValue
