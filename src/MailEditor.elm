@@ -45,6 +45,7 @@ import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Time
 import Effect.WebGL
+import Effect.WebGL.Texture
 import Flag
 import Frame2d
 import Grid
@@ -67,7 +68,6 @@ import Ui exposing (BorderAndFill(..), UiEvent)
 import Units
 import User exposing (FrontendUser)
 import Vector2d
-import WebGL.Texture
 
 
 type alias ReceivedMail =
@@ -1341,7 +1341,7 @@ backgroundLayer { lights, nightFactor, texture, depth, time } =
         , view = Mat4.makeTranslate3 -1 -1 0 |> Mat4.scale3 2 2 1
         , texture = texture
         , lights = lights
-        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , userId = Shaders.noUserIdSelected
         , time = time
         , night = nightFactor
@@ -1393,7 +1393,7 @@ drawMail { lights, nightFactor, texture, depth, time } mailPosition mailSize2 mo
                     False
 
         textureSize =
-            WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+            Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
     in
     if showHoverImage then
         [ Effect.WebGL.entityWith

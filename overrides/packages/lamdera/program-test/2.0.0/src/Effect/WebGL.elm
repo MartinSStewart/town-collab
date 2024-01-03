@@ -50,8 +50,8 @@ before trying to do too much with just the documentation provided here.
 
 import Html exposing (Attribute, Html)
 import WebGL
+import WebGL.Settings exposing (Setting)
 import WebGLFix
-import WebGLFix.Settings exposing (Setting)
 
 
 {-| Mesh forms geometry from the specified vertices. Each vertex contains a

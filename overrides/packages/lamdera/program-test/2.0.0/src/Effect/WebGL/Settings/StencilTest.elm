@@ -35,8 +35,8 @@ or [OpenGL docs](https://www.opengl.org/sdk/docs/man2/xhtml/glStencilFunc.xml).
 
 -}
 
-import WebGLFix.Settings exposing (Setting)
-import WebGLFix.Settings.StencilTest
+import WebGL.Settings exposing (Setting)
+import WebGL.Settings.StencilTest
 
 
 {-| When you need to draw an intercection of two entities, e.g. a reflection in
@@ -94,7 +94,7 @@ test :
     }
     -> Setting
 test =
-    WebGLFix.Settings.StencilTest.test
+    WebGL.Settings.StencilTest.test
 
 
 {-| The `Test` allows you to define how to compare the reference value
@@ -119,82 +119,82 @@ the pixel will be drawn.
 
 -}
 type alias Test =
-    WebGLFix.Settings.StencilTest.Test
+    WebGL.Settings.StencilTest.Test
 
 
 {-| -}
 always : Test
 always =
-    WebGLFix.Settings.StencilTest.always
+    WebGL.Settings.StencilTest.always
 
 
 {-| -}
 equal : Test
 equal =
-    WebGLFix.Settings.StencilTest.equal
+    WebGL.Settings.StencilTest.equal
 
 
 {-| -}
 never : Test
 never =
-    WebGLFix.Settings.StencilTest.never
+    WebGL.Settings.StencilTest.never
 
 
 {-| -}
 less : Test
 less =
-    WebGLFix.Settings.StencilTest.less
+    WebGL.Settings.StencilTest.less
 
 
 {-| -}
 greater : Test
 greater =
-    WebGLFix.Settings.StencilTest.greater
+    WebGL.Settings.StencilTest.greater
 
 
 {-| -}
 notEqual : Test
 notEqual =
-    WebGLFix.Settings.StencilTest.notEqual
+    WebGL.Settings.StencilTest.notEqual
 
 
 {-| -}
 lessOrEqual : Test
 lessOrEqual =
-    WebGLFix.Settings.StencilTest.lessOrEqual
+    WebGL.Settings.StencilTest.lessOrEqual
 
 
 {-| -}
 greaterOrEqual : Test
 greaterOrEqual =
-    WebGLFix.Settings.StencilTest.greaterOrEqual
+    WebGL.Settings.StencilTest.greaterOrEqual
 
 
 {-| Defines how to update the value in the stencil buffer.
 -}
 type alias Operation =
-    WebGLFix.Settings.StencilTest.Operation
+    WebGL.Settings.StencilTest.Operation
 
 
 {-| Sets the stencil buffer value to `ref` from the stencil test.
 -}
 replace : Operation
 replace =
-    WebGLFix.Settings.StencilTest.replace
+    WebGL.Settings.StencilTest.replace
 
 
 {-| Keeps the current stencil buffer value. Use this as a noop.
 -}
 keep : Operation
 keep =
-    WebGLFix.Settings.StencilTest.keep
+    WebGL.Settings.StencilTest.keep
 
 
 {-| Sets the stencil buffer value to 0.
 -}
 zero : Operation
 zero =
-    WebGLFix.Settings.StencilTest.zero
+    WebGL.Settings.StencilTest.zero
 
 
 {-| Increments the current stencil buffer value. Clamps to the maximum
@@ -202,21 +202,21 @@ representable unsigned value.
 -}
 increment : Operation
 increment =
-    WebGLFix.Settings.StencilTest.increment
+    WebGL.Settings.StencilTest.increment
 
 
 {-| Decrements the current stencil buffer value. Clamps to 0.
 -}
 decrement : Operation
 decrement =
-    WebGLFix.Settings.StencilTest.decrement
+    WebGL.Settings.StencilTest.decrement
 
 
 {-| Bitwise inverts the current stencil buffer value.
 -}
 invert : Operation
 invert =
-    WebGLFix.Settings.StencilTest.invert
+    WebGL.Settings.StencilTest.invert
 
 
 {-| Increments the current stencil buffer value. Wraps stencil buffer value to
@@ -224,7 +224,7 @@ zero when incrementing the maximum representable unsigned value.
 -}
 incrementWrap : Operation
 incrementWrap =
-    WebGLFix.Settings.StencilTest.incrementWrap
+    WebGL.Settings.StencilTest.incrementWrap
 
 
 {-| Decrements the current stencil buffer value.
@@ -233,7 +233,7 @@ value when decrementing a stencil buffer value of zero.
 -}
 decrementWrap : Operation
 decrementWrap =
-    WebGLFix.Settings.StencilTest.decrementWrap
+    WebGL.Settings.StencilTest.decrementWrap
 
 
 {-| Different options for front and back facing polygons.
@@ -244,4 +244,4 @@ testSeparate :
     -> { test : Test, fail : Operation, zfail : Operation, zpass : Operation }
     -> Setting
 testSeparate =
-    WebGLFix.Settings.StencilTest.testSeparate
+    WebGL.Settings.StencilTest.testSeparate

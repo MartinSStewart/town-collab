@@ -21,8 +21,8 @@ or [OpenGL docs](https://www.opengl.org/sdk/docs/man2/xhtml/glDepthFunc.xml).
 
 -}
 
-import WebGLFix.Settings exposing (Setting)
-import WebGLFix.Settings.DepthTest
+import WebGL.Settings exposing (Setting)
+import WebGL.Settings.DepthTest
 
 
 {-| With every pixel, we have to figure out which color to show.
@@ -49,7 +49,7 @@ Requires [`WebGL.depth`](WebGL#depth) option in
 -}
 default : Setting
 default =
-    WebGLFix.Settings.DepthTest.default
+    WebGL.Settings.DepthTest.default
 
 
 {-| When rendering, you have a buffer of pixels. Depth-testing works by
@@ -101,46 +101,46 @@ type alias Options =
 {-| -}
 less : Options -> Setting
 less =
-    WebGLFix.Settings.DepthTest.less
+    WebGL.Settings.DepthTest.less
 
 
 {-| -}
 never : Options -> Setting
 never =
-    WebGLFix.Settings.DepthTest.never
+    WebGL.Settings.DepthTest.never
 
 
 {-| -}
 always : Options -> Setting
 always =
-    WebGLFix.Settings.DepthTest.always
+    WebGL.Settings.DepthTest.always
 
 
 {-| -}
 equal : Options -> Setting
 equal =
-    WebGLFix.Settings.DepthTest.equal
+    WebGL.Settings.DepthTest.equal
 
 
 {-| -}
 greater : Options -> Setting
 greater =
-    WebGLFix.Settings.DepthTest.greater
+    WebGL.Settings.DepthTest.greater
 
 
 {-| -}
 notEqual : Options -> Setting
 notEqual =
-    WebGLFix.Settings.DepthTest.notEqual
+    WebGL.Settings.DepthTest.notEqual
 
 
 {-| -}
 lessOrEqual : Options -> Setting
 lessOrEqual =
-    WebGLFix.Settings.DepthTest.lessOrEqual
+    WebGL.Settings.DepthTest.lessOrEqual
 
 
 {-| -}
 greaterOrEqual : Options -> Setting
 greaterOrEqual =
-    WebGLFix.Settings.DepthTest.greaterOrEqual
+    WebGL.Settings.DepthTest.greaterOrEqual

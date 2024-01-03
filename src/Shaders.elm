@@ -34,6 +34,7 @@ import Effect.WebGL exposing (Shader)
 import Effect.WebGL.Settings exposing (Setting)
 import Effect.WebGL.Settings.Blend as Blend
 import Effect.WebGL.Settings.DepthTest
+import Effect.WebGL.Texture
 import Id exposing (Id, UserId)
 import Math.Matrix4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -45,7 +46,6 @@ import Random
 import Sprite exposing (Vertex)
 import TimeOfDay
 import Units exposing (TerrainUnit)
-import WebGL.Texture
 
 
 type alias InstancedVertex =
@@ -56,9 +56,9 @@ type alias InstancedVertex =
 
 type alias RenderData =
     { nightFactor : Float
-    , texture : WebGL.Texture.Texture
-    , lights : WebGL.Texture.Texture
-    , depth : WebGL.Texture.Texture
+    , texture : Effect.WebGL.Texture.Texture
+    , lights : Effect.WebGL.Texture.Texture
+    , depth : Effect.WebGL.Texture.Texture
     , staticViewMatrix : Mat4
     , viewMatrix : Mat4
     , time : Float
@@ -268,7 +268,7 @@ drawBackground { nightFactor, viewMatrix, texture, lights, depth, time, scissors
                     mesh.background
                     { view = viewMatrix
                     , texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId = noUserIdSelected
                     , time = time
@@ -307,7 +307,7 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
         starsMesh
         { view = staticViewMatrix
         , texture = texture
-        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , color = Vec4.vec4 2 2 2 nightFactor
         , userId = noUserIdSelected
         , time = time
@@ -333,7 +333,7 @@ drawWaterReflection includeSunOrMoon { staticViewMatrix, nightFactor, texture, l
                     )
                     { view = Coord.translateMat4 (TimeOfDay.sunMoonPosition model nightFactor) staticViewMatrix
                     , texture = texture
-                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId = noUserIdSelected
                     , time = time
@@ -608,10 +608,10 @@ fragmentShader :
     Shader
         {}
         { u
-            | texture : WebGL.Texture.Texture
+            | texture : Effect.WebGL.Texture.Texture
             , textureSize : Vec2
-            , lights : WebGL.Texture.Texture
-            , depth : WebGL.Texture.Texture
+            , lights : Effect.WebGL.Texture.Texture
+            , depth : Effect.WebGL.Texture.Texture
             , time : Float
             , color : Vec4
             , night : Float
@@ -845,7 +845,7 @@ void main () {
 }|]
 
 
-worldMapFragmentShader : Shader {} { u | texture : WebGL.Texture.Texture, cellPosition : Vec2 } { vcoord : Vec2 }
+worldMapFragmentShader : Shader {} { u | texture : Effect.WebGL.Texture.Texture, cellPosition : Vec2 } { vcoord : Vec2 }
 worldMapFragmentShader =
     [glsl|
 precision mediump float;

@@ -31,8 +31,8 @@ module Effect.WebGL.Settings.Blend exposing
 
 -}
 
-import WebGLFix.Settings exposing (Setting)
-import WebGLFix.Settings.Blend
+import WebGL.Settings exposing (Setting)
+import WebGL.Settings.Blend
 
 
 {-| Add the color of the current `Renderable` (the source color)
@@ -49,7 +49,7 @@ You can get a feel for all the different blending factors
 -}
 add : Factor -> Factor -> Setting
 add =
-    WebGLFix.Settings.Blend.add
+    WebGL.Settings.Blend.add
 
 
 {-| Similar to [`add`](#add), but it does `(src * factor1) - (dest * factor2)`.
@@ -63,7 +63,7 @@ based on the background.
 -}
 subtract : Factor -> Factor -> Setting
 subtract =
-    WebGLFix.Settings.Blend.subtract
+    WebGL.Settings.Blend.subtract
 
 
 {-| Similar to [`add`](#add), but it does `(dest * factor2) - (src * factor1)`.
@@ -71,78 +71,78 @@ This one is weird.
 -}
 reverseSubtract : Factor -> Factor -> Setting
 reverseSubtract =
-    WebGLFix.Settings.Blend.reverseSubtract
+    WebGL.Settings.Blend.reverseSubtract
 
 
 {-| -}
 type alias Factor =
-    WebGLFix.Settings.Blend.Factor
+    WebGL.Settings.Blend.Factor
 
 
 {-| -}
 zero : Factor
 zero =
-    WebGLFix.Settings.Blend.zero
+    WebGL.Settings.Blend.zero
 
 
 {-| -}
 one : Factor
 one =
-    WebGLFix.Settings.Blend.one
+    WebGL.Settings.Blend.one
 
 
 {-| -}
 srcColor : Factor
 srcColor =
-    WebGLFix.Settings.Blend.srcColor
+    WebGL.Settings.Blend.srcColor
 
 
 {-| -}
 oneMinusSrcColor : Factor
 oneMinusSrcColor =
-    WebGLFix.Settings.Blend.oneMinusSrcColor
+    WebGL.Settings.Blend.oneMinusSrcColor
 
 
 {-| -}
 dstColor : Factor
 dstColor =
-    WebGLFix.Settings.Blend.dstColor
+    WebGL.Settings.Blend.dstColor
 
 
 {-| -}
 oneMinusDstColor : Factor
 oneMinusDstColor =
-    WebGLFix.Settings.Blend.oneMinusDstColor
+    WebGL.Settings.Blend.oneMinusDstColor
 
 
 {-| -}
 srcAlpha : Factor
 srcAlpha =
-    WebGLFix.Settings.Blend.srcAlpha
+    WebGL.Settings.Blend.srcAlpha
 
 
 {-| -}
 oneMinusSrcAlpha : Factor
 oneMinusSrcAlpha =
-    WebGLFix.Settings.Blend.oneMinusSrcAlpha
+    WebGL.Settings.Blend.oneMinusSrcAlpha
 
 
 {-| -}
 dstAlpha : Factor
 dstAlpha =
-    WebGLFix.Settings.Blend.dstAlpha
+    WebGL.Settings.Blend.dstAlpha
 
 
 {-| -}
 oneMinusDstAlpha : Factor
 oneMinusDstAlpha =
-    WebGLFix.Settings.Blend.oneMinusDstAlpha
+    WebGL.Settings.Blend.oneMinusDstAlpha
 
 
 {-| -}
 srcAlphaSaturate : Factor
 srcAlphaSaturate =
-    WebGLFix.Settings.Blend.srcAlphaSaturate
+    WebGL.Settings.Blend.srcAlphaSaturate
 
 
 
@@ -175,7 +175,7 @@ custom :
     }
     -> Setting
 custom =
-    WebGLFix.Settings.Blend.custom
+    WebGL.Settings.Blend.custom
 
 
 {-| A `Blender` mixes the color of the current `Entity` (the source color)
@@ -183,25 +183,25 @@ with whatever is behind it (the destination color).
 You can get a feel for all the options [here](https://threejs.org/examples/webgl_materials_blending_custom.html).
 -}
 type alias Blender =
-    WebGLFix.Settings.Blend.Blender
+    WebGL.Settings.Blend.Blender
 
 
 {-| -}
 customAdd : Factor -> Factor -> Blender
 customAdd =
-    WebGLFix.Settings.Blend.customAdd
+    WebGL.Settings.Blend.customAdd
 
 
 {-| -}
 customSubtract : Factor -> Factor -> Blender
 customSubtract =
-    WebGLFix.Settings.Blend.customSubtract
+    WebGL.Settings.Blend.customSubtract
 
 
 {-| -}
 customReverseSubtract : Factor -> Factor -> Blender
 customReverseSubtract =
-    WebGLFix.Settings.Blend.customReverseSubtract
+    WebGL.Settings.Blend.customReverseSubtract
 
 
 {-| This uses the constant `r`, `g`, `b`, and `a` values
@@ -217,22 +217,22 @@ you cannot create a `Blender`, that has one factor set to
 -}
 constantColor : Factor
 constantColor =
-    WebGLFix.Settings.Blend.constantColor
+    WebGL.Settings.Blend.constantColor
 
 
 {-| -}
 oneMinusConstantColor : Factor
 oneMinusConstantColor =
-    WebGLFix.Settings.Blend.oneMinusConstantColor
+    WebGL.Settings.Blend.oneMinusConstantColor
 
 
 {-| -}
 constantAlpha : Factor
 constantAlpha =
-    WebGLFix.Settings.Blend.constantAlpha
+    WebGL.Settings.Blend.constantAlpha
 
 
 {-| -}
 oneMinusConstantAlpha : Factor
 oneMinusConstantAlpha =
-    WebGLFix.Settings.Blend.oneMinusConstantAlpha
+    WebGL.Settings.Blend.oneMinusConstantAlpha

@@ -44,7 +44,6 @@ import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Hyperlink
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
-import Image
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -86,7 +85,6 @@ import Untrusted
 import Url exposing (Url)
 import Url.Parser
 import Vector2d exposing (Vector2d)
-import WebGL.Texture
 
 
 app :
@@ -4429,7 +4427,7 @@ canvasView audioData model =
 
         textureSize : Vec2
         textureSize =
-            WebGL.Texture.size model.texture |> Coord.tuple |> Coord.toVec2
+            Effect.WebGL.Texture.size model.texture |> Coord.tuple |> Coord.toVec2
     in
     Effect.WebGL.toHtmlWith
         [ Effect.WebGL.alpha False
@@ -4532,7 +4530,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
 
         textureSize : Vec2
         textureSize =
-            WebGL.Texture.size renderData.texture |> Coord.tuple |> Coord.toVec2
+            Effect.WebGL.Texture.size renderData.texture |> Coord.tuple |> Coord.toVec2
 
         viewBounds3 =
             BoundingBox2d.extrema viewBounds_
@@ -4625,7 +4623,7 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
         , texture = texture
         , lights = lights
         , depth = depth
-        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+        , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
         , color = Vec4.vec4 1 1 1 1
         , userId = Shaders.noUserIdSelected
         , time = 0
@@ -4642,7 +4640,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
             LocalGrid.localModel model.localModel
 
         ( textureW, textureH ) =
-            WebGL.Texture.size texture
+            Effect.WebGL.Texture.size texture
     in
     List.filterMap
         (\( animalId, animal ) ->
@@ -4765,7 +4763,7 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } mo
                         , texture = texture
                         , lights = lights
                         , depth = depth
-                        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                        , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
                         , time = time
@@ -4784,7 +4782,7 @@ drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> List Effect.WebGL.
 drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioData model =
     let
         textureSize =
-            WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+            Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
     in
     case
         ( LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
@@ -5146,7 +5144,7 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                             , texture = texture
                             , lights = lights
                             , depth = depth
-                            , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                            , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                             , color = Vec4.vec4 1 1 1 1
                             , userId = Shaders.noUserIdSelected
                             , time = time
@@ -5203,7 +5201,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                                 , texture = texture
                                 , lights = lights
                                 , depth = depth
-                                , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                                , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                                 , color = Vec4.vec4 1 1 1 1
                                 , userId = Shaders.noUserIdSelected
                                 , time = time
@@ -5316,7 +5314,7 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                     , texture = texture
                     , lights = lights
                     , depth = depth
-                    , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                    , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId =
                         case maybeContextMenu of

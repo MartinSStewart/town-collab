@@ -59,6 +59,7 @@ module Ui exposing
 import Bounds
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
+import Effect.WebGL
 import Keyboard
 import List.Extra as List
 import Pixels exposing (Pixels)
@@ -66,7 +67,6 @@ import Quantity exposing (Quantity(..))
 import Sprite exposing (Vertex)
 import TextInput
 import TextInputMultiline
-import WebGL
 
 
 type alias RowColumn =
@@ -838,7 +838,7 @@ hoverRowColumnHelper isRow point elementPosition data children =
         |> .hover
 
 
-view : Maybe id -> Element id -> WebGL.Mesh Vertex
+view : Maybe id -> Element id -> Effect.WebGL.Mesh Vertex
 view focus element2 =
     viewHelper focus Coord.origin [] element2 |> Sprite.toMesh
 

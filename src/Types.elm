@@ -55,6 +55,7 @@ import Effect.File exposing (File)
 import Effect.Http
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Time
+import Effect.WebGL
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
@@ -92,7 +93,6 @@ import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Untrusted)
 import Url exposing (Url)
 import User exposing (FrontendUser, InviteTree)
-import WebGL
 
 
 type alias FrontendModel =
@@ -156,7 +156,7 @@ type alias FrontendLoaded =
     { key : Effect.Browser.Navigation.Key
     , localModel : LocalModel Change LocalGrid
     , trains : IdDict TrainId Train
-    , meshes : Dict RawCellCoord { foreground : WebGL.Mesh Vertex, background : WebGL.Mesh Vertex }
+    , meshes : Dict RawCellCoord { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
     , texture : Texture
@@ -185,14 +185,14 @@ type alias FrontendLoaded =
     , musicVolume : Int
     , soundEffectVolume : Int
     , removedTileParticles : List RemovedTileParticle
-    , debrisMesh : WebGL.Mesh DebrisVertex
+    , debrisMesh : Effect.WebGL.Mesh DebrisVertex
     , lastTrainWhistle : Maybe Effect.Time.Posix
     , lastMailEditorToggle : Maybe Effect.Time.Posix
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix
     , ui : Ui.Element UiHover
-    , uiMesh : WebGL.Mesh Vertex
+    , uiMesh : Effect.WebGL.Mesh Vertex
     , lastHouseClick : Maybe Effect.Time.Posix
     , eventIdCounter : Id EventId
     , pingData : Maybe PingData
@@ -221,7 +221,7 @@ type alias FrontendLoaded =
     , showOnlineUsers : Bool
     , contextMenu : Maybe ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
-    , reportsMesh : WebGL.Mesh Vertex
+    , reportsMesh : Effect.WebGL.Mesh Vertex
     , lastReportTilePlaced : Maybe Effect.Time.Posix
     , lastReportTileRemoved : Maybe Effect.Time.Posix
     , hideUi : Bool

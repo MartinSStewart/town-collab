@@ -32,7 +32,6 @@ import Effect.WebGL
 import List.Nonempty exposing (Nonempty(..))
 import Quantity exposing (Quantity(..))
 import Random
-import WebGL
 
 
 type alias Vertex =
@@ -274,7 +273,7 @@ spriteWithZAndOpacityAndUserId opacityAndUserId primaryColor secondaryColor ( Qu
     ]
 
 
-toMesh : List a -> WebGL.Mesh a
+toMesh : List a -> Effect.WebGL.Mesh a
 toMesh vertices =
     Effect.WebGL.indexedTriangles vertices (getQuadIndices vertices 0 [] |> List.reverse)
 

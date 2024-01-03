@@ -37,9 +37,9 @@ before trying to do too much with just the documentation provided here.
 import Elm.Kernel.WebGLFix
 import Html exposing (Attribute, Html)
 import WebGL
+import WebGL.Settings exposing (Setting)
+import WebGL.Settings.DepthTest as DepthTest
 import WebGLFix.Internal as I
-import WebGLFix.Settings exposing (Setting)
-import WebGLFix.Settings.DepthTest as DepthTest
 
 
 {-| Shaders are programs for running many computations on the GPU in parallel.

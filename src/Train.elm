@@ -42,6 +42,7 @@ import Duration exposing (Duration, Seconds)
 import Effect.Time
 import Effect.WebGL
 import Effect.WebGL.Settings.DepthTest
+import Effect.WebGL.Texture
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, MailId, TrainId, UserId)
@@ -59,7 +60,6 @@ import Shaders exposing (InstancedVertex, RenderData)
 import Sprite exposing (Vertex)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
-import WebGL.Texture
 
 
 type Status
@@ -1268,7 +1268,7 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors } 
             Coord.toTuple trainSize
 
         ( textureWidth, textureHeight ) =
-            WebGL.Texture.size texture
+            Effect.WebGL.Texture.size texture
 
         offsetX =
             sin (100 * trainData.teleportAmount) * min 1 (trainData.teleportAmount * 3)
@@ -1628,7 +1628,7 @@ drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scisso
                         , texture = texture
                         , lights = lights
                         , depth = depth
-                        , textureSize = WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+                        , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                         , color = Vec4.vec4 1 1 1 1
                         , userId = Shaders.noUserIdSelected
                         , time = time
