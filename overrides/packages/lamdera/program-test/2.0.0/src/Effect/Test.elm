@@ -39,7 +39,6 @@ import Effect.Internal exposing (Command(..), File, NavigationKey(..), Task(..))
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Snapshot exposing (Snapshot)
 import Effect.Subscription exposing (Subscription)
-import Effect.WebGL.Texture
 import Expect exposing (Expectation)
 import Html exposing (Html)
 import Html.Attributes
@@ -61,7 +60,6 @@ import Test.Html.Selector
 import Test.Runner
 import Time
 import Url exposing (Url)
-import WebGL.Texture
 import WebGLFix.Texture
 
 
