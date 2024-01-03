@@ -117,7 +117,7 @@ subscriptions model =
                 Duration.minute
 
              else
-                Duration.second
+                Duration.seconds 4
             )
             WorldUpdateTimeElapsed
         , Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
@@ -728,6 +728,12 @@ handleWorldUpdate isProduction oldTime time model =
 
                 TrainsAndAnimalsDisabled ->
                     ( model.animals, [] )
+
+        --_ =
+        --    Debug.log "a"
+        --        ( Duration.from oldTime time |> Duration.inSeconds
+        --        , IdDict.values newTrains |> List.map (Train.trainPosition time)
+        --        )
     in
     ( { model3
         | lastWorldUpdate = Just time

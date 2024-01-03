@@ -98,6 +98,9 @@ update :
     -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
 update msg loadingModel =
     case msg of
+        ShortIntervalElapsed time ->
+            ( Loading { loadingModel | time = Just time }, Command.none, Audio.cmdNone )
+
         WindowResized windowSize ->
             windowResizedUpdate windowSize loadingModel |> (\( a, b ) -> ( Loading a, b, Audio.cmdNone ))
 

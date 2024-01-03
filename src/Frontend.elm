@@ -1219,7 +1219,7 @@ updateLoaded audioData msg model =
                             case model.focus of
                                 Just uiHover ->
                                     case Ui.findInput uiHover model.ui of
-                                        Just Ui.TextInputType ->
+                                        Just (Ui.TextInputType _) ->
                                             False
 
                                         Just (Ui.ButtonType _) ->

@@ -265,6 +265,7 @@ normalView windowSize model hover =
                                 model.loginError
                     )
 
+        maybeHyperlink : Maybe Hyperlink
         maybeHyperlink =
             case hover of
                 TileHover tileHover ->
