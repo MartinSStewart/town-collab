@@ -135,14 +135,6 @@ update msg loadingModel =
                 Err _ ->
                     ( Loading loadingModel, Command.none, Audio.cmdNone )
 
-        SimplexLookupTextureLoaded result ->
-            case result of
-                Ok texture ->
-                    ( Loading { loadingModel | simplexNoiseLookup = Just texture }, Command.none, Audio.cmdNone )
-
-                Err _ ->
-                    ( Loading loadingModel, Command.none, Audio.cmdNone )
-
         MouseMove mousePosition ->
             ( Loading { loadingModel | mousePosition = mousePosition }, Command.none, Audio.cmdNone )
 
@@ -176,7 +168,7 @@ update msg loadingModel =
 
         GotUserAgentPlatform userAgentPlatform ->
             ( Loading { loadingModel | hasCmdKey = String.startsWith "mac" (String.toLower userAgentPlatform) }
-            , Ports.webGlFix
+            , Command.none
             , Audio.cmdNone
             )
 
@@ -187,41 +179,6 @@ update msg loadingModel =
                     , soundEffectVolume = userSettings.soundEffectVolume
                 }
             , Command.none
-            , Audio.cmdNone
-            )
-
-        GotWebGlFix ->
-            ( Loading loadingModel
-            , Command.batch
-                [ Effect.WebGL.Texture.loadWith
-                    { magnify = Effect.WebGL.Texture.nearest
-                    , minify = Effect.WebGL.Texture.nearest
-                    , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-                    , verticalWrap = Effect.WebGL.Texture.clampToEdge
-                    , flipY = False
-                    }
-                    "/texture.png"
-                    |> Effect.Task.attempt TextureLoaded
-                , Effect.WebGL.Texture.loadWith
-                    { magnify = Effect.WebGL.Texture.nearest
-                    , minify = Effect.WebGL.Texture.nearest
-                    , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-                    , verticalWrap = Effect.WebGL.Texture.clampToEdge
-                    , flipY = False
-                    }
-                    "/lights.png"
-                    |> Effect.Task.attempt LightsTextureLoaded
-                , Effect.WebGL.Texture.loadWith
-                    { magnify = Effect.WebGL.Texture.nearest
-                    , minify = Effect.WebGL.Texture.nearest
-                    , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-                    , verticalWrap = Effect.WebGL.Texture.clampToEdge
-                    , flipY = False
-                    }
-                    "/depth.png"
-                    |> Effect.Task.attempt DepthTextureLoaded
-                , Effect.Task.attempt SimplexLookupTextureLoaded loadSimplexTexture
-                ]
             , Audio.cmdNone
             )
 
@@ -439,6 +396,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/trains.png"
             |> Effect.Task.attempt TrainTextureLoaded
@@ -448,6 +406,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/train-lights.png"
             |> Effect.Task.attempt TrainLightsTextureLoaded
@@ -457,6 +416,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , horizontalWrap = Effect.WebGL.Texture.clampToEdge
             , verticalWrap = Effect.WebGL.Texture.clampToEdge
             , flipY = False
+            , premultiplyAlpha = False
             }
             "/train-depth.png"
             |> Effect.Task.attempt TrainDepthTextureLoaded
@@ -1623,34 +1583,6 @@ createReportsMesh localReports adminReports =
         |> Sprite.toMesh
 
 
-loadSimplexTexture : Effect.Task.Task FrontendOnly Effect.WebGL.Texture.Error Texture
-loadSimplexTexture =
-    let
-        table =
-            Terrain.permutationTable
-
-        {- Copied from Simplex.grad3 -}
-        grad3 : List Int
-        grad3 =
-            [ 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1 ]
-                |> List.map (\a -> a + 1)
-    in
-    Effect.WebGL.Texture.loadWith
-        { magnify = Effect.WebGL.Texture.nearest
-        , minify = Effect.WebGL.Texture.nearest
-        , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-        , verticalWrap = Effect.WebGL.Texture.clampToEdge
-        , flipY = False
-        }
-        (Image.fromList2d
-            [ Array.toList table.perm
-            , Array.toList table.permMod12
-            , grad3 ++ List.repeat (512 - List.length grad3) 0
-            ]
-            |> Image.toPngUrl
-        )
-
-
 windowResizedUpdate :
     Coord CssPixels
     -> { b | cssWindowSize : Coord CssPixels, windowSize : Coord Pixels, cssCanvasSize : Coord CssPixels, devicePixelRatio : Float }
@@ -1748,12 +1680,7 @@ loadingCanvasView model =
          ]
             ++ mouseListeners model
         )
-        (case
-            ( Maybe.andThen Effect.WebGL.Texture.unwrap model.texture
-            , Maybe.andThen Effect.WebGL.Texture.unwrap model.lightsTexture
-            , Maybe.andThen Effect.WebGL.Texture.unwrap model.depthTexture
-            )
-         of
+        (case ( model.texture, model.lightsTexture, model.depthTexture ) of
             ( Just texture, Just lightsTexture, Just depth ) ->
                 let
                     textureSize =

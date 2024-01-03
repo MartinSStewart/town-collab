@@ -10,6 +10,8 @@ import Basics.Extra
 import BoundingBox2d exposing (BoundingBox2d)
 import Bounds
 import Browser
+import Bytes exposing (Bytes, Endianness(..))
+import Bytes.Encode
 import Change exposing (AreTrainsAndAnimalsDisabled(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
@@ -43,6 +45,7 @@ import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Hyperlink
 import Id exposing (AnimalId, Id, TrainId, UserId)
 import IdDict exposing (IdDict)
+import Image
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -68,6 +71,7 @@ import Route exposing (PageRoute(..))
 import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData)
 import Sound exposing (Sound(..))
 import Sprite exposing (Vertex)
+import Terrain
 import TextInput exposing (OutMsg(..))
 import TextInputMultiline
 import Tile exposing (Category(..), Tile(..), TileGroup(..))
@@ -558,7 +562,13 @@ init url key =
         , texture = Nothing
         , lightsTexture = Nothing
         , depthTexture = Nothing
-        , simplexNoiseLookup = Nothing
+        , simplexNoiseLookup =
+            case loadSimplexTexture of
+                Ok texture ->
+                    Just texture
+
+                Err _ ->
+                    Nothing
         , localModel = LoadingLocalModel []
         , hasCmdKey = False
         }
@@ -571,9 +581,74 @@ init url key =
         , Effect.Task.perform (\time -> Duration.addTo time (PingData.pingOffset { pingData = Nothing }) |> ShortIntervalElapsed) Effect.Time.now
         , cmd
         , Ports.getLocalStorage
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            , premultiplyAlpha = False
+            }
+            "/texture.png"
+            |> Effect.Task.attempt TextureLoaded
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            , premultiplyAlpha = False
+            }
+            "/lights.png"
+            |> Effect.Task.attempt LightsTextureLoaded
+        , Effect.WebGL.Texture.loadWith
+            { magnify = Effect.WebGL.Texture.nearest
+            , minify = Effect.WebGL.Texture.nearest
+            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+            , verticalWrap = Effect.WebGL.Texture.clampToEdge
+            , flipY = False
+            , premultiplyAlpha = False
+            }
+            "/depth.png"
+            |> Effect.Task.attempt DepthTextureLoaded
         ]
     , Audio.cmdNone
     )
+
+
+loadSimplexTexture : Result Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture
+loadSimplexTexture =
+    let
+        table =
+            Terrain.permutationTable
+
+        {- Copied from Simplex.grad3 -}
+        grad3 : List Int
+        grad3 =
+            [ 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 0, 1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1 ]
+                |> List.map (\a -> a + 1)
+
+        image : Bytes
+        image =
+            [ Array.toList table.perm ++ List.repeat (512 - Array.length table.perm) 0
+            , Array.toList table.permMod12 ++ List.repeat (512 - Array.length table.permMod12) 0
+            , grad3 ++ List.repeat (512 - List.length grad3) 0
+            ]
+                |> List.concatMap (List.map (Bytes.Encode.signedInt16 BE))
+                |> Bytes.Encode.sequence
+                |> Bytes.Encode.encode
+    in
+    Effect.WebGL.Texture.loadBytesWith
+        { magnify = Effect.WebGL.Texture.nearest
+        , minify = Effect.WebGL.Texture.nearest
+        , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+        , verticalWrap = Effect.WebGL.Texture.clampToEdge
+        , flipY = False
+        , premultiplyAlpha = False
+        }
+        ( 512, 3 )
+        Effect.WebGL.Texture.luminanceAlpha
+        image
 
 
 update : AudioData -> FrontendMsg_ -> FrontendModel_ -> ( FrontendModel_, Command FrontendOnly ToBackend FrontendMsg_, AudioCmd FrontendMsg_ )
@@ -702,9 +777,6 @@ updateLoaded audioData msg model =
             ( model, Command.none )
 
         LightsTextureLoaded _ ->
-            ( model, Command.none )
-
-        SimplexLookupTextureLoaded _ ->
             ( model, Command.none )
 
         KeyUp keyMsg ->
@@ -1282,9 +1354,6 @@ updateLoaded audioData msg model =
             ( { model | musicVolume = userSettings.musicVolume, soundEffectVolume = userSettings.soundEffectVolume }
             , Command.none
             )
-
-        GotWebGlFix ->
-            ( model, Command.none )
 
         ImportedMail file ->
             ( model
@@ -4331,152 +4400,142 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
 
 canvasView : AudioData -> FrontendLoaded -> Html FrontendMsg_
 canvasView audioData model =
-    case
-        ( Effect.WebGL.Texture.unwrap model.texture
-        , Effect.WebGL.Texture.unwrap model.lightsTexture
-        , Effect.WebGL.Texture.unwrap model.depthTexture
+    let
+        viewBounds_ : BoundingBox2d WorldUnit WorldUnit
+        viewBounds_ =
+            viewBoundingBox model
+
+        ( windowWidth, windowHeight ) =
+            Coord.toTuple model.windowSize
+
+        ( cssWindowWidth, cssWindowHeight ) =
+            Coord.toTuple model.cssCanvasSize
+
+        { x, y } =
+            Point2d.unwrap (Toolbar.actualViewPoint model)
+
+        hoverAt2 : Hover
+        hoverAt2 =
+            LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
+
+        showMousePointer : { cursorType : CursorType, scale : Int }
+        showMousePointer =
+            cursorSprite hoverAt2 model
+
+        staticViewMatrix =
+            staticMatrix windowWidth windowHeight model.zoomFactor
+
+        renderData : RenderData
+        renderData =
+            { lights = model.lightsTexture
+            , texture = model.texture
+            , depth = model.depthTexture
+            , nightFactor = getNightFactor model
+            , staticViewMatrix = staticViewMatrix
+            , viewMatrix =
+                staticViewMatrix
+                    |> Mat4.translate3
+                        (negate <| toFloat <| round (x * toFloat Units.tileWidth))
+                        (negate <| toFloat <| round (y * toFloat Units.tileHeight))
+                        0
+            , time = shaderTime model
+            , scissors = { left = 0, bottom = 0, width = windowWidth, height = windowHeight }
+            }
+
+        textureSize : Vec2
+        textureSize =
+            WebGL.Texture.size model.texture |> Coord.tuple |> Coord.toVec2
+    in
+    Effect.WebGL.toHtmlWith
+        [ Effect.WebGL.alpha False
+        , Effect.WebGL.clearColor 1 1 1 1
+        , Effect.WebGL.depth 1
+        ]
+        ([ Html.Attributes.width windowWidth
+         , Html.Attributes.height windowHeight
+         , Cursor.htmlAttribute showMousePointer.cursorType
+         , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
+         , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
+         , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
+         , Html.Events.Extra.Wheel.onWheel MouseWheel
+         ]
+            ++ LoadingPage.mouseListeners model
         )
-    of
-        ( Just texture, Just lightsTexture, Just depth ) ->
-            let
-                viewBounds_ : BoundingBox2d WorldUnit WorldUnit
-                viewBounds_ =
-                    viewBoundingBox model
+        (drawWorld True renderData hoverAt2 viewBounds_ model
+            ++ drawTilePlacer renderData audioData model
+            ++ (case model.page of
+                    MailPage _ ->
+                        [ MailEditor.backgroundLayer renderData ]
 
-                ( windowWidth, windowHeight ) =
-                    Coord.toTuple model.windowSize
-
-                ( cssWindowWidth, cssWindowHeight ) =
-                    Coord.toTuple model.cssCanvasSize
-
-                { x, y } =
-                    Point2d.unwrap (Toolbar.actualViewPoint model)
-
-                hoverAt2 : Hover
-                hoverAt2 =
-                    LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
-
-                showMousePointer : { cursorType : CursorType, scale : Int }
-                showMousePointer =
-                    cursorSprite hoverAt2 model
-
-                staticViewMatrix =
-                    staticMatrix windowWidth windowHeight model.zoomFactor
-
-                renderData : RenderData
-                renderData =
-                    { lights = lightsTexture
-                    , texture = texture
-                    , depth = depth
-                    , nightFactor = getNightFactor model
-                    , staticViewMatrix = staticViewMatrix
-                    , viewMatrix =
-                        staticViewMatrix
-                            |> Mat4.translate3
-                                (negate <| toFloat <| round (x * toFloat Units.tileWidth))
-                                (negate <| toFloat <| round (y * toFloat Units.tileHeight))
-                                0
+                    _ ->
+                        []
+               )
+            ++ [ Effect.WebGL.entityWith
+                    [ Shaders.blend ]
+                    Shaders.vertexShader
+                    Shaders.fragmentShader
+                    model.uiMesh
+                    { view =
+                        Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
+                            |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
+                    , texture = model.texture
+                    , lights = model.lightsTexture
+                    , depth = model.depthTexture
+                    , textureSize = textureSize
+                    , color = Vec4.vec4 1 1 1 1
+                    , userId = Shaders.noUserIdSelected
                     , time = shaderTime model
-                    , scissors = { left = 0, bottom = 0, width = windowWidth, height = windowHeight }
+                    , night = renderData.nightFactor * uiNightFactorScaling
+                    , waterReflection = 0
                     }
+               ]
+            ++ (case LoadingPage.showWorldPreview hoverAt2 of
+                    Just ( changeAt, data ) ->
+                        drawWorldPreview
+                            (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
+                            (LocalGrid.notificationViewportSize |> Units.tileToPixel)
+                            (Coord.toPoint2d changeAt)
+                            1
+                            renderData
+                            renderData.nightFactor
+                            model
 
-                textureSize : Vec2
-                textureSize =
-                    WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
-            in
-            Effect.WebGL.toHtmlWith
-                [ Effect.WebGL.alpha False
-                , Effect.WebGL.clearColor 1 1 1 1
-                , Effect.WebGL.depth 1
-                ]
-                ([ Html.Attributes.width windowWidth
-                 , Html.Attributes.height windowHeight
-                 , Cursor.htmlAttribute showMousePointer.cursorType
-                 , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
-                 , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
-                 , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
-                 , Html.Events.Extra.Wheel.onWheel MouseWheel
-                 ]
-                    ++ LoadingPage.mouseListeners model
-                )
-                (drawWorld True renderData hoverAt2 viewBounds_ model
-                    ++ drawTilePlacer renderData audioData model
-                    ++ (case model.page of
-                            MailPage _ ->
-                                [ MailEditor.backgroundLayer renderData ]
+                    Nothing ->
+                        []
+               )
+            ++ drawMap model
+            ++ (case model.page of
+                    MailPage mailEditor ->
+                        let
+                            ( mailPosition, mailSize ) =
+                                case Ui.findInput (MailEditorHover MailEditor.MailButton) model.ui of
+                                    Just (Ui.ButtonType mailButton) ->
+                                        ( mailButton.position, mailButton.data.cachedSize )
 
-                            _ ->
-                                []
-                       )
-                    ++ [ Effect.WebGL.entityWith
-                            [ Shaders.blend ]
-                            Shaders.vertexShader
-                            Shaders.fragmentShader
-                            model.uiMesh
-                            { view =
-                                Mat4.makeScale3 (2 / toFloat windowWidth) (-2 / toFloat windowHeight) 1
-                                    |> Coord.translateMat4 (Coord.tuple ( -windowWidth // 2, -windowHeight // 2 ))
-                            , texture = texture
-                            , lights = lightsTexture
-                            , depth = depth
-                            , textureSize = textureSize
-                            , color = Vec4.vec4 1 1 1 1
-                            , userId = Shaders.noUserIdSelected
-                            , time = shaderTime model
-                            , night = renderData.nightFactor * uiNightFactorScaling
-                            , waterReflection = 0
-                            }
-                       ]
-                    ++ (case LoadingPage.showWorldPreview hoverAt2 of
-                            Just ( changeAt, data ) ->
-                                drawWorldPreview
-                                    (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
-                                    (LocalGrid.notificationViewportSize |> Units.tileToPixel)
-                                    (Coord.toPoint2d changeAt)
-                                    1
-                                    renderData
-                                    renderData.nightFactor
-                                    model
+                                    _ ->
+                                        ( Coord.origin, Coord.origin )
+                        in
+                        MailEditor.drawMail
+                            renderData
+                            mailPosition
+                            mailSize
+                            (LoadingPage.mouseScreenPosition model)
+                            windowWidth
+                            windowHeight
+                            model
+                            mailEditor
 
-                            Nothing ->
-                                []
-                       )
-                    ++ drawMap model
-                    ++ (case model.page of
-                            MailPage mailEditor ->
-                                let
-                                    ( mailPosition, mailSize ) =
-                                        case Ui.findInput (MailEditorHover MailEditor.MailButton) model.ui of
-                                            Just (Ui.ButtonType mailButton) ->
-                                                ( mailButton.position, mailButton.data.cachedSize )
+                    _ ->
+                        []
+               )
+            ++ (case LocalGrid.currentUserId model of
+                    Just userId ->
+                        drawCursor renderData showMousePointer userId model
 
-                                            _ ->
-                                                ( Coord.origin, Coord.origin )
-                                in
-                                MailEditor.drawMail
-                                    renderData
-                                    mailPosition
-                                    mailSize
-                                    (LoadingPage.mouseScreenPosition model)
-                                    windowWidth
-                                    windowHeight
-                                    model
-                                    mailEditor
-
-                            _ ->
-                                []
-                       )
-                    ++ (case LocalGrid.currentUserId model of
-                            Just userId ->
-                                drawCursor renderData showMousePointer userId model
-
-                            Nothing ->
-                                []
-                       )
-                )
-
-        _ ->
-            Html.text ""
+                    Nothing ->
+                        []
+               )
+        )
 
 
 drawWorld : Bool -> RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
@@ -4519,12 +4578,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
     Shaders.drawBackground renderData meshes
         ++ drawForeground renderData model.contextMenu model.currentTool hoverAt2 meshes
         ++ Shaders.drawWaterReflection includeSunOrMoon renderData model
-        ++ (case
-                ( Maybe.andThen Effect.WebGL.Texture.unwrap model.trainTexture
-                , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainLightsTexture
-                , Maybe.andThen Effect.WebGL.Texture.unwrap model.trainDepthTexture
-                )
-            of
+        ++ (case ( model.trainTexture, model.trainLightsTexture, model.trainDepthTexture ) of
                 ( Just trainTexture, Just trainLights, Just trainDepth ) ->
                     Train.draw
                         { lights = trainLights
@@ -4889,8 +4943,8 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
 
 drawMap : FrontendLoaded -> List Effect.WebGL.Entity
 drawMap model =
-    case ( model.page, Effect.WebGL.Texture.unwrap model.simplexNoiseLookup ) of
-        ( WorldPage worldPage, Just simplexNoiseLookup ) ->
+    case model.page of
+        WorldPage worldPage ->
             if worldPage.showMap then
                 let
                     grid : Grid FrontendHistory
@@ -4930,7 +4984,7 @@ drawMap model =
                     { view =
                         Mat4.makeScale3 (toFloat mapSize * 2 / windowWidth) (toFloat mapSize * -2 / windowHeight) 1
                             |> Mat4.translate3 -0.5 -0.5 -0.5
-                    , texture = simplexNoiseLookup
+                    , texture = model.simplexNoiseLookup
                     , cellPosition =
                         Toolbar.actualViewPoint model
                             |> Grid.worldToCellPoint
@@ -5328,7 +5382,6 @@ subscriptions _ model =
                                 |> Result.withDefault ""
                                 |> GotUserAgentPlatform
                         )
-                    , Ports.gotWebGlFix GotWebGlFix
                     ]
 
             Loaded loaded ->
