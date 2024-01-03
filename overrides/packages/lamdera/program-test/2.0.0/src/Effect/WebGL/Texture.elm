@@ -1,5 +1,5 @@
 module Effect.WebGL.Texture exposing
-    ( Texture, load, Error(..), size, unwrap
+    ( Texture, load, Error(..), size
     , loadWith, Options, defaultOptions
     , Resize, linear, nearest
     , nearestMipmapLinear, nearestMipmapNearest
@@ -53,32 +53,8 @@ import WebGLFix.Texture
 You can create a texture with [`load`](#load) or [`loadWith`](#loadWith)
 and measure its dimensions with [`size`](#size).
 -}
-type Texture
-    = RealTexture WebGLFix.Texture.Texture
-    | MockTexture Int Int
-
-
-fromInternalFile : Effect.Internal.Texture -> Texture
-fromInternalFile file =
-    case file of
-        Effect.Internal.RealTexture realFile ->
-            RealTexture realFile
-
-        Effect.Internal.MockTexture width height ->
-            MockTexture width height
-
-
-{-| Unfortunately in order to make this API work with Shaders, you need call this function to get the actual native Texture.
-This will return Nothing when running in a test and Just when running in a browser.
--}
-unwrap : Texture -> Maybe WebGLFix.Texture.Texture
-unwrap texture =
-    case texture of
-        RealTexture texture_ ->
-            Just texture_
-
-        MockTexture _ _ ->
-            Nothing
+type alias Texture =
+    WebGLFix.Texture.Texture
 
 
 {-| Loads a texture from the given url with default options.
@@ -128,7 +104,7 @@ loadWith options texturePath =
         (\result ->
             case result of
                 Ok ok ->
-                    Effect.Internal.Succeed (fromInternalFile ok)
+                    Effect.Internal.Succeed ok
 
                 Err WebGLFix.Texture.LoadError ->
                     Effect.Internal.Fail LoadError
@@ -328,13 +304,8 @@ mirroredRepeat =
 or other times you may want to use only a potion of a texture image.
 -}
 size : Texture -> ( Int, Int )
-size texture =
-    case texture of
-        RealTexture texture_ ->
-            WebGLFix.Texture.size texture_
-
-        MockTexture width height ->
-            ( width, height )
+size =
+    WebGLFix.Texture.size
 
 
 loadBytesWith : Options -> ( Int, Int ) -> Format -> Bytes -> Result Error Texture
@@ -391,7 +362,7 @@ loadBytesWith options textureSize format bytes =
     in
     case result of
         Ok texture ->
-            RealTexture texture |> Ok
+            Ok texture
 
         Err error ->
             case error of

@@ -491,7 +491,7 @@ toTask simulatedTask =
                 , premultiplyAlpha = options.premultiplyAlpha
                 }
                 string
-                |> Task.map (Effect.Internal.RealTexture >> Ok)
+                |> Task.map Ok
                 |> Task.onError (Err >> Task.succeed)
                 |> Task.andThen (\result -> toTask (function result))
 

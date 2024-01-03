@@ -1679,12 +1679,7 @@ loadingCanvasView model =
          ]
             ++ mouseListeners model
         )
-        (case
-            ( Maybe.andThen Effect.WebGL.Texture.unwrap model.texture
-            , Maybe.andThen Effect.WebGL.Texture.unwrap model.lightsTexture
-            , Maybe.andThen Effect.WebGL.Texture.unwrap model.depthTexture
-            )
-         of
+        (case ( model.texture, model.lightsTexture, model.depthTexture ) of
             ( Just texture, Just lightsTexture, Just depth ) ->
                 let
                     textureSize =

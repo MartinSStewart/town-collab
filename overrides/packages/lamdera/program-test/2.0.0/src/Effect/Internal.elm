@@ -15,7 +15,6 @@ module Effect.Internal exposing
     , Smaller(..)
     , Subscription(..)
     , Task(..)
-    , Texture(..)
     , Visibility(..)
     , Wrap(..)
     , andThen
@@ -121,12 +120,7 @@ type Task restriction x a
     | FileToString File (String -> Task restriction x a)
     | FileToBytes File (Bytes -> Task restriction x a)
     | FileToUrl File (String -> Task restriction x a)
-    | LoadTexture LoadTextureOptions String (Result WebGLFix.Texture.Error Texture -> Task restriction x a)
-
-
-type Texture
-    = RealTexture WebGLFix.Texture.Texture
-    | MockTexture Int Int
+    | LoadTexture LoadTextureOptions String (Result WebGLFix.Texture.Error WebGLFix.Texture.Texture -> Task restriction x a)
 
 
 type Bigger

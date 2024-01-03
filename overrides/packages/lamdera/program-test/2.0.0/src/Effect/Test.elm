@@ -27,7 +27,7 @@ import AssocList as Dict exposing (Dict)
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
 import Browser.Navigation
-import Bytes exposing (Bytes)
+import Bytes exposing (Bytes, Endianness(..))
 import Bytes.Decode
 import Bytes.Encode
 import Duration exposing (Duration)
@@ -59,6 +59,7 @@ import Test.Html.Selector
 import Test.Runner
 import Time
 import Url exposing (Url)
+import WebGLFix.Texture
 
 
 {-| Configure the simulation before starting it
@@ -1991,8 +1992,60 @@ runTask maybeClientId frontendApp state task =
         SetViewportOf htmlId _ _ function ->
             getDomTask frontendApp maybeClientId state htmlId function ()
 
-        LoadTexture _ _ function ->
-            Effect.Internal.MockTexture 1024 1024 |> Ok |> function |> runTask maybeClientId frontendApp state
+        LoadTexture options _ function ->
+            let
+                convertWrap wrap =
+                    case wrap of
+                        Effect.Internal.Repeat ->
+                            WebGLFix.Texture.repeat
+
+                        Effect.Internal.ClampToEdge ->
+                            WebGLFix.Texture.clampToEdge
+
+                        Effect.Internal.MirroredRepeat ->
+                            WebGLFix.Texture.mirroredRepeat
+            in
+            WebGLFix.Texture.loadBytesWith
+                { magnify =
+                    case options.magnify of
+                        Effect.Internal.Linear ->
+                            WebGLFix.Texture.linear
+
+                        _ ->
+                            WebGLFix.Texture.nearest
+                , minify =
+                    case options.minify of
+                        Effect.Internal.Linear ->
+                            WebGLFix.Texture.linear
+
+                        Effect.Internal.Nearest ->
+                            WebGLFix.Texture.nearest
+
+                        Effect.Internal.NearestMipmapNearest ->
+                            WebGLFix.Texture.nearestMipmapNearest
+
+                        Effect.Internal.LinearMipmapNearest ->
+                            WebGLFix.Texture.linearMipmapNearest
+
+                        Effect.Internal.NearestMipmapLinear ->
+                            WebGLFix.Texture.nearestMipmapLinear
+
+                        Effect.Internal.LinearMipmapLinear ->
+                            WebGLFix.Texture.linearMipmapLinear
+                , horizontalWrap = convertWrap options.horizontalWrap
+                , verticalWrap = convertWrap options.verticalWrap
+                , flipY = options.flipY
+                , premultiplyAlpha = options.premultiplyAlpha
+                }
+                ( 64, 64 )
+                WebGLFix.Texture.rgba
+                (List.range 1 (64 * 64)
+                    |> List.map (Bytes.Encode.signedInt32 BE)
+                    |> Bytes.Encode.sequence
+                    |> Bytes.Encode.encode
+                )
+                |> function
+                |> runTask maybeClientId frontendApp state
 
 
 getDomTask :
