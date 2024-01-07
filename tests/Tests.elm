@@ -3,12 +3,14 @@ module Tests exposing (tests)
 import Animal exposing (AnimalType(..))
 import AssocSet
 import Backend
+import Bytes exposing (Endianness(..))
 import Bytes.Decode
 import Bytes.Encode
 import Color
 import Coord
 import Effect.Test
 import Effect.Time
+import Effect.WebGL.Texture
 import EndToEndTests
 import Expect
 import Grid exposing (Grid, IntersectionType(..))
@@ -24,6 +26,7 @@ import TileCountBot
 import Time
 import Train exposing (Train)
 import Units exposing (WorldUnit)
+import Unsafe
 import Vector2d
 
 
@@ -57,10 +60,25 @@ user0 =
 --        )
 
 
+mockTexture : Effect.WebGL.Texture.Texture
+mockTexture =
+    Effect.WebGL.Texture.loadBytesWith
+        Effect.WebGL.Texture.defaultOptions
+        ( 1, 1 )
+        Effect.WebGL.Texture.rgba
+        (Bytes.Encode.sequence [ Bytes.Encode.unsignedInt32 BE 0 ] |> Bytes.Encode.encode)
+        |> Unsafe.unwrapResult
+
+
 tests : Test
 tests =
     describe "Tests"
-        [ Test.describe "End to end tests" (List.map Effect.Test.toTest EndToEndTests.tests)
+        [ Test.describe
+            "End to end tests"
+            (List.map
+                Effect.Test.toTest
+                (EndToEndTests.tests mockTexture mockTexture mockTexture mockTexture mockTexture mockTexture)
+            )
         , test "Add rail" <|
             \_ ->
                 let

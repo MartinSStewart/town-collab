@@ -1,4 +1,4 @@
-module Frontend exposing (app, app_)
+module Frontend exposing (app, app_, textureOptions)
 
 import AdminPage
 import Animal
@@ -579,39 +579,23 @@ init url key =
         , Effect.Task.perform (\time -> Duration.addTo time (PingData.pingOffset { pingData = Nothing }) |> ShortIntervalElapsed) Effect.Time.now
         , cmd
         , Ports.getLocalStorage
-        , Effect.WebGL.Texture.loadWith
-            { magnify = Effect.WebGL.Texture.nearest
-            , minify = Effect.WebGL.Texture.nearest
-            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-            , verticalWrap = Effect.WebGL.Texture.clampToEdge
-            , flipY = False
-            , premultiplyAlpha = False
-            }
-            "/texture.png"
-            |> Effect.Task.attempt TextureLoaded
-        , Effect.WebGL.Texture.loadWith
-            { magnify = Effect.WebGL.Texture.nearest
-            , minify = Effect.WebGL.Texture.nearest
-            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-            , verticalWrap = Effect.WebGL.Texture.clampToEdge
-            , flipY = False
-            , premultiplyAlpha = False
-            }
-            "/lights.png"
-            |> Effect.Task.attempt LightsTextureLoaded
-        , Effect.WebGL.Texture.loadWith
-            { magnify = Effect.WebGL.Texture.nearest
-            , minify = Effect.WebGL.Texture.nearest
-            , horizontalWrap = Effect.WebGL.Texture.clampToEdge
-            , verticalWrap = Effect.WebGL.Texture.clampToEdge
-            , flipY = False
-            , premultiplyAlpha = False
-            }
-            "/depth.png"
-            |> Effect.Task.attempt DepthTextureLoaded
+        , Effect.WebGL.Texture.loadWith textureOptions "/texture.png" |> Effect.Task.attempt TextureLoaded
+        , Effect.WebGL.Texture.loadWith textureOptions "/lights.png" |> Effect.Task.attempt LightsTextureLoaded
+        , Effect.WebGL.Texture.loadWith textureOptions "/depth.png" |> Effect.Task.attempt DepthTextureLoaded
         ]
     , Audio.cmdNone
     )
+
+
+textureOptions : Effect.WebGL.Texture.Options
+textureOptions =
+    { magnify = Effect.WebGL.Texture.nearest
+    , minify = Effect.WebGL.Texture.nearest
+    , horizontalWrap = Effect.WebGL.Texture.clampToEdge
+    , verticalWrap = Effect.WebGL.Texture.clampToEdge
+    , flipY = False
+    , premultiplyAlpha = False
+    }
 
 
 loadSimplexTexture : Result Effect.WebGL.Texture.Error Effect.WebGL.Texture.Texture
@@ -778,7 +762,7 @@ updateLoaded audioData msg model =
             ( model, Command.none )
 
         KeyUp keyMsg ->
-            case Keyboard.anyKeyOriginal keyMsg of
+            case Keyboard.anyKeyOriginal keyMsg |> Debug.log "keyup" of
                 Just key ->
                     ( { model | pressedKeys = AssocSet.remove key model.pressedKeys }, Command.none )
 
@@ -786,7 +770,7 @@ updateLoaded audioData msg model =
                     ( model, Command.none )
 
         KeyDown rawKey ->
-            case Keyboard.anyKeyOriginal rawKey of
+            case Keyboard.anyKeyOriginal rawKey |> Debug.log "keydown" of
                 Just key ->
                     let
                         model2 =
@@ -1282,6 +1266,9 @@ updateLoaded audioData msg model =
                 --        ( Duration.from model.time time |> Duration.inSeconds
                 --        , IdDict.values model2.trains |> List.map (Train.trainPosition time)
                 --        )
+                _ =
+                    Debug.log "animation frame" ()
+
                 model4 =
                     LoadingPage.updateMeshes model3
 
@@ -4446,7 +4433,7 @@ canvasView audioData model =
     in
     Effect.WebGL.toHtmlWith
         [ Effect.WebGL.alpha False
-        , Effect.WebGL.clearColor 1 1 1 1
+        , Effect.WebGL.clearColor 0 1 1 1
         , Effect.WebGL.depth 1
         ]
         ([ Html.Attributes.width windowWidth

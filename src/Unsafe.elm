@@ -1,4 +1,4 @@
-module Unsafe exposing (displayName, emailAddress, url)
+module Unsafe exposing (displayName, emailAddress, unwrapResult, url)
 
 import DisplayName exposing (DisplayName)
 import EmailAddress exposing (EmailAddress)
@@ -39,8 +39,27 @@ displayName text =
             unreachable ()
 
 
+unwrapResult : Result e a -> a
+unwrapResult result =
+    case result of
+        Ok ok ->
+            ok
+
+        Err _ ->
+            unreachable ()
+
+
 {-| Be very careful when using this!
 -}
 unreachable : () -> a
 unreachable () =
+    let
+        _ =
+            stackOverflow 0
+    in
     unreachable ()
+
+
+stackOverflow : Int -> Int
+stackOverflow a =
+    stackOverflow a + 1

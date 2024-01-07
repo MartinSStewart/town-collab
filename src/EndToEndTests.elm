@@ -3,14 +3,13 @@ module EndToEndTests exposing (PostmarkRequest, main, tests)
 import AssocList
 import Audio
 import Backend
-import Bytes exposing (Bytes)
 import Change exposing (UserStatus(..))
 import Coord
 import Dict
 import Duration
 import Effect.Http exposing (Response(..))
 import Effect.Lamdera
-import Effect.Test exposing (Config, HttpRequest, PortToJs)
+import Effect.Test exposing (Config, HttpRequest, HttpResponse(..), PortToJs)
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Env
@@ -29,65 +28,87 @@ import Toolbar
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend)
 import Ui
 import Unsafe
-import Untrusted
 import Url exposing (Url)
 
 
 main : Program () (Effect.Test.Model ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel) (Effect.Test.Msg ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
 main =
     Effect.Test.viewerWith tests
-        |> Effect.Test.addTexture "/depth.png"
-        |> Effect.Test.addBytesFile "/lights.png"
-        |> Effect.Test.addBytesFile "/texture.png"
+        |> Effect.Test.addTextureWithOptions Frontend.textureOptions "/depth.png"
+        |> Effect.Test.addTextureWithOptions Frontend.textureOptions "/lights.png"
+        |> Effect.Test.addTextureWithOptions Frontend.textureOptions "/texture.png"
+        |> Effect.Test.addTextureWithOptions Frontend.textureOptions "/train-depth.png"
+        |> Effect.Test.addTextureWithOptions Frontend.textureOptions "/train-lights.png"
+        |> Effect.Test.addTextureWithOptions Frontend.textureOptions "/trains.png"
         |> Effect.Test.startViewer
 
 
-handleRequest : Texture -> Texture -> Texture -> { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
-handleRequest depth lights texture { currentRequest } =
-    let
-        _ =
-            Debug.log "request" currentRequest
-    in
+handleRequest : Texture -> Texture -> Texture -> Texture -> Texture -> Texture -> { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> HttpResponse
+handleRequest depth lights texture trainDepth trainLights trainTexture { currentRequest } =
     if currentRequest.url == "/texture.png" && currentRequest.method == "GET" then
-        GoodStatus_
+        Effect.Test.TextureHttpResponse
             { url = currentRequest.url
             , statusCode = 200
             , statusText = ""
             , headers = Dict.empty
             }
             texture
-            |> Effect.Test.TextureHttpResponse
 
     else if currentRequest.url == "/depth.png" && currentRequest.method == "GET" then
-        GoodStatus_
+        Effect.Test.TextureHttpResponse
             { url = currentRequest.url
             , statusCode = 200
             , statusText = ""
             , headers = Dict.empty
             }
             depth
-            |> Effect.Test.TextureHttpResponse
 
     else if currentRequest.url == "/lights.png" && currentRequest.method == "GET" then
-        GoodStatus_
+        Effect.Test.TextureHttpResponse
             { url = currentRequest.url
             , statusCode = 200
             , statusText = ""
             , headers = Dict.empty
             }
             lights
-            |> Effect.Test.TextureHttpResponse
+
+    else if currentRequest.url == "/trains.png" && currentRequest.method == "GET" then
+        Effect.Test.TextureHttpResponse
+            { url = currentRequest.url
+            , statusCode = 200
+            , statusText = ""
+            , headers = Dict.empty
+            }
+            trainTexture
+
+    else if currentRequest.url == "/train-depth.png" && currentRequest.method == "GET" then
+        Effect.Test.TextureHttpResponse
+            { url = currentRequest.url
+            , statusCode = 200
+            , statusText = ""
+            , headers = Dict.empty
+            }
+            trainDepth
+
+    else if currentRequest.url == "/train-lights.png" && currentRequest.method == "GET" then
+        Effect.Test.TextureHttpResponse
+            { url = currentRequest.url
+            , statusCode = 200
+            , statusText = ""
+            , headers = Dict.empty
+            }
+            trainLights
 
     else
-        NetworkError_
+        let
+            _ =
+                Debug.log "request" currentRequest
+        in
+        NetworkErrorResponse
 
 
 handlePorts : { currentRequest : PortToJs, pastRequests : List PortToJs } -> Maybe ( String, Json.Decode.Value )
 handlePorts { currentRequest } =
-    let
-        _ =
-            Debug.log "port request" currentRequest
-    in
     case currentRequest.portName of
         "user_agent_to_js" ->
             ( "user_agent_from_js"
@@ -97,7 +118,7 @@ handlePorts { currentRequest } =
 
         "martinsstewart_elm_device_pixel_ratio_to_js" ->
             ( "martinsstewart_elm_device_pixel_ratio_from_js"
-            , Json.Encode.int 1
+            , Json.Encode.int 2
             )
                 |> Just
 
@@ -107,16 +128,14 @@ handlePorts { currentRequest } =
             )
                 |> Just
 
-        "webgl_fix_to_js" ->
-            ( "webgl_fix_from_js"
-            , Json.Encode.null
-            )
-                |> Just
-
         "audioPortToJS" ->
             Nothing
 
         _ ->
+            let
+                _ =
+                    Debug.log "port request" currentRequest
+            in
             Nothing
 
 
@@ -189,11 +208,16 @@ isOneTimePasswordEmail httpRequest =
                     Ok { subject, to, textBody } ->
                         case subject of
                             "Login Email" ->
-                                { emailAddress = to
-                                , oneTimePassword =
-                                    String.right Id.oneTimePasswordLength textBody |> Id.secretFromString
-                                }
-                                    |> Just
+                                case String.split "\n" textBody of
+                                    first :: _ ->
+                                        { emailAddress = to
+                                        , oneTimePassword =
+                                            String.right Id.oneTimePasswordLength first |> Id.secretFromString
+                                        }
+                                            |> Just
+
+                                    [] ->
+                                        Nothing
 
                             _ ->
                                 Nothing
@@ -275,10 +299,12 @@ typeText frontend0 text instructions =
     String.foldl
         (\char instructions2 ->
             let
+                keyEvent : Keyboard.RawKey
                 keyEvent =
                     Keyboard.RawKey (String.fromChar char) ("Key" ++ String.fromChar char)
             in
             frontend0.update (Audio.UserMsg (Types.KeyDown keyEvent)) instructions2
+                |> shortWait
                 |> frontend0.update (Audio.UserMsg (Types.KeyUp keyEvent))
         )
         instructions
@@ -291,7 +317,9 @@ pressEnter frontend0 instructions =
             Keyboard.RawKey "Enter" ""
     in
     frontend0.update (Audio.UserMsg (Types.KeyDown keyEvent)) instructions
+        |> shortWait
         |> frontend0.update (Audio.UserMsg (Types.KeyUp keyEvent))
+        |> shortWait
 
 
 clickOnUi :
@@ -309,11 +337,7 @@ clickOnUi frontend0 id instructions =
                             frontend.model
                     in
                     case audioModel.userModel of
-                        Loading loading ->
-                            let
-                                _ =
-                                    Debug.log "loading" loading
-                            in
+                        Loading _ ->
                             Effect.Test.continueWith state
                                 |> Effect.Test.checkState (\_ -> Err "Currently in loading state")
 
@@ -352,14 +376,21 @@ clickOnUi frontend0 id instructions =
         instructions
 
 
-tests : Bytes -> Bytes -> Bytes -> List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
-tests depth lights texture =
+tests :
+    Texture
+    -> Texture
+    -> Texture
+    -> Texture
+    -> Texture
+    -> Texture
+    -> List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
+tests depth lights texture trainDepth trainLights trainTexture =
     let
         config : Config ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
         config =
             { frontendApp = Frontend.app_
             , backendApp = Backend.app_ True
-            , handleHttpRequest = handleRequest depth lights texture
+            , handleHttpRequest = handleRequest depth lights texture trainDepth trainLights trainTexture
             , handlePortToJs = handlePorts
             , handleFileRequest =
                 \request ->
@@ -375,11 +406,12 @@ tests depth lights texture =
         |> Effect.Test.connectFrontend
             sessionId0
             url
-            { width = 1920, height = 1080 }
+            { width = 1000, height = 600 }
             (\( state, frontend0 ) ->
                 state
                     |> shortWait
                     |> pressEnter frontend0
+                    |> shortWait
                     |> shouldBeLoggedOut frontend0
                     |> clickOnUi frontend0 Types.EmailAddressTextInputHover
                     |> typeText frontend0 Env.adminEmail2
@@ -391,7 +423,7 @@ tests depth lights texture =
                                 [ loginEmail ] ->
                                     Effect.Test.continueWith state2
                                         |> shortWait
-                                        |> clickOnUi frontend0 Types.EmailAddressTextInputHover
+                                        |> clickOnUi frontend0 Types.OneTimePasswordInput
                                         |> typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
                                         |> shortWait
                                         |> shouldBeLoggedIn frontend0

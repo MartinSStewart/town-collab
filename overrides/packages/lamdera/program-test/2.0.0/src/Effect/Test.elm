@@ -348,8 +348,19 @@ frontendUpdate :
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 frontendUpdate clientId msg =
+    let
+        msgString =
+            Debug.toString msg
+    in
     NextStep
-        "Frontend update"
+        ("Frontend update: "
+            ++ (if String.length msgString < 100 then
+                    msgString
+
+                else
+                    String.left 97 msgString ++ "..."
+               )
+        )
         (\state ->
             case Dict.get clientId state.frontends of
                 Just frontend ->
@@ -1216,8 +1227,12 @@ simulateStep frontendApp backendApp state =
                             timerLength =
                                 Duration.inMilliseconds duration
                         in
-                        fractionalModBy timerLength (state.elapsedTime |> Quantity.minus offset |> Duration.inMilliseconds)
-                            > fractionalModBy timerLength (newTime |> Quantity.minus offset |> Duration.inMilliseconds)
+                        if newTime |> Quantity.minus state.elapsedTime |> Quantity.greaterThanOrEqualTo duration then
+                            True
+
+                        else
+                            fractionalModBy timerLength (state.elapsedTime |> Quantity.minus offset |> Duration.inMilliseconds)
+                                > fractionalModBy timerLength (newTime |> Quantity.minus offset |> Duration.inMilliseconds)
                     )
 
         ( newBackend, newBackendEffects ) =
@@ -1241,6 +1256,7 @@ simulateStep frontendApp backendApp state =
                     let
                         ( newFrontendModel, newFrontendEffects ) =
                             getCompletedTimers frontend.timers
+                                |> Debug.log "timer"
                                 |> List.foldl
                                     (\( _, { msg } ) ( frontendModel, effects ) ->
                                         frontendApp.update
@@ -1913,26 +1929,23 @@ runTask maybeClientId frontendApp state task =
                                 Http.NetworkError_
 
                             BadStatusResponse metadata text2 ->
-                                Http.BadStatus_ metadata text2
+                                Http.BadStatus_ metadata (Bytes.Encode.string text2 |> Bytes.Encode.encode)
 
                             BytesHttpResponse metadata body ->
-                                case Bytes.Decode.decode (Bytes.Decode.string (Bytes.width body)) body of
-                                    Just text2 ->
-                                        Http.GoodStatus_ metadata text2
-
-                                    Nothing ->
-                                        Http.BadStatus_ metadata "Test error: Response contains bytes that aren't valid a valid string"
+                                Http.GoodStatus_ metadata body
 
                             StringHttpResponse metadata text2 ->
-                                Http.GoodStatus_ metadata text2
+                                Http.GoodStatus_ metadata (Bytes.Encode.string text2 |> Bytes.Encode.encode)
 
                             JsonHttpResponse metadata body ->
-                                Http.GoodStatus_ metadata (Json.Encode.encode 0 body)
+                                Http.GoodStatus_
+                                    metadata
+                                    (Json.Encode.encode 0 body |> Bytes.Encode.string |> Bytes.Encode.encode)
 
                             TextureHttpResponse metadata _ ->
                                 Http.BadStatus_
                                     metadata
-                                    "Test error: Can't convert texture data to string"
+                                    (Bytes.Encode.string "Test error: Can't convert texture data to string" |> Bytes.Encode.encode)
                    )
                 |> httpRequest.onRequestComplete
                 |> runTask maybeClientId frontendApp { state | httpRequests = request :: state.httpRequests }
@@ -2060,22 +2073,8 @@ runTask maybeClientId frontendApp state task =
                         }
             in
             (case response of
-                TextureHttpResponse response2 ->
-                    case response2 of
-                        Effect.Http.GoodStatus_ _ texture ->
-                            Ok texture
-
-                        Effect.Http.BadUrl_ _ ->
-                            Err WebGLFix.Texture.LoadError
-
-                        Effect.Http.Timeout_ ->
-                            Err WebGLFix.Texture.LoadError
-
-                        Effect.Http.NetworkError_ ->
-                            Err WebGLFix.Texture.LoadError
-
-                        Effect.Http.BadStatus_ _ _ ->
-                            Err WebGLFix.Texture.LoadError
+                TextureHttpResponse _ texture ->
+                    Ok texture
 
                 _ ->
                     Err WebGLFix.Texture.LoadError
@@ -2145,7 +2144,13 @@ type alias TestView frontendModel =
     , testName : String
     , stepIndex : Int
     , steps : Nonempty (TestStep frontendModel)
+    , overlayPosition : OverlayPosition
     }
+
+
+type OverlayPosition
+    = Top
+    | Bottom
 
 
 type alias TestStep frontendModel =
@@ -2174,6 +2179,7 @@ type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     | ShortPauseFinished
     | NoOp
     | GotFilesForTests (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
+    | PressedToggleOverlayPosition
 
 
 init :
@@ -2247,6 +2253,7 @@ update config msg model =
                                             )
                                             (flatten test)
                                     , stepIndex = 0
+                                    , overlayPosition = Top
                                     }
                                         |> Just
                               }
@@ -2324,6 +2331,28 @@ update config msg model =
 
                 Err error ->
                     ( { model | tests = Just (Err error) }, Cmd.none )
+
+        PressedToggleOverlayPosition ->
+            ( { model
+                | currentTest =
+                    case model.currentTest of
+                        Just currentTest ->
+                            { currentTest
+                                | overlayPosition =
+                                    case currentTest.overlayPosition of
+                                        Top ->
+                                            Bottom
+
+                                        Bottom ->
+                                            Top
+                            }
+                                |> Just
+
+                        Nothing ->
+                            Nothing
+              }
+            , Cmd.none
+            )
 
 
 view :
@@ -2440,6 +2469,15 @@ button onPress text_ =
         [ Html.text text_ ]
 
 
+overlayButton : msg -> String -> Html msg
+overlayButton onPress text_ =
+    Html.button
+        [ Html.Events.onClick onPress
+        , Html.Attributes.style "padding" "2px"
+        ]
+        [ Html.text text_ ]
+
+
 text : String -> Html msg
 text text_ =
     Html.div
@@ -2496,54 +2534,70 @@ testView instructions testView_ =
             List.Nonempty.get testView_.stepIndex testView_.steps
     in
     Html.div
-        [ Html.Attributes.style "padding" "8px"
+        []
+        (testOverlay testView_ currentStep
+            :: List.map
+                (\( _, frontend ) ->
+                    Html.div [] (viewFunc frontend.model) |> Html.map (\_ -> NoOp)
+                )
+                (Dict.toList currentStep.frontends)
+        )
+
+
+
+--Html.div
+--                        []
+--                        [ "ClientId: " ++ Effect.Lamdera.clientIdToString clientId |> ellipsis 600
+--                        , Url.toString frontend.url |> ellipsis 600
+
+
+testOverlay : TestView frontendModel -> TestStep frontendModel -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+testOverlay testView_ currentStep =
+    Html.div
+        [ Html.Attributes.style "padding" "4px"
         , Html.Attributes.style "font-family" "arial"
-        , Html.Attributes.style "font-size" "16px"
+        , Html.Attributes.style "font-size" "14px"
+        , Html.Attributes.style "color" "white"
+        , Html.Attributes.style "position" "absolute"
+        , Html.Attributes.style "background" "#424242ff"
+        , case testView_.overlayPosition of
+            Top ->
+                Html.Attributes.style "top" "0"
+
+            Bottom ->
+                Html.Attributes.style "bottom" "0"
+        , case testView_.overlayPosition of
+            Top ->
+                Html.Attributes.style "border-radius" "0 0 8px 0"
+
+            Bottom ->
+                Html.Attributes.style "border-radius" "0 8px 0 0"
         ]
         [ Html.div
             []
-            [ button PressedBackToOverview "Back to overview"
-            , button PressedStepBackward "Step backward"
-            , button PressedStepForward "Step forward"
-            , text
-                (" "
-                    ++ String.fromInt (testView_.stepIndex + 1)
-                    ++ "/"
-                    ++ String.fromInt (List.Nonempty.length testView_.steps)
-                    ++ (" " ++ currentStep.stepName)
-                )
+            [ overlayButton PressedBackToOverview "Close"
+            , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
+            , overlayButton PressedToggleOverlayPosition "Move"
+            , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
+            , overlayButton PressedStepBackward "Previous"
+            , overlayButton PressedStepForward "Next step"
+            , Html.div
+                [ Html.Attributes.style "display" "inline-block"
+                , Html.Attributes.style "padding" "4px"
+                ]
+                [ Html.text
+                    (" "
+                        ++ String.fromInt (testView_.stepIndex + 1)
+                        ++ "/"
+                        ++ String.fromInt (List.Nonempty.length testView_.steps)
+                        ++ (" " ++ currentStep.stepName)
+                    )
+                ]
             ]
         , Html.div
             [ Html.Attributes.style "color" "rgb(200, 10, 10)"
             ]
             (List.map (testErrorToString >> text) currentStep.errors)
-        , Html.div
-            []
-            (Dict.toList currentStep.frontends
-                |> List.map
-                    (\( clientId, frontend ) ->
-                        Html.div
-                            []
-                            [ "ClientId: " ++ Effect.Lamdera.clientIdToString clientId |> ellipsis 600
-                            , Url.toString frontend.url |> ellipsis 600
-                            , Html.iframe
-                                [ Html.Attributes.style "width" (String.fromInt frontend.windowSize.width ++ "px")
-                                , Html.Attributes.style "height" (String.fromInt frontend.windowSize.height ++ "px")
-                                , Html.Attributes.style "overflow" "scroll"
-                                , Html.Attributes.style "box-shadow" "0 0 8px 0 rgba(0,0,0,0.4)"
-                                , Html.Attributes.style "border" "0"
-                                , Html.node
-                                    "body"
-                                    []
-                                    (viewFunc frontend.model)
-                                    |> htmlToString
-                                    |> Result.withDefault "Error rendering html"
-                                    |> Html.Attributes.srcdoc
-                                ]
-                                []
-                            ]
-                    )
-            )
         ]
 
 
