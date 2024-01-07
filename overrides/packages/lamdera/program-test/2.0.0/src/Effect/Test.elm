@@ -3,6 +3,7 @@ module Effect.Test exposing
     , FrontendActions, sendToBackend, simulateTime, fastForward, andThen, continueWith, Instructions, State, startTime, HttpBody(..), HttpPart(..)
     , checkState, checkBackend, toTest, toSnapshots
     , fakeNavigationKey, viewer, Msg, Model
+    , HttpResponse(..), addBytesFile, addTexture, addTextureWithOptions, startViewer, viewerWith
     )
 
 {-| Setting up the simulation
@@ -30,6 +31,7 @@ import Browser.Navigation
 import Bytes exposing (Bytes, Endianness(..))
 import Bytes.Decode
 import Bytes.Encode
+import Dict as RegularDict
 import Duration exposing (Duration)
 import Effect.Browser.Dom exposing (HtmlId)
 import Effect.Browser.Navigation
@@ -39,12 +41,12 @@ import Effect.Internal exposing (Command(..), File, NavigationKey(..), Task(..))
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Snapshot exposing (Snapshot)
 import Effect.Subscription exposing (Subscription)
+import Effect.WebGL.Texture
 import Expect exposing (Expectation)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
 import Http
-import Image
 import Json.Decode
 import Json.Encode
 import List.Nonempty exposing (Nonempty)
@@ -60,6 +62,7 @@ import Test.Html.Selector
 import Test.Runner
 import Time
 import Url exposing (Url)
+import WebGL.Texture
 import WebGLFix.Texture
 
 
@@ -96,7 +99,7 @@ import WebGLFix.Texture
 type alias Config toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
     { frontendApp : FrontendApp toBackend frontendMsg frontendModel toFrontend
     , backendApp : BackendApp toBackend toFrontend backendMsg backendModel
-    , handleHttpRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
+    , handleHttpRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> HttpResponse
     , handlePortToJs : { currentRequest : PortToJs, pastRequests : List PortToJs } -> Maybe ( String, Json.Decode.Value )
     , handleFileRequest : { mimeTypes : List String } -> Maybe { name : String, mimeType : String, content : String, lastModified : Time.Posix }
     , domain : Url
@@ -117,9 +120,7 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , timers : Dict Duration { msg : Time.Posix -> backendMsg, startTime : Time.Posix }
     , testErrors : List TestError
     , httpRequests : List HttpRequest
-    , handleHttpRequest :
-        { currentRequest : HttpRequest, pastRequests : List HttpRequest }
-        -> Effect.Http.Response Bytes
+    , handleHttpRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> HttpResponse
     , handlePortToJs :
         { currentRequest : PortToJs, pastRequests : List PortToJs }
         -> Maybe ( String, Json.Decode.Value )
@@ -143,6 +144,22 @@ type alias HttpRequest =
     , body : HttpBody
     , headers : List ( String, String )
     }
+
+
+{-| The response for an http request.
+Note that if the http request was expecting one form of data (for example json) and the response contains a different type of data (for example a String) then the data will automatically be converted.
+The exception to this is Texture. If the request is expecting a Texture (this will only happen with `Effect.WebGL.Texture.load` and `Effect.WebGL.Texture.loadWith`) then the response has to contain a Texture if you want the request to succeed.
+In other words, sending the Bytes that represent that texture won't work.
+-}
+type HttpResponse
+    = BadUrlResponse String
+    | TimeoutResponse
+    | NetworkErrorResponse
+    | BadStatusResponse Effect.Http.Metadata String
+    | BytesHttpResponse Effect.Http.Metadata Bytes
+    | StringHttpResponse Effect.Http.Metadata String
+    | JsonHttpResponse Effect.Http.Metadata Json.Encode.Value
+    | TextureHttpResponse Effect.Http.Metadata Effect.WebGL.Texture.Texture
 
 
 {-| Who made this http request?
@@ -1829,26 +1846,38 @@ runTask maybeClientId frontendApp state task =
                     }
             in
             state.handleHttpRequest { currentRequest = request, pastRequests = state.httpRequests }
-                |> (\response ->
-                        case response of
-                            Effect.Http.BadUrl_ url ->
+                |> (\a ->
+                        case a of
+                            BadUrlResponse url ->
                                 Http.BadUrl_ url
 
-                            Effect.Http.Timeout_ ->
+                            TimeoutResponse ->
                                 Http.Timeout_
 
-                            Effect.Http.NetworkError_ ->
+                            NetworkErrorResponse ->
                                 Http.NetworkError_
 
-                            Effect.Http.BadStatus_ metadata body ->
-                                Bytes.Decode.decode (Bytes.Decode.string (Bytes.width body)) body
-                                    |> Maybe.withDefault "String decoding failed"
-                                    |> Http.BadStatus_ metadata
+                            BadStatusResponse metadata text2 ->
+                                Http.BadStatus_ metadata text2
 
-                            Effect.Http.GoodStatus_ metadata body ->
-                                Bytes.Decode.decode (Bytes.Decode.string (Bytes.width body)) body
-                                    |> Maybe.withDefault "String decoding failed"
-                                    |> Http.GoodStatus_ metadata
+                            BytesHttpResponse metadata body ->
+                                case Bytes.Decode.decode (Bytes.Decode.string (Bytes.width body)) body of
+                                    Just text2 ->
+                                        Http.GoodStatus_ metadata text2
+
+                                    Nothing ->
+                                        Http.BadStatus_ metadata "Test error: Response contains bytes that aren't valid a valid string"
+
+                            StringHttpResponse metadata text2 ->
+                                Http.GoodStatus_ metadata text2
+
+                            JsonHttpResponse metadata body ->
+                                Http.GoodStatus_ metadata (Json.Encode.encode 0 body)
+
+                            TextureHttpResponse metadata _ ->
+                                Http.BadStatus_
+                                    metadata
+                                    "Test error: Can't convert texture data to string"
                    )
                 |> httpRequest.onRequestComplete
                 |> runTask maybeClientId frontendApp { state | httpRequests = request :: state.httpRequests }
@@ -1872,22 +1901,38 @@ runTask maybeClientId frontendApp state task =
                     }
             in
             state.handleHttpRequest { currentRequest = request, pastRequests = state.httpRequests }
-                |> (\response ->
-                        case response of
-                            Effect.Http.BadUrl_ url ->
+                |> (\a ->
+                        case a of
+                            BadUrlResponse url ->
                                 Http.BadUrl_ url
 
-                            Effect.Http.Timeout_ ->
+                            TimeoutResponse ->
                                 Http.Timeout_
 
-                            Effect.Http.NetworkError_ ->
+                            NetworkErrorResponse ->
                                 Http.NetworkError_
 
-                            Effect.Http.BadStatus_ metadata body ->
-                                Http.BadStatus_ metadata body
+                            BadStatusResponse metadata text2 ->
+                                Http.BadStatus_ metadata text2
 
-                            Effect.Http.GoodStatus_ metadata body ->
-                                Http.GoodStatus_ metadata body
+                            BytesHttpResponse metadata body ->
+                                case Bytes.Decode.decode (Bytes.Decode.string (Bytes.width body)) body of
+                                    Just text2 ->
+                                        Http.GoodStatus_ metadata text2
+
+                                    Nothing ->
+                                        Http.BadStatus_ metadata "Test error: Response contains bytes that aren't valid a valid string"
+
+                            StringHttpResponse metadata text2 ->
+                                Http.GoodStatus_ metadata text2
+
+                            JsonHttpResponse metadata body ->
+                                Http.GoodStatus_ metadata (Json.Encode.encode 0 body)
+
+                            TextureHttpResponse metadata _ ->
+                                Http.BadStatus_
+                                    metadata
+                                    "Test error: Can't convert texture data to string"
                    )
                 |> httpRequest.onRequestComplete
                 |> runTask maybeClientId frontendApp { state | httpRequests = request :: state.httpRequests }
@@ -1993,9 +2038,9 @@ runTask maybeClientId frontendApp state task =
         SetViewportOf htmlId _ _ function ->
             getDomTask frontendApp maybeClientId state htmlId function ()
 
-        LoadTexture options url function ->
+        LoadTexture _ url function ->
             let
-                response : Effect.Http.Response Bytes
+                response : HttpResponse
                 response =
                     state.handleHttpRequest
                         { currentRequest =
@@ -2013,76 +2058,26 @@ runTask maybeClientId frontendApp state task =
                             }
                         , pastRequests = state.httpRequests
                         }
-
-                convertWrap : Effect.Internal.Wrap -> WebGLFix.Texture.Wrap
-                convertWrap wrap =
-                    case wrap of
-                        Effect.Internal.Repeat ->
-                            WebGLFix.Texture.repeat
-
-                        Effect.Internal.ClampToEdge ->
-                            WebGLFix.Texture.clampToEdge
-
-                        Effect.Internal.MirroredRepeat ->
-                            WebGLFix.Texture.mirroredRepeat
             in
             (case response of
-                Effect.Http.GoodStatus_ _ bytes ->
-                    case Image.decode bytes of
-                        Just image ->
-                            WebGLFix.Texture.loadBytesWith
-                                { magnify =
-                                    case options.magnify of
-                                        Effect.Internal.Linear ->
-                                            WebGLFix.Texture.linear
+                TextureHttpResponse response2 ->
+                    case response2 of
+                        Effect.Http.GoodStatus_ _ texture ->
+                            Ok texture
 
-                                        _ ->
-                                            WebGLFix.Texture.nearest
-                                , minify =
-                                    case options.minify of
-                                        Effect.Internal.Linear ->
-                                            WebGLFix.Texture.linear
-
-                                        Effect.Internal.Nearest ->
-                                            WebGLFix.Texture.nearest
-
-                                        Effect.Internal.NearestMipmapNearest ->
-                                            WebGLFix.Texture.nearestMipmapNearest
-
-                                        Effect.Internal.LinearMipmapNearest ->
-                                            WebGLFix.Texture.linearMipmapNearest
-
-                                        Effect.Internal.NearestMipmapLinear ->
-                                            WebGLFix.Texture.nearestMipmapLinear
-
-                                        Effect.Internal.LinearMipmapLinear ->
-                                            WebGLFix.Texture.linearMipmapLinear
-                                , horizontalWrap = convertWrap options.horizontalWrap
-                                , verticalWrap = convertWrap options.verticalWrap
-                                , flipY = options.flipY
-                                , premultiplyAlpha = options.premultiplyAlpha
-                                }
-                                (Image.dimensions image |> (\{ width, height } -> ( width, height )))
-                                WebGLFix.Texture.rgba
-                                (Image.toList image
-                                    |> List.map (Bytes.Encode.unsignedInt32 BE)
-                                    |> Bytes.Encode.sequence
-                                    |> Bytes.Encode.encode
-                                )
-
-                        Nothing ->
+                        Effect.Http.BadUrl_ _ ->
                             Err WebGLFix.Texture.LoadError
 
-                Effect.Http.BadUrl_ _ ->
-                    Err WebGLFix.Texture.LoadError
+                        Effect.Http.Timeout_ ->
+                            Err WebGLFix.Texture.LoadError
 
-                Effect.Http.Timeout_ ->
-                    Err WebGLFix.Texture.LoadError
+                        Effect.Http.NetworkError_ ->
+                            Err WebGLFix.Texture.LoadError
 
-                Effect.Http.NetworkError_ ->
-                    Err WebGLFix.Texture.LoadError
+                        Effect.Http.BadStatus_ _ _ ->
+                            Err WebGLFix.Texture.LoadError
 
-                Effect.Http.BadStatus_ _ _ ->
+                _ ->
                     Err WebGLFix.Texture.LoadError
             )
                 |> function
@@ -2126,11 +2121,23 @@ getDomTask frontendApp maybeClientId state htmlId function value =
 
 
 {-| -}
-type alias Model frontendModel =
+type alias Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
     { navigationKey : Browser.Navigation.Key
     , currentTest : Maybe (TestView frontendModel)
     , testResults : List (Result TestError ())
+    , tests : Maybe (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
     }
+
+
+type alias FileLoadError =
+    { name : String
+    , error : FileLoadErrorType
+    }
+
+
+type FileLoadErrorType
+    = HttpError Http.Error
+    | TextureError WebGLFix.Texture.Error
 
 
 type alias TestView frontendModel =
@@ -2157,7 +2164,7 @@ type alias TestStep frontendModel =
 
 
 {-| -}
-type Msg
+type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     = UrlClicked Browser.UrlRequest
     | UrlChanged Url
     | PressedViewTest Int
@@ -2166,21 +2173,32 @@ type Msg
     | PressedBackToOverview
     | ShortPauseFinished
     | NoOp
+    | GotFilesForTests (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
 
 
-init : () -> Url -> Browser.Navigation.Key -> ( Model frontendModel, Cmd Msg )
+init :
+    ()
+    -> Url
+    -> Browser.Navigation.Key
+    ->
+        ( Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+        )
 init _ _ navigationKey =
-    ( { navigationKey = navigationKey, currentTest = Nothing, testResults = [] }
+    ( { navigationKey = navigationKey, currentTest = Nothing, testResults = [], tests = Nothing }
     , Process.sleep 0 |> Task.perform (\() -> ShortPauseFinished)
     )
 
 
 update :
-    List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Msg
-    -> Model frontendModel
-    -> ( Model frontendModel, Cmd Msg )
-update tests msg model =
+    ViewerWith (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+    -> Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    ->
+        ( Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+        )
+update config msg model =
     case msg of
         UrlClicked urlRequest ->
             case urlRequest of
@@ -2194,41 +2212,49 @@ update tests msg model =
             ( model, Cmd.none )
 
         PressedViewTest index ->
-            case getAt index tests of
-                Just test ->
-                    let
-                        state =
-                            instructionsToState test
-                    in
-                    ( { model
-                        | currentTest =
-                            { index = index
-                            , testName = state.testName
-                            , steps =
-                                List.Nonempty.map
-                                    (\( stepName, state_ ) ->
-                                        { stepName = stepName
-                                        , errors = state_.testErrors
-                                        , frontends =
-                                            Dict.map
-                                                (\_ frontend ->
-                                                    { model = frontend.model
-                                                    , sessionId = frontend.sessionId
-                                                    , clipboard = frontend.clipboard
-                                                    , url = frontend.url
-                                                    , windowSize = frontend.windowSize
-                                                    }
-                                                )
-                                                state_.frontends
-                                        }
-                                    )
-                                    (flatten test)
-                            , stepIndex = 0
-                            }
-                                |> Just
-                      }
-                    , Cmd.none
-                    )
+            case model.tests of
+                Just (Err error) ->
+                    ( model, Cmd.none )
+
+                Just (Ok tests) ->
+                    case getAt index tests of
+                        Just test ->
+                            let
+                                state =
+                                    instructionsToState test
+                            in
+                            ( { model
+                                | currentTest =
+                                    { index = index
+                                    , testName = state.testName
+                                    , steps =
+                                        List.Nonempty.map
+                                            (\( stepName, state_ ) ->
+                                                { stepName = stepName
+                                                , errors = state_.testErrors
+                                                , frontends =
+                                                    Dict.map
+                                                        (\_ frontend ->
+                                                            { model = frontend.model
+                                                            , sessionId = frontend.sessionId
+                                                            , clipboard = frontend.clipboard
+                                                            , url = frontend.url
+                                                            , windowSize = frontend.windowSize
+                                                            }
+                                                        )
+                                                        state_.frontends
+                                                }
+                                            )
+                                            (flatten test)
+                                    , stepIndex = 0
+                                    }
+                                        |> Just
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -2271,44 +2297,85 @@ update tests msg model =
             ( { model | currentTest = Nothing }, Cmd.none )
 
         ShortPauseFinished ->
-            case getAt (List.length model.testResults) tests of
-                Just test ->
-                    ( { model
-                        | testResults =
-                            model.testResults
-                                ++ [ case instructionsToState test |> .testErrors of
-                                        firstError :: _ ->
-                                            Err firstError
+            ( model, Task.attempt GotFilesForTests config.cmds )
 
-                                        [] ->
-                                            Ok ()
-                                   ]
-                      }
-                    , Process.sleep 0 |> Task.perform (\() -> ShortPauseFinished)
-                    )
+        GotFilesForTests result ->
+            case result of
+                Ok tests ->
+                    case getAt (List.length model.testResults) tests of
+                        Just test ->
+                            ( { model
+                                | testResults =
+                                    model.testResults
+                                        ++ [ case instructionsToState test |> .testErrors of
+                                                firstError :: _ ->
+                                                    Err firstError
 
-                Nothing ->
-                    ( model, Cmd.none )
+                                                [] ->
+                                                    Ok ()
+                                           ]
+                                , tests = Just (Ok tests)
+                              }
+                            , Process.sleep 0 |> Task.perform (\() -> ShortPauseFinished)
+                            )
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                Err error ->
+                    ( { model | tests = Just (Err error) }, Cmd.none )
 
 
 view :
-    List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Model frontendModel
-    -> Browser.Document Msg
-view tests model =
+    Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Browser.Document (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+view model =
     { title = "Test viewer"
     , body =
-        [ case model.currentTest of
-            Just testView_ ->
-                case getAt testView_.index tests of
-                    Just instructions ->
-                        testView instructions testView_
+        [ case model.tests of
+            Just (Ok tests) ->
+                case model.currentTest of
+                    Just testView_ ->
+                        case getAt testView_.index tests of
+                            Just instructions ->
+                                testView instructions testView_
+
+                            Nothing ->
+                                text "Invalid index for tests"
 
                     Nothing ->
-                        text "Invalid index for tests"
+                        overview tests model.testResults
+
+            Just (Err error) ->
+                "Failed to load \""
+                    ++ error.name
+                    ++ "\" "
+                    ++ (case error.error of
+                            HttpError Http.NetworkError ->
+                                "due to a network error"
+
+                            HttpError (Http.BadUrl _) ->
+                                "because the path is invalid"
+
+                            HttpError Http.Timeout ->
+                                "due to a network timeout"
+
+                            HttpError (Http.BadStatus code) ->
+                                "and instead got a " ++ String.fromInt code ++ " error"
+
+                            HttpError (Http.BadBody _) ->
+                                "due to a bad response body"
+
+                            TextureError WebGLFix.Texture.LoadError ->
+                                "due to the file not being found or a network error"
+
+                            TextureError (WebGLFix.Texture.SizeError w h) ->
+                                "due to the texture being an invalid size (width: " ++ String.fromInt w ++ ", height: " ++ String.fromInt h ++ ")"
+                       )
+                    |> text
 
             Nothing ->
-                overview tests model.testResults
+                text "Loading files for tests..."
         ]
     }
 
@@ -2321,7 +2388,7 @@ getAt index list =
 overview :
     List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     -> List (Result TestError ())
-    -> Html Msg
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 overview tests testResults_ =
     List.foldl
         (\test { index, testResults, elements } ->
@@ -2418,7 +2485,7 @@ getTestName instructions =
 testView :
     Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> TestView frontendModel
-    -> Html Msg
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 testView instructions testView_ =
     let
         viewFunc : frontendModel -> List (Html frontendMsg)
@@ -2497,20 +2564,233 @@ buttonAttributes =
     []
 
 
+type alias ViewerWith a =
+    { cmds : Task.Task FileLoadError a }
+
+
 {-| View your end-to-end tests in a elm reactor style app.
+
+    import Effect.Test
+
+    main =
+        Effect.Test.viewerWith
+            (\image jsonData ->
+                [{- End to end tests go here -}]
+            )
+            |> Effect.Test.addBytesFile "/test.png"
+            |> Effect.Test.addBytesFile "/data.json"
+            |> Effect.Test.startViewer
+
 -}
-viewer :
-    List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Program () (Model frontendModel) Msg
-viewer tests =
+viewerWith : a -> ViewerWith a
+viewerWith a =
+    { cmds = Task.succeed a }
+
+
+{-| View your end-to-end tests in a elm reactor style app.
+
+    import Effect.Test
+
+    main =
+        Effect.Test.viewerWith
+            (\image jsonData ->
+                [{- End to end tests go here -}]
+            )
+            |> Effect.Test.addBytesFile "/test.png"
+            |> Effect.Test.addBytesFile "/data.json"
+            |> Effect.Test.startViewer
+
+-}
+startViewer :
+    ViewerWith (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+    -> Program () (Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel) (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+startViewer viewerWith2 =
     Browser.application
         { init = init
-        , update = update tests
-        , view = view tests
+        , update = update viewerWith2
+        , view = view
         , subscriptions = \_ -> Sub.none
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
         }
+
+
+{-| View your end-to-end tests in a elm reactor style app.
+
+        main =
+            viewer [{- End to end tests go here -}]
+
+-}
+viewer :
+    List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    -> Program () (Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel) (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+viewer tests =
+    Browser.application
+        { init = init
+        , update = update { cmds = Task.succeed tests }
+        , view = view
+        , subscriptions = \_ -> Sub.none
+        , onUrlRequest = UrlClicked
+        , onUrlChange = UrlChanged
+        }
+
+
+abc : Program () (Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel) (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+abc =
+    viewerWith (\a b c -> [])
+        |> addBytesFile "test.png"
+        |> addBytesFile "test2.jpg"
+        |> addTexture "abc.png"
+        |> startViewer
+
+
+{-| Add a file containing binary data to your tests. Right now this is performed with HTTP get requests which means you can only access files in /public (or make get requests to other websites though this isn't recommended since this API might change in the future)
+
+    import Effect.Test
+
+    main =
+        Effect.Test.viewerWith
+            (\image jsonData ->
+                [{- End to end tests go here -}]
+            )
+            |> Effect.Test.addBytesFile "/test.png"
+            |> Effect.Test.addBytesFile "/data.json"
+            |> Effect.Test.startViewer
+
+-}
+addBytesFile : String -> ViewerWith (Bytes -> b) -> ViewerWith b
+addBytesFile file model =
+    { cmds =
+        Task.andThen
+            (\tests ->
+                Http.task
+                    { method = "GET"
+                    , headers = []
+                    , body = Http.emptyBody
+                    , url = file
+                    , resolver =
+                        Http.bytesResolver
+                            (\response ->
+                                case response of
+                                    Http.BadUrl_ string ->
+                                        Err { name = file, error = Http.BadUrl string |> HttpError }
+
+                                    Http.Timeout_ ->
+                                        Err { name = file, error = Http.Timeout |> HttpError }
+
+                                    Http.NetworkError_ ->
+                                        Err { name = file, error = Http.NetworkError |> HttpError }
+
+                                    Http.BadStatus_ metadata _ ->
+                                        Err { name = file, error = Http.BadStatus metadata.statusCode |> HttpError }
+
+                                    Http.GoodStatus_ _ body ->
+                                        Ok (tests body)
+                            )
+                    , timeout = Just 30000
+                    }
+            )
+            model.cmds
+    }
+
+
+{-| Add a file containing data for a `Effect.WebGL.Texture.Texture` to your tests. Right now this is performed with HTTP get requests which means you can only access files in /public (or make get requests to other websites though this isn't recommended since this API might change in the future)
+
+    import Effect.Test
+
+    main =
+        Effect.Test.viewerWith
+            (\texture ->
+                [{- End to end tests go here -}]
+            )
+            |> Effect.Test.addTextureFile "/texture.png"
+            |> Effect.Test.startViewer
+
+-}
+addTexture : String -> ViewerWith (Effect.WebGL.Texture.Texture -> b) -> ViewerWith b
+addTexture file model =
+    { cmds =
+        Task.andThen
+            (\tests ->
+                WebGLFix.Texture.load file
+                    |> Task.mapError (\error -> { name = file, error = TextureError error })
+                    |> Task.map tests
+            )
+            model.cmds
+    }
+
+
+{-| Add a file containing data for a `Effect.WebGL.Texture.Texture` to your tests. Right now this is performed with HTTP get requests which means you can only access files in /public (or make get requests to other websites though this isn't recommended since this API might change in the future)
+
+    import Effect.Test
+
+    main =
+        Effect.Test.viewerWith
+            (\texture ->
+                [{- End to end tests go here -}]
+            )
+            |> Effect.Test.addTextureFileWithOptions
+                -- WebGL texture options go here
+                "/texture.png"
+            |> Effect.Test.startViewer
+
+-}
+addTextureWithOptions : Effect.WebGL.Texture.Options -> String -> ViewerWith (Effect.WebGL.Texture.Texture -> b) -> ViewerWith b
+addTextureWithOptions options file model =
+    let
+        convertWrap : Effect.Internal.Wrap -> WebGLFix.Texture.Wrap
+        convertWrap wrap =
+            case wrap of
+                Effect.Internal.Repeat ->
+                    WebGLFix.Texture.repeat
+
+                Effect.Internal.ClampToEdge ->
+                    WebGLFix.Texture.clampToEdge
+
+                Effect.Internal.MirroredRepeat ->
+                    WebGLFix.Texture.mirroredRepeat
+    in
+    { cmds =
+        Task.andThen
+            (\tests ->
+                WebGLFix.Texture.loadWith
+                    { magnify =
+                        case options.magnify of
+                            Effect.Internal.Linear ->
+                                WebGLFix.Texture.linear
+
+                            _ ->
+                                WebGLFix.Texture.nearest
+                    , minify =
+                        case options.minify of
+                            Effect.Internal.Linear ->
+                                WebGLFix.Texture.linear
+
+                            Effect.Internal.Nearest ->
+                                WebGLFix.Texture.nearest
+
+                            Effect.Internal.NearestMipmapNearest ->
+                                WebGLFix.Texture.nearestMipmapNearest
+
+                            Effect.Internal.LinearMipmapNearest ->
+                                WebGLFix.Texture.linearMipmapNearest
+
+                            Effect.Internal.NearestMipmapLinear ->
+                                WebGLFix.Texture.nearestMipmapLinear
+
+                            Effect.Internal.LinearMipmapLinear ->
+                                WebGLFix.Texture.linearMipmapLinear
+                    , horizontalWrap = convertWrap options.horizontalWrap
+                    , verticalWrap = convertWrap options.verticalWrap
+                    , flipY = options.flipY
+                    , premultiplyAlpha = options.premultiplyAlpha
+                    }
+                    file
+                    |> Task.mapError (\error -> { name = file, error = TextureError error })
+                    |> Task.map tests
+            )
+            model.cmds
+    }
 
 
 htmlToString : Html msg -> Result String String

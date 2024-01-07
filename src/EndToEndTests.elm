@@ -6,10 +6,12 @@ import Backend
 import Bytes exposing (Bytes)
 import Change exposing (UserStatus(..))
 import Coord
+import Dict
 import Duration
 import Effect.Http exposing (Response(..))
 import Effect.Lamdera
 import Effect.Test exposing (Config, HttpRequest, PortToJs)
+import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Env
 import Frontend
@@ -31,35 +33,53 @@ import Untrusted
 import Url exposing (Url)
 
 
-config : Config ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-config =
-    { frontendApp = Frontend.app_
-    , backendApp = Backend.app_ True
-    , handleHttpRequest = handleRequest
-    , handlePortToJs = handlePorts
-    , handleFileRequest =
-        \request ->
-            let
-                _ =
-                    Debug.log "file request" request
-            in
-            Nothing
-    , domain = url
-    }
-
-
-main : Program () (Effect.Test.Model (Audio.Model Types.FrontendMsg_ FrontendModel_)) Effect.Test.Msg
+main : Program () (Effect.Test.Model ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel) (Effect.Test.Msg ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
 main =
-    Effect.Test.viewer tests
+    Effect.Test.viewerWith tests
+        |> Effect.Test.addTexture "/depth.png"
+        |> Effect.Test.addBytesFile "/lights.png"
+        |> Effect.Test.addBytesFile "/texture.png"
+        |> Effect.Test.startViewer
 
 
-handleRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
-handleRequest { currentRequest } =
+handleRequest : Texture -> Texture -> Texture -> { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
+handleRequest depth lights texture { currentRequest } =
     let
         _ =
             Debug.log "request" currentRequest
     in
-    NetworkError_
+    if currentRequest.url == "/texture.png" && currentRequest.method == "GET" then
+        GoodStatus_
+            { url = currentRequest.url
+            , statusCode = 200
+            , statusText = ""
+            , headers = Dict.empty
+            }
+            texture
+            |> Effect.Test.TextureHttpResponse
+
+    else if currentRequest.url == "/depth.png" && currentRequest.method == "GET" then
+        GoodStatus_
+            { url = currentRequest.url
+            , statusCode = 200
+            , statusText = ""
+            , headers = Dict.empty
+            }
+            depth
+            |> Effect.Test.TextureHttpResponse
+
+    else if currentRequest.url == "/lights.png" && currentRequest.method == "GET" then
+        GoodStatus_
+            { url = currentRequest.url
+            , statusCode = 200
+            , statusText = ""
+            , headers = Dict.empty
+            }
+            lights
+            |> Effect.Test.TextureHttpResponse
+
+    else
+        NetworkError_
 
 
 handlePorts : { currentRequest : PortToJs, pastRequests : List PortToJs } -> Maybe ( String, Json.Decode.Value )
@@ -332,8 +352,25 @@ clickOnUi frontend0 id instructions =
         instructions
 
 
-tests : List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
-tests =
+tests : Bytes -> Bytes -> Bytes -> List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
+tests depth lights texture =
+    let
+        config : Config ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+        config =
+            { frontendApp = Frontend.app_
+            , backendApp = Backend.app_ True
+            , handleHttpRequest = handleRequest depth lights texture
+            , handlePortToJs = handlePorts
+            , handleFileRequest =
+                \request ->
+                    let
+                        _ =
+                            Debug.log "file request" request
+                    in
+                    Nothing
+            , domain = url
+            }
+    in
     [ Effect.Test.start config "Login with one time password"
         |> Effect.Test.connectFrontend
             sessionId0
