@@ -1,13 +1,12 @@
 module Effect.WebGL.Texture exposing
     ( Texture, load, Error(..), size
-    , loadWith, Options, defaultOptions
+    , loadWith, Options, defaultOptions, loadBytesWith, rgb, rgba, alpha, luminance, luminanceAlpha
     , Resize, linear, nearest
     , nearestMipmapLinear, nearestMipmapNearest
     , linearMipmapNearest, linearMipmapLinear
     , Bigger, Smaller
     , Wrap, repeat, clampToEdge, mirroredRepeat
     , nonPowerOfTwoOptions
-    , alpha, loadBytesWith, luminance, luminanceAlpha, rgb, rgba
     )
 
 {-|
@@ -15,12 +14,12 @@ module Effect.WebGL.Texture exposing
 
 # Texture
 
-@docs Texture, load, Error, size, unwrap
+@docs Texture, load, Error, size
 
 
 # Custom Loading
 
-@docs loadWith, Options, defaultOptions
+@docs loadWith, Options, defaultOptions, loadBytesWith, rgb, rgba, alpha, luminance, luminanceAlpha
 
 
 ## Resizing
@@ -308,6 +307,15 @@ size =
     WebGLFix.Texture.size
 
 
+{-| Building [`Texture`](#Texture) from bytes
+
+  - [`Options`](#Options) - same as for [`loadWith`](#loadWith)
+  - `(width, height)` - dimensions of new created texture
+  - [`Format`](#Format) - pixel format in bytes
+  - Bytes - encoded pixels, where `Bytes.width` > `width` \* `height` \* `Bytes per pixel` or you get `SizeError`
+    Do not generate texture in `view`, [read more about this here](https://package.elm-lang.org/packages/elm-explorations/webgl/latest#making-the-most-of-the-gpu).
+
+-}
 loadBytesWith : Options -> ( Int, Int ) -> Format -> Bytes -> Result Error Texture
 loadBytesWith options textureSize format bytes =
     let
@@ -373,30 +381,54 @@ loadBytesWith options textureSize format bytes =
                     SizeError w h |> Err
 
 
+{-| How to read bytes into pixel
+
+
+## | Format | Channels | Bytes per pixel |
+
+| rgba | 4 | 4 |
+| rgb | 3 | 3 |
+| luminanceAlpha | 2 | 2 |
+| luminance | 1 | 1 |
+
+
+## | alpha | 1 | 1 |
+
+-}
 type alias Format =
     WebGLFix.Texture.Format
 
 
+{-| Single pixel is 3 bytes long and has 3 channels
+-}
 rgb : WebGLFix.Texture.Format
 rgb =
     WebGLFix.Texture.rgb
 
 
+{-| Single pixel is 4 bytes long and has 4 channels
+-}
 rgba : WebGLFix.Texture.Format
 rgba =
     WebGLFix.Texture.rgba
 
 
+{-| Single pixel is 2 bytes long and has 2 channels
+-}
 luminanceAlpha : WebGLFix.Texture.Format
 luminanceAlpha =
     WebGLFix.Texture.luminanceAlpha
 
 
+{-| Single pixel is 1 byte long and has 1 channel
+-}
 luminance : WebGLFix.Texture.Format
 luminance =
     WebGLFix.Texture.luminance
 
 
+{-| Single pixel is 1 byte long and has 1 channel
+-}
 alpha : WebGLFix.Texture.Format
 alpha =
     WebGLFix.Texture.alpha

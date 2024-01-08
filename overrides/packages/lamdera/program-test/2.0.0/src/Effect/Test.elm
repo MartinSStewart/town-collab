@@ -1,26 +1,33 @@
 module Effect.Test exposing
-    ( start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, RequestedBy(..), PortToJs
+    ( start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, HttpResponse(..), RequestedBy(..), PortToJs
     , FrontendActions, sendToBackend, simulateTime, fastForward, andThen, continueWith, Instructions, State, startTime, HttpBody(..), HttpPart(..)
     , checkState, checkBackend, toTest, toSnapshots
-    , fakeNavigationKey, viewer, Msg, Model
-    , HttpResponse(..), addBytesFile, addTexture, addTextureWithOptions, startViewer, viewerWith
+    , fakeNavigationKey, viewer, Msg, Model, viewerWith, ViewerWith, startViewer, addBytesFile, addTexture, addTextureWithOptions
     )
 
-{-| Setting up the simulation
+{-|
 
-@docs start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, RequestedBy, PortToJs
 
-Control the simulation
+## Setting up end to end tests
+
+@docs start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, HttpResponse, RequestedBy, PortToJs
+
+
+## Control the tests
 
 @docs FrontendActions, sendToBackend, simulateTime, fastForward, andThen, continueWith, Instructions, State, startTime, HttpBody, HttpPart
 
-Test the simulation
+
+## Check the current state
 
 @docs checkState, checkBackend, toTest, toSnapshots
 
-Miscellaneous
 
-@docs fakeNavigationKey, viewer, Msg, Model
+## Test viewer
+
+Sometimes it's hard to tell what's going on in an end to end test. One way to make this easier to use the `viewer` function. It's like a test runner for your browser that also lets you see the frontend of an app as simulated inputs are being triggered.
+
+@docs fakeNavigationKey, viewer, Msg, Model, viewerWith, ViewerWith, startViewer, addBytesFile, addTexture, addTextureWithOptions
 
 -}
 
@@ -66,7 +73,7 @@ import WebGL.Texture
 import WebGLFix.Texture
 
 
-{-| Configure the simulation before starting it
+{-| Configure the end to end test before starting it
 
     import Backend
     import Effect.Test
@@ -790,7 +797,7 @@ getClientConnectSubs backendSub =
             []
 
 
-{-| Add a frontend client to the simulation!
+{-| Add a frontend client to the end to end test
 
     import Effect.Test
     import Test exposing (Test)
@@ -1318,15 +1325,17 @@ fastForward duration =
         (\state -> { state | elapsedTime = Quantity.plus state.elapsedTime duration })
 
 
-{-| Sometimes you need to decide what should happen next based on some simulation state.
+{-| Sometimes you need to decide what should happen next based on some current state.
 In order to do that you can write something like this:
 
+    import Effect.Test
+
     state
-        |> TF.andThen
+        |> Effect.Test.andThen
             (\state2 ->
                 case List.filterMap isLoginEmail state2.httpRequests |> List.head of
                     Just loginEmail ->
-                        TF.continueWith state2
+                        Effect.Test.continueWith state2
                                 |> testApp.connectFrontend
                                     sessionIdFromEmail
                                     (loginEmail.loginUrl)
@@ -1335,7 +1344,7 @@ In order to do that you can write something like this:
                                     )
 
                     Nothing ->
-                        TF.continueWith state2 |> TF.checkState (\_ -> Err "Should have gotten a login email")
+                        Effect.Test.continueWith state2 |> Effect.Test.checkState (\_ -> Err "Should have gotten a login email")
             )
 
 -}
@@ -1347,15 +1356,17 @@ andThen =
     AndThen
 
 
-{-| Sometimes you need to decide what should happen next based on some simulation state.
+{-| Sometimes you need to decide what should happen next based on some current state.
 In order to do that you can write something like this:
 
+    import Effect.Test
+
     state
-        |> TF.andThen
+        |> Effect.Test.andThen
             (\state2 ->
                 case List.filterMap isLoginEmail state2.httpRequests |> List.head of
                     Just loginEmail ->
-                        TF.continueWith state2
+                        Effect.Test.continueWith state2
                                 |> testApp.connectFrontend
                                     sessionIdFromEmail
                                     (loginEmail.loginUrl)
@@ -1364,7 +1375,7 @@ In order to do that you can write something like this:
                                     )
 
                     Nothing ->
-                        TF.continueWith state2 |> TF.checkState (\_ -> Err "Should have gotten a login email")
+                        Effect.Test.continueWith state2 |> Effect.Test.checkState (\_ -> Err "Should have gotten a login email")
             )
 
 -}
@@ -2618,6 +2629,7 @@ buttonAttributes =
     []
 
 
+{-| -}
 type alias ViewerWith a =
     { cmds : Task.Task FileLoadError a }
 
@@ -2687,15 +2699,6 @@ viewer tests =
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
         }
-
-
-abc : Program () (Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel) (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-abc =
-    viewerWith (\a b c -> [])
-        |> addBytesFile "test.png"
-        |> addBytesFile "test2.jpg"
-        |> addTexture "abc.png"
-        |> startViewer
 
 
 {-| Add a file containing binary data to your tests. Right now this is performed with HTTP get requests which means you can only access files in /public (or make get requests to other websites though this isn't recommended since this API might change in the future)
@@ -2845,12 +2848,3 @@ addTextureWithOptions options file model =
             )
             model.cmds
     }
-
-
-htmlToString : Html msg -> Result String String
-htmlToString html =
-    Test.Html.Internal.Inert.fromHtml html
-        |> Result.map
-            (Test.Html.Internal.Inert.toElmHtml
-                >> Test.Html.Internal.ElmHtml.ToString.nodeToString
-            )
