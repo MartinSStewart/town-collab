@@ -9,7 +9,7 @@ import Coord
 import Duration
 import Effect.Http exposing (Response(..))
 import Effect.Lamdera
-import Effect.Test exposing (Config, HttpRequest, PortToJs)
+import Effect.Test exposing (Config, HttpRequest, HttpResponse(..), PortToJs)
 import EmailAddress exposing (EmailAddress)
 import Env
 import Frontend
@@ -48,18 +48,18 @@ config =
     }
 
 
-main : Program () (Effect.Test.Model (Audio.Model Types.FrontendMsg_ FrontendModel_)) Effect.Test.Msg
+main : Program () (Effect.Test.Model ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel) (Effect.Test.Msg ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
 main =
     Effect.Test.viewer tests
 
 
-handleRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Http.Response Bytes
+handleRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> Effect.Test.HttpResponse
 handleRequest { currentRequest } =
     let
         _ =
             Debug.log "request" currentRequest
     in
-    NetworkError_
+    NetworkErrorResponse
 
 
 handlePorts : { currentRequest : PortToJs, pastRequests : List PortToJs } -> Maybe ( String, Json.Decode.Value )
