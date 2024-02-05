@@ -9,7 +9,7 @@ import Dict
 import Duration
 import Effect.Http exposing (Response(..))
 import Effect.Lamdera
-import Effect.Test exposing (Config, HttpRequest, HttpResponse(..), PortToJs)
+import Effect.Test exposing (Config, FileUpload(..), HttpRequest, HttpResponse(..), MultipleFilesUpload(..), PortToJs)
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Env
@@ -392,13 +392,20 @@ tests depth lights texture trainDepth trainLights trainTexture =
             , backendApp = Backend.app_ True
             , handleHttpRequest = handleRequest depth lights texture trainDepth trainLights trainTexture
             , handlePortToJs = handlePorts
-            , handleFileRequest =
+            , handleFileUpload =
                 \request ->
                     let
                         _ =
                             Debug.log "file request" request
                     in
-                    Nothing
+                    CancelFileUpload
+            , handleMultipleFilesUpload =
+                \request ->
+                    let
+                        _ =
+                            Debug.log "files request" request
+                    in
+                    CancelMultipleFilesUpload
             , domain = url
             }
     in
