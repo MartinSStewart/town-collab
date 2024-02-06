@@ -9,7 +9,7 @@ import Dict
 import Duration
 import Effect.Http exposing (Response(..))
 import Effect.Lamdera
-import Effect.Test exposing (Config, HttpRequest, HttpResponse(..), PortToJs)
+import Effect.Test exposing (Config, FileUpload(..), HttpRequest, HttpResponse(..), MultipleFilesUpload(..), PortToJs)
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Env
@@ -28,6 +28,7 @@ import Toolbar
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend)
 import Ui
 import Unsafe
+import Untrusted
 import Url exposing (Url)
 
 
@@ -311,6 +312,10 @@ typeText frontend0 text instructions =
         text
 
 
+pressEnter :
+    Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
 pressEnter frontend0 instructions =
     let
         keyEvent =
@@ -376,6 +381,34 @@ clickOnUi frontend0 id instructions =
         instructions
 
 
+windowSize =
+    { width = 1000, height = 600 }
+
+
+loadPage :
+    Effect.Lamdera.SessionId
+    ->
+        (Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+         -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+         -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+        )
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+loadPage sessionId func state =
+    state
+        |> Effect.Test.connectFrontend
+            sessionId
+            url
+            windowSize
+            (\( state2, frontend0 ) ->
+                state2
+                    |> shortWait
+                    |> pressEnter frontend0
+                    |> shortWait
+                    |> func frontend0
+            )
+
+
 tests :
     Texture
     -> Texture
@@ -392,26 +425,28 @@ tests depth lights texture trainDepth trainLights trainTexture =
             , backendApp = Backend.app_ True
             , handleHttpRequest = handleRequest depth lights texture trainDepth trainLights trainTexture
             , handlePortToJs = handlePorts
-            , handleFileRequest =
+            , handleFileUpload =
                 \request ->
                     let
                         _ =
                             Debug.log "file request" request
                     in
-                    Nothing
+                    CancelFileUpload
+            , handleMultipleFilesUpload =
+                \request ->
+                    let
+                        _ =
+                            Debug.log "files request" request
+                    in
+                    CancelMultipleFilesUpload
             , domain = url
             }
     in
     [ Effect.Test.start config "Login with one time password"
-        |> Effect.Test.connectFrontend
+        |> loadPage
             sessionId0
-            url
-            { width = 1000, height = 600 }
-            (\( state, frontend0 ) ->
+            (\frontend0 state ->
                 state
-                    |> shortWait
-                    |> pressEnter frontend0
-                    |> shortWait
                     |> shouldBeLoggedOut frontend0
                     |> clickOnUi frontend0 Types.EmailAddressTextInputHover
                     |> typeText frontend0 Env.adminEmail2
@@ -433,47 +468,43 @@ tests depth lights texture trainDepth trainLights trainTexture =
                                         |> Effect.Test.checkState (\_ -> Err "Login email not found")
                         )
             )
+    , Effect.Test.start config "Can't log in for a different session"
+        |> loadPage
+            sessionId0
+            (\frontend0 state ->
+                state
+                    |> shouldBeLoggedOut frontend0
+                    |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
+                    |> shortWait
+                    |> Effect.Test.andThen
+                        (\state2 ->
+                            case List.filterMap isOneTimePasswordEmail state2.httpRequests of
+                                [ loginEmail ] ->
+                                    Effect.Test.continueWith state2
+                                        |> loadPage
+                                            sessionId1
+                                            (\frontend1 state3 ->
+                                                state3
+                                                    |> Effect.Test.sendToBackend
+                                                        sessionId1
+                                                        frontend1.clientId
+                                                        (LoginAttemptRequest loginEmail.oneTimePassword)
+                                                    |> shortWait
+                                                    |> shouldBeLoggedOut frontend0
+                                                    |> shouldBeLoggedOut frontend1
+                                            )
 
-    --, Effect.Test.start config "Can't log in for a different session"
-    --    |> Effect.Test.connectFrontend
-    --        sessionId0
-    --        url
-    --        { width = 1920, height = 1080 }
-    --        (\( state, frontend0 ) ->
-    --            state
-    --                |> shortWait
-    --                |> shouldBeLoggedOut frontend0
-    --                |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
-    --                |> shortWait
-    --                |> Effect.Test.andThen
-    --                    (\state2 ->
-    --                        case List.filterMap isOneTimePasswordEmail state2.httpRequests of
-    --                            [ loginEmail ] ->
-    --                                Effect.Test.continueWith state2
-    --                                    |> Effect.Test.connectFrontend
-    --                                        sessionId1
-    --                                        url
-    --                                        { width = 1920, height = 1080 }
-    --                                        (\( state3, frontend1 ) ->
-    --                                            state3
-    --                                                |> Effect.Test.sendToBackend
-    --                                                    sessionId1
-    --                                                    frontend1.clientId
-    --                                                    (LoginAttemptRequest loginEmail.oneTimePassword)
-    --                                                |> shortWait
-    --                                                |> shouldBeLoggedOut frontend0
-    --                                                |> shouldBeLoggedOut frontend1
-    --                                        )
-    --
-    --                            _ ->
-    --                                Effect.Test.continueWith state2
-    --                                    |> Effect.Test.checkState (\_ -> Err "Login email not found")
-    --                    )
-    --        )
+                                _ ->
+                                    Effect.Test.continueWith state2
+                                        |> Effect.Test.checkState (\_ -> Err "Login email not found")
+                        )
+            )
     ]
 
 
-shortWait : Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+shortWait :
+    Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 shortWait =
     Effect.Test.simulateTime (Duration.milliseconds 50)
 
