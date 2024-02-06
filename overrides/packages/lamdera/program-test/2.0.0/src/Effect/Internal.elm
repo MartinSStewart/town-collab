@@ -5,6 +5,7 @@ module Effect.Internal exposing
     , ClientId(..)
     , Command(..)
     , File(..)
+    , FileUploadContent(..)
     , FrontendOnly
     , HttpBody(..)
     , HttpPart(..)
@@ -167,7 +168,14 @@ type BrowserDomError
 
 type File
     = RealFile File.File
-    | MockFile { name : String, mimeType : String, content : String, lastModified : Time.Posix }
+    | MockFile { name : String, mimeType : String, content : FileUploadContent, lastModified : Time.Posix }
+
+
+{-| The type of data stored in a file
+-}
+type FileUploadContent
+    = BytesFile Bytes
+    | StringFile String
 
 
 type alias HttpRequest data restriction x a =

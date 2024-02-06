@@ -14,18 +14,19 @@ module Effect.Lamdera exposing
 
 -}
 
+import Base64
 import Browser
 import Browser.Dom
 import Browser.Events
 import Browser.Navigation
+import Bytes
+import Bytes.Decode
 import Bytes.Encode
 import Duration
 import Effect.Browser.Navigation
 import Effect.Command exposing (BackendOnly, Command, FrontendOnly)
-import Effect.Http
 import Effect.Internal exposing (File(..), NavigationKey(..))
 import Effect.Subscription exposing (Subscription)
-import Effect.WebGL.Texture
 import File
 import File.Download
 import File.Select
@@ -423,7 +424,16 @@ toTask simulatedTask =
                     File.toString file_ |> Task.andThen (\result -> toTask (function result))
 
                 MockFile { content } ->
-                    Task.succeed content |> Task.andThen (\result -> toTask (function result))
+                    (case content of
+                        Effect.Internal.StringFile a ->
+                            a
+
+                        Effect.Internal.BytesFile a ->
+                            Bytes.Decode.decode (Bytes.Decode.string (Bytes.width a)) a
+                                |> Maybe.withDefault ""
+                    )
+                        |> Task.succeed
+                        |> Task.andThen (\result -> toTask (function result))
 
         Effect.Internal.FileToBytes file function ->
             case file of
@@ -431,8 +441,13 @@ toTask simulatedTask =
                     File.toBytes file_ |> Task.andThen (\result -> toTask (function result))
 
                 MockFile { content } ->
-                    Bytes.Encode.string content
-                        |> Bytes.Encode.encode
+                    (case content of
+                        Effect.Internal.StringFile a ->
+                            Bytes.Encode.encode (Bytes.Encode.string a)
+
+                        Effect.Internal.BytesFile a ->
+                            a
+                    )
                         |> Task.succeed
                         |> Task.andThen (\result -> toTask (function result))
 
@@ -442,8 +457,15 @@ toTask simulatedTask =
                     File.toUrl file_ |> Task.andThen (\result -> toTask (function result))
 
                 MockFile { content } ->
-                    -- This isn't the correct behavior but it should be okay as MockFile should never be used here.
-                    Task.succeed content |> Task.andThen (\result -> toTask (function result))
+                    (case content of
+                        Effect.Internal.StringFile a ->
+                            "data:*/*;base64," ++ Maybe.withDefault "" (Base64.fromString a)
+
+                        Effect.Internal.BytesFile a ->
+                            "data:*/*;base64," ++ Maybe.withDefault "" (Base64.fromBytes a)
+                    )
+                        |> Task.succeed
+                        |> Task.andThen (\result -> toTask (function result))
 
         Effect.Internal.LoadTexture options string function ->
             let

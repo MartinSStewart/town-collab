@@ -1,8 +1,8 @@
 module Effect.Test exposing
-    ( start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, HttpResponse(..), RequestedBy(..), PortToJs
+    ( start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, HttpResponse(..), RequestedBy(..), PortToJs, FileData, FileUpload(..), MultipleFilesUpload(..), uploadBytesFile, uploadStringFile
     , FrontendActions, sendToBackend, simulateTime, fastForward, andThen, continueWith, Instructions, State, startTime, HttpBody(..), HttpPart(..)
     , checkState, checkBackend, toTest, toSnapshots
-    , fakeNavigationKey, viewer, Msg, Model, viewerWith, ViewerWith, startViewer, addBytesFile, addTexture, addTextureWithOptions
+    , fakeNavigationKey, viewer, Msg, Model, viewerWith, ViewerWith, startViewer, addStringFile, addBytesFile, addTexture, addTextureWithOptions
     )
 
 {-|
@@ -10,7 +10,7 @@ module Effect.Test exposing
 
 ## Setting up end to end tests
 
-@docs start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, HttpResponse, RequestedBy, PortToJs
+@docs start, Config, connectFrontend, FrontendApp, BackendApp, HttpRequest, HttpResponse, RequestedBy, PortToJs, FileData, FileUpload, MultipleFilesUpload, uploadBytesFile, uploadStringFile
 
 
 ## Control the tests
@@ -27,17 +27,20 @@ module Effect.Test exposing
 
 Sometimes it's hard to tell what's going on in an end to end test. One way to make this easier to use the `viewer` function. It's like a test runner for your browser that also lets you see the frontend of an app as simulated inputs are being triggered.
 
-@docs fakeNavigationKey, viewer, Msg, Model, viewerWith, ViewerWith, startViewer, addBytesFile, addTexture, addTextureWithOptions
+@docs fakeNavigationKey, viewer, Msg, Model, viewerWith, ViewerWith, startViewer, addStringFile, addBytesFile, addTexture, addTextureWithOptions
 
 -}
 
 import AssocList as Dict exposing (Dict)
+import Base64
 import Browser exposing (UrlRequest(..))
 import Browser.Dom
+import Browser.Events
 import Browser.Navigation
 import Bytes exposing (Bytes, Endianness(..))
 import Bytes.Decode
 import Bytes.Encode
+import DebugParser exposing (ElmValue(..), ExpandableValue(..), SequenceType(..))
 import Dict as RegularDict
 import Duration exposing (Duration)
 import Effect.Browser.Dom exposing (HtmlId)
@@ -48,28 +51,28 @@ import Effect.Internal exposing (Command(..), File, NavigationKey(..), Task(..))
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Snapshot exposing (Snapshot)
 import Effect.Subscription exposing (Subscription)
+import Effect.TreeView exposing (CollapsedField(..), PathNode)
 import Effect.WebGL.Texture
 import Expect exposing (Expectation)
 import Html exposing (Html)
 import Html.Attributes
 import Html.Events
+import Html.Lazy
 import Http
 import Json.Decode
 import Json.Encode
 import List.Nonempty exposing (Nonempty)
 import Process
 import Quantity
+import Set
 import Task
 import Test exposing (Test)
 import Test.Html.Event
-import Test.Html.Internal.ElmHtml.ToString
-import Test.Html.Internal.Inert
 import Test.Html.Query
 import Test.Html.Selector
 import Test.Runner
 import Time
 import Url exposing (Url)
-import WebGL.Texture
 import WebGLFix.Texture
 
 
@@ -83,9 +86,10 @@ import WebGLFix.Texture
     config =
         { frontendApp = Frontend.appFunctions
         , backendApp = Backend.appFunctions
-        , handleHttpRequest = always NetworkError_
+        , handleHttpRequest = always Effect.Test.NetworkErrorResponse
         , handlePortToJs = always Nothing
-        , handleFileRequest = always Nothing
+        , handleFileUpload = always Effect.Test.CancelFileUpload
+        , handleMultipleFilesUpload = always Effect.Test.CancelMultiFileUpload
         , domain = unsafeUrl "https://my-app.lamdera.app"
         }
 
@@ -108,9 +112,54 @@ type alias Config toBackend frontendMsg frontendModel toFrontend backendMsg back
     , backendApp : BackendApp toBackend toFrontend backendMsg backendModel
     , handleHttpRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> HttpResponse
     , handlePortToJs : { currentRequest : PortToJs, pastRequests : List PortToJs } -> Maybe ( String, Json.Decode.Value )
-    , handleFileRequest : { mimeTypes : List String } -> Maybe { name : String, mimeType : String, content : String, lastModified : Time.Posix }
+    , handleFileUpload : { mimeTypes : List String } -> FileUpload
+    , handleMultipleFilesUpload : { mimeTypes : List String } -> MultipleFilesUpload
     , domain : Url
     }
+
+
+{-| Possible simulated user actions for when `Effect.File.Select.file` is triggered.
+-}
+type FileUpload
+    = CancelFileUpload
+    | UploadFile FileData
+
+
+{-| File data for when simulating a user uploading a file via `Effect.File.Select.file` or `Effect.File.Select.files`
+-}
+type FileData
+    = FileUploadData { name : String, mimeType : String, content : Effect.Internal.FileUploadContent, lastModified : Time.Posix }
+
+
+{-| Create a file upload containing text data
+-}
+uploadStringFile : String -> String -> String -> Time.Posix -> FileData
+uploadStringFile name mimeType content lastModified =
+    FileUploadData
+        { name = name
+        , mimeType = mimeType
+        , content = Effect.Internal.StringFile content
+        , lastModified = lastModified
+        }
+
+
+{-| Create a file upload containing binary data
+-}
+uploadBytesFile : String -> String -> Bytes -> Time.Posix -> FileData
+uploadBytesFile name mimeType content lastModified =
+    FileUploadData
+        { name = name
+        , mimeType = mimeType
+        , content = Effect.Internal.BytesFile content
+        , lastModified = lastModified
+        }
+
+
+{-| Possible simulated user actions for when `Effect.File.Select.files` is triggered.
+-}
+type MultipleFilesUpload
+    = CancelMultipleFilesUpload
+    | UploadMultipleFiles FileData (List FileData)
 
 
 {-| -}
@@ -118,13 +167,13 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
     { testName : String
     , frontendApp : FrontendApp toBackend frontendMsg frontendModel toFrontend
     , backendApp : BackendApp toBackend toFrontend backendMsg backendModel
-    , backend : backendModel
+    , model : backendModel
     , pendingEffects : Command BackendOnly toFrontend backendMsg
     , frontends : Dict ClientId (FrontendState toBackend frontendMsg frontendModel toFrontend)
     , counter : Int
     , elapsedTime : Duration
     , toBackend : List ( SessionId, ClientId, toBackend )
-    , timers : Dict Duration { msg : Time.Posix -> backendMsg, startTime : Time.Posix }
+    , timers : Dict Duration { startTime : Time.Posix }
     , testErrors : List TestError
     , httpRequests : List HttpRequest
     , handleHttpRequest : { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> HttpResponse
@@ -132,7 +181,8 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
         { currentRequest : PortToJs, pastRequests : List PortToJs }
         -> Maybe ( String, Json.Decode.Value )
     , portRequests : List PortToJs
-    , handleFileRequest : { mimeTypes : List String } -> Maybe Effect.Internal.File
+    , handleFileUpload : { mimeTypes : List String } -> FileUpload
+    , handleMultipleFilesUpload : { mimeTypes : List String } -> MultipleFilesUpload
     , domain : Url
     , snapshots : List { name : String, body : List (Html frontendMsg), width : Int, height : Int }
     }
@@ -150,6 +200,7 @@ type alias HttpRequest =
     , url : String
     , body : HttpBody
     , headers : List ( String, String )
+    , sentAt : Time.Posix
     }
 
 
@@ -278,7 +329,7 @@ checkBackend checkFunc =
     NextStep
         "Check backend"
         (\state ->
-            case checkFunc state.backend of
+            case checkFunc state.model of
                 Ok () ->
                     state
 
@@ -371,18 +422,11 @@ frontendUpdate clientId msg =
         (\state ->
             case Dict.get clientId state.frontends of
                 Just frontend ->
-                    let
-                        ( newModel, effects ) =
-                            state.frontendApp.update msg frontend.model
-                    in
                     { state
                         | frontends =
                             Dict.insert
                                 clientId
-                                { frontend
-                                    | model = newModel
-                                    , pendingEffects = Effect.Command.batch [ effects, frontend.pendingEffects ]
-                                }
+                                (handleUpdate (currentTime state) state.frontendApp msg frontend)
                                 state.frontends
                     }
 
@@ -583,7 +627,7 @@ type alias FrontendState toBackend frontendMsg frontendModel toFrontend =
     , pendingEffects : Command FrontendOnly toBackend frontendMsg
     , toFrontend : List toFrontend
     , clipboard : String
-    , timers : Dict Duration { msg : Time.Posix -> frontendMsg, startTime : Time.Posix }
+    , timers : Dict Duration { startTime : Time.Posix }
     , url : Url
     , windowSize : { width : Int, height : Int }
     }
@@ -680,7 +724,7 @@ type alias FrontendActions toBackend frontendMsg frontendModel toFrontend backen
     }
 
 
-{-| Setup a test.
+{-| Start a end-to-end test
 
     import Backend
     import Effect.Test
@@ -690,9 +734,10 @@ type alias FrontendActions toBackend frontendMsg frontendModel toFrontend backen
     config =
         { frontendApp = Frontend.appFunctions
         , backendApp = Backend.appFunctions
-        , handleHttpRequest = always NetworkError_
+        , handleHttpRequest = always Effect.Test.NetworkErrorResponse
         , handlePortToJs = always Nothing
-        , handleFileRequest = always Nothing
+        , handleFileUpload = always Effect.Test.CancelFileUpload
+        , handleMultipleFilesUpload = always Effect.Test.CancelMultiFileUpload
         , domain = unsafeUrl "https://my-app.lamdera.app"
         }
 
@@ -724,19 +769,20 @@ start config testName =
             { testName = testName
             , frontendApp = config.frontendApp
             , backendApp = config.backendApp
-            , backend = backend
+            , model = backend
             , pendingEffects = effects
             , frontends = Dict.empty
             , counter = 0
             , elapsedTime = Quantity.zero
             , toBackend = []
-            , timers = getTimers startTime (config.backendApp.subscriptions backend)
+            , timers = getTimers (config.backendApp.subscriptions backend) |> Dict.map (\_ _ -> { startTime = startTime })
             , testErrors = []
             , httpRequests = []
             , handleHttpRequest = config.handleHttpRequest
             , handlePortToJs = config.handlePortToJs
             , portRequests = []
-            , handleFileRequest = config.handleFileRequest >> Maybe.map Effect.Internal.MockFile
+            , handleFileUpload = config.handleFileUpload
+            , handleMultipleFilesUpload = config.handleMultipleFilesUpload
             , domain = config.domain
             , snapshots = []
             }
@@ -744,20 +790,42 @@ start config testName =
     Start state
 
 
-getTimers :
-    Time.Posix
-    -> Subscription restriction backendMsg
-    -> Dict Duration { msg : Time.Posix -> backendMsg, startTime : Time.Posix }
-getTimers currentTime backendSub =
+getTimers : Subscription restriction backendMsg -> Dict Duration { msg : Nonempty (Time.Posix -> backendMsg) }
+getTimers backendSub =
     case backendSub of
         Effect.Internal.SubBatch batch ->
-            List.foldl (\sub dict -> Dict.union (getTimers currentTime sub) dict) Dict.empty batch
+            List.foldl
+                (\sub dict ->
+                    Dict.foldl
+                        (\duration value dict2 ->
+                            Dict.update
+                                duration
+                                (\maybe ->
+                                    (case maybe of
+                                        Just data ->
+                                            { msg = List.Nonempty.append value.msg data.msg }
+
+                                        Nothing ->
+                                            value
+                                    )
+                                        |> Just
+                                )
+                                dict2
+                        )
+                        dict
+                        (getTimers sub)
+                )
+                Dict.empty
+                batch
 
         Effect.Internal.TimeEvery duration msg ->
-            Dict.singleton duration { msg = msg, startTime = currentTime }
+            Dict.singleton duration { msg = List.Nonempty.singleton msg }
 
         Effect.Internal.OnAnimationFrame msg ->
-            Dict.singleton (Duration.seconds (1 / 60)) { msg = msg, startTime = currentTime }
+            Dict.singleton animationFrame { msg = List.Nonempty.singleton msg }
+
+        Effect.Internal.OnAnimationFrameDelta msg ->
+            Dict.singleton animationFrame { msg = List.Nonempty.singleton (\_ -> msg animationFrame) }
 
         _ ->
             Dict.empty
@@ -851,13 +919,13 @@ connectFrontend sessionId url windowSize andThenFunc =
                     state.frontendApp.subscriptions frontend
 
                 ( backend, backendEffects ) =
-                    getClientConnectSubs (state.backendApp.subscriptions state.backend)
+                    getClientConnectSubs (state.backendApp.subscriptions state.model)
                         |> List.foldl
                             (\msg ( newBackend, newEffects ) ->
                                 state.backendApp.update (msg sessionId clientId) newBackend
                                     |> Tuple.mapSecond (\a -> Effect.Command.batch [ newEffects, a ])
                             )
-                            ( state.backend, state.pendingEffects )
+                            ( state.model, state.pendingEffects )
 
                 state2 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
                 state2 =
@@ -870,13 +938,13 @@ connectFrontend sessionId url windowSize andThenFunc =
                                 , pendingEffects = effects
                                 , toFrontend = []
                                 , clipboard = ""
-                                , timers = getTimers (Duration.addTo startTime state.elapsedTime) subscriptions
+                                , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state })
                                 , url = url
                                 , windowSize = windowSize
                                 }
                                 state.frontends
                         , counter = state.counter + 1
-                        , backend = backend
+                        , model = backend
                         , pendingEffects = backendEffects
                     }
             in
@@ -893,6 +961,39 @@ connectFrontend sessionId url windowSize andThenFunc =
                   }
                 )
         )
+
+
+handleUpdate :
+    Time.Posix
+    -> { b | update : msg -> model -> ( model, Command r toMsg msg ), subscriptions : model -> Subscription r msg }
+    -> msg
+    -> { e | model : model, pendingEffects : Command r toMsg msg, timers : Dict Duration { startTime : Time.Posix } }
+    -> { e | model : model, pendingEffects : Command r toMsg msg, timers : Dict Duration { startTime : Time.Posix } }
+handleUpdate currentTime2 app msg state =
+    let
+        ( newModel, cmd ) =
+            app.update msg state.model
+
+        subscriptions : Subscription r msg
+        subscriptions =
+            app.subscriptions newModel
+
+        newTimers : Dict Duration { msg : Nonempty (Time.Posix -> msg) }
+        newTimers =
+            getTimers subscriptions
+    in
+    { state
+        | model = newModel
+        , pendingEffects = Effect.Command.batch [ state.pendingEffects, cmd ]
+        , timers =
+            Dict.merge
+                (\duration _ dict -> Dict.insert duration { startTime = currentTime2 } dict)
+                (\_ _ _ dict -> dict)
+                (\duration _ dict -> Dict.remove duration dict)
+                newTimers
+                state.timers
+                state.timers
+    }
 
 
 snapshotView :
@@ -1005,18 +1106,16 @@ clickLink clientId { href } =
                         Nothing ->
                             case Url.fromString (normalizeUrl state.domain href) of
                                 Just url ->
-                                    let
-                                        ( newModel, effects ) =
-                                            state.frontendApp.update (state.frontendApp.onUrlRequest (Internal url)) frontend.model
-                                    in
                                     { state
                                         | frontends =
                                             Dict.insert
                                                 clientId
-                                                { frontend
-                                                    | model = newModel
-                                                    , pendingEffects = Effect.Command.batch [ effects, frontend.pendingEffects ]
-                                                }
+                                                (handleUpdate
+                                                    (currentTime state)
+                                                    state.frontendApp
+                                                    (state.frontendApp.onUrlRequest (Internal url))
+                                                    frontend
+                                                )
                                                 state.frontends
                                     }
 
@@ -1060,22 +1159,15 @@ userEvent name clientId htmlId event =
                     in
                     case Test.Html.Event.simulate event query |> Test.Html.Event.toResult of
                         Ok msg ->
-                            let
-                                ( newModel, effects ) =
-                                    state.frontendApp.update msg frontend.model
-                            in
                             { state
                                 | frontends =
                                     Dict.insert
                                         clientId
-                                        { frontend
-                                            | model = newModel
-                                            , pendingEffects = Effect.Command.batch [ effects, frontend.pendingEffects ]
-                                        }
+                                        (handleUpdate (currentTime state) state.frontendApp msg frontend)
                                         state.frontends
                             }
 
-                        Err err ->
+                        Err _ ->
                             case Test.Runner.getFailureReason (Test.Html.Query.has [] query) of
                                 Just { description } ->
                                     addTestError
@@ -1092,25 +1184,6 @@ userEvent name clientId htmlId event =
         )
 
 
-formatHtmlError : String -> String
-formatHtmlError description =
-    let
-        stylesStart =
-            String.indexes "<style>" description
-
-        stylesEnd =
-            String.indexes "</style>" description
-    in
-    List.map2 Tuple.pair stylesStart stylesEnd
-        |> List.foldr
-            (\( first, end ) text_ ->
-                String.slice 0 (first + String.length "<style>") text_
-                    ++ "..."
-                    ++ String.slice end (String.length text_ + 999) text_
-            )
-            description
-
-
 {-| -}
 disconnectFrontend :
     BackendApp toBackend toFrontend backendMsg backendModel
@@ -1122,15 +1195,15 @@ disconnectFrontend backendApp clientId state =
         Just frontend ->
             let
                 ( backend, effects ) =
-                    getClientDisconnectSubs (backendApp.subscriptions state.backend)
+                    getClientDisconnectSubs (backendApp.subscriptions state.model)
                         |> List.foldl
                             (\msg ( newBackend, newEffects ) ->
                                 backendApp.update (msg frontend.sessionId clientId) newBackend
                                     |> Tuple.mapSecond (\a -> Effect.Command.batch [ newEffects, a ])
                             )
-                            ( state.backend, state.pendingEffects )
+                            ( state.model, state.pendingEffects )
             in
-            ( { state | backend = backend, pendingEffects = effects, frontends = Dict.remove clientId state.frontends }
+            ( { state | model = backend, pendingEffects = effects, frontends = Dict.remove clientId state.frontends }
             , Just { frontend | toFrontend = [] }
             )
 
@@ -1150,17 +1223,17 @@ reconnectFrontend backendApp frontendState state =
             "clientId " ++ String.fromInt state.counter |> Effect.Lamdera.clientIdFromString
 
         ( backend, effects ) =
-            getClientConnectSubs (backendApp.subscriptions state.backend)
+            getClientConnectSubs (backendApp.subscriptions state.model)
                 |> List.foldl
                     (\msg ( newBackend, newEffects ) ->
                         backendApp.update (msg frontendState.sessionId clientId) newBackend
                             |> Tuple.mapSecond (\a -> Effect.Command.batch [ newEffects, a ])
                     )
-                    ( state.backend, state.pendingEffects )
+                    ( state.model, state.pendingEffects )
     in
     ( { state
         | frontends = Dict.insert clientId frontendState state.frontends
-        , backend = backend
+        , model = backend
         , pendingEffects = effects
         , counter = state.counter + 1
       }
@@ -1184,100 +1257,157 @@ sendToBackend sessionId clientId toBackend =
         )
 
 
+animationFrame : Duration
 animationFrame =
     Duration.seconds (1 / 60)
 
 
-{-| Copied from elm-community/basics-extra
+timerEndTimes : Dict Duration { startTime : Time.Posix } -> List { endTime : Time.Posix, duration : Duration }
+timerEndTimes dict =
+    List.map
+        (\( duration, a ) -> { endTime = Duration.addTo a.startTime duration, duration = duration })
+        (Dict.toList dict)
 
-Perform [modular arithmetic](https://en.wikipedia.org/wiki/Modular_arithmetic)
-involving floating point numbers.
 
-The sign of the result is the same as the sign of the `modulus`
-in `fractionalModBy modulus x`.
-
-    fractionalModBy 2.5 5 --> 0
-
-    fractionalModBy 2 4.5 == 0.5
-
-    fractionalModBy 2 -4.5 == 1.5
-
-    fractionalModBy -2 4.5 == -1.5
-
+{-| Find the first minimum element in a list using a comparable transformation. Copied from elm-community/list-extra package
 -}
-fractionalModBy : Float -> Float -> Float
-fractionalModBy modulus x =
-    x - modulus * toFloat (floor (x / modulus))
+minimumBy : (a -> comparable) -> List a -> Maybe a
+minimumBy f ls =
+    let
+        minBy x ( y, fy ) =
+            let
+                fx =
+                    f x
+            in
+            if fx < fy then
+                ( x, fx )
+
+            else
+                ( y, fy )
+    in
+    case ls of
+        [ l_ ] ->
+            Just l_
+
+        l_ :: ls_ ->
+            Just <| Tuple.first <| List.foldl minBy ( l_, f l_ ) ls_
+
+        _ ->
+            Nothing
+
+
+currentTime : { a | elapsedTime : Duration } -> Time.Posix
+currentTime state =
+    Time.posixToMillis startTime + elapsedTimeInMillis state |> Time.millisToPosix
+
+
+elapsedTimeInMillis : { a | elapsedTime : Duration } -> Int
+elapsedTimeInMillis state =
+    Duration.inMilliseconds state.elapsedTime |> round
+
+
+getTriggersTimerMsgs :
+    (model -> Subscription restriction msg)
+    -> { c | timers : Dict Duration { startTime : Time.Posix }, model : model }
+    -> Time.Posix
+    -> { triggeredMsgs : List msg, completedDurations : List Duration }
+getTriggersTimerMsgs subscriptionsFunc state endTime =
+    let
+        completedDurations : List Duration
+        completedDurations =
+            List.filterMap
+                (\b ->
+                    if Time.posixToMillis b.endTime <= Time.posixToMillis endTime then
+                        Just b.duration
+
+                    else
+                        Nothing
+                )
+                (timerEndTimes state.timers)
+    in
+    { triggeredMsgs =
+        subscriptionsFunc state.model
+            |> getTimers
+            |> Dict.filter (\duration _ -> List.member duration completedDurations)
+            |> Dict.values
+            |> List.concatMap (\value -> List.Nonempty.toList value.msg)
+            |> List.map (\msg -> msg endTime)
+    , completedDurations = completedDurations
+    }
+
+
+hasPendingEffects : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Bool
+hasPendingEffects state =
+    not (List.isEmpty (flattenEffects state.pendingEffects))
+        || not (List.isEmpty (List.concatMap (\a -> flattenEffects a.pendingEffects) (Dict.values state.frontends)))
 
 
 simulateStep :
-    FrontendApp toBackend frontendMsg frontendModel toFrontend
-    -> BackendApp toBackend toFrontend backendMsg backendModel
+    Duration
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-simulateStep frontendApp backendApp state =
-    let
-        newTime =
-            Quantity.plus state.elapsedTime animationFrame
+simulateStep timeLeft state =
+    case
+        timerEndTimes state.timers
+            ++ List.concatMap (\( _, frontend ) -> timerEndTimes frontend.timers) (Dict.toList state.frontends)
+            |> minimumBy (\a -> Time.posixToMillis a.endTime)
+    of
+        Just nextTimerEnd ->
+            let
+                delta : Duration
+                delta =
+                    Duration.from (currentTime state) nextTimerEnd.endTime
+            in
+            if
+                hasPendingEffects state
+                    && (timeLeft |> Quantity.greaterThanOrEqualTo animationFrame)
+                    && (delta |> Quantity.greaterThan animationFrame)
+            then
+                runEffects state.frontendApp state.backendApp { state | elapsedTime = Quantity.plus animationFrame state.elapsedTime }
+                    |> simulateStep (timeLeft |> Quantity.minus animationFrame)
 
-        getCompletedTimers : Dict Duration { a | startTime : Time.Posix } -> List ( Duration, { a | startTime : Time.Posix } )
-        getCompletedTimers timers =
-            Dict.toList timers
-                |> List.filter
-                    (\( duration, value ) ->
+            else if delta |> Quantity.lessThanOrEqualTo timeLeft then
+                let
+                    state2 =
                         let
-                            offset : Duration
-                            offset =
-                                Duration.from startTime value.startTime
-
-                            timerLength : Float
-                            timerLength =
-                                Duration.inMilliseconds duration
+                            { triggeredMsgs, completedDurations } =
+                                getTriggersTimerMsgs state.backendApp.subscriptions state nextTimerEnd.endTime
                         in
-                        if newTime |> Quantity.minus state.elapsedTime |> Quantity.greaterThanOrEqualTo duration then
-                            True
+                        List.foldl
+                            (handleUpdate nextTimerEnd.endTime state.backendApp)
+                            { state | timers = List.foldl Dict.remove state.timers completedDurations }
+                            triggeredMsgs
+                in
+                simulateStep
+                    (timeLeft |> Quantity.minus delta)
+                    { state2
+                        | elapsedTime = Duration.from startTime nextTimerEnd.endTime
+                        , frontends =
+                            Dict.map
+                                (\_ frontend ->
+                                    let
+                                        { triggeredMsgs, completedDurations } =
+                                            getTriggersTimerMsgs state.frontendApp.subscriptions frontend nextTimerEnd.endTime
+                                    in
+                                    List.foldl
+                                        (handleUpdate nextTimerEnd.endTime state.frontendApp)
+                                        { frontend | timers = List.foldl Dict.remove frontend.timers completedDurations }
+                                        triggeredMsgs
+                                )
+                                state.frontends
+                    }
+                    |> runEffects state.frontendApp state.backendApp
 
-                        else
-                            fractionalModBy timerLength (state.elapsedTime |> Quantity.minus offset |> Duration.inMilliseconds)
-                                > fractionalModBy timerLength (newTime |> Quantity.minus offset |> Duration.inMilliseconds)
-                    )
+            else
+                { state | elapsedTime = Quantity.plus state.elapsedTime timeLeft }
 
-        ( newBackend, newBackendEffects ) =
-            getCompletedTimers state.timers
-                |> List.foldl
-                    (\( _, { msg } ) ( backend, effects ) ->
-                        backendApp.update
-                            (msg (Duration.addTo startTime newTime))
-                            backend
-                            |> Tuple.mapSecond (\a -> Effect.Command.batch [ effects, a ])
-                    )
-                    ( state.backend, state.pendingEffects )
-    in
-    { state
-        | elapsedTime = newTime
-        , pendingEffects = newBackendEffects
-        , backend = newBackend
-        , frontends =
-            Dict.map
-                (\_ frontend ->
-                    let
-                        ( newFrontendModel, newFrontendEffects ) =
-                            getCompletedTimers frontend.timers
-                                |> Debug.log "timer"
-                                |> List.foldl
-                                    (\( _, { msg } ) ( frontendModel, effects ) ->
-                                        frontendApp.update
-                                            (msg (Duration.addTo startTime newTime))
-                                            frontendModel
-                                            |> Tuple.mapSecond (\a -> Effect.Command.batch [ effects, a ])
-                                    )
-                                    ( frontend.model, frontend.pendingEffects )
-                    in
-                    { frontend | pendingEffects = newFrontendEffects, model = newFrontendModel }
-                )
-                state.frontends
-    }
-        |> runEffects frontendApp backendApp
+        Nothing ->
+            if hasPendingEffects state && (timeLeft |> Quantity.greaterThanOrEqualTo animationFrame) then
+                runEffects state.frontendApp state.backendApp { state | elapsedTime = Quantity.plus animationFrame state.elapsedTime }
+                    |> simulateStep (timeLeft |> Quantity.minus animationFrame)
+
+            else
+                { state | elapsedTime = Quantity.plus state.elapsedTime timeLeft }
 
 
 {-| Simulate the passage of time.
@@ -1293,21 +1423,7 @@ simulateTime :
 simulateTime duration =
     NextStep
         ("Simulate time " ++ String.fromFloat (Duration.inSeconds duration) ++ "s")
-        (\state -> simulateTimeHelper state.frontendApp state.backendApp duration state)
-
-
-simulateTimeHelper :
-    FrontendApp toBackend frontendMsg frontendModel toFrontend
-    -> BackendApp toBackend toFrontend backendMsg backendModel
-    -> Duration
-    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-simulateTimeHelper frontendApp backendApp duration state =
-    if duration |> Quantity.lessThan Quantity.zero then
-        state
-
-    else
-        simulateTimeHelper frontendApp backendApp (duration |> Quantity.minus animationFrame) (simulateStep frontendApp backendApp state)
+        (simulateStep duration)
 
 
 {-| Similar to `simulateTime` but this will not trigger any `Browser.onAnimationFrame` or `Time.every` subscriptions.
@@ -1391,9 +1507,11 @@ runEffects :
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 runEffects frontendApp backendApp state =
     let
+        state2 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
         state2 =
             runBackendEffects frontendApp backendApp state.pendingEffects (clearBackendEffects state)
 
+        state4 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
         state4 =
             Dict.foldl
                 (\clientId { sessionId, pendingEffects } state3 ->
@@ -1432,7 +1550,7 @@ runNetwork frontendApp backendApp state =
                     backendApp.updateFromFrontend sessionId clientId toBackendMsg model
                         |> Tuple.mapSecond (\a -> Effect.Command.batch [ effects2, a ])
                 )
-                ( state.backend, state.pendingEffects )
+                ( state.model, state.pendingEffects )
                 state.toBackend
 
         frontends =
@@ -1458,7 +1576,7 @@ runNetwork frontendApp backendApp state =
     in
     { state
         | toBackend = []
-        , backend = backendModel
+        , model = backendModel
         , pendingEffects = flattenEffects effects |> Effect.Command.batch
         , frontends = frontends
     }
@@ -1509,11 +1627,11 @@ runFrontendEffects frontendApp sessionId clientId effectsToPerform state =
         NavigationLoad urlText ->
             handleUrlChange frontendApp urlText clientId state
 
-        NavigationBack _ int ->
+        NavigationBack _ _ ->
             -- TODO
             state
 
-        NavigationForward _ int ->
+        NavigationForward _ _ ->
             -- TODO
             state
 
@@ -1535,18 +1653,12 @@ runFrontendEffects frontendApp sessionId clientId effectsToPerform state =
             in
             case Dict.get clientId newState.frontends of
                 Just frontend ->
-                    let
-                        ( model, effects ) =
-                            frontendApp.update msg frontend.model
-                    in
                     { newState
                         | frontends =
-                            Dict.insert clientId
-                                { frontend
-                                    | model = model
-                                    , pendingEffects = Effect.Command.batch [ frontend.pendingEffects, effects ]
-                                }
-                                state.frontends
+                            Dict.insert
+                                clientId
+                                (handleUpdate (currentTime newState) frontendApp msg frontend)
+                                newState.frontends
                     }
 
                 Nothing ->
@@ -1570,35 +1682,24 @@ runFrontendEffects frontendApp sessionId clientId effectsToPerform state =
                     case Dict.get clientId state.frontends of
                         Just frontend ->
                             let
-                                msgs : List (Json.Decode.Value -> frontendMsg)
+                                msgs : List frontendMsg
                                 msgs =
                                     frontendApp.subscriptions frontend.model
                                         |> getPortSubscriptions
                                         |> List.filterMap
                                             (\sub ->
                                                 if sub.portName == responsePortName then
-                                                    Just sub.msg
+                                                    Just (sub.msg responseValue)
 
                                                 else
                                                     Nothing
                                             )
-
-                                ( model, effects ) =
-                                    List.foldl
-                                        (\msg ( model_, effects_ ) ->
-                                            let
-                                                ( newModel, newEffects ) =
-                                                    frontendApp.update (msg responseValue) model_
-                                            in
-                                            ( newModel, Effect.Command.batch [ effects_, newEffects ] )
-                                        )
-                                        ( frontend.model, frontend.pendingEffects )
-                                        msgs
                             in
                             { newState
                                 | frontends =
-                                    Dict.insert clientId
-                                        { frontend | model = model, pendingEffects = effects }
+                                    Dict.insert
+                                        clientId
+                                        (List.foldl (handleUpdate (currentTime state) frontendApp) frontend msgs)
                                         newState.frontends
                             }
 
@@ -1624,42 +1725,64 @@ runFrontendEffects frontendApp sessionId clientId effectsToPerform state =
             state
 
         FileSelectFile mimeTypes msg ->
-            case state.handleFileRequest { mimeTypes = mimeTypes } of
-                Just file ->
+            case state.handleFileUpload { mimeTypes = mimeTypes } of
+                UploadFile (FileUploadData file) ->
                     case Dict.get clientId state.frontends of
                         Just frontend ->
-                            let
-                                ( model, effects ) =
-                                    frontendApp.update (msg file) frontend.model
-                            in
                             { state
                                 | frontends =
-                                    Dict.insert clientId
-                                        { frontend
-                                            | model = model
-                                            , pendingEffects = Effect.Command.batch [ frontend.pendingEffects, effects ]
-                                        }
+                                    Dict.insert
+                                        clientId
+                                        (handleUpdate
+                                            (currentTime state)
+                                            frontendApp
+                                            (msg (Effect.Internal.MockFile file))
+                                            frontend
+                                        )
                                         state.frontends
                             }
 
                         Nothing ->
                             state
 
-                Nothing ->
+                CancelFileUpload ->
                     state
 
-        FileSelectFiles strings function ->
-            -- TODO
-            state
+        FileSelectFiles mimeTypes msg ->
+            case state.handleMultipleFilesUpload { mimeTypes = mimeTypes } of
+                UploadMultipleFiles (FileUploadData file) files ->
+                    case Dict.get clientId state.frontends of
+                        Just frontend ->
+                            { state
+                                | frontends =
+                                    Dict.insert
+                                        clientId
+                                        (handleUpdate
+                                            (currentTime state)
+                                            frontendApp
+                                            (msg
+                                                (Effect.Internal.MockFile file)
+                                                (List.map (\(FileUploadData a) -> Effect.Internal.MockFile a) files)
+                                            )
+                                            frontend
+                                        )
+                                        state.frontends
+                            }
+
+                        Nothing ->
+                            state
+
+                CancelMultipleFilesUpload ->
+                    state
 
         Broadcast _ ->
             state
 
-        HttpCancel string ->
+        HttpCancel _ ->
             -- TODO
             state
 
-        Passthrough cmd ->
+        Passthrough _ ->
             state
 
 
@@ -1686,6 +1809,7 @@ handleUrlChange :
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 handleUrlChange frontendApp urlText clientId state =
     let
+        urlText_ : String
         urlText_ =
             normalizeUrl state.domain urlText
     in
@@ -1694,19 +1818,10 @@ handleUrlChange frontendApp urlText clientId state =
             case Dict.get clientId state.frontends of
                 Just frontend ->
                     let
-                        ( model, effects ) =
-                            frontendApp.update (frontendApp.onUrlChange url) frontend.model
+                        newFrontend =
+                            handleUpdate (currentTime state) frontendApp (frontendApp.onUrlChange url) frontend
                     in
-                    { state
-                        | frontends =
-                            Dict.insert clientId
-                                { frontend
-                                    | model = model
-                                    , pendingEffects = Effect.Command.batch [ frontend.pendingEffects, effects ]
-                                    , url = url
-                                }
-                                state.frontends
-                    }
+                    { state | frontends = Dict.insert clientId { newFrontend | url = url } state.frontends }
 
                 Nothing ->
                     state
@@ -1775,10 +1890,10 @@ runBackendEffects frontendApp backendApp effect state =
                     runTask Nothing frontendApp state task
 
                 ( model, effects ) =
-                    backendApp.update msg newState.backend
+                    backendApp.update msg newState.model
             in
             { newState
-                | backend = model
+                | model = model
                 , pendingEffects = Effect.Command.batch [ newState.pendingEffects, effects ]
             }
 
@@ -1832,11 +1947,11 @@ runBackendEffects frontendApp backendApp effect state =
                         state.frontends
             }
 
-        HttpCancel string ->
+        HttpCancel _ ->
             -- TODO
             state
 
-        Passthrough cmd ->
+        Passthrough _ ->
             state
 
 
@@ -1870,6 +1985,7 @@ runTask maybeClientId frontendApp state task =
                     , url = httpRequest.url
                     , body = httpBodyFromInternal httpRequest.body
                     , headers = httpRequest.headers
+                    , sentAt = currentTime state
                     }
             in
             state.handleHttpRequest { currentRequest = request, pastRequests = state.httpRequests }
@@ -1925,6 +2041,7 @@ runTask maybeClientId frontendApp state task =
                     , url = httpRequest.url
                     , body = httpBodyFromInternal httpRequest.body
                     , headers = httpRequest.headers
+                    , sentAt = currentTime state
                     }
             in
             state.handleHttpRequest { currentRequest = request, pastRequests = state.httpRequests }
@@ -1966,7 +2083,7 @@ runTask maybeClientId frontendApp state task =
             runTask maybeClientId frontendApp state (function ())
 
         TimeNow gotTime ->
-            gotTime (Duration.addTo startTime state.elapsedTime) |> runTask maybeClientId frontendApp state
+            gotTime (currentTime state) |> runTask maybeClientId frontendApp state
 
         TimeHere gotTimeZone ->
             gotTimeZone Time.utc |> runTask maybeClientId frontendApp state
@@ -2021,7 +2138,16 @@ runTask maybeClientId frontendApp state task =
                     function "" |> runTask maybeClientId frontendApp state
 
                 Effect.Internal.MockFile { content } ->
-                    function content |> runTask maybeClientId frontendApp state
+                    (case content of
+                        Effect.Internal.StringFile a ->
+                            a
+
+                        Effect.Internal.BytesFile a ->
+                            Bytes.Decode.decode (Bytes.Decode.string (Bytes.width a)) a
+                                |> Maybe.withDefault ""
+                    )
+                        |> function
+                        |> runTask maybeClientId frontendApp state
 
         FileToBytes file function ->
             case file of
@@ -2030,7 +2156,14 @@ runTask maybeClientId frontendApp state task =
                         |> runTask maybeClientId frontendApp state
 
                 Effect.Internal.MockFile { content } ->
-                    function (Bytes.Encode.encode (Bytes.Encode.string content))
+                    (case content of
+                        Effect.Internal.StringFile a ->
+                            Bytes.Encode.encode (Bytes.Encode.string a)
+
+                        Effect.Internal.BytesFile a ->
+                            a
+                    )
+                        |> function
                         |> runTask maybeClientId frontendApp state
 
         FileToUrl file function ->
@@ -2039,8 +2172,15 @@ runTask maybeClientId frontendApp state task =
                     function "" |> runTask maybeClientId frontendApp state
 
                 Effect.Internal.MockFile { content } ->
-                    -- TODO: Don't assume that content is already in a data url format.
-                    function content |> runTask maybeClientId frontendApp state
+                    (case content of
+                        Effect.Internal.StringFile a ->
+                            "data:*/*;base64," ++ Maybe.withDefault "" (Base64.fromString a)
+
+                        Effect.Internal.BytesFile a ->
+                            "data:*/*;base64," ++ Maybe.withDefault "" (Base64.fromBytes a)
+                    )
+                        |> function
+                        |> runTask maybeClientId frontendApp state
 
         Focus htmlId function ->
             getDomTask frontendApp maybeClientId state htmlId function ()
@@ -2079,6 +2219,7 @@ runTask maybeClientId frontendApp state task =
                             , url = url
                             , body = EmptyBody
                             , headers = []
+                            , sentAt = currentTime state
                             }
                         , pastRequests = state.httpRequests
                         }
@@ -2156,6 +2297,9 @@ type alias TestView frontendModel =
     , stepIndex : Int
     , steps : Nonempty (TestStep frontendModel)
     , overlayPosition : OverlayPosition
+    , clientId : Maybe ClientId
+    , showModel : Bool
+    , collapsedFields : RegularDict.Dict (List String) CollapsedField
     }
 
 
@@ -2167,15 +2311,17 @@ type OverlayPosition
 type alias TestStep frontendModel =
     { stepName : String
     , errors : List TestError
-    , frontends :
-        Dict
-            ClientId
-            { model : frontendModel
-            , sessionId : SessionId
-            , clipboard : String
-            , url : Url
-            , windowSize : { width : Int, height : Int }
-            }
+    , frontends : Dict ClientId (TestStepFrontend frontendModel)
+    }
+
+
+type alias TestStepFrontend frontendModel =
+    { model : frontendModel
+    , sessionId : SessionId
+    , clipboard : String
+    , url : Url
+    , windowSize : { width : Int, height : Int }
+    , cachedElmValue : Maybe ElmValue
     }
 
 
@@ -2191,6 +2337,12 @@ type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     | NoOp
     | GotFilesForTests (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
     | PressedToggleOverlayPosition
+    | SelectedFrontend ClientId
+    | PressedShowModel
+    | PressedHideModel
+    | PressedExpandField (List PathNode)
+    | PressedCollapseField (List PathNode)
+    | PressedArrowKey ArrowKey
 
 
 init :
@@ -2216,7 +2368,7 @@ update :
         , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         )
 update config msg model =
-    case msg of
+    (case msg of
         UrlClicked urlRequest ->
             case urlRequest of
                 Browser.Internal _ ->
@@ -2230,7 +2382,7 @@ update config msg model =
 
         PressedViewTest index ->
             case model.tests of
-                Just (Err error) ->
+                Just (Err _) ->
                     ( model, Cmd.none )
 
                 Just (Ok tests) ->
@@ -2257,6 +2409,7 @@ update config msg model =
                                                             , clipboard = frontend.clipboard
                                                             , url = frontend.url
                                                             , windowSize = frontend.windowSize
+                                                            , cachedElmValue = Nothing
                                                             }
                                                         )
                                                         state_.frontends
@@ -2265,6 +2418,9 @@ update config msg model =
                                             (flatten test)
                                     , stepIndex = 0
                                     , overlayPosition = Top
+                                    , clientId = Nothing
+                                    , showModel = False
+                                    , collapsedFields = RegularDict.empty
                                     }
                                         |> Just
                               }
@@ -2281,35 +2437,10 @@ update config msg model =
             ( model, Cmd.none )
 
         PressedStepForward ->
-            ( { model
-                | currentTest =
-                    case model.currentTest of
-                        Just currentTest ->
-                            { currentTest
-                                | stepIndex =
-                                    min (List.Nonempty.length currentTest.steps - 1) (currentTest.stepIndex + 1)
-                            }
-                                |> Just
-
-                        Nothing ->
-                            Nothing
-              }
-            , Cmd.none
-            )
+            ( updateCurrentTest stepForward model, Cmd.none )
 
         PressedStepBackward ->
-            ( { model
-                | currentTest =
-                    case model.currentTest of
-                        Just currentTest ->
-                            { currentTest | stepIndex = max 0 (currentTest.stepIndex - 1) }
-                                |> Just
-
-                        Nothing ->
-                            Nothing
-              }
-            , Cmd.none
-            )
+            ( updateCurrentTest stepBackward model, Cmd.none )
 
         PressedBackToOverview ->
             ( { model | currentTest = Nothing }, Cmd.none )
@@ -2344,26 +2475,201 @@ update config msg model =
                     ( { model | tests = Just (Err error) }, Cmd.none )
 
         PressedToggleOverlayPosition ->
-            ( { model
-                | currentTest =
-                    case model.currentTest of
-                        Just currentTest ->
-                            { currentTest
-                                | overlayPosition =
-                                    case currentTest.overlayPosition of
-                                        Top ->
-                                            Bottom
+            ( updateCurrentTest
+                (\currentTest ->
+                    { currentTest
+                        | overlayPosition =
+                            case currentTest.overlayPosition of
+                                Top ->
+                                    Bottom
 
-                                        Bottom ->
-                                            Top
-                            }
-                                |> Just
-
-                        Nothing ->
-                            Nothing
-              }
+                                Bottom ->
+                                    Top
+                    }
+                )
+                model
             , Cmd.none
             )
+
+        SelectedFrontend clientId ->
+            ( updateCurrentTest (\currentTest -> { currentTest | clientId = Just clientId }) model, Cmd.none )
+
+        PressedShowModel ->
+            ( updateCurrentTest (\currentTest -> { currentTest | showModel = True }) model, Cmd.none )
+
+        PressedHideModel ->
+            ( updateCurrentTest (\currentTest -> { currentTest | showModel = False }) model, Cmd.none )
+
+        PressedExpandField pathNodes ->
+            ( updateCurrentTest
+                (\currentTest ->
+                    { currentTest
+                        | collapsedFields =
+                            RegularDict.insert
+                                (List.map Effect.TreeView.pathNodeToKey pathNodes)
+                                FieldIsExpanded
+                                currentTest.collapsedFields
+                    }
+                )
+                model
+            , Cmd.none
+            )
+
+        PressedCollapseField pathNodes ->
+            ( updateCurrentTest
+                (\currentTest ->
+                    { currentTest
+                        | collapsedFields =
+                            RegularDict.insert
+                                (List.map Effect.TreeView.pathNodeToKey pathNodes)
+                                FieldIsCollapsed
+                                currentTest.collapsedFields
+                    }
+                )
+                model
+            , Cmd.none
+            )
+
+        PressedArrowKey arrowKey ->
+            ( updateCurrentTest
+                (\currentTest ->
+                    case arrowKey of
+                        ArrowRight ->
+                            stepForward currentTest
+
+                        ArrowLeft ->
+                            stepBackward currentTest
+                )
+                model
+            , Cmd.none
+            )
+    )
+        |> checkCachedElmValue
+
+
+stepForward : TestView frontendModel -> TestView frontendModel
+stepForward currentTest =
+    case List.Nonempty.toList currentTest.steps |> listGet (currentTest.stepIndex + 1) of
+        Just nextStep ->
+            { currentTest
+                | stepIndex = currentTest.stepIndex + 1
+                , clientId =
+                    case currentTest.clientId of
+                        Nothing ->
+                            Dict.keys nextStep.frontends |> List.head
+
+                        Just clientId ->
+                            Just clientId
+            }
+
+        Nothing ->
+            currentTest
+
+
+stepBackward : TestView frontendModel -> TestView frontendModel
+stepBackward currentTest =
+    { currentTest | stepIndex = max 0 (currentTest.stepIndex - 1) }
+
+
+checkCachedElmValue :
+    ( Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    )
+    ->
+        ( Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+        )
+checkCachedElmValue ( model, cmd ) =
+    ( updateCurrentTest
+        (\currentTest ->
+            case ( currentTest.clientId, model.tests ) of
+                ( Just clientId, Just (Ok tests) ) ->
+                    { currentTest
+                        | steps =
+                            checkCachedElmValueHelper clientId currentTest.stepIndex currentTest tests currentTest.steps
+                                |> checkCachedElmValueHelper clientId (currentTest.stepIndex - 1) currentTest tests
+                    }
+
+                _ ->
+                    currentTest
+        )
+        model
+    , cmd
+    )
+
+
+checkCachedElmValueHelper :
+    ClientId
+    -> Int
+    -> TestView frontendModel
+    -> List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    -> Nonempty (TestStep frontendModel)
+    -> Nonempty (TestStep frontendModel)
+checkCachedElmValueHelper clientId stepIndex currentTest tests steps =
+    updateAt
+        stepIndex
+        (\currentStep ->
+            { currentStep
+                | frontends =
+                    Dict.update
+                        clientId
+                        (Maybe.map
+                            (\frontend ->
+                                { frontend
+                                    | cachedElmValue =
+                                        case ( frontend.cachedElmValue, getAt currentTest.index tests ) of
+                                            ( Nothing, Just instructions ) ->
+                                                if currentTest.showModel then
+                                                    toElmValue (getFrontendApp instructions) frontend
+
+                                                else
+                                                    Nothing
+
+                                            _ ->
+                                                frontend.cachedElmValue
+                                }
+                            )
+                        )
+                        currentStep.frontends
+            }
+        )
+        steps
+
+
+updateAt : Int -> (b -> b) -> Nonempty b -> Nonempty b
+updateAt index mapFunc list =
+    List.indexedMap
+        (\index2 item ->
+            if index2 == index then
+                mapFunc item
+
+            else
+                item
+        )
+        (List.Nonempty.toList list)
+        |> List.Nonempty.fromList
+        |> Maybe.withDefault list
+
+
+updateCurrentTest :
+    (TestView frontendModel -> TestView frontendModel)
+    -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+updateCurrentTest func model =
+    { model
+        | currentTest =
+            case model.currentTest of
+                Just currentTest ->
+                    func currentTest |> Just
+
+                Nothing ->
+                    Nothing
+    }
+
+
+listGet : Int -> List a -> Maybe a
+listGet index list =
+    List.drop index list |> List.head
 
 
 view :
@@ -2372,7 +2678,7 @@ view :
 view model =
     { title = "Test viewer"
     , body =
-        [ case model.tests of
+        case model.tests of
             Just (Ok tests) ->
                 case model.currentTest of
                     Just testView_ ->
@@ -2381,13 +2687,13 @@ view model =
                                 testView instructions testView_
 
                             Nothing ->
-                                text "Invalid index for tests"
+                                [ text "Invalid index for tests" ]
 
                     Nothing ->
-                        overview tests model.testResults
+                        [ overview tests model.testResults ]
 
             Just (Err error) ->
-                "Failed to load \""
+                [ "Failed to load \""
                     ++ error.name
                     ++ "\" "
                     ++ (case error.error of
@@ -2413,10 +2719,10 @@ view model =
                                 "due to the texture being an invalid size (width: " ++ String.fromInt w ++ ", height: " ++ String.fromInt h ++ ")"
                        )
                     |> text
+                ]
 
             Nothing ->
-                text "Loading files for tests..."
-        ]
+                [ text "Loading files for tests..." ]
     }
 
 
@@ -2436,7 +2742,7 @@ overview tests testResults_ =
             , testResults = List.drop 1 testResults
             , elements =
                 Html.div
-                    []
+                    [ Html.Attributes.style "padding-bottom" "4px" ]
                     [ button (PressedViewTest index) (getTestName test)
                     , case testResults of
                         (Ok ()) :: _ ->
@@ -2468,7 +2774,14 @@ overview tests testResults_ =
             [ Html.Attributes.style "padding" "8px"
             , Html.Attributes.style "font-family" "arial"
             , Html.Attributes.style "font-size" "16px"
+            , darkBackground
+            , Html.Attributes.style "height" "100vh"
             ]
+
+
+darkBackground : Html.Attribute msg
+darkBackground =
+    Html.Attributes.style "background-color" "rgb(20,20,20)"
 
 
 button : msg -> String -> Html msg
@@ -2476,6 +2789,10 @@ button onPress text_ =
     Html.button
         [ Html.Events.onClick onPress
         , Html.Attributes.style "padding" "8px"
+        , Html.Attributes.style "color" "rgb(10,10,10)"
+        , Html.Attributes.style "background-color" "rgb(240,240,240)"
+        , Html.Attributes.style "border-width" "0px"
+        , Html.Attributes.style "border-radius" "4px"
         ]
         [ Html.text text_ ]
 
@@ -2485,6 +2802,43 @@ overlayButton onPress text_ =
     Html.button
         [ Html.Events.onClick onPress
         , Html.Attributes.style "padding" "2px"
+        , Html.Attributes.style "margin" "0px"
+        , Html.Attributes.style "color" "rgb(10,10,10)"
+        , Html.Attributes.style "background-color" "rgb(240,240,240)"
+        , Html.Attributes.style "border-color" "rgb(250,250,250)"
+        , Html.Attributes.style "border-width" "1px"
+        , Html.Attributes.style "border-radius" "4px"
+        , Html.Attributes.style "border-style" "solid"
+        , Html.Attributes.style "font-family" "arial"
+        , Html.Attributes.style "font-size" "14px"
+        , Html.Attributes.style "font-weight" "regular"
+        , Html.Attributes.style "line-height" "1"
+        ]
+        [ Html.text text_ ]
+
+
+overlaySelectButton : Bool -> msg -> String -> Html msg
+overlaySelectButton isSelected onPress text_ =
+    Html.button
+        [ Html.Events.onClick onPress
+        , Html.Attributes.style "padding" "2px"
+        , Html.Attributes.style "color" "rgb(10,10,10)"
+        , Html.Attributes.style
+            "background-color"
+            (if isSelected then
+                "rgb(180,200,255)"
+
+             else
+                "rgb(240,240,240)"
+            )
+        , Html.Attributes.style "border-color" "rgb(250,250,250)"
+        , Html.Attributes.style "border-width" "1px"
+        , Html.Attributes.style "border-radius" "4px"
+        , Html.Attributes.style "border-style" "solid"
+        , Html.Attributes.style "font-family" "arial"
+        , Html.Attributes.style "font-size" "14px"
+        , Html.Attributes.style "font-weight" "regular"
+        , Html.Attributes.style "line-height" "1"
         ]
         [ Html.text text_ ]
 
@@ -2501,21 +2855,29 @@ titleText : String -> Html msg
 titleText text_ =
     Html.h1
         [ Html.Attributes.style "font-size" "20px"
+        , defaultFontColor
         ]
         [ Html.text text_ ]
 
 
-getViewFunc : Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> frontendModel -> List (Html frontendMsg)
-getViewFunc instructions =
+defaultFontColor : Html.Attribute msg
+defaultFontColor =
+    Html.Attributes.style "color" "rgb(240,240,240)"
+
+
+getFrontendApp :
+    Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> FrontendApp toBackend frontendMsg frontendModel toFrontend
+getFrontendApp instructions =
     case instructions of
         NextStep _ _ instructions_ ->
-            getViewFunc instructions_
+            getFrontendApp instructions_
 
         AndThen _ instructions_ ->
-            getViewFunc instructions_
+            getFrontendApp instructions_
 
         Start state ->
-            \model -> state.frontendApp.view model |> .body
+            state.frontendApp
 
 
 getTestName : Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> String
@@ -2531,35 +2893,181 @@ getTestName instructions =
             state.testName
 
 
+modelView :
+    RegularDict.Dict (List String) CollapsedField
+    -> TestStepFrontend frontendModel
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+modelView collapsedFields frontend =
+    case frontend.cachedElmValue of
+        Just elmValue ->
+            Effect.TreeView.treeView treeViewConfig 0 [] collapsedFields elmValue
+
+        Nothing ->
+            Html.text "Failed to show frontend model"
+
+
+treeViewConfig : Effect.TreeView.MsgConfig (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+treeViewConfig =
+    { pressedExpandField = PressedExpandField
+    , pressedCollapseField = PressedCollapseField
+    }
+
+
+toElmValue : FrontendApp toBackend frontendMsg frontendModel toFrontend -> TestStepFrontend frontendModel -> Maybe ElmValue
+toElmValue frontendApp testStep =
+    { sessionId = Effect.Lamdera.sessionIdToString testStep.sessionId
+    , url = Url.toString testStep.url
+    , subscriptions = frontendApp.subscriptions testStep.model
+    , model = testStep.model
+    }
+        |> DebugParser.valueToElmValue
+        |> Just
+
+
+
+--|> Debug.toString
+--|> DebugParser.parseWithOptionalTag
+--|> Result.toMaybe
+--|> Maybe.map (\a -> refineElmValue a.value)
+
+
+refineElmValue : ElmValue -> ElmValue
+refineElmValue value =
+    case value of
+        Plain _ ->
+            value
+
+        Expandable expandableValue ->
+            (case expandableValue of
+                ElmSequence sequenceType elmValues ->
+                    List.map refineElmValue elmValues |> ElmSequence sequenceType
+
+                ElmType variant elmValues ->
+                    case ( variant, elmValues ) of
+                        ( "D", [ Expandable (ElmSequence SeqList list) ] ) ->
+                            List.filterMap
+                                (\a ->
+                                    case a of
+                                        Expandable (ElmSequence SeqTuple [ key, value2 ]) ->
+                                            Just ( refineElmValue key, refineElmValue value2 )
+
+                                        _ ->
+                                            Nothing
+                                )
+                                list
+                                |> ElmDict
+
+                        _ ->
+                            ElmType variant (List.map refineElmValue elmValues)
+
+                ElmRecord fields ->
+                    List.map (\( field, value2 ) -> ( field, refineElmValue value2 )) fields |> ElmRecord
+
+                ElmDict list ->
+                    List.map (\( key, value2 ) -> ( refineElmValue key, refineElmValue value2 )) list
+                        |> ElmDict
+            )
+                |> Expandable
+
+
+modelDiffView :
+    RegularDict.Dict (List String) CollapsedField
+    -> TestStepFrontend frontendModel
+    -> TestStepFrontend frontendModel
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+modelDiffView collapsedFields frontend previousFrontend =
+    case ( frontend.cachedElmValue, previousFrontend.cachedElmValue ) of
+        ( Just ok, Just previous ) ->
+            Effect.TreeView.treeViewDiff treeViewConfig 0 [] collapsedFields previous ok
+
+        _ ->
+            Html.text "Failed to show frontend model"
+
+
 testView :
     Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> TestView frontendModel
-    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    -> List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
 testView instructions testView_ =
     let
-        viewFunc : frontendModel -> List (Html frontendMsg)
-        viewFunc =
-            getViewFunc instructions
+        frontendApp : FrontendApp toBackend frontendMsg frontendModel toFrontend
+        frontendApp =
+            getFrontendApp instructions
 
+        currentStep : TestStep frontendModel
         currentStep =
             List.Nonempty.get testView_.stepIndex testView_.steps
     in
-    Html.div
-        []
-        (testOverlay testView_ currentStep
+    if testView_.showModel then
+        let
+            maybePreviousFrontend : Maybe (TestStepFrontend frontendModel)
+            maybePreviousFrontend =
+                if testView_.stepIndex > 0 then
+                    let
+                        previousStep =
+                            List.Nonempty.get (testView_.stepIndex - 1) testView_.steps
+                    in
+                    Maybe.andThen (\clientId -> Dict.get clientId previousStep.frontends) testView_.clientId
+
+                else
+                    Nothing
+        in
+        [ Html.div
+            [ Html.Attributes.style "width" "100%"
+            , Html.Attributes.style "min-height" "100vh"
+            , darkBackground
+            , defaultFontColor
+            , Html.Attributes.style "font-family" "arial"
+            , Html.Attributes.style "white-space" "pre"
+            ]
+            [ Html.div
+                []
+                [ Html.div
+                    []
+                    [ overlayButton PressedBackToOverview "Close"
+                    , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
+                    , overlayButton PressedStepBackward "Previous"
+                    , overlayButton PressedStepForward "Next step"
+                    , overlayButton PressedHideModel "Hide model"
+                    , Html.div
+                        [ Html.Attributes.style "display" "inline-block"
+                        , Html.Attributes.style "padding" "4px"
+                        ]
+                        [ Html.text
+                            (" "
+                                ++ String.fromInt (testView_.stepIndex + 1)
+                                ++ "/"
+                                ++ String.fromInt (List.Nonempty.length testView_.steps)
+                                ++ (" " ++ currentStep.stepName)
+                            )
+                        ]
+                    ]
+                , frontendSelection currentStep testView_
+                ]
+            , Html.div
+                [ Html.Attributes.style "font-size" "14px", Html.Attributes.style "padding" "4px" ]
+                [ case Maybe.andThen (\clientId -> Dict.get clientId currentStep.frontends) testView_.clientId of
+                    Just frontend ->
+                        case maybePreviousFrontend of
+                            Just previousFrontend ->
+                                Html.Lazy.lazy3 modelDiffView testView_.collapsedFields frontend previousFrontend
+
+                            Nothing ->
+                                Html.Lazy.lazy2 modelView testView_.collapsedFields frontend
+
+                    Nothing ->
+                        Html.text ""
+                ]
+            ]
+        ]
+
+    else
+        testOverlay testView_ currentStep
             :: List.map
                 (\( _, frontend ) ->
-                    Html.div [] (viewFunc frontend.model) |> Html.map (\_ -> NoOp)
+                    frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
                 )
                 (Dict.toList currentStep.frontends)
-        )
-
-
-
---Html.div
---                        []
---                        [ "ClientId: " ++ Effect.Lamdera.clientIdToString clientId |> ellipsis 600
---                        , Url.toString frontend.url |> ellipsis 600
 
 
 testOverlay : TestView frontendModel -> TestStep frontendModel -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
@@ -2568,9 +3076,10 @@ testOverlay testView_ currentStep =
         [ Html.Attributes.style "padding" "4px"
         , Html.Attributes.style "font-family" "arial"
         , Html.Attributes.style "font-size" "14px"
-        , Html.Attributes.style "color" "white"
-        , Html.Attributes.style "position" "absolute"
-        , Html.Attributes.style "background" "#424242ff"
+        , defaultFontColor
+        , Html.Attributes.style "position" "fixed"
+        , darkBackground
+        , Html.Attributes.style "z-index" "9999"
         , case testView_.overlayPosition of
             Top ->
                 Html.Attributes.style "top" "0"
@@ -2592,6 +3101,7 @@ testOverlay testView_ currentStep =
             , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
             , overlayButton PressedStepBackward "Previous"
             , overlayButton PressedStepForward "Next step"
+            , overlayButton PressedShowModel "Show model"
             , Html.div
                 [ Html.Attributes.style "display" "inline-block"
                 , Html.Attributes.style "padding" "4px"
@@ -2605,11 +3115,42 @@ testOverlay testView_ currentStep =
                     )
                 ]
             ]
+        , frontendSelection currentStep testView_
         , Html.div
             [ Html.Attributes.style "color" "rgb(200, 10, 10)"
             ]
             (List.map (testErrorToString >> text) currentStep.errors)
         ]
+
+
+frontendSelection currentStep testView_ =
+    let
+        frontends =
+            Dict.toList currentStep.frontends
+    in
+    if List.isEmpty frontends then
+        text "No frontends have connected"
+
+    else
+        Html.div
+            [ Html.Attributes.style "padding" "4px"
+            , Html.Attributes.style "display" "inline-block"
+            ]
+            [ Html.text "Frontends:" ]
+            :: List.map
+                (\( clientId, _ ) ->
+                    Html.div
+                        [ Html.Attributes.style "padding-right" "4px"
+                        , Html.Attributes.style "display" "inline-block"
+                        ]
+                        [ overlaySelectButton
+                            (Just clientId == testView_.clientId)
+                            (SelectedFrontend clientId)
+                            (Effect.Lamdera.clientIdToString clientId)
+                        ]
+                )
+                frontends
+            |> Html.div []
 
 
 ellipsis : Int -> String -> Html msg
@@ -2675,10 +3216,35 @@ startViewer viewerWith2 =
         { init = init
         , update = update viewerWith2
         , view = view
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = viewerSubscriptions
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
         }
+
+
+viewerSubscriptions :
+    Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Sub (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+viewerSubscriptions _ =
+    Browser.Events.onKeyDown
+        (Json.Decode.field "key" Json.Decode.string
+            |> Json.Decode.andThen
+                (\key ->
+                    if key == "ArrowLeft" then
+                        PressedArrowKey ArrowLeft |> Json.Decode.succeed
+
+                    else if key == "ArrowRight" then
+                        PressedArrowKey ArrowRight |> Json.Decode.succeed
+
+                    else
+                        Json.Decode.fail ""
+                )
+        )
+
+
+type ArrowKey
+    = ArrowLeft
+    | ArrowRight
 
 
 {-| View your end-to-end tests in a elm reactor style app.
@@ -2695,13 +3261,13 @@ viewer tests =
         { init = init
         , update = update { cmds = Task.succeed tests }
         , view = view
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = viewerSubscriptions
         , onUrlRequest = UrlClicked
         , onUrlChange = UrlChanged
         }
 
 
-{-| Add a file containing binary data to your tests. Right now this is performed with HTTP get requests which means you can only access files in /public (or make get requests to other websites though this isn't recommended since this API might change in the future)
+{-| Add a file containing binary data to your tests.
 
     import Effect.Test
 
@@ -2727,6 +3293,56 @@ addBytesFile file model =
                     , url = file
                     , resolver =
                         Http.bytesResolver
+                            (\response ->
+                                case response of
+                                    Http.BadUrl_ string ->
+                                        Err { name = file, error = Http.BadUrl string |> HttpError }
+
+                                    Http.Timeout_ ->
+                                        Err { name = file, error = Http.Timeout |> HttpError }
+
+                                    Http.NetworkError_ ->
+                                        Err { name = file, error = Http.NetworkError |> HttpError }
+
+                                    Http.BadStatus_ metadata _ ->
+                                        Err { name = file, error = Http.BadStatus metadata.statusCode |> HttpError }
+
+                                    Http.GoodStatus_ _ body ->
+                                        Ok (tests body)
+                            )
+                    , timeout = Just 30000
+                    }
+            )
+            model.cmds
+    }
+
+
+{-| Add a file containing text data to your tests.
+
+    import Effect.Test
+
+    main =
+        Effect.Test.viewerWith
+            (\text jsonData ->
+                [{- End to end tests go here -}]
+            )
+            |> Effect.Test.addStringFile "/test.txt"
+            |> Effect.Test.addStringFile "/data.json"
+            |> Effect.Test.startViewer
+
+-}
+addStringFile : String -> ViewerWith (String -> b) -> ViewerWith b
+addStringFile file model =
+    { cmds =
+        Task.andThen
+            (\tests ->
+                Http.task
+                    { method = "GET"
+                    , headers = []
+                    , body = Http.emptyBody
+                    , url = file
+                    , resolver =
+                        Http.stringResolver
                             (\response ->
                                 case response of
                                     Http.BadUrl_ string ->

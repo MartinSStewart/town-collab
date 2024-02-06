@@ -24,6 +24,7 @@ module Effect.File exposing
 -}
 
 import Bytes exposing (Bytes)
+import Bytes.Encode
 import Effect.Command exposing (FrontendOnly)
 import Effect.Internal exposing (File, Task(..))
 import File
@@ -40,7 +41,12 @@ the metadata, send it over [`elm/http`](/packages/elm/http/latest), etc.
 -}
 type File
     = RealFile File.File
-    | MockFile { name : String, mimeType : String, content : String, lastModified : Time.Posix }
+    | MockFile { name : String, mimeType : String, content : FileUploadContent, lastModified : Time.Posix }
+
+
+type FileUploadContent
+    = BytesFile Bytes
+    | StringFile String
 
 
 {-| Please ignore
@@ -52,7 +58,18 @@ toInternalFile file =
             Effect.Internal.RealFile realFile
 
         MockFile mockFile ->
-            Effect.Internal.MockFile mockFile
+            Effect.Internal.MockFile
+                { name = mockFile.name
+                , mimeType = mockFile.mimeType
+                , content =
+                    case mockFile.content of
+                        BytesFile a ->
+                            Effect.Internal.BytesFile a
+
+                        StringFile a ->
+                            Effect.Internal.StringFile a
+                , lastModified = mockFile.lastModified
+                }
 
 
 {-| Please ignore
@@ -64,7 +81,18 @@ fromInternalFile file =
             RealFile realFile
 
         Effect.Internal.MockFile mockFile ->
-            MockFile mockFile
+            MockFile
+                { name = mockFile.name
+                , mimeType = mockFile.mimeType
+                , content =
+                    case mockFile.content of
+                        Effect.Internal.BytesFile a ->
+                            BytesFile a
+
+                        Effect.Internal.StringFile a ->
+                            StringFile a
+                , lastModified = mockFile.lastModified
+                }
 
 
 {-| Decode `File` values. For example, if you want to create a drag-and-drop
@@ -217,7 +245,12 @@ size file =
             File.size file_
 
         MockFile file_ ->
-            String.length file_.content
+            case file_.content of
+                BytesFile bytes ->
+                    Bytes.width bytes
+
+                StringFile text ->
+                    Bytes.Encode.string text |> Bytes.Encode.encode |> Bytes.width
 
 
 {-| Get the time the file was last modified.
