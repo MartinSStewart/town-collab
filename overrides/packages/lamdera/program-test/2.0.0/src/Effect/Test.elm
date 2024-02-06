@@ -3062,12 +3062,27 @@ testView instructions testView_ =
         ]
 
     else
-        testOverlay testView_ currentStep
-            :: List.map
-                (\( _, frontend ) ->
-                    frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
-                )
-                (Dict.toList currentStep.frontends)
+        [ testOverlay testView_ currentStep
+        , case testView_.clientId of
+            Just clientId ->
+                case Dict.get clientId currentStep.frontends of
+                    Just frontend ->
+                        frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
+
+                    Nothing ->
+                        Html.div
+                            [ Html.Attributes.style "text-align" "center"
+                            , Html.Attributes.style "margin-top" "100px"
+                            , Html.Attributes.style "font-size" "18px"
+                            , Html.Attributes.style "font-weight" "bold"
+                            , Html.Attributes.style "color" "rgb(100, 100, 100)"
+                            , Html.Attributes.style "font-family" "arial"
+                            ]
+                            [ Html.text (Effect.Lamdera.clientIdToString clientId ++ " not found") ]
+
+            Nothing ->
+                Html.text ""
+        ]
 
 
 testOverlay : TestView frontendModel -> TestStep frontendModel -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
