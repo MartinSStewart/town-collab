@@ -2274,7 +2274,7 @@ getDomTask frontendApp maybeClientId state htmlId function value =
 {-| -}
 type alias Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
     { navigationKey : Browser.Navigation.Key
-    , currentTest : Maybe (TestView frontendModel)
+    , currentTest : Maybe (TestView frontendModel backendModel)
     , testResults : List (Result TestError ())
     , tests : Maybe (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
     }
@@ -2291,11 +2291,11 @@ type FileLoadErrorType
     | TextureError WebGLFix.Texture.Error
 
 
-type alias TestView frontendModel =
+type alias TestView frontendModel backendModel =
     { index : Int
     , testName : String
     , stepIndex : Int
-    , steps : Nonempty (TestStep frontendModel)
+    , steps : Nonempty (TestStep frontendModel backendModel)
     , overlayPosition : OverlayPosition
     , clientId : Maybe ClientId
     , showModel : Bool
@@ -2308,10 +2308,11 @@ type OverlayPosition
     | Bottom
 
 
-type alias TestStep frontendModel =
+type alias TestStep frontendModel backendModel =
     { stepName : String
     , errors : List TestError
     , frontends : Dict ClientId (TestStepFrontend frontendModel)
+    , backendModel : backendModel
     }
 
 
@@ -2401,6 +2402,7 @@ update config msg model =
                                             (\( stepName, state_ ) ->
                                                 { stepName = stepName
                                                 , errors = state_.testErrors
+                                                , backendModel = state_.model
                                                 , frontends =
                                                     Dict.map
                                                         (\_ frontend ->
@@ -2547,7 +2549,7 @@ update config msg model =
         |> checkCachedElmValue
 
 
-stepForward : TestView frontendModel -> TestView frontendModel
+stepForward : TestView frontendModel backendModel -> TestView frontendModel backendModel
 stepForward currentTest =
     case List.Nonempty.toList currentTest.steps |> listGet (currentTest.stepIndex + 1) of
         Just nextStep ->
@@ -2566,7 +2568,7 @@ stepForward currentTest =
             currentTest
 
 
-stepBackward : TestView frontendModel -> TestView frontendModel
+stepBackward : TestView frontendModel backendModel -> TestView frontendModel backendModel
 stepBackward currentTest =
     { currentTest | stepIndex = max 0 (currentTest.stepIndex - 1) }
 
@@ -2601,10 +2603,10 @@ checkCachedElmValue ( model, cmd ) =
 checkCachedElmValueHelper :
     ClientId
     -> Int
-    -> TestView frontendModel
+    -> TestView frontendModel backendModel
     -> List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Nonempty (TestStep frontendModel)
-    -> Nonempty (TestStep frontendModel)
+    -> Nonempty (TestStep frontendModel backendModel)
+    -> Nonempty (TestStep frontendModel backendModel)
 checkCachedElmValueHelper clientId stepIndex currentTest tests steps =
     updateAt
         stepIndex
@@ -2620,7 +2622,15 @@ checkCachedElmValueHelper clientId stepIndex currentTest tests steps =
                                         case ( frontend.cachedElmValue, getAt currentTest.index tests ) of
                                             ( Nothing, Just instructions ) ->
                                                 if currentTest.showModel then
-                                                    toElmValue (getFrontendApp instructions) frontend
+                                                    let
+                                                        state =
+                                                            getState instructions
+                                                    in
+                                                    toElmValue
+                                                        state.frontendApp
+                                                        state.backendApp
+                                                        currentStep.backendModel
+                                                        frontend
 
                                                 else
                                                     Nothing
@@ -2652,7 +2662,7 @@ updateAt index mapFunc list =
 
 
 updateCurrentTest :
-    (TestView frontendModel -> TestView frontendModel)
+    (TestView frontendModel backendModel -> TestView frontendModel backendModel)
     -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 updateCurrentTest func model =
@@ -2865,19 +2875,19 @@ defaultFontColor =
     Html.Attributes.style "color" "rgb(240,240,240)"
 
 
-getFrontendApp :
+getState :
     Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> FrontendApp toBackend frontendMsg frontendModel toFrontend
-getFrontendApp instructions =
+    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+getState instructions =
     case instructions of
         NextStep _ _ instructions_ ->
-            getFrontendApp instructions_
+            getState instructions_
 
         AndThen _ instructions_ ->
-            getFrontendApp instructions_
+            getState instructions_
 
         Start state ->
-            state.frontendApp
+            state
 
 
 getTestName : Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> String
@@ -2913,12 +2923,19 @@ treeViewConfig =
     }
 
 
-toElmValue : FrontendApp toBackend frontendMsg frontendModel toFrontend -> TestStepFrontend frontendModel -> Maybe ElmValue
-toElmValue frontendApp testStep =
+toElmValue :
+    FrontendApp toBackend frontendMsg frontendModel toFrontend
+    -> BackendApp toBackend toFrontend backendMsg backendModel
+    -> backendModel
+    -> TestStepFrontend frontendModel
+    -> Maybe ElmValue
+toElmValue frontendApp backendApp backendModel testStep =
     { sessionId = Effect.Lamdera.sessionIdToString testStep.sessionId
     , url = Url.toString testStep.url
-    , subscriptions = frontendApp.subscriptions testStep.model
-    , model = testStep.model
+    , frontendSubscriptions = frontendApp.subscriptions testStep.model
+    , backendSubscriptions = backendApp.subscriptions backendModel
+    , frontendModel = testStep.model
+    , backendModel = backendModel
     }
         |> DebugParser.valueToElmValue
         |> Just
@@ -2986,15 +3003,15 @@ modelDiffView collapsedFields frontend previousFrontend =
 
 testView :
     Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> TestView frontendModel
+    -> TestView frontendModel backendModel
     -> List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
 testView instructions testView_ =
     let
-        frontendApp : FrontendApp toBackend frontendMsg frontendModel toFrontend
-        frontendApp =
-            getFrontendApp instructions
+        state : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        state =
+            getState instructions
 
-        currentStep : TestStep frontendModel
+        currentStep : TestStep frontendModel backendModel
         currentStep =
             List.Nonempty.get testView_.stepIndex testView_.steps
     in
@@ -3067,7 +3084,7 @@ testView instructions testView_ =
             Just clientId ->
                 case Dict.get clientId currentStep.frontends of
                     Just frontend ->
-                        frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
+                        state.frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
 
                     Nothing ->
                         Html.div
@@ -3085,7 +3102,10 @@ testView instructions testView_ =
         ]
 
 
-testOverlay : TestView frontendModel -> TestStep frontendModel -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+testOverlay :
+    TestView frontendModel backendModel
+    -> TestStep frontendModel backendModel
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 testOverlay testView_ currentStep =
     Html.div
         [ Html.Attributes.style "padding" "4px"

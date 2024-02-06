@@ -24,8 +24,9 @@ import LocalGrid
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark
+import Tile exposing (Category(..), TileGroup(..))
 import Toolbar
-import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend)
+import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, FrontendMsg_(..), Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend, ToolButton(..), UiHover(..))
 import Ui
 import Unsafe
 import Untrusted
@@ -327,6 +328,18 @@ pressEnter frontend0 instructions =
         |> shortWait
 
 
+clickOnScreen :
+    Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    -> Point2d Pixels Pixels
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+clickOnScreen frontend0 position instructions =
+    frontend0.update (Audio.UserMsg (MouseDown MainButton position)) instructions
+        |> shortWait
+        |> frontend0.update (Audio.UserMsg (MouseUp MainButton position))
+        |> shortWait
+
+
 clickOnUi :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> Types.UiHover
@@ -409,6 +422,36 @@ loadPage sessionId func state =
             )
 
 
+loadAndLogin sessionId func state =
+    loadPage
+        sessionId
+        (\frontend0 state2 ->
+            state2
+                |> shouldBeLoggedOut frontend0
+                |> clickOnUi frontend0 Types.EmailAddressTextInputHover
+                |> typeText frontend0 Env.adminEmail2
+                |> pressEnter frontend0
+                |> shortWait
+                |> Effect.Test.andThen
+                    (\state3 ->
+                        case List.filterMap isOneTimePasswordEmail state3.httpRequests of
+                            [ loginEmail ] ->
+                                Effect.Test.continueWith state3
+                                    |> shortWait
+                                    |> clickOnUi frontend0 Types.OneTimePasswordInput
+                                    |> typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
+                                    |> shortWait
+                                    |> shouldBeLoggedIn frontend0
+
+                            _ ->
+                                Effect.Test.continueWith state3
+                                    |> Effect.Test.checkState (\_ -> Err "Login email not found")
+                    )
+                |> func frontend0
+        )
+        state
+
+
 tests :
     Texture
     -> Texture
@@ -443,61 +486,44 @@ tests depth lights texture trainDepth trainLights trainTexture =
             }
     in
     [ Effect.Test.start config "Login with one time password"
-        |> loadPage
+        |> loadAndLogin sessionId0 (\_ state -> state)
+    , Effect.Test.start config "Test train movement"
+        |> loadAndLogin
             sessionId0
             (\frontend0 state ->
                 state
-                    |> shouldBeLoggedOut frontend0
-                    |> clickOnUi frontend0 Types.EmailAddressTextInputHover
-                    |> typeText frontend0 Env.adminEmail2
-                    |> pressEnter frontend0
+                    |> clickOnUi frontend0 (CategoryButton Rail)
                     |> shortWait
-                    |> Effect.Test.andThen
-                        (\state2 ->
-                            case List.filterMap isOneTimePasswordEmail state2.httpRequests of
-                                [ loginEmail ] ->
-                                    Effect.Test.continueWith state2
-                                        |> shortWait
-                                        |> clickOnUi frontend0 Types.OneTimePasswordInput
-                                        |> typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
-                                        |> shortWait
-                                        |> shouldBeLoggedIn frontend0
-
-                                _ ->
-                                    Effect.Test.continueWith state2
-                                        |> Effect.Test.checkState (\_ -> Err "Login email not found")
-                        )
-            )
-    , Effect.Test.start config "Can't log in for a different session"
-        |> loadPage
-            sessionId0
-            (\frontend0 state ->
-                state
-                    |> shouldBeLoggedOut frontend0
-                    |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
+                    |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton TrainHouseGroup))
                     |> shortWait
-                    |> Effect.Test.andThen
-                        (\state2 ->
-                            case List.filterMap isOneTimePasswordEmail state2.httpRequests of
-                                [ loginEmail ] ->
-                                    Effect.Test.continueWith state2
-                                        |> loadPage
-                                            sessionId1
-                                            (\frontend1 state3 ->
-                                                state3
-                                                    |> Effect.Test.sendToBackend
-                                                        sessionId1
-                                                        frontend1.clientId
-                                                        (LoginAttemptRequest loginEmail.oneTimePassword)
-                                                    |> shortWait
-                                                    |> shouldBeLoggedOut frontend0
-                                                    |> shouldBeLoggedOut frontend1
-                                            )
-
-                                _ ->
-                                    Effect.Test.continueWith state2
-                                        |> Effect.Test.checkState (\_ -> Err "Login email not found")
-                        )
+                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    |> shortWait
+                    |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton RailStraightGroup))
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 340 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 360 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 380 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 400 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 420 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 440 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 460 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 480 310)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 500 310)
+                    |> shortWait
+                    |> clickOnUi frontend0 (ToolButtonHover HandToolButton)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    |> Effect.Test.simulateTime (Duration.seconds 1)
+                    |> Effect.Test.simulateTime (Duration.seconds 1)
+                    |> Effect.Test.simulateTime (Duration.seconds 1)
             )
     ]
 

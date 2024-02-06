@@ -762,7 +762,7 @@ updateLoaded audioData msg model =
             ( model, Command.none )
 
         KeyUp keyMsg ->
-            case Keyboard.anyKeyOriginal keyMsg |> Debug.log "keyup" of
+            case Keyboard.anyKeyOriginal keyMsg of
                 Just key ->
                     ( { model | pressedKeys = AssocSet.remove key model.pressedKeys }, Command.none )
 
@@ -770,7 +770,7 @@ updateLoaded audioData msg model =
                     ( model, Command.none )
 
         KeyDown rawKey ->
-            case Keyboard.anyKeyOriginal rawKey |> Debug.log "keydown" of
+            case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
                     let
                         model2 =
@@ -1266,9 +1266,6 @@ updateLoaded audioData msg model =
                 --        ( Duration.from model.time time |> Duration.inSeconds
                 --        , IdDict.values model2.trains |> List.map (Train.trainPosition time)
                 --        )
-                _ =
-                    Debug.log "animation frame" ()
-
                 model4 =
                     LoadingPage.updateMeshes model3
 

@@ -338,7 +338,6 @@ tests =
                     test (String.fromInt index) <|
                         \_ ->
                             TextInputMultiline.indexToCoord lines cursorIndex
-                                |> Debug.log "abc"
                                 |> TextInputMultiline.coordToIndex lines
                                 |> Expect.equal cursorIndex
                 )
