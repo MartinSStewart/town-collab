@@ -501,29 +501,24 @@ tests depth lights texture trainDepth trainLights trainTexture =
                     |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton RailStraightGroup))
                     |> shortWait
                     |> clickOnScreen frontend0 (Point2d.pixels 340 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 360 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 380 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 400 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 420 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 440 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 460 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 480 310)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 500 310)
-                    |> shortWait
-                    |> clickOnUi frontend0 (ToolButtonHover HandToolButton)
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
-                    |> Effect.Test.simulateTime (Duration.seconds 1)
-                    |> Effect.Test.simulateTime (Duration.seconds 1)
-                    |> Effect.Test.simulateTime (Duration.seconds 1)
+                    |> (\state2 ->
+                            List.foldl
+                                (\index state3 ->
+                                    clickOnScreen frontend0 (Point2d.pixels (340 + toFloat index * 20) 310) state3
+                                )
+                                state2
+                                (List.range 0 12)
+                       )
+             --|> shortWait
+             --|> clickOnUi frontend0 (ToolButtonHover HandToolButton)
+             --|> shortWait
+             --|> clickOnScreen frontend0 (Point2d.pixels 300 300)
+             --|> (\state2 ->
+             --        List.foldl
+             --            (\_ state3 -> Effect.Test.simulateTime (Duration.seconds 0.1) state3)
+             --            state2
+             --            (List.range 1 60)
+             --   )
             )
     ]
 
