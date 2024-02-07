@@ -922,32 +922,29 @@ connectFrontend sessionId url windowSize andThenFunc =
                 state2 =
                     getClientConnectSubs (state.backendApp.subscriptions state.model)
                         |> List.foldl
-                            (\msg state4 ->
-                                handleUpdate (currentTime state4) state4.backendApp (msg sessionId clientId) state4
+                            (\msg state3 ->
+                                handleUpdate (currentTime state3) state3.backendApp (msg sessionId clientId) state3
                             )
                             state
-
-                state3 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-                state3 =
-                    { state2
-                        | frontends =
-                            Dict.insert
-                                clientId
-                                { model = frontend
-                                , sessionId = sessionId
-                                , pendingEffects = effects
-                                , toFrontend = []
-                                , clipboard = ""
-                                , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state2 })
-                                , url = url
-                                , windowSize = windowSize
-                                }
-                                state2.frontends
-                        , counter = state2.counter + 1
-                    }
             in
             andThenFunc
-                ( Start state3 |> NextStep "Connect new frontend" identity
+                ( { state2
+                    | frontends =
+                        Dict.insert
+                            clientId
+                            { model = frontend
+                            , sessionId = sessionId
+                            , pendingEffects = effects
+                            , toFrontend = []
+                            , clipboard = ""
+                            , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state2 })
+                            , url = url
+                            , windowSize = windowSize
+                            }
+                            state2.frontends
+                    , counter = state2.counter + 1
+                  }
+                    |> Start
                 , { clientId = clientId
                   , keyDownEvent = keyDownEvent clientId
                   , clickButton = clickButton clientId
@@ -1589,7 +1586,7 @@ runNetwork state =
                 (\_ frontend ->
                     List.foldl
                         (handleUpdateFromBackend (currentTime state2) state2.frontendApp)
-                        frontend
+                        { frontend | toFrontend = [] }
                         frontend.toFrontend
                 )
                 state2.frontends

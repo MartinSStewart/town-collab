@@ -29,7 +29,6 @@ import Toolbar
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, FrontendMsg_(..), Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend, ToolButton(..), UiHover(..))
 import Ui
 import Unsafe
-import Untrusted
 import Url exposing (Url)
 
 
@@ -334,7 +333,9 @@ clickOnScreen :
     -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
 clickOnScreen frontend0 position instructions =
-    frontend0.update (Audio.UserMsg (MouseDown MainButton position)) instructions
+    instructions
+        |> frontend0.update (Audio.UserMsg (MouseMove position))
+        |> frontend0.update (Audio.UserMsg (MouseDown MainButton position))
         |> shortWait
         |> frontend0.update (Audio.UserMsg (MouseUp MainButton position))
         |> shortWait
@@ -509,16 +510,16 @@ tests depth lights texture trainDepth trainLights trainTexture =
                                 state2
                                 (List.range 0 12)
                        )
-             --|> shortWait
-             --|> clickOnUi frontend0 (ToolButtonHover HandToolButton)
-             --|> shortWait
-             --|> clickOnScreen frontend0 (Point2d.pixels 300 300)
-             --|> (\state2 ->
-             --        List.foldl
-             --            (\_ state3 -> Effect.Test.simulateTime (Duration.seconds 0.1) state3)
-             --            state2
-             --            (List.range 1 60)
-             --   )
+                    |> shortWait
+                    |> clickOnUi frontend0 (ToolButtonHover HandToolButton)
+                    |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    |> (\state2 ->
+                            List.foldl
+                                (\_ state3 -> Effect.Test.simulateTime (Duration.seconds 0.1) state3)
+                                state2
+                                (List.range 1 60)
+                       )
             )
     ]
 
