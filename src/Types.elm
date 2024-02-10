@@ -179,7 +179,6 @@ type alias FrontendLoaded =
     , undoAddLast : Effect.Time.Posix
     , time : Effect.Time.Posix
     , startTime : Effect.Time.Posix
-    , animationElapsedTime : Duration
     , ignoreNextUrlChanged : Bool
     , lastTilePlaced : Maybe { time : Effect.Time.Posix, overwroteTiles : Bool, tile : Tile, position : Coord WorldUnit }
     , sounds : AssocList.Dict Sound (Result Audio.LoadError Audio.Source)

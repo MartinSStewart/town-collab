@@ -1217,7 +1217,6 @@ updateLoaded audioData msg model =
                     { model
                         | time = time
                         , localTime = localTime
-                        , animationElapsedTime = Duration.from model.time time |> Quantity.plus model.animationElapsedTime
                         , trains =
                             case localGrid.trainsDisabled of
                                 TrainsAndAnimalsDisabled ->

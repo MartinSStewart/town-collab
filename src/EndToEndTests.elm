@@ -508,7 +508,7 @@ tests depth lights texture trainDepth trainLights trainTexture =
                                     clickOnScreen frontend0 (Point2d.pixels (340 + toFloat index * 20) 310) state3
                                 )
                                 state2
-                                (List.range 0 12)
+                                (List.range 0 30)
                        )
                     |> shortWait
                     |> clickOnUi frontend0 (ToolButtonHover HandToolButton)
@@ -518,7 +518,7 @@ tests depth lights texture trainDepth trainLights trainTexture =
                             List.foldl
                                 (\_ state3 -> Effect.Test.simulateTime (Duration.seconds 0.1) state3)
                                 state2
-                                (List.range 1 60)
+                                (List.range 1 120)
                        )
             )
     ]

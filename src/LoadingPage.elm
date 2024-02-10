@@ -290,7 +290,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , undoAddLast = Time.millisToPosix 0
             , time = time
             , startTime = time
-            , animationElapsedTime = Duration.seconds 0
             , ignoreNextUrlChanged = False
             , lastTilePlaced = Nothing
             , sounds = loading.sounds
