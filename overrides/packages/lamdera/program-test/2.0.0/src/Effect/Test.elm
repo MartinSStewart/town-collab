@@ -51,6 +51,7 @@ import Effect.Internal exposing (Command(..), File, NavigationKey(..), Task(..))
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Snapshot exposing (Snapshot)
 import Effect.Subscription exposing (Subscription)
+import Effect.Time
 import Effect.TreeView exposing (CollapsedField(..), PathNode)
 import Effect.WebGL.Texture
 import Expect exposing (Expectation)
@@ -168,6 +169,8 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , frontendApp : FrontendApp toBackend frontendMsg frontendModel toFrontend
     , backendApp : BackendApp toBackend toFrontend backendMsg backendModel
     , model : backendModel
+    , updateHistory : List (UpdateHistory toFrontend backendMsg backendModel BackendOnly)
+    , updateFromFrontendHistory : List (UpdateFromFrontendHistory toFrontend backendMsg backendModel BackendOnly)
     , pendingEffects : Command BackendOnly toFrontend backendMsg
     , frontends : Dict ClientId (FrontendState toBackend frontendMsg frontendModel toFrontend)
     , counter : Int
@@ -584,9 +587,11 @@ flattenHelper inProgress =
     case inProgress of
         NextStep name stepFunc inProgress_ ->
             let
+                list : Nonempty ( String, State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
                 list =
                     flattenHelper inProgress_
 
+                previousState : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
                 previousState =
                     List.Nonempty.head list |> Tuple.second
             in
@@ -594,9 +599,11 @@ flattenHelper inProgress =
 
         AndThen andThenFunc inProgress_ ->
             let
+                list : Nonempty ( String, State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
                 list =
                     flattenHelper inProgress_
 
+                previousState : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
                 previousState =
                     List.Nonempty.head list |> Tuple.second
             in
@@ -630,6 +637,8 @@ type alias FrontendState toBackend frontendMsg frontendModel toFrontend =
     , timers : Dict Duration { startTime : Time.Posix }
     , url : Url
     , windowSize : { width : Int, height : Int }
+    , updateHistory : List (UpdateHistory toBackend frontendMsg frontendModel FrontendOnly)
+    , updateFromBackendHistory : List (UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel FrontendOnly)
     }
 
 
@@ -770,6 +779,8 @@ start config testName =
             , frontendApp = config.frontendApp
             , backendApp = config.backendApp
             , model = backend
+            , updateHistory = []
+            , updateFromFrontendHistory = []
             , pendingEffects = effects
             , frontends = Dict.empty
             , counter = 0
@@ -940,6 +951,8 @@ connectFrontend sessionId url windowSize andThenFunc =
                             , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state2 })
                             , url = url
                             , windowSize = windowSize
+                            , updateHistory = []
+                            , updateFromBackendHistory = []
                             }
                             state2.frontends
                     , counter = state2.counter + 1
@@ -958,12 +971,46 @@ connectFrontend sessionId url windowSize andThenFunc =
         )
 
 
+type alias UpdateHistory toMsg msg model restriction =
+    { msg : msg, newModel : model, newCmd : Command restriction toMsg msg, time : Effect.Time.Posix }
+
+
+type alias UpdateFromFrontendHistory toBackend backendMsg backendModel restriction =
+    { sessionId : SessionId
+    , clientId : ClientId
+    , toBackend : toBackend
+    , newModel : backendModel
+    , newCmd : Command restriction toBackend backendMsg
+    , time : Effect.Time.Posix
+    }
+
+
+type alias UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel restriction =
+    { toFrontend : toFrontend
+    , newModel : frontendModel
+    , newCmd : Command restriction toBackend frontendMsg
+    , time : Effect.Time.Posix
+    }
+
+
 handleUpdate :
     Time.Posix
     -> { b | update : msg -> model -> ( model, Command r toMsg msg ), subscriptions : model -> Subscription r msg }
     -> msg
-    -> { e | model : model, pendingEffects : Command r toMsg msg, timers : Dict Duration { startTime : Time.Posix } }
-    -> { e | model : model, pendingEffects : Command r toMsg msg, timers : Dict Duration { startTime : Time.Posix } }
+    ->
+        { e
+            | model : model
+            , pendingEffects : Command r toMsg msg
+            , timers : Dict Duration { startTime : Time.Posix }
+            , updateHistory : List (UpdateHistory toMsg msg model r)
+        }
+    ->
+        { e
+            | model : model
+            , pendingEffects : Command r toMsg msg
+            , timers : Dict Duration { startTime : Time.Posix }
+            , updateHistory : List (UpdateHistory toMsg msg model r)
+        }
 handleUpdate currentTime2 app msg state =
     let
         ( newModel, cmd ) =
@@ -988,6 +1035,7 @@ handleUpdate currentTime2 app msg state =
                 newTimers
                 state.timers
                 state.timers
+        , updateHistory = { msg = msg, newModel = newModel, newCmd = cmd, time = currentTime2 } :: state.updateHistory
     }
 
 
@@ -997,10 +1045,10 @@ handleUpdateFromBackend :
     -> toFrontend
     -> FrontendState toBackend frontendMsg frontendModel toFrontend
     -> FrontendState toBackend frontendMsg frontendModel toFrontend
-handleUpdateFromBackend currentTime2 app msg state =
+handleUpdateFromBackend currentTime2 app toFrontend frontendState =
     let
         ( newModel, cmd ) =
-            app.updateFromBackend msg state.model
+            app.updateFromBackend toFrontend frontendState.model
 
         subscriptions : Subscription FrontendOnly frontendMsg
         subscriptions =
@@ -1010,17 +1058,20 @@ handleUpdateFromBackend currentTime2 app msg state =
         newTimers =
             getTimers subscriptions
     in
-    { state
+    { frontendState
         | model = newModel
-        , pendingEffects = Effect.Command.batch [ state.pendingEffects, cmd ]
+        , pendingEffects = Effect.Command.batch [ frontendState.pendingEffects, cmd ]
         , timers =
             Dict.merge
                 (\duration _ dict -> Dict.insert duration { startTime = currentTime2 } dict)
                 (\_ _ _ dict -> dict)
                 (\duration _ dict -> Dict.remove duration dict)
                 newTimers
-                state.timers
-                state.timers
+                frontendState.timers
+                frontendState.timers
+        , updateFromBackendHistory =
+            { toFrontend = toFrontend, newModel = newModel, newCmd = cmd, time = currentTime2 }
+                :: frontendState.updateFromBackendHistory
     }
 
 
@@ -2274,6 +2325,7 @@ type alias Model toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , currentTest : Maybe (TestView frontendModel backendModel)
     , testResults : List (Result TestError ())
     , tests : Maybe (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
+    , windowSize : ( Int, Int )
     }
 
 
@@ -2341,6 +2393,8 @@ type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     | PressedExpandField (List PathNode)
     | PressedCollapseField (List PathNode)
     | PressedArrowKey ArrowKey
+    | ChangedEventSlider String
+    | GotWindowSize Int Int
 
 
 init :
@@ -2352,8 +2406,17 @@ init :
         , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         )
 init _ _ navigationKey =
-    ( { navigationKey = navigationKey, currentTest = Nothing, testResults = [], tests = Nothing }
-    , Process.sleep 0 |> Task.perform (\() -> ShortPauseFinished)
+    ( { navigationKey = navigationKey
+      , currentTest = Nothing
+      , testResults = []
+      , tests = Nothing
+      , windowSize = ( 1920, 1080 )
+      }
+    , Cmd.batch
+        [ Process.sleep 0 |> Task.perform (\() -> ShortPauseFinished)
+        , Browser.Dom.getViewport
+            |> Task.perform (\{ viewport } -> GotWindowSize (round viewport.width) (round viewport.height))
+        ]
     )
 
 
@@ -2436,7 +2499,7 @@ update config msg model =
             ( model, Cmd.none )
 
         PressedStepForward ->
-            ( updateCurrentTest stepForward model, Cmd.none )
+            ( updateCurrentTest (\currentTest -> stepTo (currentTest.stepIndex + 1) currentTest) model, Cmd.none )
 
         PressedStepBackward ->
             ( updateCurrentTest stepBackward model, Cmd.none )
@@ -2534,7 +2597,7 @@ update config msg model =
                 (\currentTest ->
                     case arrowKey of
                         ArrowRight ->
-                            stepForward currentTest
+                            stepTo (currentTest.stepIndex + 1) currentTest
 
                         ArrowLeft ->
                             stepBackward currentTest
@@ -2542,16 +2605,27 @@ update config msg model =
                 model
             , Cmd.none
             )
+
+        ChangedEventSlider a ->
+            case String.toInt a of
+                Just stepIndex ->
+                    ( updateCurrentTest (stepTo stepIndex) model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        GotWindowSize width height ->
+            ( { model | windowSize = ( width, height ) }, Cmd.none )
     )
         |> checkCachedElmValue
 
 
-stepForward : TestView frontendModel backendModel -> TestView frontendModel backendModel
-stepForward currentTest =
-    case List.Nonempty.toList currentTest.steps |> listGet (currentTest.stepIndex + 1) of
+stepTo : Int -> TestView frontendModel backendModel -> TestView frontendModel backendModel
+stepTo stepIndex currentTest =
+    case List.Nonempty.toList currentTest.steps |> listGet stepIndex of
         Just nextStep ->
             { currentTest
-                | stepIndex = currentTest.stepIndex + 1
+                | stepIndex = stepIndex
                 , clientId =
                     case currentTest.clientId of
                         Nothing ->
@@ -2691,7 +2765,7 @@ view model =
                     Just testView_ ->
                         case getAt testView_.index tests of
                             Just instructions ->
-                                testView instructions testView_
+                                testView (Tuple.first model.windowSize) instructions testView_
 
                             Nothing ->
                                 [ text "Invalid index for tests" ]
@@ -2788,7 +2862,7 @@ overview tests testResults_ =
 
 darkBackground : Html.Attribute msg
 darkBackground =
-    Html.Attributes.style "background-color" "rgb(20,20,20)"
+    Html.Attributes.style "background-color" "rgba(0,0,0,0.8)"
 
 
 button : msg -> String -> Html msg
@@ -2934,15 +3008,12 @@ toElmValue frontendApp backendApp backendModel testStep =
     , frontendModel = testStep.model
     , backendModel = backendModel
     }
+        --|> Debug.toString
+        --|> DebugParser.parseWithOptionalTag
+        --|> Result.toMaybe
+        --|> Maybe.map (\a -> refineElmValue a.value)
         |> DebugParser.valueToElmValue
         |> Just
-
-
-
---|> Debug.toString
---|> DebugParser.parseWithOptionalTag
---|> Result.toMaybe
---|> Maybe.map (\a -> refineElmValue a.value)
 
 
 refineElmValue : ElmValue -> ElmValue
@@ -2998,11 +3069,53 @@ modelDiffView collapsedFields frontend previousFrontend =
             Html.text "Failed to show frontend model"
 
 
+slider : Int -> Nonempty a -> Int -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+slider windowWidth steps stepIndex =
+    let
+        totalSteps =
+            List.Nonempty.length steps
+    in
+    Html.input
+        [ Html.Attributes.type_ "range"
+        , Html.Attributes.min "0"
+        , Html.Attributes.max (String.fromInt totalSteps)
+        , Html.Attributes.value (String.fromInt stepIndex)
+        , Html.Attributes.step "1"
+        , Html.Attributes.style "width" (String.fromInt (min (windowWidth // 2) (totalSteps * 10)) ++ "px")
+        , Html.Events.onInput ChangedEventSlider
+        , Html.Attributes.list "slider-ticks"
+        , Html.Attributes.style "padding" "4px"
+        ]
+        (if windowWidth < totalSteps * 2 then
+            []
+
+         else
+            [ List.range 0 (totalSteps - 1)
+                |> List.map (\index -> Html.option [ Html.Attributes.value (String.fromInt index) ] [])
+                |> Html.datalist [ Html.Attributes.id "slider-ticks" ]
+            ]
+        )
+
+
+currentStepText currentStep testView_ =
+    Html.div
+        [ Html.Attributes.style "padding" "4px" ]
+        [ Html.text
+            (" "
+                ++ String.fromInt (testView_.stepIndex + 1)
+                ++ "/"
+                ++ String.fromInt (List.Nonempty.length testView_.steps)
+                ++ (" " ++ currentStep.stepName)
+            )
+        ]
+
+
 testView :
-    Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    Int
+    -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> TestView frontendModel backendModel
     -> List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
-testView instructions testView_ =
+testView windowWidth instructions testView_ =
     let
         state : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
         state =
@@ -3043,19 +3156,9 @@ testView instructions testView_ =
                     , overlayButton PressedStepBackward "Previous"
                     , overlayButton PressedStepForward "Next step"
                     , overlayButton PressedHideModel "Hide model"
-                    , Html.div
-                        [ Html.Attributes.style "display" "inline-block"
-                        , Html.Attributes.style "padding" "4px"
-                        ]
-                        [ Html.text
-                            (" "
-                                ++ String.fromInt (testView_.stepIndex + 1)
-                                ++ "/"
-                                ++ String.fromInt (List.Nonempty.length testView_.steps)
-                                ++ (" " ++ currentStep.stepName)
-                            )
-                        ]
                     ]
+                , Html.Lazy.lazy3 slider windowWidth testView_.steps testView_.stepIndex
+                , currentStepText currentStep testView_
                 , frontendSelection currentStep testView_
                 ]
             , Html.div
@@ -3076,7 +3179,7 @@ testView instructions testView_ =
         ]
 
     else
-        [ testOverlay testView_ currentStep
+        [ testOverlay windowWidth testView_ currentStep
         , case testView_.clientId of
             Just clientId ->
                 case Dict.get clientId currentStep.frontends of
@@ -3086,7 +3189,7 @@ testView instructions testView_ =
                     Nothing ->
                         Html.div
                             [ Html.Attributes.style "text-align" "center"
-                            , Html.Attributes.style "margin-top" "100px"
+                            , Html.Attributes.style "margin-top" "200px"
                             , Html.Attributes.style "font-size" "18px"
                             , Html.Attributes.style "font-weight" "bold"
                             , Html.Attributes.style "color" "rgb(100, 100, 100)"
@@ -3100,10 +3203,11 @@ testView instructions testView_ =
 
 
 testOverlay :
-    TestView frontendModel backendModel
+    Int
+    -> TestView frontendModel backendModel
     -> TestStep frontendModel backendModel
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-testOverlay testView_ currentStep =
+testOverlay windowWidth testView_ currentStep =
     Html.div
         [ Html.Attributes.style "padding" "4px"
         , Html.Attributes.style "font-family" "arial"
@@ -3134,19 +3238,9 @@ testOverlay testView_ currentStep =
             , overlayButton PressedStepBackward "Previous"
             , overlayButton PressedStepForward "Next step"
             , overlayButton PressedShowModel "Show model"
-            , Html.div
-                [ Html.Attributes.style "display" "inline-block"
-                , Html.Attributes.style "padding" "4px"
-                ]
-                [ Html.text
-                    (" "
-                        ++ String.fromInt (testView_.stepIndex + 1)
-                        ++ "/"
-                        ++ String.fromInt (List.Nonempty.length testView_.steps)
-                        ++ (" " ++ currentStep.stepName)
-                    )
-                ]
             ]
+        , Html.Lazy.lazy3 slider windowWidth testView_.steps testView_.stepIndex
+        , currentStepText currentStep testView_
         , frontendSelection currentStep testView_
         , Html.div
             [ Html.Attributes.style "color" "rgb(200, 10, 10)"
@@ -3258,20 +3352,23 @@ viewerSubscriptions :
     Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Sub (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 viewerSubscriptions _ =
-    Browser.Events.onKeyDown
-        (Json.Decode.field "key" Json.Decode.string
-            |> Json.Decode.andThen
-                (\key ->
-                    if key == "ArrowLeft" then
-                        PressedArrowKey ArrowLeft |> Json.Decode.succeed
+    Sub.batch
+        [ Browser.Events.onKeyDown
+            (Json.Decode.field "key" Json.Decode.string
+                |> Json.Decode.andThen
+                    (\key ->
+                        if key == "ArrowLeft" then
+                            PressedArrowKey ArrowLeft |> Json.Decode.succeed
 
-                    else if key == "ArrowRight" then
-                        PressedArrowKey ArrowRight |> Json.Decode.succeed
+                        else if key == "ArrowRight" then
+                            PressedArrowKey ArrowRight |> Json.Decode.succeed
 
-                    else
-                        Json.Decode.fail ""
-                )
-        )
+                        else
+                            Json.Decode.fail ""
+                    )
+            )
+        , Browser.Events.onResize GotWindowSize
+        ]
 
 
 type ArrowKey

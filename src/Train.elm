@@ -662,7 +662,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
                 Train { train | t = newTClamped, isStuckOrDerailed = IsNotStuckOrDerailed }
 
 
-stoppedSpeed : Quantity Float units
+stoppedSpeed : Quantity Float (Rate TileLocalUnit Seconds)
 stoppedSpeed =
     Quantity 0.1
 

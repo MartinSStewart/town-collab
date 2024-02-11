@@ -336,7 +336,6 @@ clickOnScreen frontend0 position instructions =
     instructions
         |> frontend0.update (Audio.UserMsg (MouseMove position))
         |> frontend0.update (Audio.UserMsg (MouseDown MainButton position))
-        |> shortWait
         |> frontend0.update (Audio.UserMsg (MouseUp MainButton position))
         |> shortWait
 
@@ -508,7 +507,7 @@ tests depth lights texture trainDepth trainLights trainTexture =
                                     clickOnScreen frontend0 (Point2d.pixels (340 + toFloat index * 20) 310) state3
                                 )
                                 state2
-                                (List.range 0 30)
+                                (List.range 0 50)
                        )
                     |> shortWait
                     |> clickOnUi frontend0 (ToolButtonHover HandToolButton)

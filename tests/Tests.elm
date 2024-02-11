@@ -139,13 +139,10 @@ tests =
                             , home = Coord.xy -5 -5
                             , homePath = Tile.trainHouseLeftRailPath
                             , isStuckOrDerailed = Train.IsNotStuckOrDerailed
-                            , status = Train.Travelling
+                            , status = Train.Travelling { startedAt = Time.millisToPosix 0 }
                             , owner = Id.fromInt 0
                             , color = Color.rgb255 80 80 80
                             }
-
-                    endTime =
-                        Time.millisToPosix 992
 
                     moveTrainBy : Int -> Int -> Train -> Train
                     moveTrainBy start end a =
@@ -157,25 +154,44 @@ tests =
                             |> IdDict.get (Id.fromInt 0)
                             |> Maybe.withDefault train
 
-                    trainA : Train
                     trainA =
-                        List.range 0 61
-                            |> List.foldl (\index a -> moveTrainBy (index * 16) ((index + 1) * 16) a) train
+                        List.range 1 120
+                            |> List.foldl
+                                (\_ state ->
+                                    let
+                                        newTime : Float
+                                        newTime =
+                                            state.time + 1000 / 60
+                                    in
+                                    { train = moveTrainBy (round state.time) (round newTime) state.train
+                                    , time = newTime
+                                    }
+                                )
+                                { train = train, time = 0 }
+
+                    timeElapsed : Time.Posix
+                    timeElapsed =
+                        trainA.time |> round |> Time.millisToPosix
 
                     trainB : Train
                     trainB =
-                        moveTrainBy 0 (Time.posixToMillis endTime) train
+                        moveTrainBy 0 (Time.posixToMillis timeElapsed) train
                 in
                 Expect.all
                     [ \_ ->
-                        Point2d.distanceFrom (Train.trainPosition endTime trainA) (Train.trainPosition endTime trainB)
+                        Point2d.distanceFrom
+                            (Train.trainPosition timeElapsed trainA.train)
+                            (Point2d.fromTuple Units.tileUnit ( 2.7, 0.5 ))
                             |> Quantity.unwrap
-                            |> Expect.lessThan 0.0001
+                            |> Expect.lessThan 0.00000001
                     , \_ ->
-                        Quantity.difference (Train.speed endTime trainA) (Train.speed endTime trainB)
+                        Point2d.distanceFrom
+                            (Train.trainPosition timeElapsed trainB)
+                            (Point2d.fromTuple Units.tileUnit ( 2.7, 0.5 ))
                             |> Quantity.unwrap
-                            |> abs
-                            |> Expect.lessThan 0.0001
+                            |> Expect.lessThan 0.00000001
+                    , \_ -> Expect.within (Expect.Absolute 0.00001) 2.1 (Quantity.unwrap (Train.speed timeElapsed trainA.train))
+                    , \_ -> Expect.within (Expect.Absolute 0.00001) 2.1 (Quantity.unwrap (Train.speed timeElapsed trainB))
                     ]
                     ()
         , test "Add house overlaps neighbor" <|
