@@ -170,7 +170,7 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , backendApp : BackendApp toBackend toFrontend backendMsg backendModel
     , model : backendModel
     , updateHistory : List (UpdateHistory toFrontend backendMsg backendModel BackendOnly)
-    , updateFromFrontendHistory : List (UpdateFromFrontendHistory toFrontend backendMsg backendModel BackendOnly)
+    , updateFromFrontendHistory : List (UpdateFromFrontendHistory toFrontend backendMsg backendModel)
     , pendingEffects : Command BackendOnly toFrontend backendMsg
     , frontends : Dict ClientId (FrontendState toBackend frontendMsg frontendModel toFrontend)
     , counter : Int
@@ -575,42 +575,63 @@ toSnapshots instructions =
 
 flatten :
     Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> Nonempty ( String, State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+    -> Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 flatten inProgress =
     List.Nonempty.reverse (flattenHelper inProgress)
 
 
 flattenHelper :
     Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> Nonempty ( String, State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+    -> Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 flattenHelper inProgress =
     case inProgress of
         NextStep name stepFunc inProgress_ ->
             let
-                list : Nonempty ( String, State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+                list : Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
                 list =
                     flattenHelper inProgress_
 
                 previousState : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
                 previousState =
-                    List.Nonempty.head list |> Tuple.second
+                    getHistoryState (List.Nonempty.head list)
             in
-            List.Nonempty.cons ( name, stepFunc previousState ) list
+            List.Nonempty.cons (Event name (stepFunc previousState)) list
 
         AndThen andThenFunc inProgress_ ->
             let
-                list : Nonempty ( String, State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+                list : Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
                 list =
                     flattenHelper inProgress_
 
                 previousState : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
                 previousState =
-                    List.Nonempty.head list |> Tuple.second
+                    getHistoryState (List.Nonempty.head list)
             in
             List.Nonempty.append (flattenHelper (andThenFunc previousState)) list
 
         Start state ->
-            List.Nonempty.fromElement ( "Start", state )
+            List.Nonempty.fromElement (Event "Start" state)
+
+
+getHistoryState :
+    FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+getHistoryState event =
+    case event of
+        Event _ state ->
+            state
+
+        BackendUpdateEvent _ state ->
+            state
+
+        FrontendUpdateEvent _ _ state ->
+            state
+
+        UpdateFromFrontendEvent _ state ->
+            state
+
+        UpdateFromBackendEvent _ _ state ->
+            state
 
 
 instructionsToState :
@@ -638,7 +659,7 @@ type alias FrontendState toBackend frontendMsg frontendModel toFrontend =
     , url : Url
     , windowSize : { width : Int, height : Int }
     , updateHistory : List (UpdateHistory toBackend frontendMsg frontendModel FrontendOnly)
-    , updateFromBackendHistory : List (UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel FrontendOnly)
+    , updateFromBackendHistory : List (UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel)
     }
 
 
@@ -971,24 +992,32 @@ connectFrontend sessionId url windowSize andThenFunc =
         )
 
 
+type FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    = BackendUpdateEvent (UpdateHistory toFrontend backendMsg backendModel BackendOnly) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    | FrontendUpdateEvent ClientId (UpdateHistory toBackend frontendMsg frontendModel FrontendOnly) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    | UpdateFromFrontendEvent (UpdateFromFrontendHistory toBackend backendMsg backendModel) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    | UpdateFromBackendEvent ClientId (UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    | Event String (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+
+
 type alias UpdateHistory toMsg msg model restriction =
     { msg : msg, newModel : model, newCmd : Command restriction toMsg msg, time : Effect.Time.Posix }
 
 
-type alias UpdateFromFrontendHistory toBackend backendMsg backendModel restriction =
+type alias UpdateFromFrontendHistory toBackend backendMsg backendModel =
     { sessionId : SessionId
     , clientId : ClientId
     , toBackend : toBackend
     , newModel : backendModel
-    , newCmd : Command restriction toBackend backendMsg
+    , newCmd : Command BackendOnly toBackend backendMsg
     , time : Effect.Time.Posix
     }
 
 
-type alias UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel restriction =
+type alias UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel =
     { toFrontend : toFrontend
     , newModel : frontendModel
-    , newCmd : Command restriction toBackend frontendMsg
+    , newCmd : Command FrontendOnly toBackend frontendMsg
     , time : Effect.Time.Posix
     }
 
@@ -2459,23 +2488,117 @@ update config msg model =
                                     , testName = state.testName
                                     , steps =
                                         List.Nonempty.map
-                                            (\( stepName, state_ ) ->
-                                                { stepName = stepName
-                                                , errors = state_.testErrors
-                                                , backendModel = state_.model
-                                                , frontends =
-                                                    Dict.map
-                                                        (\_ frontend ->
-                                                            { model = frontend.model
-                                                            , sessionId = frontend.sessionId
-                                                            , clipboard = frontend.clipboard
-                                                            , url = frontend.url
-                                                            , windowSize = frontend.windowSize
-                                                            , cachedElmValue = Nothing
-                                                            }
-                                                        )
-                                                        state_.frontends
-                                                }
+                                            (\step ->
+                                                case step of
+                                                    Event stepName state_ ->
+                                                        { stepName = stepName
+                                                        , errors = state_.testErrors
+                                                        , backendModel = state_.model
+                                                        , frontends =
+                                                            Dict.map
+                                                                (\_ frontend ->
+                                                                    { model = frontend.model
+                                                                    , sessionId = frontend.sessionId
+                                                                    , clipboard = frontend.clipboard
+                                                                    , url = frontend.url
+                                                                    , windowSize = frontend.windowSize
+                                                                    , cachedElmValue = Nothing
+                                                                    }
+                                                                )
+                                                                state_.frontends
+                                                        }
+
+                                                    BackendUpdateEvent updateHistory state_ ->
+                                                        { stepName = "BackendUpdateEvent"
+                                                        , errors = state_.testErrors
+                                                        , backendModel = updateHistory.newModel
+                                                        , frontends =
+                                                            Dict.map
+                                                                (\_ frontend ->
+                                                                    { model = frontend.model
+                                                                    , sessionId = frontend.sessionId
+                                                                    , clipboard = frontend.clipboard
+                                                                    , url = frontend.url
+                                                                    , windowSize = frontend.windowSize
+                                                                    , cachedElmValue = Nothing
+                                                                    }
+                                                                )
+                                                                state_.frontends
+                                                        }
+
+                                                    FrontendUpdateEvent clientId updateHistory state_ ->
+                                                        { stepName = "FrontendUpdateEvent"
+                                                        , errors = state_.testErrors
+                                                        , backendModel = state_.model
+                                                        , frontends =
+                                                            Dict.map
+                                                                (\clientId2 frontend ->
+                                                                    if clientId == clientId2 then
+                                                                        { model = updateHistory.newModel
+                                                                        , sessionId = frontend.sessionId
+                                                                        , clipboard = frontend.clipboard
+                                                                        , url = frontend.url
+                                                                        , windowSize = frontend.windowSize
+                                                                        , cachedElmValue = Nothing
+                                                                        }
+
+                                                                    else
+                                                                        { model = frontend.model
+                                                                        , sessionId = frontend.sessionId
+                                                                        , clipboard = frontend.clipboard
+                                                                        , url = frontend.url
+                                                                        , windowSize = frontend.windowSize
+                                                                        , cachedElmValue = Nothing
+                                                                        }
+                                                                )
+                                                                state_.frontends
+                                                        }
+
+                                                    UpdateFromFrontendEvent updateFromFrontendHistory state_ ->
+                                                        { stepName = "UpdateFromFrontendEvent"
+                                                        , errors = state_.testErrors
+                                                        , backendModel = updateFromFrontendHistory.newModel
+                                                        , frontends =
+                                                            Dict.map
+                                                                (\_ frontend ->
+                                                                    { model = frontend.model
+                                                                    , sessionId = frontend.sessionId
+                                                                    , clipboard = frontend.clipboard
+                                                                    , url = frontend.url
+                                                                    , windowSize = frontend.windowSize
+                                                                    , cachedElmValue = Nothing
+                                                                    }
+                                                                )
+                                                                state_.frontends
+                                                        }
+
+                                                    UpdateFromBackendEvent clientId updateFromBackendHistory state_ ->
+                                                        { stepName = "UpdateFromBackendEvent"
+                                                        , errors = state_.testErrors
+                                                        , backendModel = state_.model
+                                                        , frontends =
+                                                            Dict.map
+                                                                (\clientId2 frontend ->
+                                                                    if clientId == clientId2 then
+                                                                        { model = updateFromBackendHistory.newModel
+                                                                        , sessionId = frontend.sessionId
+                                                                        , clipboard = frontend.clipboard
+                                                                        , url = frontend.url
+                                                                        , windowSize = frontend.windowSize
+                                                                        , cachedElmValue = Nothing
+                                                                        }
+
+                                                                    else
+                                                                        { model = frontend.model
+                                                                        , sessionId = frontend.sessionId
+                                                                        , clipboard = frontend.clipboard
+                                                                        , url = frontend.url
+                                                                        , windowSize = frontend.windowSize
+                                                                        , cachedElmValue = Nothing
+                                                                        }
+                                                                )
+                                                                state_.frontends
+                                                        }
                                             )
                                             (flatten test)
                                     , stepIndex = 0
