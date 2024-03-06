@@ -420,18 +420,11 @@ frontendUpdate clientId msg =
                )
         )
         (\state ->
-            case Dict.get clientId state.frontends of
-                Just frontend ->
-                    { state
-                        | frontends =
-                            Dict.insert
-                                clientId
-                                (handleFrontendUpdate (currentTime state) state.frontendApp msg frontend)
-                                state.frontends
-                    }
+            if Dict.member clientId state.frontends then
+                handleFrontendUpdate clientId (currentTime state) msg state
 
-                Nothing ->
-                    addTestError (ClientIdNotFound clientId) state
+            else
+                addTestError (ClientIdNotFound clientId) state
         )
 
 
@@ -888,7 +881,7 @@ connectFrontend sessionId url windowSize andThenFunc =
                     getClientConnectSubs (state.backendApp.subscriptions state.model)
                         |> List.foldl
                             (\msg state3 ->
-                                handleFrontendUpdate (currentTime state3) state3.backendApp (msg sessionId clientId) state3
+                                handleBackendUpdate (currentTime state3) state3.backendApp (msg sessionId clientId) state3
                             )
                             state
             in
@@ -951,46 +944,48 @@ type EventType toBackend frontendMsg frontendModel toFrontend backendMsg backend
 
 
 handleFrontendUpdate :
-    Time.Posix
-    -> { b | update : msg -> model -> ( model, Command r toMsg msg ), subscriptions : model -> Subscription r msg }
-    -> msg
-    ->
-        { e
-            | model : model
-            , pendingEffects : Command r toMsg msg
-            , timers : Dict Duration { startTime : Time.Posix }
-        }
-    ->
-        { e
-            | model : model
-            , pendingEffects : Command r toMsg msg
-            , timers : Dict Duration { startTime : Time.Posix }
-        }
-handleFrontendUpdate currentTime2 app msg state =
-    let
-        ( newModel, cmd ) =
-            app.update msg state.model
+    ClientId
+    -> Time.Posix
+    -> frontendMsg
+    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+handleFrontendUpdate clientId currentTime2 msg state =
+    case Dict.get clientId state.frontends of
+        Just frontend ->
+            let
+                ( newModel, cmd ) =
+                    state.frontendApp.update msg frontend.model
 
-        subscriptions : Subscription r msg
-        subscriptions =
-            app.subscriptions newModel
+                subscriptions : Subscription FrontendOnly frontendMsg
+                subscriptions =
+                    state.frontendApp.subscriptions newModel
 
-        newTimers : Dict Duration { msg : Nonempty (Time.Posix -> msg) }
-        newTimers =
-            getTimers subscriptions
-    in
-    { state
-        | model = newModel
-        , pendingEffects = Effect.Command.batch [ state.pendingEffects, cmd ]
-        , timers =
-            Dict.merge
-                (\duration _ dict -> Dict.insert duration { startTime = currentTime2 } dict)
-                (\_ _ _ dict -> dict)
-                (\duration _ dict -> Dict.remove duration dict)
-                newTimers
-                state.timers
-                state.timers
-    }
+                newTimers : Dict Duration { msg : Nonempty (Time.Posix -> frontendMsg) }
+                newTimers =
+                    getTimers subscriptions
+            in
+            { state
+                | frontends =
+                    Dict.insert
+                        clientId
+                        { frontend
+                            | model = newModel
+                            , pendingEffects = Effect.Command.batch [ frontend.pendingEffects, cmd ]
+                            , timers =
+                                Dict.merge
+                                    (\duration _ dict -> Dict.insert duration { startTime = currentTime2 } dict)
+                                    (\_ _ _ dict -> dict)
+                                    (\duration _ dict -> Dict.remove duration dict)
+                                    newTimers
+                                    frontend.timers
+                                    frontend.timers
+                        }
+                        state.frontends
+            }
+                |> addEvent (FrontendMsgEvent frontend.sessionId clientId msg cmd)
+
+        Nothing ->
+            state
 
 
 handleBackendUpdate :
@@ -1024,7 +1019,7 @@ handleBackendUpdate currentTime2 app msg state =
                 state.timers
                 state.timers
     }
-        |> addBackendEvent (BackendMsgEvent msg cmd)
+        |> addEvent (BackendMsgEvent msg cmd)
 
 
 handleUpdateFromBackend :
@@ -1091,14 +1086,14 @@ handleUpdateFromFrontend sessionId clientId msg state =
                 state.timers
                 state.timers
     }
-        |> addBackendEvent (ToBackendEvent msg cmd)
+        |> addEvent (ToBackendEvent msg cmd)
 
 
-addBackendEvent :
+addEvent :
     EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-addBackendEvent eventType state =
+addEvent eventType state =
     { state
         | history =
             Array.push
@@ -1276,18 +1271,11 @@ clickLink clientId { href } =
                         Nothing ->
                             case Url.fromString (normalizeUrl state.domain href) of
                                 Just url ->
-                                    { state
-                                        | frontends =
-                                            Dict.insert
-                                                clientId
-                                                (handleFrontendUpdate
-                                                    (currentTime state)
-                                                    state.frontendApp
-                                                    (state.frontendApp.onUrlRequest (Internal url))
-                                                    frontend
-                                                )
-                                                state.frontends
-                                    }
+                                    handleFrontendUpdate
+                                        clientId
+                                        (currentTime state)
+                                        (state.frontendApp.onUrlRequest (Internal url))
+                                        state
 
                                 Nothing ->
                                     addTestError (InvalidUrl href) state
@@ -1329,13 +1317,7 @@ userEvent name clientId htmlId event =
                     in
                     case Test.Html.Event.simulate event query |> Test.Html.Event.toResult of
                         Ok msg ->
-                            { state
-                                | frontends =
-                                    Dict.insert
-                                        clientId
-                                        (handleFrontendUpdate (currentTime state) state.frontendApp msg frontend)
-                                        state.frontends
-                            }
+                            handleFrontendUpdate clientId (currentTime state) msg state
 
                         Err _ ->
                             case Test.Runner.getFailureReason (Test.Html.Query.has [] query) of
@@ -1517,24 +1499,32 @@ simulateStep timeLeft state =
                             (handleBackendUpdate nextTimerEnd.endTime state.backendApp)
                             { state | timers = List.foldl Dict.remove state.timers completedDurations }
                             triggeredMsgs
+
+                    state3 =
+                        Dict.foldl
+                            (\clientId frontend state4 ->
+                                let
+                                    { triggeredMsgs, completedDurations } =
+                                        getTriggersTimerMsgs state2.frontendApp.subscriptions frontend nextTimerEnd.endTime
+                                in
+                                List.foldl
+                                    (handleFrontendUpdate clientId nextTimerEnd.endTime)
+                                    { state4
+                                        | frontends =
+                                            Dict.insert
+                                                clientId
+                                                { frontend | timers = List.foldl Dict.remove frontend.timers completedDurations }
+                                                state4.frontends
+                                    }
+                                    triggeredMsgs
+                            )
+                            state2
+                            state2.frontends
                 in
                 simulateStep
                     (timeLeft |> Quantity.minus delta)
-                    { state2
+                    { state3
                         | elapsedTime = Duration.from startTime nextTimerEnd.endTime
-                        , frontends =
-                            Dict.map
-                                (\_ frontend ->
-                                    let
-                                        { triggeredMsgs, completedDurations } =
-                                            getTriggersTimerMsgs state.frontendApp.subscriptions frontend nextTimerEnd.endTime
-                                    in
-                                    List.foldl
-                                        (handleFrontendUpdate nextTimerEnd.endTime state.frontendApp)
-                                        { frontend | timers = List.foldl Dict.remove frontend.timers completedDurations }
-                                        triggeredMsgs
-                                )
-                                state.frontends
                     }
                     |> runEffects
 
@@ -1770,18 +1760,7 @@ runFrontendEffects sessionId clientId effectsToPerform state =
                 ( newState, msg ) =
                     runTask (Just clientId) state task
             in
-            case Dict.get clientId newState.frontends of
-                Just frontend ->
-                    { newState
-                        | frontends =
-                            Dict.insert
-                                clientId
-                                (handleFrontendUpdate (currentTime newState) state.frontendApp msg frontend)
-                                newState.frontends
-                    }
-
-                Nothing ->
-                    state
+            handleFrontendUpdate clientId (currentTime newState) msg newState
 
         Port portName _ value ->
             let
@@ -1814,13 +1793,7 @@ runFrontendEffects sessionId clientId effectsToPerform state =
                                                     Nothing
                                             )
                             in
-                            { newState
-                                | frontends =
-                                    Dict.insert
-                                        clientId
-                                        (List.foldl (handleFrontendUpdate (currentTime state) state.frontendApp) frontend msgs)
-                                        newState.frontends
-                            }
+                            List.foldl (handleFrontendUpdate clientId (currentTime state)) newState msgs
 
                         Nothing ->
                             newState
@@ -1846,23 +1819,7 @@ runFrontendEffects sessionId clientId effectsToPerform state =
         FileSelectFile mimeTypes msg ->
             case state.handleFileUpload { mimeTypes = mimeTypes } of
                 UploadFile (FileUploadData file) ->
-                    case Dict.get clientId state.frontends of
-                        Just frontend ->
-                            { state
-                                | frontends =
-                                    Dict.insert
-                                        clientId
-                                        (handleFrontendUpdate
-                                            (currentTime state)
-                                            state.frontendApp
-                                            (msg (Effect.Internal.MockFile file))
-                                            frontend
-                                        )
-                                        state.frontends
-                            }
-
-                        Nothing ->
-                            state
+                    handleFrontendUpdate clientId (currentTime state) (msg (Effect.Internal.MockFile file)) state
 
                 CancelFileUpload ->
                     state
@@ -1870,26 +1827,14 @@ runFrontendEffects sessionId clientId effectsToPerform state =
         FileSelectFiles mimeTypes msg ->
             case state.handleMultipleFilesUpload { mimeTypes = mimeTypes } of
                 UploadMultipleFiles (FileUploadData file) files ->
-                    case Dict.get clientId state.frontends of
-                        Just frontend ->
-                            { state
-                                | frontends =
-                                    Dict.insert
-                                        clientId
-                                        (handleFrontendUpdate
-                                            (currentTime state)
-                                            state.frontendApp
-                                            (msg
-                                                (Effect.Internal.MockFile file)
-                                                (List.map (\(FileUploadData a) -> Effect.Internal.MockFile a) files)
-                                            )
-                                            frontend
-                                        )
-                                        state.frontends
-                            }
-
-                        Nothing ->
-                            state
+                    handleFrontendUpdate
+                        clientId
+                        (currentTime state)
+                        (msg
+                            (Effect.Internal.MockFile file)
+                            (List.map (\(FileUploadData a) -> Effect.Internal.MockFile a) files)
+                        )
+                        state
 
                 CancelMultipleFilesUpload ->
                     state
@@ -1933,16 +1878,15 @@ handleUrlChange urlText clientId state =
     in
     case Url.fromString urlText_ of
         Just url ->
-            case Dict.get clientId state.frontends of
-                Just frontend ->
-                    let
-                        newFrontend =
-                            handleFrontendUpdate (currentTime state) state.frontendApp (state.frontendApp.onUrlChange url) frontend
-                    in
-                    { state | frontends = Dict.insert clientId { newFrontend | url = url } state.frontends }
-
-                Nothing ->
-                    state
+            let
+                state2 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+                state2 =
+                    handleFrontendUpdate clientId (currentTime state) (state.frontendApp.onUrlChange url) state
+            in
+            { state2
+                | frontends =
+                    Dict.update clientId (Maybe.map (\newFrontend -> { newFrontend | url = url })) state.frontends
+            }
 
         Nothing ->
             state
