@@ -31,6 +31,7 @@ Sometimes it's hard to tell what's going on in an end to end test. One way to ma
 
 -}
 
+import Array exposing (Array)
 import AssocList as Dict exposing (Dict)
 import Base64
 import Browser exposing (UrlRequest(..))
@@ -169,8 +170,7 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , frontendApp : FrontendApp toBackend frontendMsg frontendModel toFrontend
     , backendApp : BackendApp toBackend toFrontend backendMsg backendModel
     , model : backendModel
-    , updateHistory : List (UpdateHistory toFrontend backendMsg backendModel BackendOnly)
-    , updateFromFrontendHistory : List (UpdateFromFrontendHistory toFrontend backendMsg backendModel)
+    , history : Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     , pendingEffects : Command BackendOnly toFrontend backendMsg
     , frontends : Dict ClientId (FrontendState toBackend frontendMsg frontendModel toFrontend)
     , counter : Int
@@ -262,10 +262,7 @@ httpBodyFromInternal body =
 {-| -}
 type HttpBody
     = EmptyBody
-    | StringBody
-        { contentType : String
-        , content : String
-        }
+    | StringBody { contentType : String, content : String }
     | JsonBody Json.Encode.Value
     | MultipartBody (List HttpPart)
     | BytesBody String Bytes
@@ -573,67 +570,6 @@ toSnapshots instructions =
             )
 
 
-flatten :
-    Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-flatten inProgress =
-    List.Nonempty.reverse (flattenHelper inProgress)
-
-
-flattenHelper :
-    Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-flattenHelper inProgress =
-    case inProgress of
-        NextStep name stepFunc inProgress_ ->
-            let
-                list : Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-                list =
-                    flattenHelper inProgress_
-
-                previousState : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-                previousState =
-                    getHistoryState (List.Nonempty.head list)
-            in
-            List.Nonempty.cons (Event name (stepFunc previousState)) list
-
-        AndThen andThenFunc inProgress_ ->
-            let
-                list : Nonempty (FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-                list =
-                    flattenHelper inProgress_
-
-                previousState : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-                previousState =
-                    getHistoryState (List.Nonempty.head list)
-            in
-            List.Nonempty.append (flattenHelper (andThenFunc previousState)) list
-
-        Start state ->
-            List.Nonempty.fromElement (Event "Start" state)
-
-
-getHistoryState :
-    FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-getHistoryState event =
-    case event of
-        Event _ state ->
-            state
-
-        BackendUpdateEvent _ state ->
-            state
-
-        FrontendUpdateEvent _ _ state ->
-            state
-
-        UpdateFromFrontendEvent _ state ->
-            state
-
-        UpdateFromBackendEvent _ _ state ->
-            state
-
-
 instructionsToState :
     Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
@@ -658,8 +594,6 @@ type alias FrontendState toBackend frontendMsg frontendModel toFrontend =
     , timers : Dict Duration { startTime : Time.Posix }
     , url : Url
     , windowSize : { width : Int, height : Int }
-    , updateHistory : List (UpdateHistory toBackend frontendMsg frontendModel FrontendOnly)
-    , updateFromBackendHistory : List (UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel)
     }
 
 
@@ -800,8 +734,7 @@ start config testName =
             , frontendApp = config.frontendApp
             , backendApp = config.backendApp
             , model = backend
-            , updateHistory = []
-            , updateFromFrontendHistory = []
+            , history = Array.empty
             , pendingEffects = effects
             , frontends = Dict.empty
             , counter = 0
@@ -972,8 +905,6 @@ connectFrontend sessionId url windowSize andThenFunc =
                             , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state2 })
                             , url = url
                             , windowSize = windowSize
-                            , updateHistory = []
-                            , updateFromBackendHistory = []
                             }
                             state2.frontends
                     , counter = state2.counter + 1
@@ -992,34 +923,31 @@ connectFrontend sessionId url windowSize andThenFunc =
         )
 
 
-type FullHistory toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    = BackendUpdateEvent (UpdateHistory toFrontend backendMsg backendModel BackendOnly) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    | FrontendUpdateEvent ClientId (UpdateHistory toBackend frontendMsg frontendModel FrontendOnly) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    | UpdateFromFrontendEvent (UpdateFromFrontendHistory toBackend backendMsg backendModel) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    | UpdateFromBackendEvent ClientId (UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel) (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    | Event String (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-
-
-type alias UpdateHistory toMsg msg model restriction =
-    { msg : msg, newModel : model, newCmd : Command restriction toMsg msg, time : Effect.Time.Posix }
-
-
-type alias UpdateFromFrontendHistory toBackend backendMsg backendModel =
-    { sessionId : SessionId
-    , clientId : ClientId
-    , toBackend : toBackend
-    , newModel : backendModel
-    , newCmd : Command BackendOnly toBackend backendMsg
-    , time : Effect.Time.Posix
+type alias Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
+    { eventType : EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    , time : Time.Posix
+    , frontends : Dict ClientId (EventFrontend frontendModel)
+    , backend : backendModel
+    , testErrors : List TestError
     }
 
 
-type alias UpdateFromBackendHistory toFrontend toBackend frontendMsg frontendModel =
-    { toFrontend : toFrontend
-    , newModel : frontendModel
-    , newCmd : Command FrontendOnly toBackend frontendMsg
-    , time : Effect.Time.Posix
+type alias EventFrontend frontendModel =
+    { model : frontendModel
+    , sessionId : SessionId
+    , clipboard : String
+    , url : Url
+    , windowSize : { width : Int, height : Int }
+    , cachedElmValue : Maybe ElmValue
     }
+
+
+type EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    = ToBackendEvent toBackend (Command BackendOnly toFrontend backendMsg)
+    | ToFrontendEvent SessionId ClientId toFrontend (Command FrontendOnly toBackend frontendMsg)
+    | BackendMsgEvent backendMsg (Command BackendOnly toFrontend backendMsg)
+    | FrontendMsgEvent SessionId ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
+    | TestEvent String
 
 
 handleUpdate :
@@ -1031,14 +959,12 @@ handleUpdate :
             | model : model
             , pendingEffects : Command r toMsg msg
             , timers : Dict Duration { startTime : Time.Posix }
-            , updateHistory : List (UpdateHistory toMsg msg model r)
         }
     ->
         { e
             | model : model
             , pendingEffects : Command r toMsg msg
             , timers : Dict Duration { startTime : Time.Posix }
-            , updateHistory : List (UpdateHistory toMsg msg model r)
         }
 handleUpdate currentTime2 app msg state =
     let
@@ -1064,7 +990,6 @@ handleUpdate currentTime2 app msg state =
                 newTimers
                 state.timers
                 state.timers
-        , updateHistory = { msg = msg, newModel = newModel, newCmd = cmd, time = currentTime2 } :: state.updateHistory
     }
 
 
@@ -1098,9 +1023,6 @@ handleUpdateFromBackend currentTime2 app toFrontend frontendState =
                 newTimers
                 frontendState.timers
                 frontendState.timers
-        , updateFromBackendHistory =
-            { toFrontend = toFrontend, newModel = newModel, newCmd = cmd, time = currentTime2 }
-                :: frontendState.updateFromBackendHistory
     }
 
 
@@ -1126,6 +1048,26 @@ handleUpdateFromFrontend sessionId clientId msg state =
     { state
         | model = newModel
         , pendingEffects = Effect.Command.batch [ state.pendingEffects, cmd ]
+        , history =
+            Array.push
+                { eventType = ToBackendEvent msg cmd
+                , time = currentTime state
+                , frontends =
+                    Dict.map
+                        (\_ a ->
+                            { model = a.model
+                            , sessionId = a.sessionId
+                            , clipboard = a.clipboard
+                            , url = a.url
+                            , windowSize = a.windowSize
+                            , cachedElmValue = Nothing
+                            }
+                        )
+                        state.frontends
+                , backend = newModel
+                , testErrors = state.testErrors
+                }
+                state.history
         , timers =
             Dict.merge
                 (\duration _ dict -> Dict.insert duration { startTime = currentTime state } dict)
@@ -1142,15 +1084,15 @@ snapshotView :
     -> { name : String }
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-snapshotView clientId { name } =
-    NextStep
-        "Snapshot view"
+snapshotView clientId name instructions =
+    nextStepHelper
+        name
         (\state ->
             case Dict.get clientId state.frontends of
                 Just frontend ->
                     { state
                         | snapshots =
-                            { name = name
+                            { name = name.name
                             , body = state.frontendApp.view frontend.model |> .body
                             , width = frontend.windowSize.width
                             , height = frontend.windowSize.height
@@ -1161,6 +1103,49 @@ snapshotView clientId { name } =
                 Nothing ->
                     addTestError (ClientIdNotFound clientId) state
         )
+        instructions
+
+
+nextStepHelper :
+    { name : String }
+    ->
+        (State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+         -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        )
+    -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+nextStepHelper { name } func instructions =
+    NextStep
+        name
+        (\state ->
+            let
+                state2 =
+                    func state
+            in
+            { state2
+                | history =
+                    Array.push
+                        { eventType = TestEvent name
+                        , time = currentTime state2
+                        , frontends =
+                            Dict.map
+                                (\_ a ->
+                                    { model = a.model
+                                    , sessionId = a.sessionId
+                                    , clipboard = a.clipboard
+                                    , url = a.url
+                                    , windowSize = a.windowSize
+                                    , cachedElmValue = Nothing
+                                    }
+                                )
+                                state2.frontends
+                        , backend = state2.model
+                        , testErrors = state2.testErrors
+                        }
+                        state2.history
+            }
+        )
+        instructions
 
 
 {-| -}
@@ -2351,7 +2336,7 @@ getDomTask maybeClientId state htmlId function value =
 {-| -}
 type alias Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
     { navigationKey : Browser.Navigation.Key
-    , currentTest : Maybe (TestView frontendModel backendModel)
+    , currentTest : Maybe (TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     , testResults : List (Result TestError ())
     , tests : Maybe (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
     , windowSize : ( Int, Int )
@@ -2369,11 +2354,11 @@ type FileLoadErrorType
     | TextureError WebGLFix.Texture.Error
 
 
-type alias TestView frontendModel backendModel =
+type alias TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
     { index : Int
     , testName : String
     , stepIndex : Int
-    , steps : Nonempty (TestStep frontendModel backendModel)
+    , steps : Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     , overlayPosition : OverlayPosition
     , clientId : Maybe ClientId
     , showModel : Bool
@@ -2384,24 +2369,6 @@ type alias TestView frontendModel backendModel =
 type OverlayPosition
     = Top
     | Bottom
-
-
-type alias TestStep frontendModel backendModel =
-    { stepName : String
-    , errors : List TestError
-    , frontends : Dict ClientId (TestStepFrontend frontendModel)
-    , backendModel : backendModel
-    }
-
-
-type alias TestStepFrontend frontendModel =
-    { model : frontendModel
-    , sessionId : SessionId
-    , clipboard : String
-    , url : Url
-    , windowSize : { width : Int, height : Int }
-    , cachedElmValue : Maybe ElmValue
-    }
 
 
 {-| -}
@@ -2435,6 +2402,10 @@ init :
         , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         )
 init _ _ navigationKey =
+    let
+        _ =
+            Debug.log "init" ()
+    in
     ( { navigationKey = navigationKey
       , currentTest = Nothing
       , testResults = []
@@ -2472,13 +2443,18 @@ update config msg model =
 
         PressedViewTest index ->
             case model.tests of
-                Just (Err _) ->
+                Just (Err error) ->
+                    let
+                        _ =
+                            Debug.log "error" error
+                    in
                     ( model, Cmd.none )
 
                 Just (Ok tests) ->
                     case getAt index tests of
                         Just test ->
                             let
+                                state : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
                                 state =
                                     instructionsToState test
                             in
@@ -2486,121 +2462,7 @@ update config msg model =
                                 | currentTest =
                                     { index = index
                                     , testName = state.testName
-                                    , steps =
-                                        List.Nonempty.map
-                                            (\step ->
-                                                case step of
-                                                    Event stepName state_ ->
-                                                        { stepName = stepName
-                                                        , errors = state_.testErrors
-                                                        , backendModel = state_.model
-                                                        , frontends =
-                                                            Dict.map
-                                                                (\_ frontend ->
-                                                                    { model = frontend.model
-                                                                    , sessionId = frontend.sessionId
-                                                                    , clipboard = frontend.clipboard
-                                                                    , url = frontend.url
-                                                                    , windowSize = frontend.windowSize
-                                                                    , cachedElmValue = Nothing
-                                                                    }
-                                                                )
-                                                                state_.frontends
-                                                        }
-
-                                                    BackendUpdateEvent updateHistory state_ ->
-                                                        { stepName = "BackendUpdateEvent"
-                                                        , errors = state_.testErrors
-                                                        , backendModel = updateHistory.newModel
-                                                        , frontends =
-                                                            Dict.map
-                                                                (\_ frontend ->
-                                                                    { model = frontend.model
-                                                                    , sessionId = frontend.sessionId
-                                                                    , clipboard = frontend.clipboard
-                                                                    , url = frontend.url
-                                                                    , windowSize = frontend.windowSize
-                                                                    , cachedElmValue = Nothing
-                                                                    }
-                                                                )
-                                                                state_.frontends
-                                                        }
-
-                                                    FrontendUpdateEvent clientId updateHistory state_ ->
-                                                        { stepName = "FrontendUpdateEvent"
-                                                        , errors = state_.testErrors
-                                                        , backendModel = state_.model
-                                                        , frontends =
-                                                            Dict.map
-                                                                (\clientId2 frontend ->
-                                                                    if clientId == clientId2 then
-                                                                        { model = updateHistory.newModel
-                                                                        , sessionId = frontend.sessionId
-                                                                        , clipboard = frontend.clipboard
-                                                                        , url = frontend.url
-                                                                        , windowSize = frontend.windowSize
-                                                                        , cachedElmValue = Nothing
-                                                                        }
-
-                                                                    else
-                                                                        { model = frontend.model
-                                                                        , sessionId = frontend.sessionId
-                                                                        , clipboard = frontend.clipboard
-                                                                        , url = frontend.url
-                                                                        , windowSize = frontend.windowSize
-                                                                        , cachedElmValue = Nothing
-                                                                        }
-                                                                )
-                                                                state_.frontends
-                                                        }
-
-                                                    UpdateFromFrontendEvent updateFromFrontendHistory state_ ->
-                                                        { stepName = "UpdateFromFrontendEvent"
-                                                        , errors = state_.testErrors
-                                                        , backendModel = updateFromFrontendHistory.newModel
-                                                        , frontends =
-                                                            Dict.map
-                                                                (\_ frontend ->
-                                                                    { model = frontend.model
-                                                                    , sessionId = frontend.sessionId
-                                                                    , clipboard = frontend.clipboard
-                                                                    , url = frontend.url
-                                                                    , windowSize = frontend.windowSize
-                                                                    , cachedElmValue = Nothing
-                                                                    }
-                                                                )
-                                                                state_.frontends
-                                                        }
-
-                                                    UpdateFromBackendEvent clientId updateFromBackendHistory state_ ->
-                                                        { stepName = "UpdateFromBackendEvent"
-                                                        , errors = state_.testErrors
-                                                        , backendModel = state_.model
-                                                        , frontends =
-                                                            Dict.map
-                                                                (\clientId2 frontend ->
-                                                                    if clientId == clientId2 then
-                                                                        { model = updateFromBackendHistory.newModel
-                                                                        , sessionId = frontend.sessionId
-                                                                        , clipboard = frontend.clipboard
-                                                                        , url = frontend.url
-                                                                        , windowSize = frontend.windowSize
-                                                                        , cachedElmValue = Nothing
-                                                                        }
-
-                                                                    else
-                                                                        { model = frontend.model
-                                                                        , sessionId = frontend.sessionId
-                                                                        , clipboard = frontend.clipboard
-                                                                        , url = frontend.url
-                                                                        , windowSize = frontend.windowSize
-                                                                        , cachedElmValue = Nothing
-                                                                        }
-                                                                )
-                                                                state_.frontends
-                                                        }
-                                            )
-                                            (flatten test)
+                                    , steps = state.history
                                     , stepIndex = 0
                                     , overlayPosition = Top
                                     , clientId = Nothing
@@ -2743,9 +2605,9 @@ update config msg model =
         |> checkCachedElmValue
 
 
-stepTo : Int -> TestView frontendModel backendModel -> TestView frontendModel backendModel
+stepTo : Int -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 stepTo stepIndex currentTest =
-    case List.Nonempty.toList currentTest.steps |> listGet stepIndex of
+    case Array.get stepIndex currentTest.steps of
         Just nextStep ->
             { currentTest
                 | stepIndex = stepIndex
@@ -2762,7 +2624,7 @@ stepTo stepIndex currentTest =
             currentTest
 
 
-stepBackward : TestView frontendModel backendModel -> TestView frontendModel backendModel
+stepBackward : TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 stepBackward currentTest =
     { currentTest | stepIndex = max 0 (currentTest.stepIndex - 1) }
 
@@ -2797,10 +2659,10 @@ checkCachedElmValue ( model, cmd ) =
 checkCachedElmValueHelper :
     ClientId
     -> Int
-    -> TestView frontendModel backendModel
+    -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Nonempty (TestStep frontendModel backendModel)
-    -> Nonempty (TestStep frontendModel backendModel)
+    -> Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    -> Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 checkCachedElmValueHelper clientId stepIndex currentTest tests steps =
     updateAt
         stepIndex
@@ -2823,7 +2685,7 @@ checkCachedElmValueHelper clientId stepIndex currentTest tests steps =
                                                     toElmValue
                                                         state.frontendApp
                                                         state.backendApp
-                                                        currentStep.backendModel
+                                                        currentStep.backend
                                                         frontend
 
                                                 else
@@ -2840,23 +2702,18 @@ checkCachedElmValueHelper clientId stepIndex currentTest tests steps =
         steps
 
 
-updateAt : Int -> (b -> b) -> Nonempty b -> Nonempty b
-updateAt index mapFunc list =
-    List.indexedMap
-        (\index2 item ->
-            if index2 == index then
-                mapFunc item
+updateAt : Int -> (b -> b) -> Array b -> Array b
+updateAt index mapFunc array =
+    case Array.get index array of
+        Just item ->
+            Array.set index (mapFunc item) array
 
-            else
-                item
-        )
-        (List.Nonempty.toList list)
-        |> List.Nonempty.fromList
-        |> Maybe.withDefault list
+        Nothing ->
+            array
 
 
 updateCurrentTest :
-    (TestView frontendModel backendModel -> TestView frontendModel backendModel)
+    (TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 updateCurrentTest func model =
@@ -3099,7 +2956,7 @@ getTestName instructions =
 
 modelView :
     RegularDict.Dict (List String) CollapsedField
-    -> TestStepFrontend frontendModel
+    -> EventFrontend frontendModel
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 modelView collapsedFields frontend =
     case frontend.cachedElmValue of
@@ -3121,7 +2978,7 @@ toElmValue :
     FrontendApp toBackend frontendMsg frontendModel toFrontend
     -> BackendApp toBackend toFrontend backendMsg backendModel
     -> backendModel
-    -> TestStepFrontend frontendModel
+    -> EventFrontend frontendModel
     -> Maybe ElmValue
 toElmValue frontendApp backendApp backendModel testStep =
     { sessionId = Effect.Lamdera.sessionIdToString testStep.sessionId
@@ -3180,8 +3037,8 @@ refineElmValue value =
 
 modelDiffView :
     RegularDict.Dict (List String) CollapsedField
-    -> TestStepFrontend frontendModel
-    -> TestStepFrontend frontendModel
+    -> EventFrontend frontendModel
+    -> EventFrontend frontendModel
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 modelDiffView collapsedFields frontend previousFrontend =
     case ( frontend.cachedElmValue, previousFrontend.cachedElmValue ) of
@@ -3192,11 +3049,11 @@ modelDiffView collapsedFields frontend previousFrontend =
             Html.text "Failed to show frontend model"
 
 
-slider : Int -> Nonempty a -> Int -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+slider : Int -> Array a -> Int -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 slider windowWidth steps stepIndex =
     let
         totalSteps =
-            List.Nonempty.length steps
+            Array.length steps
     in
     Html.input
         [ Html.Attributes.type_ "range"
@@ -3220,6 +3077,10 @@ slider windowWidth steps stepIndex =
         )
 
 
+currentStepText :
+    Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 currentStepText currentStep testView_ =
     Html.div
         [ Html.Attributes.style "padding" "4px" ]
@@ -3227,8 +3088,25 @@ currentStepText currentStep testView_ =
             (" "
                 ++ String.fromInt (testView_.stepIndex + 1)
                 ++ "/"
-                ++ String.fromInt (List.Nonempty.length testView_.steps)
-                ++ (" " ++ currentStep.stepName)
+                ++ String.fromInt (Array.length testView_.steps)
+                ++ (" "
+                        ++ (case currentStep.eventType of
+                                TestEvent name ->
+                                    name
+
+                                ToBackendEvent toBackend command ->
+                                    "ToBackend"
+
+                                ToFrontendEvent sessionId clientId toFrontend command ->
+                                    "ToFrontend"
+
+                                BackendMsgEvent backendMsg command ->
+                                    "BackendMsg"
+
+                                FrontendMsgEvent sessionId clientId frontendMsg command ->
+                                    "FrontendMsg"
+                           )
+                   )
             )
         ]
 
@@ -3236,99 +3114,97 @@ currentStepText currentStep testView_ =
 testView :
     Int
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> TestView frontendModel backendModel
+    -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
 testView windowWidth instructions testView_ =
     let
         state : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
         state =
             getState instructions
-
-        currentStep : TestStep frontendModel backendModel
-        currentStep =
-            List.Nonempty.get testView_.stepIndex testView_.steps
     in
-    if testView_.showModel then
-        let
-            maybePreviousFrontend : Maybe (TestStepFrontend frontendModel)
-            maybePreviousFrontend =
-                if testView_.stepIndex > 0 then
-                    let
-                        previousStep =
-                            List.Nonempty.get (testView_.stepIndex - 1) testView_.steps
-                    in
-                    Maybe.andThen (\clientId -> Dict.get clientId previousStep.frontends) testView_.clientId
-
-                else
-                    Nothing
-        in
-        [ Html.div
-            [ Html.Attributes.style "width" "100%"
-            , Html.Attributes.style "min-height" "100vh"
-            , darkBackground
-            , defaultFontColor
-            , Html.Attributes.style "font-family" "arial"
-            , Html.Attributes.style "white-space" "pre"
-            ]
-            [ Html.div
-                []
-                [ Html.div
-                    []
-                    [ overlayButton PressedBackToOverview "Close"
-                    , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
-                    , overlayButton PressedStepBackward "Previous"
-                    , overlayButton PressedStepForward "Next step"
-                    , overlayButton PressedHideModel "Hide model"
-                    ]
-                , Html.Lazy.lazy3 slider windowWidth testView_.steps testView_.stepIndex
-                , currentStepText currentStep testView_
-                , frontendSelection currentStep testView_
-                ]
-            , Html.div
-                [ Html.Attributes.style "font-size" "14px", Html.Attributes.style "padding" "4px" ]
-                [ case Maybe.andThen (\clientId -> Dict.get clientId currentStep.frontends) testView_.clientId of
-                    Just frontend ->
-                        case maybePreviousFrontend of
-                            Just previousFrontend ->
-                                Html.Lazy.lazy3 modelDiffView testView_.collapsedFields frontend previousFrontend
+    case Array.get testView_.stepIndex testView_.steps of
+        Just currentStep ->
+            if testView_.showModel then
+                let
+                    maybePreviousFrontend : Maybe (EventFrontend frontendModel)
+                    maybePreviousFrontend =
+                        case Array.get (testView_.stepIndex - 1) testView_.steps of
+                            Just previousStep ->
+                                Maybe.andThen (\clientId -> Dict.get clientId previousStep.frontends) testView_.clientId
 
                             Nothing ->
-                                Html.Lazy.lazy2 modelView testView_.collapsedFields frontend
+                                Nothing
+                in
+                [ Html.div
+                    [ Html.Attributes.style "width" "100%"
+                    , Html.Attributes.style "min-height" "100vh"
+                    , darkBackground
+                    , defaultFontColor
+                    , Html.Attributes.style "font-family" "arial"
+                    , Html.Attributes.style "white-space" "pre"
+                    ]
+                    [ Html.div
+                        []
+                        [ Html.div
+                            []
+                            [ overlayButton PressedBackToOverview "Close"
+                            , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
+                            , overlayButton PressedStepBackward "Previous"
+                            , overlayButton PressedStepForward "Next step"
+                            , overlayButton PressedHideModel "Hide model"
+                            ]
+                        , Html.Lazy.lazy3 slider windowWidth testView_.steps testView_.stepIndex
+                        , currentStepText currentStep testView_
+                        , frontendSelection currentStep testView_
+                        ]
+                    , Html.div
+                        [ Html.Attributes.style "font-size" "14px", Html.Attributes.style "padding" "4px" ]
+                        [ case Maybe.andThen (\clientId -> Dict.get clientId currentStep.frontends) testView_.clientId of
+                            Just frontend ->
+                                case maybePreviousFrontend of
+                                    Just previousFrontend ->
+                                        Html.Lazy.lazy3 modelDiffView testView_.collapsedFields frontend previousFrontend
+
+                                    Nothing ->
+                                        Html.Lazy.lazy2 modelView testView_.collapsedFields frontend
+
+                            Nothing ->
+                                Html.text ""
+                        ]
+                    ]
+                ]
+
+            else
+                [ testOverlay windowWidth testView_ currentStep
+                , case testView_.clientId of
+                    Just clientId ->
+                        case Dict.get clientId currentStep.frontends of
+                            Just frontend ->
+                                state.frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
+
+                            Nothing ->
+                                Html.div
+                                    [ Html.Attributes.style "text-align" "center"
+                                    , Html.Attributes.style "margin-top" "200px"
+                                    , Html.Attributes.style "font-size" "18px"
+                                    , Html.Attributes.style "font-weight" "bold"
+                                    , Html.Attributes.style "color" "rgb(100, 100, 100)"
+                                    , Html.Attributes.style "font-family" "arial"
+                                    ]
+                                    [ Html.text (Effect.Lamdera.clientIdToString clientId ++ " not found") ]
 
                     Nothing ->
                         Html.text ""
                 ]
-            ]
-        ]
 
-    else
-        [ testOverlay windowWidth testView_ currentStep
-        , case testView_.clientId of
-            Just clientId ->
-                case Dict.get clientId currentStep.frontends of
-                    Just frontend ->
-                        state.frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
-
-                    Nothing ->
-                        Html.div
-                            [ Html.Attributes.style "text-align" "center"
-                            , Html.Attributes.style "margin-top" "200px"
-                            , Html.Attributes.style "font-size" "18px"
-                            , Html.Attributes.style "font-weight" "bold"
-                            , Html.Attributes.style "color" "rgb(100, 100, 100)"
-                            , Html.Attributes.style "font-family" "arial"
-                            ]
-                            [ Html.text (Effect.Lamdera.clientIdToString clientId ++ " not found") ]
-
-            Nothing ->
-                Html.text ""
-        ]
+        Nothing ->
+            [ Html.text "Step not found" ]
 
 
 testOverlay :
     Int
-    -> TestView frontendModel backendModel
-    -> TestStep frontendModel backendModel
+    -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 testOverlay windowWidth testView_ currentStep =
     Html.div
@@ -3368,7 +3244,7 @@ testOverlay windowWidth testView_ currentStep =
         , Html.div
             [ Html.Attributes.style "color" "rgb(200, 10, 10)"
             ]
-            (List.map (testErrorToString >> text) currentStep.errors)
+            (List.map (testErrorToString >> text) currentStep.testErrors)
         ]
 
 
