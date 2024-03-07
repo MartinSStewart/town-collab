@@ -317,7 +317,7 @@ checkState checkFunc =
                 Err error ->
                     addTestError (CustomError error) state
             )
-                |> addEvent (TestEvent "Check state")
+                |> addEvent (TestEvent Nothing "Check state")
         )
 
 
@@ -336,7 +336,7 @@ checkBackend checkFunc =
                 Err error ->
                     addTestError (CustomError error) state
             )
-                |> addEvent (TestEvent "Check backend")
+                |> addEvent (TestEvent Nothing "Check backend")
         )
 
 
@@ -361,7 +361,7 @@ checkFrontend clientId checkFunc =
                 Nothing ->
                     addTestError (ClientIdNotFound clientId) state
             )
-                |> addEvent (TestEvent "Check frontend")
+                |> addEvent (TestEvent (Just clientId) "Check frontend")
         )
 
 
@@ -400,7 +400,7 @@ checkView clientId query =
                 Nothing ->
                     addTestError (ClientIdNotFound clientId) state
             )
-                |> addEvent (TestEvent "Check view")
+                |> addEvent (TestEvent (Just clientId) "Check view")
         )
 
 
@@ -411,19 +411,19 @@ frontendUpdate :
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 frontendUpdate clientId msg =
     let
-        msgString : String
-        msgString =
-            "Trigger frontend update: " ++ Debug.toString msg
+        event : EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        event =
+            TestEvent (Just clientId) ("Trigger frontend update: " ++ Debug.toString msg)
     in
     NextStep
         (\state ->
             if Dict.member clientId state.frontends then
-                addEvent (TestEvent msgString) state
+                addEvent event state
                     |> handleFrontendUpdate clientId (currentTime state) msg
 
             else
                 addTestError (ClientIdNotFound clientId) state
-                    |> addEvent (TestEvent msgString)
+                    |> addEvent event
         )
 
 
@@ -935,11 +935,11 @@ type alias EventFrontend frontendModel =
 
 
 type EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    = ToBackendEvent toBackend (Command BackendOnly toFrontend backendMsg)
-    | ToFrontendEvent SessionId ClientId toFrontend (Command FrontendOnly toBackend frontendMsg)
+    = ToBackendEvent ClientId toBackend (Command BackendOnly toFrontend backendMsg)
+    | ToFrontendEvent ClientId toFrontend (Command FrontendOnly toBackend frontendMsg)
     | BackendMsgEvent backendMsg (Command BackendOnly toFrontend backendMsg)
-    | FrontendMsgEvent SessionId ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
-    | TestEvent String
+    | FrontendMsgEvent ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
+    | TestEvent (Maybe ClientId) String
 
 
 handleFrontendUpdate :
@@ -981,7 +981,7 @@ handleFrontendUpdate clientId currentTime2 msg state =
                         }
                         state.frontends
             }
-                |> addEvent (FrontendMsgEvent frontend.sessionId clientId msg cmd)
+                |> addEvent (FrontendMsgEvent clientId msg cmd)
 
         Nothing ->
             state
@@ -1060,7 +1060,7 @@ handleUpdateFromBackend clientId currentTime2 toFrontend state =
                         }
                         state.frontends
             }
-                |> addEvent (ToFrontendEvent frontendState.sessionId clientId toFrontend cmd)
+                |> addEvent (ToFrontendEvent clientId toFrontend cmd)
 
         Nothing ->
             state
@@ -1097,7 +1097,7 @@ handleUpdateFromFrontend sessionId clientId msg state =
                 state.timers
                 state.timers
     }
-        |> addEvent (ToBackendEvent msg cmd)
+        |> addEvent (ToBackendEvent clientId msg cmd)
 
 
 addEvent :
@@ -1152,7 +1152,7 @@ snapshotView clientId { name } instructions =
                 Nothing ->
                     addTestError (ClientIdNotFound clientId) state
             )
-                |> addEvent (TestEvent ("Snapshot: " ++ name))
+                |> addEvent (TestEvent (Just clientId) ("Snapshot: " ++ name))
         )
         instructions
 
@@ -1219,7 +1219,7 @@ clickLink :
 clickLink clientId { href } =
     let
         event =
-            "Click link " ++ href |> TestEvent
+            TestEvent (Just clientId) ("Click link " ++ href)
     in
     NextStep
         (\state ->
@@ -1277,7 +1277,7 @@ userEvent name clientId htmlId event =
             Effect.Browser.Dom.idToString htmlId
 
         eventType =
-            "User event: " ++ name ++ " for " ++ htmlIdString |> TestEvent
+            TestEvent (Just clientId) ("User event: " ++ name ++ " for " ++ htmlIdString)
     in
     NextStep
         (\state ->
@@ -1354,7 +1354,7 @@ sendToBackend sessionId clientId toBackend =
     NextStep
         (\state ->
             { state | toBackend = state.toBackend ++ [ ( sessionId, clientId, toBackend ) ] }
-                |> addEvent (TestEvent ("Trigger ToBackend: " ++ Debug.toString toBackend))
+                |> addEvent (TestEvent (Just clientId) ("Trigger ToBackend: " ++ Debug.toString toBackend))
         )
 
 
@@ -1546,7 +1546,10 @@ fastForward duration =
     NextStep
         (\state ->
             addEvent
-                (TestEvent ("Fast forward " ++ String.fromFloat (Duration.inSeconds duration) ++ "s (skip timer events)"))
+                (TestEvent
+                    Nothing
+                    ("Fast forward " ++ String.fromFloat (Duration.inSeconds duration) ++ "s (skip timer events)")
+                )
                 { state | elapsedTime = Quantity.plus state.elapsedTime duration }
         )
 
@@ -2325,7 +2328,7 @@ type alias TestView toBackend frontendMsg frontendModel toFrontend backendMsg ba
     , stepIndex : Int
     , steps : Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     , overlayPosition : OverlayPosition
-    , clientId : Maybe ClientId
+    , currentTimeline : CurrentTimeline
     , showModel : Bool
     , collapsedFields : RegularDict.Dict (List String) CollapsedField
     }
@@ -2356,6 +2359,8 @@ type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     | PressedArrowKey ArrowKey
     | ChangedEventSlider String
     | GotWindowSize Int Int
+    | PressedTimelineEvent CurrentTimeline Int
+    | GotTimelineScrollFocus
 
 
 init :
@@ -2430,7 +2435,7 @@ update config msg model =
                                     , steps = state.history
                                     , stepIndex = 0
                                     , overlayPosition = Top
-                                    , clientId = Nothing
+                                    , currentTimeline = BackendTimeline
                                     , showModel = False
                                     , collapsedFields = RegularDict.empty
                                     }
@@ -2504,7 +2509,7 @@ update config msg model =
             )
 
         SelectedFrontend clientId ->
-            ( updateCurrentTest (\currentTest -> { currentTest | clientId = Just clientId }) model, Cmd.none )
+            ( updateCurrentTest (\currentTest -> { currentTest | currentTimeline = FrontendTimeline clientId }) model, Cmd.none )
 
         PressedShowModel ->
             ( updateCurrentTest (\currentTest -> { currentTest | showModel = True }) model, Cmd.none )
@@ -2566,24 +2571,35 @@ update config msg model =
 
         GotWindowSize width height ->
             ( { model | windowSize = ( width, height ) }, Cmd.none )
+
+        PressedTimelineEvent maybeClientId stepIndex ->
+            ( updateCurrentTest (\currentTest -> stepTo stepIndex { currentTest | currentTimeline = maybeClientId }) model, Cmd.none )
+
+        GotTimelineScrollFocus ->
+            ( model
+            , -- Setting focus on a non-existent DOM element properly removes focus from the timeline scroll div.
+              -- If we used Browser.Dom.blur instead then arrow key events would still cause the timeline to shift left/right.
+              Browser.Dom.focus "dummyScroll" |> Task.attempt (\_ -> NoOp)
+            )
     )
         |> checkCachedElmValue
+
+
+timelineViewId : String
+timelineViewId =
+    "timelineDiv"
+
+
+type CurrentTimeline
+    = BackendTimeline
+    | FrontendTimeline ClientId
 
 
 stepTo : Int -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 stepTo stepIndex currentTest =
     case Array.get stepIndex currentTest.steps of
-        Just nextStep ->
-            { currentTest
-                | stepIndex = stepIndex
-                , clientId =
-                    case currentTest.clientId of
-                        Nothing ->
-                            Dict.keys nextStep.frontends |> List.head
-
-                        Just clientId ->
-                            Just clientId
-            }
+        Just _ ->
+            { currentTest | stepIndex = stepIndex }
 
         Nothing ->
             currentTest
@@ -2605,8 +2621,8 @@ checkCachedElmValue :
 checkCachedElmValue ( model, cmd ) =
     ( updateCurrentTest
         (\currentTest ->
-            case ( currentTest.clientId, model.tests ) of
-                ( Just clientId, Just (Ok tests) ) ->
+            case ( currentTest.currentTimeline, model.tests ) of
+                ( FrontendTimeline clientId, Just (Ok tests) ) ->
                     { currentTest
                         | steps =
                             checkCachedElmValueHelper clientId currentTest.stepIndex currentTest tests currentTest.steps
@@ -3046,19 +3062,19 @@ currentStepText currentStep testView_ =
         fullMsg : String
         fullMsg =
             case currentStep.eventType of
-                TestEvent name ->
+                TestEvent _ name ->
                     name
 
-                ToBackendEvent toBackend command ->
+                ToBackendEvent clientId toBackend command ->
                     "ToBackend: " ++ Debug.toString toBackend
 
-                ToFrontendEvent sessionId clientId toFrontend command ->
+                ToFrontendEvent clientId toFrontend command ->
                     "ToFrontend: " ++ Debug.toString toFrontend
 
                 BackendMsgEvent backendMsg command ->
                     "BackendMsg: " ++ Debug.toString backendMsg
 
-                FrontendMsgEvent sessionId clientId frontendMsg command ->
+                FrontendMsgEvent clientId frontendMsg command ->
                     "FrontendMsg: " ++ Debug.toString frontendMsg
     in
     Html.div
@@ -3081,6 +3097,141 @@ ellipsis2 maxChars text2 =
         text2
 
 
+addTimelineEvent :
+    CurrentTimeline
+    ->
+        { columnIndex : Int
+        , dict :
+            Dict
+                CurrentTimeline
+                { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+                , rowIndex : Int
+                }
+        }
+    ->
+        { columnIndex : Int
+        , dict :
+            Dict
+                CurrentTimeline
+                { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+                , rowIndex : Int
+                }
+        }
+addTimelineEvent timelineType state =
+    { columnIndex = state.columnIndex + 1
+    , dict =
+        Dict.update
+            timelineType
+            (\maybeTimeline ->
+                (case maybeTimeline of
+                    Just timeline ->
+                        { events = circle timelineType state.columnIndex timeline.rowIndex :: timeline.events
+                        , rowIndex = timeline.rowIndex
+                        }
+
+                    Nothing ->
+                        let
+                            rowIndex : Int
+                            rowIndex =
+                                Dict.size state.dict
+                        in
+                        { events = [ circle timelineType state.columnIndex rowIndex ]
+                        , rowIndex = rowIndex
+                        }
+                )
+                    |> Just
+            )
+            state.dict
+    }
+
+
+timelineRowHeight =
+    32
+
+
+timelineView :
+    Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+timelineView events =
+    let
+        timelines :
+            List
+                ( CurrentTimeline
+                , { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+                  , rowIndex : Int
+                  }
+                )
+        timelines =
+            Array.foldl
+                (\item state ->
+                    case item.eventType of
+                        TestEvent maybeClientId name ->
+                            case maybeClientId of
+                                Just clientId ->
+                                    addTimelineEvent (FrontendTimeline clientId) state
+
+                                Nothing ->
+                                    addTimelineEvent BackendTimeline state
+
+                        ToBackendEvent clientId toBackend command ->
+                            addTimelineEvent (FrontendTimeline clientId) state
+
+                        ToFrontendEvent clientId toFrontend command ->
+                            addTimelineEvent BackendTimeline state
+
+                        BackendMsgEvent backendMsg command ->
+                            addTimelineEvent BackendTimeline state
+
+                        FrontendMsgEvent clientId frontendMsg command ->
+                            addTimelineEvent (FrontendTimeline clientId) state
+                )
+                { columnIndex = 0, dict = Dict.singleton BackendTimeline { events = [], rowIndex = 0 } }
+                events
+                |> .dict
+                |> Dict.toList
+    in
+    timelines
+        |> List.concatMap (\( _, timeline ) -> timeline.events)
+        |> (\a -> timelineCss :: a)
+        |> Html.div
+            [ Html.Attributes.style "height" (String.fromInt (List.length timelines * timelineRowHeight) ++ "px")
+            , Html.Attributes.style "position" "relative"
+            , Html.Attributes.style "overflow-x" "auto"
+
+            --, Html.Events.stopPropagationOn "keydown" (Json.Decode.succeed ( NoOp, True ))
+            , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOp, True ))
+            , Html.Events.onFocus GotTimelineScrollFocus
+            , Html.Attributes.tabindex -1
+            , Html.Attributes.id timelineViewId
+            ]
+
+
+timelineCss =
+    Html.node "style"
+        []
+        [ Html.text
+            """
+.circle { width: 8px; height: 8px; background-color: white; border-radius: 8px }
+.circle-container { position: absolute; padding: 4px; }
+    """
+        ]
+
+
+circle : CurrentTimeline -> Int -> Int -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+circle timeline columnIndex rowIndex =
+    Html.div
+        [ Html.Events.onClick (PressedTimelineEvent timeline columnIndex)
+        , Html.Attributes.class "circle-container"
+        , Html.Attributes.style "left" (String.fromInt (columnIndex * 16) ++ "px")
+        , Html.Attributes.style "top" (String.fromInt (rowIndex * timelineRowHeight) ++ "px")
+        ]
+        [ Html.div
+            [ Html.Attributes.class "circle"
+            ]
+            []
+        ]
+
+
 testView :
     Int
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
@@ -3100,7 +3251,12 @@ testView windowWidth instructions testView_ =
                     maybePreviousFrontend =
                         case Array.get (testView_.stepIndex - 1) testView_.steps of
                             Just previousStep ->
-                                Maybe.andThen (\clientId -> Dict.get clientId previousStep.frontends) testView_.clientId
+                                case testView_.currentTimeline of
+                                    FrontendTimeline clientId ->
+                                        Dict.get clientId previousStep.frontends
+
+                                    BackendTimeline ->
+                                        Nothing
 
                             Nothing ->
                                 Nothing
@@ -3129,16 +3285,21 @@ testView windowWidth instructions testView_ =
                         ]
                     , Html.div
                         [ Html.Attributes.style "font-size" "14px", Html.Attributes.style "padding" "4px" ]
-                        [ case Maybe.andThen (\clientId -> Dict.get clientId currentStep.frontends) testView_.clientId of
-                            Just frontend ->
-                                case maybePreviousFrontend of
-                                    Just previousFrontend ->
-                                        Html.Lazy.lazy3 modelDiffView testView_.collapsedFields frontend previousFrontend
+                        [ case testView_.currentTimeline of
+                            FrontendTimeline clientId ->
+                                case Dict.get clientId currentStep.frontends of
+                                    Just frontend ->
+                                        case maybePreviousFrontend of
+                                            Just previousFrontend ->
+                                                Html.Lazy.lazy3 modelDiffView testView_.collapsedFields frontend previousFrontend
+
+                                            Nothing ->
+                                                Html.Lazy.lazy2 modelView testView_.collapsedFields frontend
 
                                     Nothing ->
-                                        Html.Lazy.lazy2 modelView testView_.collapsedFields frontend
+                                        Html.text ""
 
-                            Nothing ->
+                            BackendTimeline ->
                                 Html.text ""
                         ]
                     ]
@@ -3146,8 +3307,8 @@ testView windowWidth instructions testView_ =
 
             else
                 [ testOverlay windowWidth testView_ currentStep
-                , case testView_.clientId of
-                    Just clientId ->
+                , case testView_.currentTimeline of
+                    FrontendTimeline clientId ->
                         case Dict.get clientId currentStep.frontends of
                             Just frontend ->
                                 state.frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
@@ -3163,7 +3324,7 @@ testView windowWidth instructions testView_ =
                                     ]
                                     [ Html.text (Effect.Lamdera.clientIdToString clientId ++ " not found") ]
 
-                    Nothing ->
+                    BackendTimeline ->
                         Html.text ""
                 ]
 
@@ -3209,6 +3370,7 @@ testOverlay windowWidth testView_ currentStep =
             , overlayButton PressedShowModel "Show model"
             ]
         , Html.Lazy.lazy3 slider windowWidth testView_.steps testView_.stepIndex
+        , timelineView testView_.steps
         , currentStepText currentStep testView_
         , frontendSelection currentStep testView_
         , Html.div
@@ -3239,7 +3401,7 @@ frontendSelection currentStep testView_ =
                         , Html.Attributes.style "display" "inline-block"
                         ]
                         [ overlaySelectButton
-                            (Just clientId == testView_.clientId)
+                            (FrontendTimeline clientId == testView_.currentTimeline)
                             (SelectedFrontend clientId)
                             (Effect.Lamdera.clientIdToString clientId)
                         ]
