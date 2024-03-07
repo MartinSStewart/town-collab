@@ -3117,9 +3117,10 @@ timelineRowHeight =
 
 
 timelineView :
-    Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    Int
+    -> Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-timelineView events =
+timelineView stepIndex events =
     let
         timelines :
             List
@@ -3173,7 +3174,19 @@ timelineView events =
                     []
                     :: timeline.events
             )
-        |> (\a -> timelineCss :: a)
+        |> (\a ->
+                Html.div
+                    [ Html.Attributes.style "position" "absolute"
+                    , Html.Attributes.style "left" (px (stepIndex * timelineColumnWidth))
+                    , Html.Attributes.style "top" (px 0)
+                    , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
+                    , Html.Attributes.style "width" (px timelineColumnWidth)
+                    , Html.Attributes.style "background-color" "rgba(255,255,255,0.4)"
+                    ]
+                    []
+                    :: timelineCss
+                    :: a
+           )
         |> Html.div
             [ Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
             , Html.Attributes.style "position" "relative"
@@ -3264,8 +3277,8 @@ testView windowWidth instructions testView_ =
                             , overlayButton PressedStepForward "Next step"
                             , overlayButton PressedHideModel "Hide model"
                             ]
+                        , timelineView testView_.stepIndex testView_.steps
                         , currentStepText currentStep testView_
-                        , frontendSelection currentStep testView_
                         ]
                     , Html.div
                         [ Html.Attributes.style "font-size" "14px", Html.Attributes.style "padding" "4px" ]
@@ -3354,44 +3367,13 @@ testOverlay windowWidth testView_ currentStep =
             , overlayButton PressedStepForward "Next step"
             , overlayButton PressedShowModel "Show model"
             ]
-        , timelineView testView_.steps
+        , timelineView testView_.stepIndex testView_.steps
         , currentStepText currentStep testView_
-        , frontendSelection currentStep testView_
         , Html.div
             [ Html.Attributes.style "color" "rgb(200, 10, 10)"
             ]
             (List.map (testErrorToString >> text) currentStep.testErrors)
         ]
-
-
-frontendSelection currentStep testView_ =
-    let
-        frontends =
-            Dict.toList currentStep.frontends
-    in
-    if List.isEmpty frontends then
-        text "No frontends have connected"
-
-    else
-        Html.div
-            [ Html.Attributes.style "padding" "4px"
-            , Html.Attributes.style "display" "inline-block"
-            ]
-            [ Html.text "Frontends:" ]
-            :: List.map
-                (\( clientId, _ ) ->
-                    Html.div
-                        [ Html.Attributes.style "padding-right" "4px"
-                        , Html.Attributes.style "display" "inline-block"
-                        ]
-                        [ overlaySelectButton
-                            (FrontendTimeline clientId == testView_.currentTimeline)
-                            (SelectedFrontend clientId)
-                            (Effect.Lamdera.clientIdToString clientId)
-                        ]
-                )
-                frontends
-            |> Html.div []
 
 
 ellipsis : Int -> String -> Html msg
