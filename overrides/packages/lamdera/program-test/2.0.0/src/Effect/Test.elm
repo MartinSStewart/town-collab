@@ -2577,11 +2577,6 @@ update config msg model =
         |> checkCachedElmValue
 
 
-timelineViewId : String
-timelineViewId =
-    "timelineDiv"
-
-
 type CurrentTimeline
     = BackendTimeline
     | FrontendTimeline ClientId
@@ -3069,6 +3064,8 @@ addTimelineEvent :
             Dict
                 CurrentTimeline
                 { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+                , columnStart : Int
+                , columnEnd : Int
                 , rowIndex : Int
                 }
         }
@@ -3078,6 +3075,8 @@ addTimelineEvent :
             Dict
                 CurrentTimeline
                 { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+                , columnStart : Int
+                , columnEnd : Int
                 , rowIndex : Int
                 }
         }
@@ -3090,6 +3089,8 @@ addTimelineEvent timelineType state =
                 (case maybeTimeline of
                     Just timeline ->
                         { events = circle timelineType state.columnIndex timeline.rowIndex :: timeline.events
+                        , columnStart = timeline.columnStart
+                        , columnEnd = state.columnIndex
                         , rowIndex = timeline.rowIndex
                         }
 
@@ -3100,6 +3101,8 @@ addTimelineEvent timelineType state =
                                 Dict.size state.dict
                         in
                         { events = [ circle timelineType state.columnIndex rowIndex ]
+                        , columnStart = state.columnIndex
+                        , columnEnd = state.columnIndex
                         , rowIndex = rowIndex
                         }
                 )
@@ -3122,6 +3125,8 @@ timelineView events =
             List
                 ( CurrentTimeline
                 , { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+                  , columnStart : Int
+                  , columnEnd : Int
                   , rowIndex : Int
                   }
                 )
@@ -3149,22 +3154,37 @@ timelineView events =
                         FrontendMsgEvent clientId frontendMsg command ->
                             addTimelineEvent (FrontendTimeline clientId) state
                 )
-                { columnIndex = 0, dict = Dict.singleton BackendTimeline { events = [], rowIndex = 0 } }
+                { columnIndex = 0, dict = Dict.singleton BackendTimeline { events = [], columnStart = 0, columnEnd = 0, rowIndex = 0 } }
                 events
                 |> .dict
                 |> Dict.toList
     in
     timelines
-        |> List.concatMap (\( _, timeline ) -> timeline.events)
+        |> List.concatMap
+            (\( _, timeline ) ->
+                Html.div
+                    [ Html.Attributes.style "position" "absolute"
+                    , Html.Attributes.style "left" (px (timeline.columnStart * timelineColumnWidth + timelineColumnWidth // 2))
+                    , Html.Attributes.style "top" (px (timeline.rowIndex * timelineRowHeight + 7))
+                    , Html.Attributes.style "height" "2px"
+                    , Html.Attributes.style "width" (px ((timeline.columnEnd - timeline.columnStart) * timelineColumnWidth + timelineColumnWidth // 4))
+                    , Html.Attributes.style "background-color" "white"
+                    ]
+                    []
+                    :: timeline.events
+            )
         |> (\a -> timelineCss :: a)
         |> Html.div
-            [ Html.Attributes.style "height" (String.fromInt (List.length timelines * timelineRowHeight) ++ "px")
+            [ Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
             , Html.Attributes.style "position" "relative"
             , Html.Attributes.style "overflow-x" "auto"
             , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\a -> ( a, True )))
             , Html.Attributes.tabindex -1
-            , Html.Attributes.id timelineViewId
             ]
+
+
+px value =
+    String.fromInt value ++ "px"
 
 
 timelineCss =
@@ -3178,13 +3198,17 @@ timelineCss =
         ]
 
 
+timelineColumnWidth =
+    16
+
+
 circle : CurrentTimeline -> Int -> Int -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 circle timeline columnIndex rowIndex =
     Html.div
         [ Html.Events.onClick (PressedTimelineEvent timeline columnIndex)
         , Html.Attributes.class "circle-container"
-        , Html.Attributes.style "left" (String.fromInt (columnIndex * 16) ++ "px")
-        , Html.Attributes.style "top" (String.fromInt (rowIndex * timelineRowHeight) ++ "px")
+        , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth))
+        , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
         ]
         [ Html.div
             [ Html.Attributes.class "circle"
