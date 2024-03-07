@@ -2453,10 +2453,10 @@ update config msg model =
             ( model, Cmd.none )
 
         PressedStepForward ->
-            ( updateCurrentTest (\currentTest -> stepTo (currentTest.stepIndex + 1) currentTest) model, Cmd.none )
+            updateCurrentTest (\currentTest -> stepTo (currentTest.stepIndex + 1) currentTest) model
 
         PressedStepBackward ->
-            ( updateCurrentTest stepBackward model, Cmd.none )
+            updateCurrentTest (\currentTest -> stepTo (currentTest.stepIndex - 1) currentTest) model
 
         PressedBackToOverview ->
             ( { model | currentTest = Nothing }, Cmd.none )
@@ -2491,9 +2491,9 @@ update config msg model =
                     ( { model | tests = Just (Err error) }, Cmd.none )
 
         PressedToggleOverlayPosition ->
-            ( updateCurrentTest
+            updateCurrentTest
                 (\currentTest ->
-                    { currentTest
+                    ( { currentTest
                         | overlayPosition =
                             case currentTest.overlayPosition of
                                 Top ->
@@ -2501,50 +2501,50 @@ update config msg model =
 
                                 Bottom ->
                                     Top
-                    }
+                      }
+                    , Cmd.none
+                    )
                 )
                 model
-            , Cmd.none
-            )
 
         SelectedFrontend clientId ->
-            ( updateCurrentTest (\currentTest -> { currentTest | currentTimeline = FrontendTimeline clientId }) model, Cmd.none )
+            updateCurrentTest (\currentTest -> ( { currentTest | currentTimeline = FrontendTimeline clientId }, Cmd.none )) model
 
         PressedShowModel ->
-            ( updateCurrentTest (\currentTest -> { currentTest | showModel = True }) model, Cmd.none )
+            updateCurrentTest (\currentTest -> ( { currentTest | showModel = True }, Cmd.none )) model
 
         PressedHideModel ->
-            ( updateCurrentTest (\currentTest -> { currentTest | showModel = False }) model, Cmd.none )
+            updateCurrentTest (\currentTest -> ( { currentTest | showModel = False }, Cmd.none )) model
 
         PressedExpandField pathNodes ->
-            ( updateCurrentTest
+            updateCurrentTest
                 (\currentTest ->
-                    { currentTest
+                    ( { currentTest
                         | collapsedFields =
                             RegularDict.insert
                                 (List.map Effect.TreeView.pathNodeToKey pathNodes)
                                 FieldIsExpanded
                                 currentTest.collapsedFields
-                    }
+                      }
+                    , Cmd.none
+                    )
                 )
                 model
-            , Cmd.none
-            )
 
         PressedCollapseField pathNodes ->
-            ( updateCurrentTest
+            updateCurrentTest
                 (\currentTest ->
-                    { currentTest
+                    ( { currentTest
                         | collapsedFields =
                             RegularDict.insert
                                 (List.map Effect.TreeView.pathNodeToKey pathNodes)
                                 FieldIsCollapsed
                                 currentTest.collapsedFields
-                    }
+                      }
+                    , Cmd.none
+                    )
                 )
                 model
-            , Cmd.none
-            )
 
         PressedArrowKey arrowKey ->
             ( updateCurrentTest
@@ -2554,7 +2554,7 @@ update config msg model =
                             stepTo (currentTest.stepIndex + 1) currentTest
 
                         ArrowLeft ->
-                            stepBackward currentTest
+                            stepTo (currentTest.stepIndex - 1) currentTest
                 )
                 model
             , Cmd.none
@@ -2582,19 +2582,20 @@ type CurrentTimeline
     | FrontendTimeline ClientId
 
 
-stepTo : Int -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+stepTo :
+    Int
+    -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    ->
+        ( TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        , Cmd msg
+        )
 stepTo stepIndex currentTest =
     case Array.get stepIndex currentTest.steps of
         Just _ ->
-            { currentTest | stepIndex = stepIndex }
+            ( { currentTest | stepIndex = stepIndex }, Cmd.none )
 
         Nothing ->
-            currentTest
-
-
-stepBackward : TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-stepBackward currentTest =
-    { currentTest | stepIndex = max 0 (currentTest.stepIndex - 1) }
+            ( currentTest, Cmd.none )
 
 
 checkCachedElmValue :
@@ -2606,9 +2607,9 @@ checkCachedElmValue :
         , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         )
 checkCachedElmValue ( model, cmd ) =
-    ( updateCurrentTest
+    updateCurrentTest
         (\currentTest ->
-            case ( currentTest.currentTimeline, model.tests ) of
+            ( case ( currentTest.currentTimeline, model.tests ) of
                 ( FrontendTimeline clientId, Just (Ok tests) ) ->
                     { currentTest
                         | steps =
@@ -2618,10 +2619,10 @@ checkCachedElmValue ( model, cmd ) =
 
                 _ ->
                     currentTest
+            , cmd
+            )
         )
         model
-    , cmd
-    )
 
 
 checkCachedElmValueHelper :
@@ -2681,19 +2682,28 @@ updateAt index mapFunc array =
 
 
 updateCurrentTest :
-    (TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    (TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+     ->
+        ( TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+        )
+    )
     -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    ->
+        ( Model toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+        )
 updateCurrentTest func model =
-    { model
-        | currentTest =
-            case model.currentTest of
-                Just currentTest ->
-                    func currentTest |> Just
+    case model.currentTest of
+        Just currentTest ->
+            let
+                ( currentTest2, cmd ) =
+                    func currentTest
+            in
+            ( { model | currentTest = Just currentTest2 }, cmd )
 
-                Nothing ->
-                    Nothing
-    }
+        Nothing ->
+            ( model, Cmd.none )
 
 
 view :
@@ -3185,7 +3195,16 @@ timelineView stepIndex events =
                     ]
                     []
                     :: timelineCss
-                    :: a
+                    :: List.map
+                        (\index ->
+                            Html.div
+                                [ Html.Attributes.style "left" (px (stepIndex * timelineColumnWidth))
+                                , Html.Attributes.id (timelineEventId index)
+                                ]
+                                []
+                        )
+                        (List.range 0 (Array.length events - 1))
+                    ++ a
            )
         |> Html.div
             [ Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
@@ -3194,6 +3213,11 @@ timelineView stepIndex events =
             , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\a -> ( a, True )))
             , Html.Attributes.tabindex -1
             ]
+
+
+timelineEventId : Int -> String
+timelineEventId index =
+    "event123_" ++ String.fromInt index
 
 
 px value =
