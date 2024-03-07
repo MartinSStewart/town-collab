@@ -2360,7 +2360,6 @@ type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     | ChangedEventSlider String
     | GotWindowSize Int Int
     | PressedTimelineEvent CurrentTimeline Int
-    | GotTimelineScrollFocus
 
 
 init :
@@ -2574,13 +2573,6 @@ update config msg model =
 
         PressedTimelineEvent maybeClientId stepIndex ->
             ( updateCurrentTest (\currentTest -> stepTo stepIndex { currentTest | currentTimeline = maybeClientId }) model, Cmd.none )
-
-        GotTimelineScrollFocus ->
-            ( model
-            , -- Setting focus on a non-existent DOM element properly removes focus from the timeline scroll div.
-              -- If we used Browser.Dom.blur instead then arrow key events would still cause the timeline to shift left/right.
-              Browser.Dom.focus "dummyScroll" |> Task.attempt (\_ -> NoOp)
-            )
     )
         |> checkCachedElmValue
 
@@ -3025,34 +3017,6 @@ modelDiffView collapsedFields frontend previousFrontend =
             Html.text "Failed to show frontend model"
 
 
-slider : Int -> Array a -> Int -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-slider windowWidth steps stepIndex =
-    let
-        totalSteps =
-            Array.length steps
-    in
-    Html.input
-        [ Html.Attributes.type_ "range"
-        , Html.Attributes.min "0"
-        , Html.Attributes.max (String.fromInt totalSteps)
-        , Html.Attributes.value (String.fromInt stepIndex)
-        , Html.Attributes.step "1"
-        , Html.Attributes.style "width" (String.fromInt (min (windowWidth // 2) (totalSteps * 10)) ++ "px")
-        , Html.Events.onInput ChangedEventSlider
-        , Html.Attributes.list "slider-ticks"
-        , Html.Attributes.style "padding" "4px"
-        ]
-        (if windowWidth < totalSteps * 2 then
-            []
-
-         else
-            [ List.range 0 (totalSteps - 1)
-                |> List.map (\index -> Html.option [ Html.Attributes.value (String.fromInt index) ] [])
-                |> Html.datalist [ Html.Attributes.id "slider-ticks" ]
-            ]
-        )
-
-
 currentStepText :
     Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
@@ -3197,10 +3161,7 @@ timelineView events =
             [ Html.Attributes.style "height" (String.fromInt (List.length timelines * timelineRowHeight) ++ "px")
             , Html.Attributes.style "position" "relative"
             , Html.Attributes.style "overflow-x" "auto"
-
-            --, Html.Events.stopPropagationOn "keydown" (Json.Decode.succeed ( NoOp, True ))
-            , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOp, True ))
-            , Html.Events.onFocus GotTimelineScrollFocus
+            , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\a -> ( a, True )))
             , Html.Attributes.tabindex -1
             , Html.Attributes.id timelineViewId
             ]
@@ -3279,7 +3240,6 @@ testView windowWidth instructions testView_ =
                             , overlayButton PressedStepForward "Next step"
                             , overlayButton PressedHideModel "Hide model"
                             ]
-                        , Html.Lazy.lazy3 slider windowWidth testView_.steps testView_.stepIndex
                         , currentStepText currentStep testView_
                         , frontendSelection currentStep testView_
                         ]
@@ -3346,6 +3306,7 @@ testOverlay windowWidth testView_ currentStep =
         , Html.Attributes.style "position" "fixed"
         , darkBackground
         , Html.Attributes.style "z-index" "9999"
+        , Html.Attributes.style "width" (String.fromInt (windowWidth // 2) ++ "px")
         , case testView_.overlayPosition of
             Top ->
                 Html.Attributes.style "top" "0"
@@ -3369,7 +3330,6 @@ testOverlay windowWidth testView_ currentStep =
             , overlayButton PressedStepForward "Next step"
             , overlayButton PressedShowModel "Show model"
             ]
-        , Html.Lazy.lazy3 slider windowWidth testView_.steps testView_.stepIndex
         , timelineView testView_.steps
         , currentStepText currentStep testView_
         , frontendSelection currentStep testView_
@@ -3484,22 +3444,25 @@ viewerSubscriptions :
     -> Sub (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 viewerSubscriptions _ =
     Sub.batch
-        [ Browser.Events.onKeyDown
-            (Json.Decode.field "key" Json.Decode.string
-                |> Json.Decode.andThen
-                    (\key ->
-                        if key == "ArrowLeft" then
-                            PressedArrowKey ArrowLeft |> Json.Decode.succeed
-
-                        else if key == "ArrowRight" then
-                            PressedArrowKey ArrowRight |> Json.Decode.succeed
-
-                        else
-                            Json.Decode.fail ""
-                    )
-            )
+        [ Browser.Events.onKeyDown decodeArrows
         , Browser.Events.onResize GotWindowSize
         ]
+
+
+decodeArrows : Json.Decode.Decoder (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+decodeArrows =
+    Json.Decode.field "key" Json.Decode.string
+        |> Json.Decode.andThen
+            (\key ->
+                if key == "ArrowLeft" then
+                    PressedArrowKey ArrowLeft |> Json.Decode.succeed
+
+                else if key == "ArrowRight" then
+                    PressedArrowKey ArrowRight |> Json.Decode.succeed
+
+                else
+                    Json.Decode.fail ""
+            )
 
 
 type ArrowKey
