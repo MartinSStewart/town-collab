@@ -3057,29 +3057,23 @@ ellipsis2 maxChars text2 =
         text2
 
 
+type alias TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
+    { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
+    , columnStart : Int
+    , columnEnd : Int
+    , rowIndex : Int
+    }
+
+
 addTimelineEvent :
     Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     ->
         { columnIndex : Int
-        , dict :
-            Dict
-                CurrentTimeline
-                { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
-                , columnStart : Int
-                , columnEnd : Int
-                , rowIndex : Int
-                }
+        , dict : Dict CurrentTimeline (TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         }
     ->
         { columnIndex : Int
-        , dict :
-            Dict
-                CurrentTimeline
-                { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
-                , columnStart : Int
-                , columnEnd : Int
-                , rowIndex : Int
-                }
+        , dict : Dict CurrentTimeline (TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         }
 addTimelineEvent event state =
     let
@@ -3106,82 +3100,23 @@ addTimelineEvent event state =
                 FrontendUpdateEvent clientId frontendMsg command ->
                     FrontendTimeline clientId
 
-        arrowDown cmd =
-            let
-                rowIndexes : List Int
-                rowIndexes =
-                    hasToFrontendCmds event cmd
-                        |> Set.toList
-                        |> List.filterMap
-                            (\clientId ->
-                                Dict.get (FrontendTimeline (Effect.Lamdera.clientIdFromString clientId)) state.dict
-                                    |> Maybe.map .rowIndex
-                            )
-            in
-            case List.maximum rowIndexes of
-                Just maxRowIndex ->
-                    Html.div
-                        [ Html.Attributes.style "width" "2px"
-                        , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
-                        , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
-                        , Html.Attributes.style "height" (px (maxRowIndex * timelineRowHeight - 3))
-                        , Html.Attributes.style "background-color" "white"
-                        , Html.Attributes.style "position" "absolute"
-                        ]
-                        []
-                        :: List.map
-                            (\rowIndex ->
-                                Html.div
-                                    [ Html.Attributes.class "triangle-down"
-                                    , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
-                                    , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
-                                    ]
-                                    []
-                            )
-                            rowIndexes
-
-                Nothing ->
-                    []
-
         arrows : Int -> List (Html msg)
         arrows rowIndex =
             case event.eventType of
                 FrontendUpdateEvent _ _ cmd ->
-                    arrowUp rowIndex cmd
+                    arrowUp state.columnIndex rowIndex cmd
 
                 UpdateFromBackendEvent _ _ cmd ->
-                    arrowUp rowIndex cmd
+                    arrowUp state.columnIndex rowIndex cmd
 
                 UpdateFromFrontendEvent clientId toBackend cmd ->
-                    arrowDown cmd
+                    arrowDown state.columnIndex state.dict event cmd
 
                 BackendUpdateEvent backendMsg cmd ->
-                    arrowDown cmd
+                    arrowDown state.columnIndex state.dict event cmd
 
-                _ ->
+                TestEvent _ _ ->
                     []
-
-        arrowUp rowIndex cmd =
-            if hasToBackendCmds cmd then
-                [ Html.div
-                    [ Html.Attributes.style "width" "2px"
-                    , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
-                    , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
-                    , Html.Attributes.style "height" (px (rowIndex * timelineRowHeight))
-                    , Html.Attributes.style "background-color" "white"
-                    , Html.Attributes.style "position" "absolute"
-                    ]
-                    []
-                , Html.div
-                    [ Html.Attributes.class "triangle-up"
-                    , Html.Attributes.style "top" (px (timelineRowHeight // 4))
-                    , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
-                    ]
-                    []
-                ]
-
-            else
-                []
     in
     { columnIndex = state.columnIndex + 1
     , dict =
@@ -3217,6 +3152,75 @@ addTimelineEvent event state =
     }
 
 
+arrowDown :
+    Int
+    -> Dict CurrentTimeline (TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Command BackendOnly toFrontend backendMsg
+    -> List (Html msg)
+arrowDown columnIndex timelines event cmd =
+    let
+        rowIndexes : List Int
+        rowIndexes =
+            hasToFrontendCmds event cmd
+                |> Set.toList
+                |> List.filterMap
+                    (\clientId ->
+                        Dict.get (FrontendTimeline (Effect.Lamdera.clientIdFromString clientId)) timelines
+                            |> Maybe.map .rowIndex
+                    )
+    in
+    case List.maximum rowIndexes of
+        Just maxRowIndex ->
+            Html.div
+                [ Html.Attributes.style "width" "2px"
+                , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
+                , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
+                , Html.Attributes.style "height" (px (maxRowIndex * timelineRowHeight - 3))
+                , Html.Attributes.style "background-color" "white"
+                , Html.Attributes.style "position" "absolute"
+                ]
+                []
+                :: List.map
+                    (\rowIndex ->
+                        Html.div
+                            [ Html.Attributes.class "triangle-down"
+                            , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
+                            , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
+                            ]
+                            []
+                    )
+                    rowIndexes
+
+        Nothing ->
+            []
+
+
+arrowUp : Int -> Int -> Command FrontendOnly toBackend frontendMsg -> List (Html msg)
+arrowUp columnIndex rowIndex cmd =
+    if hasToBackendCmds cmd then
+        [ Html.div
+            [ Html.Attributes.style "width" "2px"
+            , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
+            , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
+            , Html.Attributes.style "height" (px (rowIndex * timelineRowHeight))
+            , Html.Attributes.style "background-color" "white"
+            , Html.Attributes.style "position" "absolute"
+            ]
+            []
+        , Html.div
+            [ Html.Attributes.class "triangle-up"
+            , Html.Attributes.style "top" (px (timelineRowHeight // 4))
+            , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
+            ]
+            []
+        ]
+
+    else
+        []
+
+
+timelineRowHeight : number
 timelineRowHeight =
     32
 
@@ -3230,11 +3234,7 @@ timelineView stepIndex events =
         timelines :
             List
                 ( CurrentTimeline
-                , { events : List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
-                  , columnStart : Int
-                  , columnEnd : Int
-                  , rowIndex : Int
-                  }
+                , TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
                 )
         timelines =
             Array.foldl
@@ -3244,6 +3244,42 @@ timelineView stepIndex events =
                 |> .dict
                 |> Dict.toList
     in
+    Html.div
+        []
+        [ Html.div
+            [ Html.Attributes.style "display" "inline-block"
+            , Html.Attributes.style "position" "relative"
+            , Html.Attributes.style "width" "64px"
+            , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
+            ]
+            (List.map
+                (\( timelineType, timeline ) ->
+                    Html.div
+                        [ Html.Attributes.style "position" "absolute"
+                        , Html.Attributes.style "top" (px (timeline.rowIndex * timelineRowHeight))
+                        ]
+                        [ Html.text
+                            (case timelineType of
+                                BackendTimeline ->
+                                    "Backend"
+
+                                FrontendTimeline clientId ->
+                                    Effect.Lamdera.clientIdToString clientId
+                            )
+                        ]
+                )
+                timelines
+            )
+        , timelineViewHelper stepIndex events timelines
+        ]
+
+
+timelineViewHelper :
+    Int
+    -> Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    -> List ( CurrentTimeline, TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+timelineViewHelper stepIndex events timelines =
     timelines
         |> List.concatMap
             (\( _, timeline ) ->
@@ -3281,11 +3317,13 @@ timelineView stepIndex events =
                     ++ a
            )
         |> Html.div
-            [ Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
+            [ Html.Attributes.style "width" "500px"
+            , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
             , Html.Attributes.style "position" "relative"
             , Html.Attributes.style "overflow-x" "auto"
             , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\a -> ( a, True )))
             , Html.Attributes.tabindex -1
+            , Html.Attributes.style "display" "inline-block"
             ]
 
 
@@ -3527,7 +3565,8 @@ testOverlay windowWidth testView_ currentStep =
         , Html.Attributes.style "position" "fixed"
         , darkBackground
         , Html.Attributes.style "z-index" "9999"
-        , Html.Attributes.style "width" (String.fromInt (windowWidth // 2) ++ "px")
+
+        --, Html.Attributes.style "width" (String.fromInt (windowWidth // 2) ++ "px")
         , case testView_.overlayPosition of
             Top ->
                 Html.Attributes.style "top" "0"
