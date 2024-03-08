@@ -2371,10 +2371,6 @@ init :
         , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         )
 init _ _ navigationKey =
-    let
-        _ =
-            Debug.log "init" ()
-    in
     ( { navigationKey = navigationKey
       , currentTest = Nothing
       , testResults = []
@@ -2413,10 +2409,6 @@ update config msg model =
         PressedViewTest index ->
             case model.tests of
                 Just (Err error) ->
-                    let
-                        _ =
-                            Debug.log "error" error
-                    in
                     ( model, Cmd.none )
 
                 Just (Ok tests) ->
@@ -2547,7 +2539,7 @@ update config msg model =
                 model
 
         PressedArrowKey arrowKey ->
-            ( updateCurrentTest
+            updateCurrentTest
                 (\currentTest ->
                     case arrowKey of
                         ArrowRight ->
@@ -2557,13 +2549,11 @@ update config msg model =
                             stepTo (currentTest.stepIndex - 1) currentTest
                 )
                 model
-            , Cmd.none
-            )
 
         ChangedEventSlider a ->
             case String.toInt a of
                 Just stepIndex ->
-                    ( updateCurrentTest (stepTo stepIndex) model, Cmd.none )
+                    updateCurrentTest (stepTo stepIndex) model
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -2572,7 +2562,7 @@ update config msg model =
             ( { model | windowSize = ( width, height ) }, Cmd.none )
 
         PressedTimelineEvent maybeClientId stepIndex ->
-            ( updateCurrentTest (\currentTest -> stepTo stepIndex { currentTest | currentTimeline = maybeClientId }) model, Cmd.none )
+            updateCurrentTest (\currentTest -> stepTo stepIndex { currentTest | currentTimeline = maybeClientId }) model
     )
         |> checkCachedElmValue
 
@@ -2585,10 +2575,7 @@ type CurrentTimeline
 stepTo :
     Int
     -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    ->
-        ( TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-        , Cmd msg
-        )
+    -> ( TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel, Cmd msg )
 stepTo stepIndex currentTest =
     case Array.get stepIndex currentTest.steps of
         Just _ ->
@@ -2607,22 +2594,26 @@ checkCachedElmValue :
         , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         )
 checkCachedElmValue ( model, cmd ) =
-    updateCurrentTest
-        (\currentTest ->
-            ( case ( currentTest.currentTimeline, model.tests ) of
-                ( FrontendTimeline clientId, Just (Ok tests) ) ->
-                    { currentTest
-                        | steps =
-                            checkCachedElmValueHelper clientId currentTest.stepIndex currentTest tests currentTest.steps
-                                |> checkCachedElmValueHelper clientId (currentTest.stepIndex - 1) currentTest tests
-                    }
+    let
+        ( model2, cmd2 ) =
+            updateCurrentTest
+                (\currentTest ->
+                    ( case ( currentTest.currentTimeline, model.tests ) of
+                        ( FrontendTimeline clientId, Just (Ok tests) ) ->
+                            { currentTest
+                                | steps =
+                                    checkCachedElmValueHelper clientId currentTest.stepIndex currentTest tests currentTest.steps
+                                        |> checkCachedElmValueHelper clientId (currentTest.stepIndex - 1) currentTest tests
+                            }
 
-                _ ->
-                    currentTest
-            , cmd
-            )
-        )
-        model
+                        _ ->
+                            currentTest
+                    , Cmd.none
+                    )
+                )
+                model
+    in
+    ( model2, Cmd.batch [ cmd, cmd2 ] )
 
 
 checkCachedElmValueHelper :
@@ -3067,7 +3058,7 @@ ellipsis2 maxChars text2 =
 
 
 addTimelineEvent :
-    CurrentTimeline
+    EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     ->
         { columnIndex : Int
         , dict :
@@ -3090,7 +3081,62 @@ addTimelineEvent :
                 , rowIndex : Int
                 }
         }
-addTimelineEvent timelineType state =
+addTimelineEvent eventType state =
+    let
+        timelineType : CurrentTimeline
+        timelineType =
+            case eventType of
+                TestEvent maybeClientId name ->
+                    case maybeClientId of
+                        Just clientId ->
+                            FrontendTimeline clientId
+
+                        Nothing ->
+                            BackendTimeline
+
+                ToBackendEvent clientId toBackend command ->
+                    FrontendTimeline clientId
+
+                ToFrontendEvent clientId toFrontend command ->
+                    BackendTimeline
+
+                BackendMsgEvent backendMsg command ->
+                    BackendTimeline
+
+                FrontendMsgEvent clientId frontendMsg command ->
+                    FrontendTimeline clientId
+
+        arrowUp rowIndex =
+            case eventType of
+                FrontendMsgEvent _ _ cmd ->
+                    if hasToBackendCmds cmd then
+                        [ Html.div
+                            [ Html.Attributes.style "width" "2px"
+                            , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
+                            , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
+                            , Html.Attributes.style "height" (px (rowIndex * timelineRowHeight))
+                            , Html.Attributes.style "background-color" "white"
+                            , Html.Attributes.style "position" "absolute"
+                            ]
+                            []
+                        , Html.div
+                            [ Html.Attributes.class "triangle-up"
+                            , Html.Attributes.style "top" (px (timelineRowHeight // 4))
+                            , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
+                            ]
+                            []
+                        ]
+
+                    else
+                        []
+
+                ToFrontendEvent _ _ cmd ->
+                    []
+
+                --hasToBackendCmds cmd
+                _ ->
+                    []
+    in
     { columnIndex = state.columnIndex + 1
     , dict =
         Dict.update
@@ -3098,7 +3144,10 @@ addTimelineEvent timelineType state =
             (\maybeTimeline ->
                 (case maybeTimeline of
                     Just timeline ->
-                        { events = circle timelineType state.columnIndex timeline.rowIndex :: timeline.events
+                        { events =
+                            circle eventType timelineType state.columnIndex timeline.rowIndex
+                                :: arrowUp timeline.rowIndex
+                                ++ timeline.events
                         , columnStart = timeline.columnStart
                         , columnEnd = state.columnIndex
                         , rowIndex = timeline.rowIndex
@@ -3110,7 +3159,7 @@ addTimelineEvent timelineType state =
                             rowIndex =
                                 Dict.size state.dict
                         in
-                        { events = [ circle timelineType state.columnIndex rowIndex ]
+                        { events = circle eventType timelineType state.columnIndex rowIndex :: arrowUp rowIndex
                         , columnStart = state.columnIndex
                         , columnEnd = state.columnIndex
                         , rowIndex = rowIndex
@@ -3143,28 +3192,7 @@ timelineView stepIndex events =
                 )
         timelines =
             Array.foldl
-                (\item state ->
-                    case item.eventType of
-                        TestEvent maybeClientId name ->
-                            case maybeClientId of
-                                Just clientId ->
-                                    addTimelineEvent (FrontendTimeline clientId) state
-
-                                Nothing ->
-                                    addTimelineEvent BackendTimeline state
-
-                        ToBackendEvent clientId toBackend command ->
-                            addTimelineEvent (FrontendTimeline clientId) state
-
-                        ToFrontendEvent clientId toFrontend command ->
-                            addTimelineEvent BackendTimeline state
-
-                        BackendMsgEvent backendMsg command ->
-                            addTimelineEvent BackendTimeline state
-
-                        FrontendMsgEvent clientId frontendMsg command ->
-                            addTimelineEvent (FrontendTimeline clientId) state
-                )
+                (\item state -> addTimelineEvent item.eventType state)
                 { columnIndex = 0, dict = Dict.singleton BackendTimeline { events = [], columnStart = 0, columnEnd = 0, rowIndex = 0 } }
                 events
                 |> .dict
@@ -3215,6 +3243,19 @@ timelineView stepIndex events =
             ]
 
 
+hasToBackendCmds : Command FrontendOnly toBackend frontendMsg -> Bool
+hasToBackendCmds cmd =
+    case cmd of
+        Batch commands ->
+            List.any hasToBackendCmds commands
+
+        SendToBackend _ ->
+            True
+
+        _ ->
+            False
+
+
 timelineEventId : Int -> String
 timelineEventId index =
     "event123_" ++ String.fromInt index
@@ -3230,7 +3271,24 @@ timelineCss =
         [ Html.text
             """
 .circle { width: 8px; height: 8px; background-color: white; border-radius: 8px }
+.big-circle { width: 14px; height: 14px; margin: -3px; background-color: white; border-radius: 8px }
 .circle-container { position: absolute; padding: 4px; }
+.triangle-up {
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 8px solid white;
+    position: absolute;
+}
+.triangle-down {
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 8px solid white;
+    position: absolute;
+}
     """
         ]
 
@@ -3239,8 +3297,13 @@ timelineColumnWidth =
     16
 
 
-circle : CurrentTimeline -> Int -> Int -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-circle timeline columnIndex rowIndex =
+circle :
+    EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> CurrentTimeline
+    -> Int
+    -> Int
+    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+circle eventType timeline columnIndex rowIndex =
     Html.div
         [ Html.Events.onClick (PressedTimelineEvent timeline columnIndex)
         , Html.Attributes.class "circle-container"
@@ -3248,7 +3311,23 @@ circle timeline columnIndex rowIndex =
         , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
         ]
         [ Html.div
-            [ Html.Attributes.class "circle"
+            [ Html.Attributes.class
+                (case eventType of
+                    FrontendMsgEvent _ _ _ ->
+                        "circle"
+
+                    ToBackendEvent clientId toBackend command ->
+                        "circle"
+
+                    ToFrontendEvent clientId toFrontend command ->
+                        "circle"
+
+                    BackendMsgEvent backendMsg command ->
+                        "circle"
+
+                    TestEvent maybeClientId string ->
+                        "big-circle"
+                )
             ]
             []
         ]
