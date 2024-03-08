@@ -921,6 +921,7 @@ type alias Event toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , frontends : Dict ClientId (EventFrontend frontendModel)
     , backend : backendModel
     , testErrors : List TestError
+    , cachedElmValue : Maybe { diff : ElmValue, noDiff : ElmValue }
     }
 
 
@@ -930,7 +931,6 @@ type alias EventFrontend frontendModel =
     , clipboard : String
     , url : Url
     , windowSize : { width : Int, height : Int }
-    , cachedElmValue : Maybe ElmValue
     }
 
 
@@ -1118,12 +1118,12 @@ addEvent eventType state =
                             , clipboard = a.clipboard
                             , url = a.url
                             , windowSize = a.windowSize
-                            , cachedElmValue = Nothing
                             }
                         )
                         state.frontends
                 , backend = state.model
                 , testErrors = state.testErrors
+                , cachedElmValue = Nothing
                 }
                 state.history
     }
@@ -2328,7 +2328,6 @@ type alias TestView toBackend frontendMsg frontendModel toFrontend backendMsg ba
     , stepIndex : Int
     , steps : Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
     , overlayPosition : OverlayPosition
-    , currentTimeline : CurrentTimeline
     , showModel : Bool
     , collapsedFields : RegularDict.Dict (List String) CollapsedField
     }
@@ -2351,7 +2350,6 @@ type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     | NoOp
     | GotFilesForTests (Result FileLoadError (List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)))
     | PressedToggleOverlayPosition
-    | SelectedFrontend ClientId
     | PressedShowModel
     | PressedHideModel
     | PressedExpandField (List PathNode)
@@ -2359,7 +2357,7 @@ type Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     | PressedArrowKey ArrowKey
     | ChangedEventSlider String
     | GotWindowSize Int Int
-    | PressedTimelineEvent CurrentTimeline Int
+    | PressedTimelineEvent Int
 
 
 init :
@@ -2408,7 +2406,7 @@ update config msg model =
 
         PressedViewTest index ->
             case model.tests of
-                Just (Err error) ->
+                Just (Err _) ->
                     ( model, Cmd.none )
 
                 Just (Ok tests) ->
@@ -2426,7 +2424,6 @@ update config msg model =
                                     , steps = state.history
                                     , stepIndex = 0
                                     , overlayPosition = Top
-                                    , currentTimeline = BackendTimeline
                                     , showModel = False
                                     , collapsedFields = RegularDict.empty
                                     }
@@ -2499,9 +2496,6 @@ update config msg model =
                 )
                 model
 
-        SelectedFrontend clientId ->
-            updateCurrentTest (\currentTest -> ( { currentTest | currentTimeline = FrontendTimeline clientId }, Cmd.none )) model
-
         PressedShowModel ->
             updateCurrentTest (\currentTest -> ( { currentTest | showModel = True }, Cmd.none )) model
 
@@ -2561,8 +2555,8 @@ update config msg model =
         GotWindowSize width height ->
             ( { model | windowSize = ( width, height ) }, Cmd.none )
 
-        PressedTimelineEvent maybeClientId stepIndex ->
-            updateCurrentTest (\currentTest -> stepTo stepIndex { currentTest | currentTimeline = maybeClientId }) model
+        PressedTimelineEvent stepIndex ->
+            updateCurrentTest (\currentTest -> stepTo stepIndex currentTest) model
     )
         |> checkCachedElmValue
 
@@ -2598,13 +2592,55 @@ checkCachedElmValue ( model, cmd ) =
         ( model2, cmd2 ) =
             updateCurrentTest
                 (\currentTest ->
-                    ( case ( currentTest.currentTimeline, model.tests ) of
-                        ( FrontendTimeline clientId, Just (Ok tests) ) ->
-                            { currentTest
-                                | steps =
-                                    checkCachedElmValueHelper clientId currentTest.stepIndex currentTest tests currentTest.steps
-                                        |> checkCachedElmValueHelper clientId (currentTest.stepIndex - 1) currentTest tests
-                            }
+                    let
+                        maybePreviousStep : Maybe ( Int, Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+                        maybePreviousStep =
+                            previousTimelineStep currentTest.stepIndex currentTest
+                    in
+                    ( case model.tests of
+                        Just (Ok tests) ->
+                            case getAt currentTest.index tests of
+                                Just test ->
+                                    let
+                                        state : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+                                        state =
+                                            getState test
+
+                                        steps2 =
+                                            updateAt
+                                                currentTest.stepIndex
+                                                (\event ->
+                                                    case event.cachedElmValue of
+                                                        Just _ ->
+                                                            event
+
+                                                        Nothing ->
+                                                            checkCachedElmValueHelper event state
+                                                )
+                                                currentTest.steps
+                                    in
+                                    { currentTest
+                                        | steps =
+                                            case maybePreviousStep of
+                                                Just ( previousIndex, _ ) ->
+                                                    updateAt
+                                                        previousIndex
+                                                        (\event ->
+                                                            case event.cachedElmValue of
+                                                                Just _ ->
+                                                                    event
+
+                                                                Nothing ->
+                                                                    checkCachedElmValueHelper event state
+                                                        )
+                                                        steps2
+
+                                                Nothing ->
+                                                    steps2
+                                    }
+
+                                Nothing ->
+                                    currentTest
 
                         _ ->
                             currentTest
@@ -2616,50 +2652,161 @@ checkCachedElmValue ( model, cmd ) =
     ( model2, Cmd.batch [ cmd, cmd2 ] )
 
 
-checkCachedElmValueHelper :
-    ClientId
-    -> Int
+eventTypeToTimelineType : EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> CurrentTimeline
+eventTypeToTimelineType eventType =
+    case eventType of
+        UpdateFromFrontendEvent clientId toBackend command ->
+            BackendTimeline
+
+        UpdateFromBackendEvent clientId toFrontend command ->
+            FrontendTimeline clientId
+
+        BackendUpdateEvent backendMsg command ->
+            BackendTimeline
+
+        FrontendUpdateEvent clientId frontendMsg command ->
+            FrontendTimeline clientId
+
+        TestEvent maybeClientId string ->
+            case maybeClientId of
+                Just clientId ->
+                    FrontendTimeline clientId
+
+                Nothing ->
+                    BackendTimeline
+
+
+previousTimelineStep :
+    Int
     -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> List (Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-checkCachedElmValueHelper clientId stepIndex currentTest tests steps =
-    updateAt
-        stepIndex
-        (\currentStep ->
-            { currentStep
-                | frontends =
-                    Dict.update
-                        clientId
-                        (Maybe.map
-                            (\frontend ->
-                                { frontend
-                                    | cachedElmValue =
-                                        case ( frontend.cachedElmValue, getAt currentTest.index tests ) of
-                                            ( Nothing, Just instructions ) ->
-                                                if currentTest.showModel then
-                                                    let
-                                                        state =
-                                                            getState instructions
-                                                    in
-                                                    toElmValue
-                                                        state.frontendApp
-                                                        state.backendApp
-                                                        currentStep.backend
-                                                        frontend
+    -> Maybe ( Int, Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+previousTimelineStep stepIndex test =
+    if stepIndex <= 0 then
+        Nothing
 
-                                                else
-                                                    Nothing
+    else
+        let
+            timeline : CurrentTimeline
+            timeline =
+                currentTimeline test
+        in
+        Array.slice 0 (stepIndex - 1) test.steps
+            |> Array.foldr
+                (\step state ->
+                    case state of
+                        Done _ ->
+                            state
 
-                                            _ ->
-                                                frontend.cachedElmValue
-                                }
-                            )
-                        )
-                        currentStep.frontends
-            }
-        )
-        steps
+                        Continue index ->
+                            if eventTypeToTimelineType step.eventType == timeline then
+                                Done ( index, step )
+
+                            else
+                                Continue (index - 1)
+                )
+                (Continue (stepIndex - 1))
+            |> (\a ->
+                    case a of
+                        Continue _ ->
+                            Nothing
+
+                        Done b ->
+                            Just b
+               )
+
+
+type Fold c d
+    = Continue c
+    | Done d
+
+
+currentTimeline : TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> CurrentTimeline
+currentTimeline currentTest =
+    case Array.get currentTest.stepIndex currentTest.steps of
+        Just step ->
+            eventTypeToTimelineType step.eventType
+
+        Nothing ->
+            BackendTimeline
+
+
+checkCachedElmValueHelper :
+    Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+checkCachedElmValueHelper event state =
+    { event
+        | cachedElmValue =
+            case event.eventType of
+                BackendUpdateEvent msg cmd3 ->
+                    { diff =
+                        DebugParser.valueToElmValue
+                            { newSubscriptions = state.backendApp.subscriptions event.backend
+                            , newModel = event.backend
+                            }
+                    , noDiff =
+                        DebugParser.valueToElmValue
+                            { backendMsg = msg
+                            , cmds = cmd3
+                            }
+                    }
+                        |> Just
+
+                UpdateFromFrontendEvent clientId toBackend cmd3 ->
+                    { diff =
+                        DebugParser.valueToElmValue
+                            { newSubscriptions = state.backendApp.subscriptions event.backend
+                            , newModel = event.backend
+                            }
+                    , noDiff =
+                        DebugParser.valueToElmValue
+                            { toBackend = toBackend
+                            , cmds = cmd3
+                            }
+                    }
+                        |> Just
+
+                UpdateFromBackendEvent clientId toFrontend cmd3 ->
+                    case Dict.get clientId event.frontends of
+                        Just frontend ->
+                            { diff =
+                                DebugParser.valueToElmValue
+                                    { newSubscriptions = state.frontendApp.subscriptions frontend.model
+                                    , newModel = frontend.model
+                                    }
+                            , noDiff =
+                                DebugParser.valueToElmValue
+                                    { toFrontend = toFrontend
+                                    , cmds = cmd3
+                                    }
+                            }
+                                |> Just
+
+                        Nothing ->
+                            Nothing
+
+                FrontendUpdateEvent clientId frontendMsg cmd3 ->
+                    case Dict.get clientId event.frontends of
+                        Just frontend ->
+                            { diff =
+                                DebugParser.valueToElmValue
+                                    { newSubscriptions = state.frontendApp.subscriptions frontend.model
+                                    , newModel = frontend.model
+                                    }
+                            , noDiff =
+                                DebugParser.valueToElmValue
+                                    { frontendMsg = frontendMsg
+                                    , cmds = cmd3
+                                    }
+                            }
+                                |> Just
+
+                        Nothing ->
+                            Nothing
+
+                TestEvent maybeClientId string ->
+                    Nothing
+    }
 
 
 updateAt : Int -> (b -> b) -> Array b -> Array b
@@ -2920,15 +3067,19 @@ getTestName instructions =
 
 modelView :
     RegularDict.Dict (List String) CollapsedField
-    -> EventFrontend frontendModel
+    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-modelView collapsedFields frontend =
-    case frontend.cachedElmValue of
+modelView collapsedFields event =
+    case event.cachedElmValue of
         Just elmValue ->
-            Effect.TreeView.treeView treeViewConfig 0 [] collapsedFields elmValue
+            Html.div
+                []
+                [ Effect.TreeView.treeView treeViewConfig 0 [] collapsedFields elmValue.diff
+                , Effect.TreeView.treeView treeViewConfig 0 [] collapsedFields elmValue.noDiff
+                ]
 
         Nothing ->
-            Html.text "Failed to show frontend model"
+            Html.text "Failed to show  model"
 
 
 treeViewConfig : Effect.TreeView.MsgConfig (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
@@ -2936,28 +3087,6 @@ treeViewConfig =
     { pressedExpandField = PressedExpandField
     , pressedCollapseField = PressedCollapseField
     }
-
-
-toElmValue :
-    FrontendApp toBackend frontendMsg frontendModel toFrontend
-    -> BackendApp toBackend toFrontend backendMsg backendModel
-    -> backendModel
-    -> EventFrontend frontendModel
-    -> Maybe ElmValue
-toElmValue frontendApp backendApp backendModel testStep =
-    { sessionId = Effect.Lamdera.sessionIdToString testStep.sessionId
-    , url = Url.toString testStep.url
-    , frontendSubscriptions = frontendApp.subscriptions testStep.model
-    , backendSubscriptions = backendApp.subscriptions backendModel
-    , frontendModel = testStep.model
-    , backendModel = backendModel
-    }
-        --|> Debug.toString
-        --|> DebugParser.parseWithOptionalTag
-        --|> Result.toMaybe
-        --|> Maybe.map (\a -> refineElmValue a.value)
-        |> DebugParser.valueToElmValue
-        |> Just
 
 
 refineElmValue : ElmValue -> ElmValue
@@ -3001,13 +3130,17 @@ refineElmValue value =
 
 modelDiffView :
     RegularDict.Dict (List String) CollapsedField
-    -> EventFrontend frontendModel
-    -> EventFrontend frontendModel
+    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-modelDiffView collapsedFields frontend previousFrontend =
-    case ( frontend.cachedElmValue, previousFrontend.cachedElmValue ) of
+modelDiffView collapsedFields step previousStep =
+    case ( step.cachedElmValue, previousStep.cachedElmValue ) of
         ( Just ok, Just previous ) ->
-            Effect.TreeView.treeViewDiff treeViewConfig 0 [] collapsedFields previous ok
+            Html.div
+                []
+                [ Effect.TreeView.treeViewDiff treeViewConfig 0 [] collapsedFields previous.diff ok.diff
+                , Effect.TreeView.treeView treeViewConfig 0 [] collapsedFields ok.noDiff
+                ]
 
         _ ->
             Html.text "Failed to show frontend model"
@@ -3077,29 +3210,6 @@ addTimelineEvent :
         }
 addTimelineEvent event state =
     let
-        timelineType : CurrentTimeline
-        timelineType =
-            case event.eventType of
-                TestEvent maybeClientId name ->
-                    case maybeClientId of
-                        Just clientId ->
-                            FrontendTimeline clientId
-
-                        Nothing ->
-                            BackendTimeline
-
-                UpdateFromFrontendEvent clientId toBackend command ->
-                    BackendTimeline
-
-                UpdateFromBackendEvent clientId toFrontend command ->
-                    FrontendTimeline clientId
-
-                BackendUpdateEvent backendMsg command ->
-                    BackendTimeline
-
-                FrontendUpdateEvent clientId frontendMsg command ->
-                    FrontendTimeline clientId
-
         arrows : Int -> List (Html msg)
         arrows rowIndex =
             case event.eventType of
@@ -3121,12 +3231,12 @@ addTimelineEvent event state =
     { columnIndex = state.columnIndex + 1
     , dict =
         Dict.update
-            timelineType
+            (eventTypeToTimelineType event.eventType)
             (\maybeTimeline ->
                 (case maybeTimeline of
                     Just timeline ->
                         { events =
-                            circle event.eventType timelineType state.columnIndex timeline.rowIndex
+                            circle event.eventType state.columnIndex timeline.rowIndex
                                 :: arrows timeline.rowIndex
                                 ++ timeline.events
                         , columnStart = timeline.columnStart
@@ -3140,7 +3250,7 @@ addTimelineEvent event state =
                             rowIndex =
                                 Dict.size state.dict
                         in
-                        { events = circle event.eventType timelineType state.columnIndex rowIndex :: arrows rowIndex
+                        { events = circle event.eventType state.columnIndex rowIndex :: arrows rowIndex
                         , columnStart = state.columnIndex
                         , columnEnd = state.columnIndex
                         , rowIndex = rowIndex
@@ -3309,7 +3419,10 @@ timelineViewHelper stepIndex events timelines =
                         (\index ->
                             Html.div
                                 [ Html.Attributes.style "left" (px (stepIndex * timelineColumnWidth))
+                                , Html.Attributes.style "width" (px timelineColumnWidth)
+                                , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
                                 , Html.Attributes.id (timelineEventId index)
+                                , Html.Events.onClick (PressedTimelineEvent index)
                                 ]
                                 []
                         )
@@ -3321,7 +3434,7 @@ timelineViewHelper stepIndex events timelines =
             , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
             , Html.Attributes.style "position" "relative"
             , Html.Attributes.style "overflow-x" "auto"
-            , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\a -> ( a, True )))
+            , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\_ -> ( NoOp, True )))
             , Html.Attributes.tabindex -1
             , Html.Attributes.style "display" "inline-block"
             ]
@@ -3416,16 +3529,10 @@ timelineColumnWidth =
     16
 
 
-circle :
-    EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> CurrentTimeline
-    -> Int
-    -> Int
-    -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-circle eventType timeline columnIndex rowIndex =
+circle : EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Int -> Int -> Html msg
+circle eventType columnIndex rowIndex =
     Html.div
-        [ Html.Events.onClick (PressedTimelineEvent timeline columnIndex)
-        , Html.Attributes.class "circle-container"
+        [ Html.Attributes.class "circle-container"
         , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth))
         , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
         ]
@@ -3458,28 +3565,13 @@ testView :
     -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> List (Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel))
 testView windowWidth instructions testView_ =
-    let
-        state : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-        state =
-            getState instructions
-    in
     case Array.get testView_.stepIndex testView_.steps of
         Just currentStep ->
             if testView_.showModel then
                 let
-                    maybePreviousFrontend : Maybe (EventFrontend frontendModel)
-                    maybePreviousFrontend =
-                        case Array.get (testView_.stepIndex - 1) testView_.steps of
-                            Just previousStep ->
-                                case testView_.currentTimeline of
-                                    FrontendTimeline clientId ->
-                                        Dict.get clientId previousStep.frontends
-
-                                    BackendTimeline ->
-                                        Nothing
-
-                            Nothing ->
-                                Nothing
+                    maybeStep : Maybe ( Int, Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+                    maybeStep =
+                        previousTimelineStep testView_.stepIndex testView_
                 in
                 [ Html.div
                     [ Html.Attributes.style "width" "100%"
@@ -3504,48 +3596,18 @@ testView windowWidth instructions testView_ =
                         ]
                     , Html.div
                         [ Html.Attributes.style "font-size" "14px", Html.Attributes.style "padding" "4px" ]
-                        [ case testView_.currentTimeline of
-                            FrontendTimeline clientId ->
-                                case Dict.get clientId currentStep.frontends of
-                                    Just frontend ->
-                                        case maybePreviousFrontend of
-                                            Just previousFrontend ->
-                                                Html.Lazy.lazy3 modelDiffView testView_.collapsedFields frontend previousFrontend
+                        [ case maybeStep of
+                            Just ( _, previousStep ) ->
+                                Html.Lazy.lazy3 modelDiffView testView_.collapsedFields currentStep previousStep
 
-                                            Nothing ->
-                                                Html.Lazy.lazy2 modelView testView_.collapsedFields frontend
-
-                                    Nothing ->
-                                        Html.text ""
-
-                            BackendTimeline ->
-                                Html.text ""
+                            Nothing ->
+                                Html.Lazy.lazy2 modelView testView_.collapsedFields currentStep
                         ]
                     ]
                 ]
 
             else
-                [ testOverlay windowWidth testView_ currentStep
-                , case testView_.currentTimeline of
-                    FrontendTimeline clientId ->
-                        case Dict.get clientId currentStep.frontends of
-                            Just frontend ->
-                                state.frontendApp.view frontend.model |> .body |> Html.div [] |> Html.map (\_ -> NoOp)
-
-                            Nothing ->
-                                Html.div
-                                    [ Html.Attributes.style "text-align" "center"
-                                    , Html.Attributes.style "margin-top" "200px"
-                                    , Html.Attributes.style "font-size" "18px"
-                                    , Html.Attributes.style "font-weight" "bold"
-                                    , Html.Attributes.style "color" "rgb(100, 100, 100)"
-                                    , Html.Attributes.style "font-family" "arial"
-                                    ]
-                                    [ Html.text (Effect.Lamdera.clientIdToString clientId ++ " not found") ]
-
-                    BackendTimeline ->
-                        Html.text ""
-                ]
+                [ testOverlay windowWidth testView_ currentStep ]
 
         Nothing ->
             [ Html.text "Step not found" ]
