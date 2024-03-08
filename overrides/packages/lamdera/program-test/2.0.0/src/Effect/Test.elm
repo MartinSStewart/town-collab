@@ -66,7 +66,7 @@ import Json.Encode
 import List.Nonempty exposing (Nonempty)
 import Process
 import Quantity
-import Set
+import Set exposing (Set)
 import Task
 import Test exposing (Test)
 import Test.Html.Event
@@ -935,10 +935,10 @@ type alias EventFrontend frontendModel =
 
 
 type EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    = ToBackendEvent ClientId toBackend (Command BackendOnly toFrontend backendMsg)
-    | ToFrontendEvent ClientId toFrontend (Command FrontendOnly toBackend frontendMsg)
-    | BackendMsgEvent backendMsg (Command BackendOnly toFrontend backendMsg)
-    | FrontendMsgEvent ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
+    = UpdateFromFrontendEvent ClientId toBackend (Command BackendOnly toFrontend backendMsg)
+    | UpdateFromBackendEvent ClientId toFrontend (Command FrontendOnly toBackend frontendMsg)
+    | BackendUpdateEvent backendMsg (Command BackendOnly toFrontend backendMsg)
+    | FrontendUpdateEvent ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
     | TestEvent (Maybe ClientId) String
 
 
@@ -981,7 +981,7 @@ handleFrontendUpdate clientId currentTime2 msg state =
                         }
                         state.frontends
             }
-                |> addEvent (FrontendMsgEvent clientId msg cmd)
+                |> addEvent (FrontendUpdateEvent clientId msg cmd)
 
         Nothing ->
             state
@@ -1018,7 +1018,7 @@ handleBackendUpdate currentTime2 app msg state =
                 state.timers
                 state.timers
     }
-        |> addEvent (BackendMsgEvent msg cmd)
+        |> addEvent (BackendUpdateEvent msg cmd)
 
 
 handleUpdateFromBackend :
@@ -1060,7 +1060,7 @@ handleUpdateFromBackend clientId currentTime2 toFrontend state =
                         }
                         state.frontends
             }
-                |> addEvent (ToFrontendEvent clientId toFrontend cmd)
+                |> addEvent (UpdateFromBackendEvent clientId toFrontend cmd)
 
         Nothing ->
             state
@@ -1097,7 +1097,7 @@ handleUpdateFromFrontend sessionId clientId msg state =
                 state.timers
                 state.timers
     }
-        |> addEvent (ToBackendEvent clientId msg cmd)
+        |> addEvent (UpdateFromFrontendEvent clientId msg cmd)
 
 
 addEvent :
@@ -3025,17 +3025,17 @@ currentStepText currentStep testView_ =
                 TestEvent _ name ->
                     name
 
-                ToBackendEvent clientId toBackend command ->
-                    "ToBackend: " ++ Debug.toString toBackend
+                UpdateFromFrontendEvent clientId toBackend command ->
+                    "UpdateFromFrontend: " ++ Debug.toString toBackend
 
-                ToFrontendEvent clientId toFrontend command ->
-                    "ToFrontend: " ++ Debug.toString toFrontend
+                UpdateFromBackendEvent clientId toFrontend command ->
+                    "UpdateFromBackend: " ++ Debug.toString toFrontend
 
-                BackendMsgEvent backendMsg command ->
-                    "BackendMsg: " ++ Debug.toString backendMsg
+                BackendUpdateEvent backendMsg command ->
+                    "BackendUpdate: " ++ Debug.toString backendMsg
 
-                FrontendMsgEvent clientId frontendMsg command ->
-                    "FrontendMsg: " ++ Debug.toString frontendMsg
+                FrontendUpdateEvent clientId frontendMsg command ->
+                    "FrontendUpdate: " ++ Debug.toString frontendMsg
     in
     Html.div
         [ Html.Attributes.style "padding" "4px", Html.Attributes.title fullMsg ]
@@ -3058,7 +3058,7 @@ ellipsis2 maxChars text2 =
 
 
 addTimelineEvent :
-    EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     ->
         { columnIndex : Int
         , dict :
@@ -3081,11 +3081,11 @@ addTimelineEvent :
                 , rowIndex : Int
                 }
         }
-addTimelineEvent eventType state =
+addTimelineEvent event state =
     let
         timelineType : CurrentTimeline
         timelineType =
-            case eventType of
+            case event.eventType of
                 TestEvent maybeClientId name ->
                     case maybeClientId of
                         Just clientId ->
@@ -3094,48 +3094,94 @@ addTimelineEvent eventType state =
                         Nothing ->
                             BackendTimeline
 
-                ToBackendEvent clientId toBackend command ->
-                    FrontendTimeline clientId
-
-                ToFrontendEvent clientId toFrontend command ->
+                UpdateFromFrontendEvent clientId toBackend command ->
                     BackendTimeline
 
-                BackendMsgEvent backendMsg command ->
-                    BackendTimeline
-
-                FrontendMsgEvent clientId frontendMsg command ->
+                UpdateFromBackendEvent clientId toFrontend command ->
                     FrontendTimeline clientId
 
-        arrowUp rowIndex =
-            case eventType of
-                FrontendMsgEvent _ _ cmd ->
-                    if hasToBackendCmds cmd then
-                        [ Html.div
-                            [ Html.Attributes.style "width" "2px"
-                            , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
-                            , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
-                            , Html.Attributes.style "height" (px (rowIndex * timelineRowHeight))
-                            , Html.Attributes.style "background-color" "white"
-                            , Html.Attributes.style "position" "absolute"
-                            ]
-                            []
-                        , Html.div
-                            [ Html.Attributes.class "triangle-up"
-                            , Html.Attributes.style "top" (px (timelineRowHeight // 4))
-                            , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
-                            ]
-                            []
+                BackendUpdateEvent backendMsg command ->
+                    BackendTimeline
+
+                FrontendUpdateEvent clientId frontendMsg command ->
+                    FrontendTimeline clientId
+
+        arrowDown cmd =
+            let
+                rowIndexes : List Int
+                rowIndexes =
+                    hasToFrontendCmds event cmd
+                        |> Set.toList
+                        |> List.filterMap
+                            (\clientId ->
+                                Dict.get (FrontendTimeline (Effect.Lamdera.clientIdFromString clientId)) state.dict
+                                    |> Maybe.map .rowIndex
+                            )
+            in
+            case List.maximum rowIndexes of
+                Just maxRowIndex ->
+                    Html.div
+                        [ Html.Attributes.style "width" "2px"
+                        , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
+                        , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
+                        , Html.Attributes.style "height" (px (maxRowIndex * timelineRowHeight - 3))
+                        , Html.Attributes.style "background-color" "white"
+                        , Html.Attributes.style "position" "absolute"
                         ]
-
-                    else
                         []
+                        :: List.map
+                            (\rowIndex ->
+                                Html.div
+                                    [ Html.Attributes.class "triangle-down"
+                                    , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
+                                    , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
+                                    ]
+                                    []
+                            )
+                            rowIndexes
 
-                ToFrontendEvent _ _ cmd ->
+                Nothing ->
                     []
 
-                --hasToBackendCmds cmd
+        arrows : Int -> List (Html msg)
+        arrows rowIndex =
+            case event.eventType of
+                FrontendUpdateEvent _ _ cmd ->
+                    arrowUp rowIndex cmd
+
+                UpdateFromBackendEvent _ _ cmd ->
+                    arrowUp rowIndex cmd
+
+                UpdateFromFrontendEvent clientId toBackend cmd ->
+                    arrowDown cmd
+
+                BackendUpdateEvent backendMsg cmd ->
+                    arrowDown cmd
+
                 _ ->
                     []
+
+        arrowUp rowIndex cmd =
+            if hasToBackendCmds cmd then
+                [ Html.div
+                    [ Html.Attributes.style "width" "2px"
+                    , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
+                    , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
+                    , Html.Attributes.style "height" (px (rowIndex * timelineRowHeight))
+                    , Html.Attributes.style "background-color" "white"
+                    , Html.Attributes.style "position" "absolute"
+                    ]
+                    []
+                , Html.div
+                    [ Html.Attributes.class "triangle-up"
+                    , Html.Attributes.style "top" (px (timelineRowHeight // 4))
+                    , Html.Attributes.style "left" (px (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
+                    ]
+                    []
+                ]
+
+            else
+                []
     in
     { columnIndex = state.columnIndex + 1
     , dict =
@@ -3145,8 +3191,8 @@ addTimelineEvent eventType state =
                 (case maybeTimeline of
                     Just timeline ->
                         { events =
-                            circle eventType timelineType state.columnIndex timeline.rowIndex
-                                :: arrowUp timeline.rowIndex
+                            circle event.eventType timelineType state.columnIndex timeline.rowIndex
+                                :: arrows timeline.rowIndex
                                 ++ timeline.events
                         , columnStart = timeline.columnStart
                         , columnEnd = state.columnIndex
@@ -3159,7 +3205,7 @@ addTimelineEvent eventType state =
                             rowIndex =
                                 Dict.size state.dict
                         in
-                        { events = circle eventType timelineType state.columnIndex rowIndex :: arrowUp rowIndex
+                        { events = circle event.eventType timelineType state.columnIndex rowIndex :: arrows rowIndex
                         , columnStart = state.columnIndex
                         , columnEnd = state.columnIndex
                         , rowIndex = rowIndex
@@ -3192,7 +3238,7 @@ timelineView stepIndex events =
                 )
         timelines =
             Array.foldl
-                (\item state -> addTimelineEvent item.eventType state)
+                addTimelineEvent
                 { columnIndex = 0, dict = Dict.singleton BackendTimeline { events = [], columnStart = 0, columnEnd = 0, rowIndex = 0 } }
                 events
                 |> .dict
@@ -3256,6 +3302,41 @@ hasToBackendCmds cmd =
             False
 
 
+hasToFrontendCmds :
+    Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Command BackendOnly toFrontend backendMsg
+    -> Set String
+hasToFrontendCmds event cmd =
+    case cmd of
+        Batch commands ->
+            List.foldl (\cmd2 set -> Set.union set (hasToFrontendCmds event cmd2)) Set.empty commands
+
+        SendToFrontend (Effect.Internal.ClientId clientId) _ ->
+            if Dict.member (Effect.Lamdera.clientIdFromString clientId) event.frontends then
+                Set.singleton clientId
+
+            else
+                Set.empty
+
+        SendToFrontends (Effect.Internal.SessionId sessionId) _ ->
+            Dict.toList event.frontends
+                |> List.filterMap
+                    (\( clientId, frontend ) ->
+                        if Effect.Lamdera.sessionIdToString frontend.sessionId == sessionId then
+                            Just (Effect.Lamdera.clientIdToString clientId)
+
+                        else
+                            Nothing
+                    )
+                |> Set.fromList
+
+        Broadcast _ ->
+            Dict.keys event.frontends |> List.map Effect.Lamdera.clientIdToString |> Set.fromList
+
+        _ ->
+            Set.empty
+
+
 timelineEventId : Int -> String
 timelineEventId index =
     "event123_" ++ String.fromInt index
@@ -3313,16 +3394,16 @@ circle eventType timeline columnIndex rowIndex =
         [ Html.div
             [ Html.Attributes.class
                 (case eventType of
-                    FrontendMsgEvent _ _ _ ->
+                    FrontendUpdateEvent _ _ _ ->
                         "circle"
 
-                    ToBackendEvent clientId toBackend command ->
+                    UpdateFromFrontendEvent clientId toBackend command ->
                         "circle"
 
-                    ToFrontendEvent clientId toFrontend command ->
+                    UpdateFromBackendEvent clientId toFrontend command ->
                         "circle"
 
-                    BackendMsgEvent backendMsg command ->
+                    BackendUpdateEvent backendMsg command ->
                         "circle"
 
                     TestEvent maybeClientId string ->
