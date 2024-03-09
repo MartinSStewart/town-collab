@@ -2575,14 +2575,39 @@ type CurrentTimeline
 stepTo :
     Int
     -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> ( TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel, Cmd msg )
+    ->
+        ( TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+        , Cmd (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+        )
 stepTo stepIndex currentTest =
     case Array.get stepIndex currentTest.steps of
         Just _ ->
-            ( { currentTest | stepIndex = stepIndex }, Cmd.none )
+            ( { currentTest | stepIndex = stepIndex }
+            , Browser.Dom.getElement timelineContainerId
+                |> Task.andThen
+                    (\container ->
+                        Browser.Dom.setViewportOf
+                            timelineContainerId
+                            (toFloat stepIndex * timelineColumnWidth - container.element.width / 2)
+                            0
+                    )
+                |> Task.attempt (\_ -> NoOp)
+            )
 
         Nothing ->
             ( currentTest, Cmd.none )
+
+
+abc =
+    ( { scene = { width = 1076, height = 870 }
+      , viewport = { x = 0, y = 0, width = 1076, height = 870 }
+      , element = { x = 68, y = 24, width = 500, height = 64 }
+      }
+    , { scene = { width = 1076, height = 870 }
+      , viewport = { x = 0, y = 0, width = 1076, height = 870 }
+      , element = { x = 293, y = 24, width = 16, height = 64 }
+      }
+    )
 
 
 checkCachedElmValue :
@@ -2764,7 +2789,7 @@ checkCachedElmValueHelper event state =
                     }
                         |> Just
 
-                UpdateFromFrontendEvent clientId toBackend cmd3 ->
+                UpdateFromFrontendEvent _ toBackend cmd3 ->
                     { diff =
                         DebugParser.valueToElmValue
                             { newSubscriptions = state.backendApp.subscriptions event.backend
@@ -2841,7 +2866,7 @@ checkCachedElmValueHelper event state =
                         Nothing ->
                             Nothing
 
-                TestEvent maybeClientId string ->
+                TestEvent _ _ ->
                     Nothing
     }
 
@@ -3378,6 +3403,7 @@ arrowUp columnIndex rowIndex cmd =
             , Html.Attributes.style "height" (px (rowIndex * timelineRowHeight))
             , Html.Attributes.style "background-color" "white"
             , Html.Attributes.style "position" "absolute"
+            , Html.Attributes.style "pointer-events" "none"
             ]
             []
         , Html.div
@@ -3466,25 +3492,25 @@ timelineViewHelper stepIndex events timelines =
                     :: timeline.events
             )
         |> (\a ->
-                Html.div
-                    [ Html.Attributes.style "position" "absolute"
-                    , Html.Attributes.style "left" (px (stepIndex * timelineColumnWidth))
-                    , Html.Attributes.style "top" (px 0)
-                    , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
-                    , Html.Attributes.style "width" (px timelineColumnWidth)
-                    , Html.Attributes.style "background-color" "rgba(255,255,255,0.4)"
-                    ]
-                    []
-                    :: timelineCss
+                timelineCss
                     :: List.map
                         (\index ->
                             Html.div
-                                [ Html.Attributes.style "left" (px (stepIndex * timelineColumnWidth))
-                                , Html.Attributes.style "width" (px timelineColumnWidth)
-                                , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
-                                , Html.Attributes.id (timelineEventId index)
-                                , Html.Events.onClick (PressedTimelineEvent index)
-                                ]
+                                ([ Html.Attributes.style "left" (px (index * timelineColumnWidth))
+                                 , Html.Attributes.style "width" (px timelineColumnWidth)
+                                 , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
+                                 , Html.Attributes.style "position" "absolute"
+                                 , Html.Events.onClick (PressedTimelineEvent index)
+                                 ]
+                                    ++ (if index == stepIndex then
+                                            [ Html.Attributes.id timelineEventId
+                                            , Html.Attributes.style "background-color" "rgba(255,255,255,0.4)"
+                                            ]
+
+                                        else
+                                            []
+                                       )
+                                )
                                 []
                         )
                         (List.range 0 (Array.length events - 1))
@@ -3499,7 +3525,13 @@ timelineViewHelper stepIndex events timelines =
             , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\_ -> ( NoOp, True )))
             , Html.Attributes.tabindex -1
             , Html.Attributes.style "display" "inline-block"
+            , Html.Attributes.id timelineContainerId
             ]
+
+
+timelineContainerId : String
+timelineContainerId =
+    "timelineContainer123"
 
 
 hasToBackendCmds : Command FrontendOnly toBackend frontendMsg -> Bool
@@ -3550,9 +3582,9 @@ hasToFrontendCmds event cmd =
             Set.empty
 
 
-timelineEventId : Int -> String
-timelineEventId index =
-    "event123_" ++ String.fromInt index
+timelineEventId : String
+timelineEventId =
+    "currentEvent123"
 
 
 px value =
@@ -3564,9 +3596,9 @@ timelineCss =
         []
         [ Html.text
             """
-.circle { width: 8px; height: 8px; border-radius: 8px }
-.big-circle { width: 14px; height: 14px; margin: -3px; border-radius: 8px }
-.circle-container { position: absolute; padding: 4px; }
+.circle { width: 8px; height: 8px; border-radius: 8px; pointer-events: none; }
+.big-circle { width: 14px; height: 14px; margin: -3px; border-radius: 8px; pointer-events: none; }
+.circle-container { position: absolute; padding: 4px; pointer-events: none; }
 .triangle-up {
     width: 0;
     height: 0;
@@ -3574,6 +3606,7 @@ timelineCss =
     border-right: 4px solid transparent;
     border-bottom: 8px solid white;
     position: absolute;
+    pointer-events: none;
 }
 .triangle-down {
     width: 0;
@@ -3582,6 +3615,7 @@ timelineCss =
     border-right: 4px solid transparent;
     border-top: 8px solid white;
     position: absolute;
+    pointer-events: none;
 }
     """
         ]
@@ -3605,22 +3639,22 @@ circle color eventType columnIndex rowIndex =
                     FrontendUpdateEvent _ _ _ ->
                         "circle"
 
-                    UpdateFromFrontendEvent clientId toBackend command ->
+                    UpdateFromFrontendEvent _ _ _ ->
                         "circle"
 
-                    UpdateFromBackendEvent clientId toFrontend command ->
+                    UpdateFromBackendEvent _ _ _ ->
                         "circle"
 
-                    BackendUpdateEvent backendMsg command ->
+                    BackendUpdateEvent _ _ ->
                         "circle"
 
-                    TestEvent maybeClientId string ->
+                    TestEvent _ _ ->
                         "big-circle"
 
-                    BackendInitEvent command ->
+                    BackendInitEvent _ ->
                         "circle"
 
-                    FrontendInitEvent clientId command ->
+                    FrontendInitEvent _ _ ->
                         "circle"
                 )
             ]
@@ -3740,11 +3774,6 @@ ellipsis width text_ =
         , Html.Attributes.style "padding" "4px"
         ]
         [ Html.text text_ ]
-
-
-buttonAttributes : List (Html.Attribute msg)
-buttonAttributes =
-    []
 
 
 {-| -}
