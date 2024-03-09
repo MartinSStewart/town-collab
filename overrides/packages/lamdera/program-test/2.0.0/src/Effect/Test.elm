@@ -717,7 +717,7 @@ start :
     -> Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 start config testName =
     let
-        ( backend, effects ) =
+        ( backend, cmd ) =
             config.backendApp.init
 
         state : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
@@ -727,7 +727,7 @@ start config testName =
             , backendApp = config.backendApp
             , model = backend
             , history = Array.empty
-            , pendingEffects = effects
+            , pendingEffects = cmd
             , frontends = Dict.empty
             , counter = 0
             , elapsedTime = Quantity.zero
@@ -743,6 +743,7 @@ start config testName =
             , domain = config.domain
             , snapshots = []
             }
+                |> addEvent (BackendInitEvent cmd)
     in
     Start state
 
@@ -866,41 +867,44 @@ connectFrontend sessionId url windowSize andThenFunc =
     AndThen
         (\state ->
             let
+                state2 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+                state2 =
+                    { state
+                        | frontends =
+                            Dict.insert
+                                clientId
+                                { model = frontend
+                                , sessionId = sessionId
+                                , pendingEffects = cmd
+                                , toFrontend = []
+                                , clipboard = ""
+                                , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state })
+                                , url = url
+                                , windowSize = windowSize
+                                }
+                                state.frontends
+                        , counter = state.counter + 1
+                    }
+                        |> addEvent (FrontendInitEvent clientId cmd)
+
+                clientId : ClientId
                 clientId =
                     "clientId " ++ String.fromInt state.counter |> Effect.Lamdera.clientIdFromString
 
-                ( frontend, effects ) =
+                ( frontend, cmd ) =
                     state.frontendApp.init url (Effect.Browser.Navigation.fromInternalKey MockNavigationKey)
 
+                subscriptions : Subscription FrontendOnly frontendMsg
                 subscriptions =
                     state.frontendApp.subscriptions frontend
-
-                state2 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-                state2 =
-                    getClientConnectSubs (state.backendApp.subscriptions state.model)
-                        |> List.foldl
-                            (\msg state3 ->
-                                handleBackendUpdate (currentTime state3) state3.backendApp (msg sessionId clientId) state3
-                            )
-                            state
             in
             andThenFunc
-                ( { state2
-                    | frontends =
-                        Dict.insert
-                            clientId
-                            { model = frontend
-                            , sessionId = sessionId
-                            , pendingEffects = effects
-                            , toFrontend = []
-                            , clipboard = ""
-                            , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state2 })
-                            , url = url
-                            , windowSize = windowSize
-                            }
-                            state2.frontends
-                    , counter = state2.counter + 1
-                  }
+                ( getClientConnectSubs (state2.backendApp.subscriptions state2.model)
+                    |> List.foldl
+                        (\msg state3 ->
+                            handleBackendUpdate (currentTime state3) state3.backendApp (msg sessionId clientId) state3
+                        )
+                        state2
                     |> Start
                 , { clientId = clientId
                   , keyDownEvent = keyDownEvent clientId
@@ -939,6 +943,8 @@ type EventType toBackend frontendMsg frontendModel toFrontend backendMsg backend
     | UpdateFromBackendEvent ClientId toFrontend (Command FrontendOnly toBackend frontendMsg)
     | BackendUpdateEvent backendMsg (Command BackendOnly toFrontend backendMsg)
     | FrontendUpdateEvent ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
+    | BackendInitEvent (Command BackendOnly toFrontend backendMsg)
+    | FrontendInitEvent ClientId (Command FrontendOnly toBackend frontendMsg)
     | TestEvent (Maybe ClientId) String
 
 
@@ -2655,25 +2661,31 @@ checkCachedElmValue ( model, cmd ) =
 eventTypeToTimelineType : EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> CurrentTimeline
 eventTypeToTimelineType eventType =
     case eventType of
-        UpdateFromFrontendEvent clientId toBackend command ->
+        UpdateFromFrontendEvent _ _ _ ->
             BackendTimeline
 
-        UpdateFromBackendEvent clientId toFrontend command ->
+        UpdateFromBackendEvent clientId _ _ ->
             FrontendTimeline clientId
 
-        BackendUpdateEvent backendMsg command ->
+        BackendUpdateEvent _ _ ->
             BackendTimeline
 
-        FrontendUpdateEvent clientId frontendMsg command ->
+        FrontendUpdateEvent clientId _ _ ->
             FrontendTimeline clientId
 
-        TestEvent maybeClientId string ->
+        TestEvent maybeClientId _ ->
             case maybeClientId of
                 Just clientId ->
                     FrontendTimeline clientId
 
                 Nothing ->
                     BackendTimeline
+
+        BackendInitEvent _ ->
+            BackendTimeline
+
+        FrontendInitEvent clientId _ ->
+            FrontendTimeline clientId
 
 
 previousTimelineStep :
@@ -2690,7 +2702,7 @@ previousTimelineStep stepIndex test =
             timeline =
                 currentTimeline test
         in
-        Array.slice 0 (stepIndex - 1) test.steps
+        Array.slice 0 stepIndex test.steps
             |> Array.foldr
                 (\step state ->
                     case state of
@@ -2798,6 +2810,31 @@ checkCachedElmValueHelper event state =
                                     { frontendMsg = frontendMsg
                                     , cmds = cmd3
                                     }
+                            }
+                                |> Just
+
+                        Nothing ->
+                            Nothing
+
+                BackendInitEvent cmd3 ->
+                    { diff =
+                        DebugParser.valueToElmValue
+                            { newSubscriptions = state.backendApp.subscriptions event.backend
+                            , newModel = event.backend
+                            }
+                    , noDiff = DebugParser.valueToElmValue { cmds = cmd3 }
+                    }
+                        |> Just
+
+                FrontendInitEvent clientId cmd3 ->
+                    case Dict.get clientId event.frontends of
+                        Just frontend ->
+                            { diff =
+                                DebugParser.valueToElmValue
+                                    { newSubscriptions = state.frontendApp.subscriptions frontend.model
+                                    , newModel = frontend.model
+                                    }
+                            , noDiff = DebugParser.valueToElmValue { cmds = cmd3 }
                             }
                                 |> Just
 
@@ -3158,17 +3195,23 @@ currentStepText currentStep testView_ =
                 TestEvent _ name ->
                     name
 
-                UpdateFromFrontendEvent clientId toBackend command ->
+                UpdateFromFrontendEvent _ toBackend _ ->
                     "UpdateFromFrontend: " ++ Debug.toString toBackend
 
-                UpdateFromBackendEvent clientId toFrontend command ->
+                UpdateFromBackendEvent _ toFrontend _ ->
                     "UpdateFromBackend: " ++ Debug.toString toFrontend
 
-                BackendUpdateEvent backendMsg command ->
+                BackendUpdateEvent backendMsg _ ->
                     "BackendUpdate: " ++ Debug.toString backendMsg
 
-                FrontendUpdateEvent clientId frontendMsg command ->
+                FrontendUpdateEvent _ frontendMsg _ ->
                     "FrontendUpdate: " ++ Debug.toString frontendMsg
+
+                BackendInitEvent command ->
+                    "BackendInit"
+
+                FrontendInitEvent clientId command ->
+                    "FrontendInitEvent: " ++ Effect.Lamdera.clientIdToString clientId
     in
     Html.div
         [ Html.Attributes.style "padding" "4px", Html.Attributes.title fullMsg ]
@@ -3199,7 +3242,9 @@ type alias TimelineViewData toBackend frontendMsg frontendModel toFrontend backe
 
 
 addTimelineEvent :
-    Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    Maybe Int
+    -> Int
+    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     ->
         { columnIndex : Int
         , dict : Dict CurrentTimeline (TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
@@ -3208,7 +3253,7 @@ addTimelineEvent :
         { columnIndex : Int
         , dict : Dict CurrentTimeline (TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
         }
-addTimelineEvent event state =
+addTimelineEvent maybePreviousStepIndex currentStepIndex event state =
     let
         arrows : Int -> List (Html msg)
         arrows rowIndex =
@@ -3219,14 +3264,31 @@ addTimelineEvent event state =
                 UpdateFromBackendEvent _ _ cmd ->
                     arrowUp state.columnIndex rowIndex cmd
 
-                UpdateFromFrontendEvent clientId toBackend cmd ->
+                UpdateFromFrontendEvent _ _ cmd ->
                     arrowDown state.columnIndex state.dict event cmd
 
-                BackendUpdateEvent backendMsg cmd ->
+                BackendUpdateEvent _ cmd ->
                     arrowDown state.columnIndex state.dict event cmd
 
                 TestEvent _ _ ->
                     []
+
+                BackendInitEvent cmd ->
+                    arrowDown state.columnIndex state.dict event cmd
+
+                FrontendInitEvent _ cmd ->
+                    arrowUp state.columnIndex rowIndex cmd
+
+        color : String
+        color =
+            if maybePreviousStepIndex == Just state.columnIndex then
+                "red"
+
+            else if currentStepIndex == state.columnIndex then
+                "green"
+
+            else
+                "white"
     in
     { columnIndex = state.columnIndex + 1
     , dict =
@@ -3236,8 +3298,8 @@ addTimelineEvent event state =
                 (case maybeTimeline of
                     Just timeline ->
                         { events =
-                            circle event.eventType state.columnIndex timeline.rowIndex
-                                :: arrows timeline.rowIndex
+                            arrows timeline.rowIndex
+                                ++ [ circle color event.eventType state.columnIndex timeline.rowIndex ]
                                 ++ timeline.events
                         , columnStart = timeline.columnStart
                         , columnEnd = state.columnIndex
@@ -3250,7 +3312,7 @@ addTimelineEvent event state =
                             rowIndex =
                                 Dict.size state.dict
                         in
-                        { events = circle event.eventType state.columnIndex rowIndex :: arrows rowIndex
+                        { events = arrows rowIndex ++ [ circle color event.eventType state.columnIndex rowIndex ]
                         , columnStart = state.columnIndex
                         , columnEnd = state.columnIndex
                         , rowIndex = rowIndex
@@ -3336,21 +3398,20 @@ timelineRowHeight =
 
 
 timelineView :
-    Int
-    -> Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
+    TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-timelineView stepIndex events =
+timelineView testView_ =
     let
-        timelines :
-            List
-                ( CurrentTimeline
-                , TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-                )
+        previousStepIndex : Maybe Int
+        previousStepIndex =
+            previousTimelineStep testView_.stepIndex testView_ |> Maybe.map Tuple.first
+
+        timelines : List ( CurrentTimeline, TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
         timelines =
             Array.foldl
-                addTimelineEvent
+                (addTimelineEvent previousStepIndex testView_.stepIndex)
                 { columnIndex = 0, dict = Dict.singleton BackendTimeline { events = [], columnStart = 0, columnEnd = 0, rowIndex = 0 } }
-                events
+                testView_.steps
                 |> .dict
                 |> Dict.toList
     in
@@ -3380,7 +3441,7 @@ timelineView stepIndex events =
                 )
                 timelines
             )
-        , timelineViewHelper stepIndex events timelines
+        , timelineViewHelper testView_.stepIndex testView_.steps timelines
         ]
 
 
@@ -3434,6 +3495,7 @@ timelineViewHelper stepIndex events timelines =
             , Html.Attributes.style "height" (px (List.length timelines * timelineRowHeight))
             , Html.Attributes.style "position" "relative"
             , Html.Attributes.style "overflow-x" "auto"
+            , Html.Attributes.style "overflow-y" "clip"
             , Html.Events.preventDefaultOn "keydown" (decodeArrows |> Json.Decode.map (\_ -> ( NoOp, True )))
             , Html.Attributes.tabindex -1
             , Html.Attributes.style "display" "inline-block"
@@ -3502,8 +3564,8 @@ timelineCss =
         []
         [ Html.text
             """
-.circle { width: 8px; height: 8px; background-color: white; border-radius: 8px }
-.big-circle { width: 14px; height: 14px; margin: -3px; background-color: white; border-radius: 8px }
+.circle { width: 8px; height: 8px; border-radius: 8px }
+.big-circle { width: 14px; height: 14px; margin: -3px; border-radius: 8px }
 .circle-container { position: absolute; padding: 4px; }
 .triangle-up {
     width: 0;
@@ -3529,15 +3591,16 @@ timelineColumnWidth =
     16
 
 
-circle : EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Int -> Int -> Html msg
-circle eventType columnIndex rowIndex =
+circle : String -> EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Int -> Int -> Html msg
+circle color eventType columnIndex rowIndex =
     Html.div
         [ Html.Attributes.class "circle-container"
         , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth))
         , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
         ]
         [ Html.div
-            [ Html.Attributes.class
+            [ Html.Attributes.style "background-color" color
+            , Html.Attributes.class
                 (case eventType of
                     FrontendUpdateEvent _ _ _ ->
                         "circle"
@@ -3553,6 +3616,12 @@ circle eventType columnIndex rowIndex =
 
                     TestEvent maybeClientId string ->
                         "big-circle"
+
+                    BackendInitEvent command ->
+                        "circle"
+
+                    FrontendInitEvent clientId command ->
+                        "circle"
                 )
             ]
             []
@@ -3591,7 +3660,7 @@ testView windowWidth instructions testView_ =
                             , overlayButton PressedStepForward "Next step"
                             , overlayButton PressedHideModel "Hide model"
                             ]
-                        , timelineView testView_.stepIndex testView_.steps
+                        , timelineView testView_
                         , currentStepText currentStep testView_
                         ]
                     , Html.div
@@ -3652,7 +3721,7 @@ testOverlay windowWidth testView_ currentStep =
             , overlayButton PressedStepForward "Next step"
             , overlayButton PressedShowModel "Show model"
             ]
-        , timelineView testView_.stepIndex testView_.steps
+        , timelineView testView_
         , currentStepText currentStep testView_
         , Html.div
             [ Html.Attributes.style "color" "rgb(200, 10, 10)"
