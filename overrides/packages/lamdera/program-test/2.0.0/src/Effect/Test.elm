@@ -52,7 +52,6 @@ import Effect.Internal exposing (Command(..), File, NavigationKey(..), Task(..))
 import Effect.Lamdera exposing (ClientId, SessionId)
 import Effect.Snapshot exposing (Snapshot)
 import Effect.Subscription exposing (Subscription)
-import Effect.Time
 import Effect.TreeView exposing (CollapsedField(..), PathNode)
 import Effect.WebGL.Texture
 import Expect exposing (Expectation)
@@ -67,6 +66,8 @@ import List.Nonempty exposing (Nonempty)
 import Process
 import Quantity
 import Set exposing (Set)
+import Svg
+import Svg.Attributes
 import Task
 import Test exposing (Test)
 import Test.Html.Event
@@ -164,6 +165,14 @@ type MultipleFilesUpload
     | UploadMultipleFiles FileData (List FileData)
 
 
+type alias ToBackendData toBackend =
+    { sessionId : SessionId
+    , clientId : ClientId
+    , toBackend : toBackend
+    , stepIndex : Maybe Int
+    }
+
+
 {-| -}
 type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
     { testName : String
@@ -175,7 +184,7 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , frontends : Dict ClientId (FrontendState toBackend frontendMsg frontendModel toFrontend)
     , counter : Int
     , elapsedTime : Duration
-    , toBackend : List ( SessionId, ClientId, toBackend )
+    , toBackend : List (ToBackendData toBackend)
     , timers : Dict Duration { startTime : Time.Posix }
     , testErrors : List TestError
     , httpRequests : List HttpRequest
@@ -581,7 +590,7 @@ type alias FrontendState toBackend frontendMsg frontendModel toFrontend =
     { model : frontendModel
     , sessionId : SessionId
     , pendingEffects : Command FrontendOnly toBackend frontendMsg
-    , toFrontend : List toFrontend
+    , toFrontend : List (ToFrontendData toFrontend)
     , clipboard : String
     , timers : Dict Duration { startTime : Time.Posix }
     , url : Url
@@ -939,8 +948,8 @@ type alias EventFrontend frontendModel =
 
 
 type EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    = UpdateFromFrontendEvent ClientId toBackend (Command BackendOnly toFrontend backendMsg)
-    | UpdateFromBackendEvent ClientId toFrontend (Command FrontendOnly toBackend frontendMsg)
+    = UpdateFromFrontendEvent { clientId : ClientId, toBackend : toBackend, cmds : Command BackendOnly toFrontend backendMsg, stepIndex : Maybe Int }
+    | UpdateFromBackendEvent { clientId : ClientId, toFrontend : toFrontend, cmds : Command FrontendOnly toBackend frontendMsg, stepIndex : Int }
     | BackendUpdateEvent backendMsg (Command BackendOnly toFrontend backendMsg)
     | FrontendUpdateEvent ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
     | BackendInitEvent (Command BackendOnly toFrontend backendMsg)
@@ -1027,13 +1036,17 @@ handleBackendUpdate currentTime2 app msg state =
         |> addEvent (BackendUpdateEvent msg cmd)
 
 
+type alias ToFrontendData toFrontend =
+    { toFrontend : toFrontend, stepIndex : Int }
+
+
 handleUpdateFromBackend :
     ClientId
     -> Time.Posix
-    -> toFrontend
+    -> ToFrontendData toFrontend
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-handleUpdateFromBackend clientId currentTime2 toFrontend state =
+handleUpdateFromBackend clientId currentTime2 { toFrontend, stepIndex } state =
     case Dict.get clientId state.frontends of
         Just frontendState ->
             let
@@ -1066,22 +1079,27 @@ handleUpdateFromBackend clientId currentTime2 toFrontend state =
                         }
                         state.frontends
             }
-                |> addEvent (UpdateFromBackendEvent clientId toFrontend cmd)
+                |> addEvent
+                    (UpdateFromBackendEvent
+                        { clientId = clientId
+                        , toFrontend = toFrontend
+                        , cmds = cmd
+                        , stepIndex = stepIndex
+                        }
+                    )
 
         Nothing ->
             state
 
 
 handleUpdateFromFrontend :
-    SessionId
-    -> ClientId
-    -> toBackend
+    ToBackendData toBackend
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-handleUpdateFromFrontend sessionId clientId msg state =
+handleUpdateFromFrontend { sessionId, clientId, toBackend, stepIndex } state =
     let
         ( newModel, cmd ) =
-            state.backendApp.updateFromFrontend sessionId clientId msg state.model
+            state.backendApp.updateFromFrontend sessionId clientId toBackend state.model
 
         subscriptions : Subscription BackendOnly backendMsg
         subscriptions =
@@ -1103,7 +1121,7 @@ handleUpdateFromFrontend sessionId clientId msg state =
                 state.timers
                 state.timers
     }
-        |> addEvent (UpdateFromFrontendEvent clientId msg cmd)
+        |> addEvent (UpdateFromFrontendEvent { clientId = clientId, toBackend = toBackend, cmds = cmd, stepIndex = stepIndex })
 
 
 addEvent :
@@ -1359,7 +1377,11 @@ sendToBackend :
 sendToBackend sessionId clientId toBackend =
     NextStep
         (\state ->
-            { state | toBackend = state.toBackend ++ [ ( sessionId, clientId, toBackend ) ] }
+            { state
+                | toBackend =
+                    state.toBackend
+                        ++ [ { sessionId = sessionId, clientId = clientId, toBackend = toBackend, stepIndex = Nothing } ]
+            }
                 |> addEvent (TestEvent (Just clientId) ("Trigger ToBackend: " ++ Debug.toString toBackend))
         )
 
@@ -1660,12 +1682,7 @@ runNetwork state =
     let
         state2 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
         state2 =
-            List.foldl
-                (\( sessionId, clientId, toBackendMsg ) state3 ->
-                    handleUpdateFromFrontend sessionId clientId toBackendMsg state3
-                )
-                state
-                state.toBackend
+            List.foldl handleUpdateFromFrontend state state.toBackend
     in
     Dict.foldl
         (\clientId frontend state4 ->
@@ -1711,7 +1728,16 @@ runFrontendEffects sessionId clientId effectsToPerform state =
             List.foldl (runFrontendEffects sessionId clientId) state nestedEffectsToPerform
 
         SendToBackend toBackend ->
-            { state | toBackend = state.toBackend ++ [ ( sessionId, clientId, toBackend ) ] }
+            { state
+                | toBackend =
+                    state.toBackend
+                        ++ [ { sessionId = sessionId
+                             , clientId = clientId
+                             , toBackend = toBackend
+                             , stepIndex = Array.length state.history - 1 |> Just
+                             }
+                           ]
+            }
 
         NavigationPushUrl _ urlText ->
             handleUrlChange urlText clientId state
@@ -1905,7 +1931,15 @@ runBackendEffects effect state =
                 | frontends =
                     Dict.update
                         (Effect.Lamdera.clientIdFromString clientId)
-                        (Maybe.map (\frontend -> { frontend | toFrontend = frontend.toFrontend ++ [ toFrontend ] }))
+                        (Maybe.map
+                            (\frontend ->
+                                { frontend
+                                    | toFrontend =
+                                        frontend.toFrontend
+                                            ++ [ { toFrontend = toFrontend, stepIndex = Array.length state.history - 1 } ]
+                                }
+                            )
+                        )
                         state.frontends
             }
 
@@ -1919,7 +1953,11 @@ runBackendEffects effect state =
                     Dict.map
                         (\_ frontend ->
                             if frontend.sessionId == sessionId_ then
-                                { frontend | toFrontend = frontend.toFrontend ++ [ toFrontend ] }
+                                { frontend
+                                    | toFrontend =
+                                        frontend.toFrontend
+                                            ++ [ { toFrontend = toFrontend, stepIndex = Array.length state.history - 1 } ]
+                                }
 
                             else
                                 frontend
@@ -1983,7 +2021,7 @@ runBackendEffects effect state =
             { state
                 | frontends =
                     Dict.map
-                        (\_ frontend -> { frontend | toFrontend = frontend.toFrontend ++ [ toFrontend ] })
+                        (\_ frontend -> { frontend | toFrontend = frontend.toFrontend ++ [ { toFrontend = toFrontend, stepIndex = Array.length state.history - 1 } ] })
                         state.frontends
             }
 
@@ -2686,10 +2724,10 @@ checkCachedElmValue ( model, cmd ) =
 eventTypeToTimelineType : EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> CurrentTimeline
 eventTypeToTimelineType eventType =
     case eventType of
-        UpdateFromFrontendEvent _ _ _ ->
+        UpdateFromFrontendEvent _ ->
             BackendTimeline
 
-        UpdateFromBackendEvent clientId _ _ ->
+        UpdateFromBackendEvent { clientId } ->
             FrontendTimeline clientId
 
         BackendUpdateEvent _ _ ->
@@ -2794,7 +2832,7 @@ checkCachedElmValueHelper event state =
                     }
                         |> Just
 
-                UpdateFromFrontendEvent _ toBackend cmd3 ->
+                UpdateFromFrontendEvent { toBackend, cmds } ->
                     { diff =
                         DebugParser.valueToElmValue
                             { newSubscriptions = state.backendApp.subscriptions event.backend
@@ -2803,12 +2841,12 @@ checkCachedElmValueHelper event state =
                     , noDiff =
                         DebugParser.valueToElmValue
                             { toBackend = toBackend
-                            , cmds = cmd3
+                            , cmds = cmds
                             }
                     }
                         |> Just
 
-                UpdateFromBackendEvent clientId toFrontend cmd3 ->
+                UpdateFromBackendEvent { clientId, toFrontend, cmds } ->
                     case Dict.get clientId event.frontends of
                         Just frontend ->
                             { diff =
@@ -2819,7 +2857,7 @@ checkCachedElmValueHelper event state =
                             , noDiff =
                                 DebugParser.valueToElmValue
                                     { toFrontend = toFrontend
-                                    , cmds = cmd3
+                                    , cmds = cmds
                                     }
                             }
                                 |> Just
@@ -3225,10 +3263,10 @@ currentStepText currentStep testView_ =
                 TestEvent _ name ->
                     name
 
-                UpdateFromFrontendEvent _ toBackend _ ->
+                UpdateFromFrontendEvent { toBackend } ->
                     "UpdateFromFrontend: " ++ Debug.toString toBackend
 
-                UpdateFromBackendEvent _ toFrontend _ ->
+                UpdateFromBackendEvent { toFrontend } ->
                     "UpdateFromBackend: " ++ Debug.toString toFrontend
 
                 BackendUpdateEvent backendMsg _ ->
@@ -3289,25 +3327,56 @@ addTimelineEvent maybePreviousStepIndex currentStepIndex event state =
         arrows rowIndex =
             case event.eventType of
                 FrontendUpdateEvent _ _ cmd ->
-                    arrowUp state.columnIndex rowIndex cmd
+                    []
 
-                UpdateFromBackendEvent _ _ cmd ->
-                    arrowUp state.columnIndex rowIndex cmd
+                UpdateFromBackendEvent data ->
+                    --[ arrowSvg
+                    --    (data.stepIndex * timelineColumnWidth + timelineColumnWidth // 2)
+                    --    (timelineRowHeight // 2)
+                    --    (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2)
+                    --    timelineRowHeight
+                    --]
+                    []
 
-                UpdateFromFrontendEvent _ _ cmd ->
-                    arrowDown state.columnIndex state.dict event cmd
+                UpdateFromFrontendEvent data ->
+                    case data.stepIndex of
+                        Just stepIndex ->
+                            let
+                                x0 =
+                                    stepIndex * timelineColumnWidth + timelineColumnWidth // 2 |> toFloat
 
+                                y0 =
+                                    timelineRowHeight + timelineRowHeight // 4 |> toFloat
+
+                                x1 =
+                                    state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 |> toFloat
+
+                                y1 =
+                                    timelineRowHeight // 4 |> toFloat
+
+                                length =
+                                    (x1 - x0) ^ 2 + (y1 - y0) ^ 2 |> sqrt
+
+                                length2 =
+                                    (length - 6) / length
+                            in
+                            [ arrowSvg x0 y0 (length2 * (x1 - x0) + x0) (length2 * (y1 - y0) + y0) ]
+
+                        Nothing ->
+                            []
+
+                --arrowDown state.columnIndex state.dict event cmds
                 BackendUpdateEvent _ cmd ->
-                    arrowDown state.columnIndex state.dict event cmd
+                    []
 
                 TestEvent _ _ ->
                     []
 
                 BackendInitEvent cmd ->
-                    arrowDown state.columnIndex state.dict event cmd
+                    []
 
                 FrontendInitEvent _ cmd ->
-                    arrowUp state.columnIndex rowIndex cmd
+                    []
 
         color : String
         color =
@@ -3352,6 +3421,73 @@ addTimelineEvent maybePreviousStepIndex currentStepIndex event state =
             )
             state.dict
     }
+
+
+arrowSvg : Float -> Float -> Float -> Float -> Html msg
+arrowSvg x0 y0 x1 y1 =
+    let
+        length =
+            (x1 - x0) ^ 2 + (y1 - y0) ^ 2 |> sqrt
+
+        offset =
+            (length - 6) / length
+
+        x2 =
+            offset * (x1 - x0) + x0
+
+        y2 =
+            offset * (y1 - y0) + y0
+
+        arrowWidthScalar =
+            0.666
+
+        x3 =
+            -(y1 - y2) * arrowWidthScalar + x2
+
+        y3 =
+            (x1 - x2) * arrowWidthScalar + y2
+
+        x4 =
+            (y1 - y2) * arrowWidthScalar + x2
+
+        y4 =
+            -(x1 - x2) * arrowWidthScalar + y2
+
+        maxX =
+            max x0 x1 + 10
+
+        maxY =
+            max y0 y1 + 10
+    in
+    Svg.svg
+        [ Svg.Attributes.width (String.fromFloat maxX)
+        , Svg.Attributes.height (String.fromFloat maxY)
+        , "0 0 " ++ String.fromFloat maxX ++ " " ++ String.fromFloat maxY |> Svg.Attributes.viewBox
+        , Html.Attributes.style "position" "absolute"
+        , Html.Attributes.style "top" "0"
+        , Html.Attributes.style "pointer-events" "none"
+        ]
+        [ Svg.line
+            [ Svg.Attributes.x1 (String.fromFloat x0)
+            , Svg.Attributes.y1 (String.fromFloat y0)
+            , Svg.Attributes.x2 (String.fromFloat x2)
+            , Svg.Attributes.y2 (String.fromFloat y2)
+            , Svg.Attributes.width "20"
+            , Html.Attributes.style "stroke" "white"
+            , Html.Attributes.style "stroke-width" "2"
+            ]
+            []
+        , Svg.polygon
+            [ Html.Attributes.style "fill" "white"
+            , (String.fromFloat x3 ++ "," ++ String.fromFloat y3)
+                ++ " "
+                ++ (String.fromFloat x1 ++ "," ++ String.fromFloat y1)
+                ++ " "
+                ++ (String.fromFloat x4 ++ "," ++ String.fromFloat y4)
+                |> Svg.Attributes.points
+            ]
+            []
+        ]
 
 
 arrowDown :
@@ -3644,10 +3780,10 @@ circle color eventType columnIndex rowIndex =
                     FrontendUpdateEvent _ _ _ ->
                         "circle"
 
-                    UpdateFromFrontendEvent _ _ _ ->
+                    UpdateFromFrontendEvent _ ->
                         "circle"
 
-                    UpdateFromBackendEvent _ _ _ ->
+                    UpdateFromBackendEvent _ ->
                         "circle"
 
                     BackendUpdateEvent _ _ ->
