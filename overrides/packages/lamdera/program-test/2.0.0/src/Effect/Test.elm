@@ -2735,11 +2735,16 @@ previousTimelineStep stepIndex test =
                             state
 
                         Continue index ->
-                            if eventTypeToTimelineType step.eventType == timeline then
-                                Done ( index, step )
+                            case step.eventType of
+                                TestEvent _ _ ->
+                                    Continue (index - 1)
 
-                            else
-                                Continue (index - 1)
+                                _ ->
+                                    if eventTypeToTimelineType step.eventType == timeline then
+                                        Done ( index, step )
+
+                                    else
+                                        Continue (index - 1)
                 )
                 (Continue (stepIndex - 1))
             |> (\a ->
@@ -3710,7 +3715,23 @@ testView windowWidth instructions testView_ =
                 ]
 
             else
-                [ testOverlay windowWidth testView_ currentStep ]
+                let
+                    state =
+                        getState instructions
+                in
+                testOverlay windowWidth testView_ currentStep
+                    :: (case currentTimeline testView_ of
+                            FrontendTimeline clientId ->
+                                case Dict.get clientId currentStep.frontends of
+                                    Just frontend ->
+                                        state.frontendApp.view frontend.model |> .body |> List.map (Html.map (\_ -> NoOp))
+
+                                    Nothing ->
+                                        []
+
+                            BackendTimeline ->
+                                []
+                       )
 
         Nothing ->
             [ Html.text "Step not found" ]
