@@ -173,6 +173,18 @@ type alias ToBackendData toBackend =
     }
 
 
+type alias BackendPendingEffect toFrontend backendMsg =
+    { cmds : Command BackendOnly toFrontend backendMsg
+    , stepIndex : Int
+    }
+
+
+type alias FrontendPendingEffect toBackend frontendMsg =
+    { cmds : Command FrontendOnly toBackend frontendMsg
+    , stepIndex : Int
+    }
+
+
 {-| -}
 type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel =
     { testName : String
@@ -180,7 +192,7 @@ type alias State toBackend frontendMsg frontendModel toFrontend backendMsg backe
     , backendApp : BackendApp toBackend toFrontend backendMsg backendModel
     , model : backendModel
     , history : Array (Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    , pendingEffects : Command BackendOnly toFrontend backendMsg
+    , pendingEffects : Array (BackendPendingEffect toFrontend backendMsg)
     , frontends : Dict ClientId (FrontendState toBackend frontendMsg frontendModel toFrontend)
     , counter : Int
     , elapsedTime : Duration
@@ -589,7 +601,7 @@ instructionsToState inProgress =
 type alias FrontendState toBackend frontendMsg frontendModel toFrontend =
     { model : frontendModel
     , sessionId : SessionId
-    , pendingEffects : Command FrontendOnly toBackend frontendMsg
+    , pendingEffects : Array (FrontendPendingEffect toBackend frontendMsg)
     , toFrontend : List (ToFrontendData toFrontend)
     , clipboard : String
     , timers : Dict Duration { startTime : Time.Posix }
@@ -736,7 +748,7 @@ start config testName =
             , backendApp = config.backendApp
             , model = backend
             , history = Array.empty
-            , pendingEffects = cmd
+            , pendingEffects = Array.fromList [ { cmds = cmd, stepIndex = 0 } ]
             , frontends = Dict.empty
             , counter = 0
             , elapsedTime = Quantity.zero
@@ -884,7 +896,7 @@ connectFrontend sessionId url windowSize andThenFunc =
                                 clientId
                                 { model = frontend
                                 , sessionId = sessionId
-                                , pendingEffects = cmd
+                                , pendingEffects = Array.fromList [ { cmds = cmd, stepIndex = Array.length state.history } ]
                                 , toFrontend = []
                                 , clipboard = ""
                                 , timers = getTimers subscriptions |> Dict.map (\_ _ -> { startTime = currentTime state })
@@ -984,7 +996,10 @@ handleFrontendUpdate clientId currentTime2 msg state =
                         clientId
                         { frontend
                             | model = newModel
-                            , pendingEffects = Effect.Command.batch [ frontend.pendingEffects, cmd ]
+                            , pendingEffects =
+                                Array.push
+                                    { cmds = cmd, stepIndex = Array.length state.history }
+                                    frontend.pendingEffects
                             , timers =
                                 Dict.merge
                                     (\duration _ dict -> Dict.insert duration { startTime = currentTime2 } dict)
@@ -1023,7 +1038,10 @@ handleBackendUpdate currentTime2 app msg state =
     in
     { state
         | model = newModel
-        , pendingEffects = Effect.Command.batch [ state.pendingEffects, cmd ]
+        , pendingEffects =
+            Array.push
+                { cmds = cmd, stepIndex = Array.length state.history }
+                state.pendingEffects
         , timers =
             Dict.merge
                 (\duration _ dict -> Dict.insert duration { startTime = currentTime2 } dict)
@@ -1067,7 +1085,10 @@ handleUpdateFromBackend clientId currentTime2 { toFrontend, stepIndex } state =
                         clientId
                         { frontendState
                             | model = newModel
-                            , pendingEffects = Effect.Command.batch [ frontendState.pendingEffects, cmd ]
+                            , pendingEffects =
+                                Array.push
+                                    { cmds = cmd, stepIndex = Array.length state.history }
+                                    frontendState.pendingEffects
                             , timers =
                                 Dict.merge
                                     (\duration _ dict -> Dict.insert duration { startTime = currentTime2 } dict)
@@ -1111,7 +1132,10 @@ handleUpdateFromFrontend { sessionId, clientId, toBackend, stepIndex } state =
     in
     { state
         | model = newModel
-        , pendingEffects = Effect.Command.batch [ state.pendingEffects, cmd ]
+        , pendingEffects =
+            Array.push
+                { cmds = cmd, stepIndex = Array.length state.history }
+                state.pendingEffects
         , timers =
             Dict.merge
                 (\duration _ dict -> Dict.insert duration { startTime = currentTime state } dict)
@@ -1467,8 +1491,15 @@ getTriggersTimerMsgs subscriptionsFunc state endTime =
 
 hasPendingEffects : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Bool
 hasPendingEffects state =
-    not (List.isEmpty (flattenEffects state.pendingEffects))
-        || not (List.isEmpty (List.concatMap (\a -> flattenEffects a.pendingEffects) (Dict.values state.frontends)))
+    let
+        hasEffectsHelper pendingEffects =
+            Array.foldl
+                (\{ cmds } hasEffects -> hasEffects || not (List.isEmpty (flattenEffects cmds)))
+                False
+                pendingEffects
+    in
+    hasEffectsHelper state.pendingEffects
+        || List.any (\a -> hasEffectsHelper a.pendingEffects) (Dict.values state.frontends)
 
 
 simulateStep :
@@ -1648,29 +1679,23 @@ runEffects state =
     let
         state2 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
         state2 =
-            runBackendEffects state.pendingEffects (clearBackendEffects state)
+            Array.foldl (\a state6 -> runBackendEffects a.stepIndex a.cmds state6) (clearBackendEffects state) state.pendingEffects
 
         state4 : State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
         state4 =
             Dict.foldl
                 (\clientId { sessionId, pendingEffects } state3 ->
-                    runFrontendEffects
-                        sessionId
-                        clientId
-                        pendingEffects
+                    Array.foldl
+                        (\a state6 -> runFrontendEffects sessionId clientId a.stepIndex a.cmds state6)
                         (clearFrontendEffects clientId state3)
+                        pendingEffects
                 )
                 state2
                 state2.frontends
     in
     { state4
-        | pendingEffects = flattenEffects state4.pendingEffects |> Effect.Command.batch
-        , frontends =
-            Dict.map
-                (\_ frontend ->
-                    { frontend | pendingEffects = flattenEffects frontend.pendingEffects |> Effect.Command.batch }
-                )
-                state4.frontends
+        | pendingEffects = state4.pendingEffects
+        , frontends = Dict.map (\_ frontend -> { frontend | pendingEffects = frontend.pendingEffects }) state4.frontends
     }
         |> runNetwork
 
@@ -1699,7 +1724,7 @@ clearBackendEffects :
     State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 clearBackendEffects state =
-    { state | pendingEffects = Effect.Command.none }
+    { state | pendingEffects = Array.empty }
 
 
 clearFrontendEffects :
@@ -1711,7 +1736,7 @@ clearFrontendEffects clientId state =
         | frontends =
             Dict.update
                 clientId
-                (Maybe.map (\frontend -> { frontend | pendingEffects = None }))
+                (Maybe.map (\frontend -> { frontend | pendingEffects = Array.empty }))
                 state.frontends
     }
 
@@ -1719,13 +1744,14 @@ clearFrontendEffects clientId state =
 runFrontendEffects :
     SessionId
     -> ClientId
+    -> Int
     -> Command FrontendOnly toBackend frontendMsg
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-runFrontendEffects sessionId clientId effectsToPerform state =
+runFrontendEffects sessionId clientId stepIndex effectsToPerform state =
     case effectsToPerform of
         Batch nestedEffectsToPerform ->
-            List.foldl (runFrontendEffects sessionId clientId) state nestedEffectsToPerform
+            List.foldl (runFrontendEffects sessionId clientId stepIndex) state nestedEffectsToPerform
 
         SendToBackend toBackend ->
             { state
@@ -1734,7 +1760,7 @@ runFrontendEffects sessionId clientId effectsToPerform state =
                         ++ [ { sessionId = sessionId
                              , clientId = clientId
                              , toBackend = toBackend
-                             , stepIndex = Array.length state.history - 1 |> Just
+                             , stepIndex = Just stepIndex
                              }
                            ]
             }
@@ -1918,13 +1944,14 @@ flattenEffects effect =
 
 
 runBackendEffects :
-    Command BackendOnly toFrontend backendMsg
+    Int
+    -> Command BackendOnly toFrontend backendMsg
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> State toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-runBackendEffects effect state =
+runBackendEffects stepIndex effect state =
     case effect of
         Batch effects ->
-            List.foldl runBackendEffects state effects
+            List.foldl (runBackendEffects stepIndex) state effects
 
         SendToFrontend (Effect.Internal.ClientId clientId) toFrontend ->
             { state
@@ -1936,7 +1963,7 @@ runBackendEffects effect state =
                                 { frontend
                                     | toFrontend =
                                         frontend.toFrontend
-                                            ++ [ { toFrontend = toFrontend, stepIndex = Array.length state.history - 1 } ]
+                                            ++ [ { toFrontend = toFrontend, stepIndex = stepIndex } ]
                                 }
                             )
                         )
@@ -1956,7 +1983,7 @@ runBackendEffects effect state =
                                 { frontend
                                     | toFrontend =
                                         frontend.toFrontend
-                                            ++ [ { toFrontend = toFrontend, stepIndex = Array.length state.history - 1 } ]
+                                            ++ [ { toFrontend = toFrontend, stepIndex = stepIndex } ]
                                 }
 
                             else
@@ -2021,7 +2048,7 @@ runBackendEffects effect state =
             { state
                 | frontends =
                     Dict.map
-                        (\_ frontend -> { frontend | toFrontend = frontend.toFrontend ++ [ { toFrontend = toFrontend, stepIndex = Array.length state.history - 1 } ] })
+                        (\_ frontend -> { frontend | toFrontend = frontend.toFrontend ++ [ { toFrontend = toFrontend, stepIndex = stepIndex } ] })
                         state.frontends
             }
 
