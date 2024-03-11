@@ -66,7 +66,7 @@ import List.Nonempty exposing (Nonempty)
 import Process
 import Quantity
 import Set exposing (Set)
-import Svg
+import Svg exposing (Svg)
 import Svg.Attributes
 import Task
 import Test exposing (Test)
@@ -331,14 +331,14 @@ checkState :
 checkState checkFunc =
     NextStep
         (\state ->
-            (case checkFunc state of
+            case checkFunc state of
                 Ok () ->
                     state
+                        |> addEvent (CheckStateEvent { checkType = CheckState, isSuccessful = True })
 
                 Err error ->
                     addTestError (CustomError error) state
-            )
-                |> addEvent (TestEvent Nothing "Check state")
+                        |> addEvent (CheckStateEvent { checkType = CheckState, isSuccessful = False })
         )
 
 
@@ -370,19 +370,20 @@ checkFrontend :
 checkFrontend clientId checkFunc =
     NextStep
         (\state ->
-            (case Dict.get clientId state.frontends of
+            case Dict.get clientId state.frontends of
                 Just frontend ->
                     case checkFunc frontend.model of
                         Ok () ->
                             state
+                                |> addEvent (CheckStateEvent { checkType = CheckFrontendState clientId, isSuccessful = True })
 
                         Err error ->
                             addTestError (CustomError error) state
+                                |> addEvent (CheckStateEvent { checkType = CheckFrontendState clientId, isSuccessful = False })
 
                 Nothing ->
                     addTestError (ClientIdNotFound clientId) state
-            )
-                |> addEvent (TestEvent (Just clientId) "Check frontend")
+                        |> addEvent (CheckStateEvent { checkType = CheckFrontendState clientId, isSuccessful = False })
         )
 
 
@@ -402,7 +403,7 @@ checkView :
 checkView clientId query =
     NextStep
         (\state ->
-            (case Dict.get clientId state.frontends of
+            case Dict.get clientId state.frontends of
                 Just frontend ->
                     case
                         state.frontendApp.view frontend.model
@@ -414,14 +415,14 @@ checkView clientId query =
                     of
                         Just { description } ->
                             addTestError (ViewTestError description) state
+                                |> addEvent (CheckStateEvent { checkType = CheckFrontendView clientId, isSuccessful = False })
 
                         Nothing ->
-                            state
+                            state |> addEvent (CheckStateEvent { checkType = CheckFrontendView clientId, isSuccessful = True })
 
                 Nothing ->
                     addTestError (ClientIdNotFound clientId) state
-            )
-                |> addEvent (TestEvent (Just clientId) "Check view")
+                        |> addEvent (CheckStateEvent { checkType = CheckFrontendView clientId, isSuccessful = False })
         )
 
 
@@ -966,7 +967,14 @@ type EventType toBackend frontendMsg frontendModel toFrontend backendMsg backend
     | FrontendUpdateEvent ClientId frontendMsg (Command FrontendOnly toBackend frontendMsg)
     | BackendInitEvent (Command BackendOnly toFrontend backendMsg)
     | FrontendInitEvent ClientId (Command FrontendOnly toBackend frontendMsg)
+    | CheckStateEvent { checkType : CheckType, isSuccessful : Bool }
     | TestEvent (Maybe ClientId) String
+
+
+type CheckType
+    = CheckFrontendView ClientId
+    | CheckFrontendState ClientId
+    | CheckState
 
 
 handleFrontendUpdate :
@@ -2608,10 +2616,20 @@ update config msg model =
                 (\currentTest ->
                     case arrowKey of
                         ArrowRight ->
-                            stepTo (currentTest.stepIndex + 1) currentTest
+                            case nextTimelineStep False currentTest.stepIndex currentTest of
+                                Just ( nextIndex, _ ) ->
+                                    stepTo nextIndex currentTest
+
+                                Nothing ->
+                                    ( currentTest, Cmd.none )
 
                         ArrowLeft ->
-                            stepTo (currentTest.stepIndex - 1) currentTest
+                            case previousTimelineStep False currentTest.stepIndex currentTest of
+                                Just ( previousIndex, _ ) ->
+                                    stepTo previousIndex currentTest
+
+                                Nothing ->
+                                    ( currentTest, Cmd.none )
                 )
                 model
 
@@ -2691,10 +2709,10 @@ checkCachedElmValue ( model, cmd ) =
                     let
                         maybePreviousStep : Maybe ( Int, Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
                         maybePreviousStep =
-                            previousTimelineStep currentTest.stepIndex currentTest
+                            previousTimelineStep True currentTest.stepIndex currentTest
                     in
-                    ( case model.tests of
-                        Just (Ok tests) ->
+                    ( case ( currentTest.showModel, model.tests ) of
+                        ( True, Just (Ok tests) ) ->
                             case getAt currentTest.index tests of
                                 Just test ->
                                     let
@@ -2777,12 +2795,72 @@ eventTypeToTimelineType eventType =
         FrontendInitEvent clientId _ ->
             FrontendTimeline clientId
 
+        CheckStateEvent { checkType } ->
+            case checkType of
+                CheckFrontendView clientId ->
+                    FrontendTimeline clientId
 
-previousTimelineStep :
-    Int
+                CheckFrontendState clientId ->
+                    FrontendTimeline clientId
+
+                CheckState ->
+                    BackendTimeline
+
+
+nextTimelineStep :
+    Bool
+    -> Int
     -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Maybe ( Int, Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
-previousTimelineStep stepIndex test =
+nextTimelineStep skipTestEvents stepIndex test =
+    if stepIndex >= Array.length test.steps then
+        Nothing
+
+    else
+        let
+            timeline : CurrentTimeline
+            timeline =
+                currentTimeline test
+        in
+        Array.slice (stepIndex + 1) (Array.length test.steps) test.steps
+            |> Array.foldl
+                (\step state ->
+                    case state of
+                        Done _ ->
+                            state
+
+                        Continue index ->
+                            case ( skipTestEvents, step.eventType ) of
+                                ( True, TestEvent _ _ ) ->
+                                    Continue (index + 1)
+
+                                ( True, CheckStateEvent _ ) ->
+                                    Continue (index + 1)
+
+                                _ ->
+                                    if eventTypeToTimelineType step.eventType == timeline then
+                                        Done ( index, step )
+
+                                    else
+                                        Continue (index + 1)
+                )
+                (Continue (stepIndex + 1))
+            |> (\a ->
+                    case a of
+                        Continue _ ->
+                            Nothing
+
+                        Done b ->
+                            Just b
+               )
+
+
+previousTimelineStep :
+    Bool
+    -> Int
+    -> TestView toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
+    -> Maybe ( Int, Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
+previousTimelineStep skipTestEvents stepIndex test =
     if stepIndex <= 0 then
         Nothing
 
@@ -2800,8 +2878,11 @@ previousTimelineStep stepIndex test =
                             state
 
                         Continue index ->
-                            case step.eventType of
-                                TestEvent _ _ ->
+                            case ( skipTestEvents, step.eventType ) of
+                                ( True, TestEvent _ _ ) ->
+                                    Continue (index - 1)
+
+                                ( True, CheckStateEvent _ ) ->
                                     Continue (index - 1)
 
                                 _ ->
@@ -2937,6 +3018,9 @@ checkCachedElmValueHelper event state =
                             Nothing
 
                 TestEvent _ _ ->
+                    Nothing
+
+                CheckStateEvent _ ->
                     Nothing
     }
 
@@ -3211,7 +3295,7 @@ modelView collapsedFields event =
                 ]
 
         Nothing ->
-            Html.text "Failed to show  model"
+            Html.text "Failed to show model"
 
 
 treeViewConfig : Effect.TreeView.MsgConfig (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
@@ -3302,11 +3386,22 @@ currentStepText currentStep testView_ =
                 FrontendUpdateEvent _ frontendMsg _ ->
                     "FrontendUpdate: " ++ Debug.toString frontendMsg
 
-                BackendInitEvent command ->
+                BackendInitEvent _ ->
                     "BackendInit"
 
-                FrontendInitEvent clientId command ->
+                FrontendInitEvent clientId _ ->
                     "FrontendInitEvent: " ++ Effect.Lamdera.clientIdToString clientId
+
+                CheckStateEvent { checkType } ->
+                    case checkType of
+                        CheckFrontendView _ ->
+                            "Check frontend view"
+
+                        CheckFrontendState _ ->
+                            "Check frontend state"
+
+                        CheckState ->
+                            "Check global state"
     in
     Html.div
         [ Html.Attributes.style "padding" "4px", Html.Attributes.title fullMsg ]
@@ -3350,59 +3445,64 @@ addTimelineEvent :
         }
 addTimelineEvent maybePreviousStepIndex currentStepIndex event state =
     let
+        arrowHelper : Int -> Int -> Int -> List (Html msg)
+        arrowHelper rowIndexStart rowIndexEnd stepIndex =
+            let
+                x0 =
+                    stepIndex * timelineColumnWidth + timelineColumnWidth // 2 |> toFloat
+
+                y0 =
+                    rowIndexStart * timelineRowHeight + timelineRowHeight // 4 |> toFloat
+
+                x1 =
+                    state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 |> toFloat
+
+                y1 =
+                    rowIndexEnd * timelineRowHeight + timelineRowHeight // 4 |> toFloat
+
+                length =
+                    (x1 - x0) ^ 2 + (y1 - y0) ^ 2 |> sqrt
+
+                length2 =
+                    (length - 4) / length
+            in
+            [ arrowSvg x0 y0 (length2 * (x1 - x0) + x0) (length2 * (y1 - y0) + y0) ]
+
         arrows : Int -> List (Html msg)
         arrows rowIndex =
             case event.eventType of
-                FrontendUpdateEvent _ _ cmd ->
+                FrontendUpdateEvent _ _ _ ->
                     []
 
                 UpdateFromBackendEvent data ->
-                    --[ arrowSvg
-                    --    (data.stepIndex * timelineColumnWidth + timelineColumnWidth // 2)
-                    --    (timelineRowHeight // 2)
-                    --    (state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2)
-                    --    timelineRowHeight
-                    --]
-                    []
+                    arrowHelper 0 rowIndex data.stepIndex
 
                 UpdateFromFrontendEvent data ->
                     case data.stepIndex of
                         Just stepIndex ->
-                            let
-                                x0 =
-                                    stepIndex * timelineColumnWidth + timelineColumnWidth // 2 |> toFloat
+                            case Dict.get (FrontendTimeline data.clientId) state.dict of
+                                Just timeline ->
+                                    arrowHelper timeline.rowIndex rowIndex stepIndex
 
-                                y0 =
-                                    timelineRowHeight + timelineRowHeight // 4 |> toFloat
-
-                                x1 =
-                                    state.columnIndex * timelineColumnWidth + timelineColumnWidth // 2 |> toFloat
-
-                                y1 =
-                                    timelineRowHeight // 4 |> toFloat
-
-                                length =
-                                    (x1 - x0) ^ 2 + (y1 - y0) ^ 2 |> sqrt
-
-                                length2 =
-                                    (length - 6) / length
-                            in
-                            [ arrowSvg x0 y0 (length2 * (x1 - x0) + x0) (length2 * (y1 - y0) + y0) ]
+                                Nothing ->
+                                    []
 
                         Nothing ->
                             []
 
-                --arrowDown state.columnIndex state.dict event cmds
-                BackendUpdateEvent _ cmd ->
+                BackendUpdateEvent _ _ ->
                     []
 
                 TestEvent _ _ ->
                     []
 
-                BackendInitEvent cmd ->
+                BackendInitEvent _ ->
                     []
 
-                FrontendInitEvent _ cmd ->
+                FrontendInitEvent _ _ ->
+                    []
+
+                CheckStateEvent _ ->
                     []
 
         color : String
@@ -3517,75 +3617,6 @@ arrowSvg x0 y0 x1 y1 =
         ]
 
 
-arrowDown :
-    Int
-    -> Dict CurrentTimeline (TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
-    -> Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> Command BackendOnly toFrontend backendMsg
-    -> List (Html msg)
-arrowDown columnIndex timelines event cmd =
-    let
-        rowIndexes : List Int
-        rowIndexes =
-            hasToFrontendCmds event cmd
-                |> Set.toList
-                |> List.filterMap
-                    (\clientId ->
-                        Dict.get (FrontendTimeline (Effect.Lamdera.clientIdFromString clientId)) timelines
-                            |> Maybe.map .rowIndex
-                    )
-    in
-    case List.maximum rowIndexes of
-        Just maxRowIndex ->
-            Html.div
-                [ Html.Attributes.style "width" "2px"
-                , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
-                , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
-                , Html.Attributes.style "height" (px (maxRowIndex * timelineRowHeight - 3))
-                , Html.Attributes.style "background-color" "white"
-                , Html.Attributes.style "position" "absolute"
-                ]
-                []
-                :: List.map
-                    (\rowIndex ->
-                        Html.div
-                            [ Html.Attributes.class "triangle-down"
-                            , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
-                            , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
-                            ]
-                            []
-                    )
-                    rowIndexes
-
-        Nothing ->
-            []
-
-
-arrowUp : Int -> Int -> Command FrontendOnly toBackend frontendMsg -> List (Html msg)
-arrowUp columnIndex rowIndex cmd =
-    if hasToBackendCmds cmd then
-        [ Html.div
-            [ Html.Attributes.style "width" "2px"
-            , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 1))
-            , Html.Attributes.style "top" (px (timelineRowHeight // 4 + 3))
-            , Html.Attributes.style "height" (px (rowIndex * timelineRowHeight))
-            , Html.Attributes.style "background-color" "white"
-            , Html.Attributes.style "position" "absolute"
-            , Html.Attributes.style "pointer-events" "none"
-            ]
-            []
-        , Html.div
-            [ Html.Attributes.class "triangle-up"
-            , Html.Attributes.style "top" (px (timelineRowHeight // 4))
-            , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth + timelineColumnWidth // 2 - 4))
-            ]
-            []
-        ]
-
-    else
-        []
-
-
 timelineRowHeight : number
 timelineRowHeight =
     32
@@ -3598,7 +3629,7 @@ timelineView testView_ =
     let
         previousStepIndex : Maybe Int
         previousStepIndex =
-            previousTimelineStep testView_.stepIndex testView_ |> Maybe.map Tuple.first
+            previousTimelineStep True testView_.stepIndex testView_ |> Maybe.map Tuple.first
 
         timelines : List ( CurrentTimeline, TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
         timelines =
@@ -3645,15 +3676,28 @@ timelineViewHelper :
     -> List ( CurrentTimeline, TimelineViewData toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
     -> Html (Msg toBackend frontendMsg frontendModel toFrontend backendMsg backendModel)
 timelineViewHelper stepIndex events timelines =
+    let
+        maxColumnEnd : Int
+        maxColumnEnd =
+            List.map (\( _, timeline ) -> timeline.columnEnd) timelines |> List.maximum |> Maybe.withDefault 0
+    in
     timelines
         |> List.concatMap
-            (\( _, timeline ) ->
+            (\( timelineType, timeline ) ->
                 Html.div
                     [ Html.Attributes.style "position" "absolute"
                     , Html.Attributes.style "left" (px (timeline.columnStart * timelineColumnWidth + timelineColumnWidth // 2))
                     , Html.Attributes.style "top" (px (timeline.rowIndex * timelineRowHeight + 7))
                     , Html.Attributes.style "height" "2px"
-                    , Html.Attributes.style "width" (px ((timeline.columnEnd - timeline.columnStart) * timelineColumnWidth + timelineColumnWidth // 4))
+                    , Html.Attributes.style
+                        "width"
+                        (case timelineType of
+                            FrontendTimeline _ ->
+                                px ((timeline.columnEnd - timeline.columnStart) * timelineColumnWidth + timelineColumnWidth // 4)
+
+                            BackendTimeline ->
+                                px ((maxColumnEnd - timeline.columnStart) * timelineColumnWidth + timelineColumnWidth // 4)
+                        )
                     , Html.Attributes.style "background-color" "white"
                     ]
                     []
@@ -3764,67 +3808,94 @@ timelineCss =
         []
         [ Html.text
             """
-.circle { width: 8px; height: 8px; border-radius: 8px; pointer-events: none; }
-.big-circle { width: 14px; height: 14px; margin: -3px; border-radius: 8px; pointer-events: none; }
-.circle-container { position: absolute; padding: 4px; pointer-events: none; }
-.triangle-up {
-    width: 0;
-    height: 0;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-bottom: 8px solid white;
-    position: absolute;
+.circle {
+    width: 8px;
+    height: 8px;
+    margin: 3px;
+    border-radius: 8px;
     pointer-events: none;
+    position: absolute;
 }
-.triangle-down {
-    width: 0;
-    height: 0;
-    border-left: 4px solid transparent;
-    border-right: 4px solid transparent;
-    border-top: 8px solid white;
-    position: absolute;
+.big-circle {
+    width: 12px;
+    height: 12px;
+    margin: 1px;
+    border-radius: 8px;
     pointer-events: none;
+    position: absolute;
 }
     """
         ]
 
 
 timelineColumnWidth =
-    16
+    14
 
 
 circle : String -> EventType toBackend frontendMsg frontendModel toFrontend backendMsg backendModel -> Int -> Int -> Html msg
 circle color eventType columnIndex rowIndex =
-    Html.div
-        [ Html.Attributes.class "circle-container"
-        , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth))
-        , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight))
+    let
+        circleHelper : String -> Html msg
+        circleHelper class =
+            Html.div
+                [ Html.Attributes.style "background-color" color
+                , Html.Attributes.style "left" (px (columnIndex * timelineColumnWidth))
+                , Html.Attributes.style "top" (px (rowIndex * timelineRowHeight + 1))
+                , Html.Attributes.class class
+                ]
+                []
+    in
+    case eventType of
+        FrontendUpdateEvent _ _ _ ->
+            circleHelper "circle"
+
+        UpdateFromFrontendEvent _ ->
+            circleHelper "circle"
+
+        UpdateFromBackendEvent _ ->
+            circleHelper "circle"
+
+        BackendUpdateEvent _ _ ->
+            circleHelper "circle"
+
+        TestEvent _ _ ->
+            circleHelper "big-circle"
+
+        BackendInitEvent _ ->
+            circleHelper "circle"
+
+        FrontendInitEvent _ _ ->
+            circleHelper "circle"
+
+        CheckStateEvent _ ->
+            magnifyingGlassSvg (columnIndex * timelineColumnWidth) (rowIndex * timelineRowHeight)
+
+
+{-| Original SVG from <https://upload.wikimedia.org/wikipedia/commons/5/55/Magnifying_glass_icon.svg>
+-}
+magnifyingGlassSvg : Int -> Int -> Svg msg
+magnifyingGlassSvg left top =
+    Svg.svg
+        [ Svg.Attributes.width (String.fromInt timelineColumnWidth)
+        , Html.Attributes.style "left" (px left)
+        , Html.Attributes.style "top" (px top)
+        , Html.Attributes.style "position" "absolute"
+        , Svg.Attributes.viewBox "-60 -60 600 700"
         ]
-        [ Html.div
-            [ Html.Attributes.style "background-color" color
-            , Html.Attributes.class
-                (case eventType of
-                    FrontendUpdateEvent _ _ _ ->
-                        "circle"
-
-                    UpdateFromFrontendEvent _ ->
-                        "circle"
-
-                    UpdateFromBackendEvent _ ->
-                        "circle"
-
-                    BackendUpdateEvent _ _ ->
-                        "circle"
-
-                    TestEvent _ _ ->
-                        "big-circle"
-
-                    BackendInitEvent _ ->
-                        "circle"
-
-                    FrontendInitEvent _ _ ->
-                        "circle"
-                )
+        [ Svg.path
+            [ Svg.Attributes.fill "none"
+            , Svg.Attributes.stroke "black"
+            , Svg.Attributes.strokeWidth "120"
+            , Svg.Attributes.strokeLinecap "round"
+            , Svg.Attributes.d "m280,278a153,153 0 1,0-2,2l170,170m-91-117 110,110-26,26-110-110"
+            ]
+            []
+        , Svg.path
+            [ Svg.Attributes.fill "none"
+            , Svg.Attributes.stroke "white"
+            , Svg.Attributes.strokeWidth "80"
+            , Svg.Attributes.strokeLinecap "round"
+            , Svg.Attributes.d "m280,278a153,153 0 1,0-2,2l170,170m-91-117 110,110-26,26-110-110"
             ]
             []
         ]
@@ -3842,7 +3913,7 @@ testView windowWidth instructions testView_ =
                 let
                     maybeStep : Maybe ( Int, Event toBackend frontendMsg frontendModel toFrontend backendMsg backendModel )
                     maybeStep =
-                        previousTimelineStep testView_.stepIndex testView_
+                        previousTimelineStep True testView_.stepIndex testView_
                 in
                 [ Html.div
                     [ Html.Attributes.style "width" "100%"
@@ -3858,8 +3929,6 @@ testView windowWidth instructions testView_ =
                             []
                             [ overlayButton PressedBackToOverview "Close"
                             , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
-                            , overlayButton PressedStepBackward "Previous"
-                            , overlayButton PressedStepForward "Next step"
                             , overlayButton PressedHideModel "Hide model"
                             ]
                         , timelineView testView_
@@ -3893,7 +3962,13 @@ testView windowWidth instructions testView_ =
                                         []
 
                             BackendTimeline ->
-                                []
+                                [ Html.div
+                                    [ Html.Attributes.style "position" "absolute"
+                                    , Html.Attributes.style "left" "45%"
+                                    , Html.Attributes.style "top" "400px"
+                                    ]
+                                    [ Html.text "There is no backend view to display" ]
+                                ]
                        )
 
         Nothing ->
@@ -3935,15 +4010,12 @@ testOverlay windowWidth testView_ currentStep =
             , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
             , overlayButton PressedToggleOverlayPosition "Move"
             , Html.div [ Html.Attributes.style "display" "inline-block", Html.Attributes.style "padding" "4px" ] []
-            , overlayButton PressedStepBackward "Previous"
-            , overlayButton PressedStepForward "Next step"
             , overlayButton PressedShowModel "Show model"
             ]
         , timelineView testView_
         , currentStepText currentStep testView_
         , Html.div
-            [ Html.Attributes.style "color" "rgb(200, 10, 10)"
-            ]
+            [ Html.Attributes.style "color" "rgb(200, 10, 10)" ]
             (List.map (testErrorToString >> text) currentStep.testErrors)
         ]
 
