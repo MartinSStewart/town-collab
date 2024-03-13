@@ -64,7 +64,7 @@ import Units exposing (CellLocalUnit, CellUnit, TileLocalUnit, WorldUnit)
 type Status
     = WaitingAtHome
     | TeleportingHome Effect.Time.Posix
-    | Travelling
+    | Travelling { startedAt : Effect.Time.Posix }
     | StoppedAtPostOffice { time : Effect.Time.Posix, userId : Id UserId }
 
 
@@ -233,7 +233,7 @@ derail time otherTrainId (Train train) =
 trainPosition : Effect.Time.Posix -> Train -> Point2d WorldUnit WorldUnit
 trainPosition time (Train train) =
     case status time (Train train) of
-        Travelling ->
+        Travelling _ ->
             travellingPosition time (Train train)
 
         WaitingAtHome ->
@@ -311,8 +311,8 @@ status time (Train train) =
             else
                 WaitingAtHome
 
-        Travelling ->
-            Travelling
+        Travelling travelling ->
+            Travelling travelling
 
         StoppedAtPostOffice stoppedAtPostOffice ->
             StoppedAtPostOffice stoppedAtPostOffice
@@ -327,7 +327,7 @@ speed time (Train train) =
         TeleportingHome _ ->
             train.speed
 
-        Travelling ->
+        Travelling _ ->
             train.speed
 
         StoppedAtPostOffice _ ->
@@ -371,7 +371,33 @@ moveTrains targetTime time trains model =
             newTrains =
                 IdDict.map
                     (\trainId train ->
-                        moveTrain trainId defaultMaxSpeed time nextTime model train
+                        case status time train of
+                            Travelling { startedAt } ->
+                                if Duration.from startedAt nextTime |> Quantity.lessThanOrEqualToZero then
+                                    train
+
+                                else
+                                    moveTrain
+                                        trainId
+                                        defaultMaxSpeed
+                                        (if Duration.from startedAt time |> Quantity.lessThanZero then
+                                            startedAt
+
+                                         else
+                                            time
+                                        )
+                                        nextTime
+                                        model
+                                        train
+
+                            _ ->
+                                moveTrain
+                                    trainId
+                                    defaultMaxSpeed
+                                    time
+                                    nextTime
+                                    model
+                                    train
                     )
                     trains
 
@@ -477,7 +503,7 @@ moveTrain trainId maxSpeed startTime endTime state (Train train) =
                 TeleportingHome _ ->
                     moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
 
-                Travelling ->
+                Travelling _ ->
                     moveTrainHelper trainId startTime endTime distance distance state (Train { train | speed = Quantity newSpeed })
 
                 StoppedAtPostOffice _ ->
@@ -574,7 +600,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
                                 Nothing ->
                                     case train.status of
                                         StoppedAtPostOffice _ ->
-                                            Travelling
+                                            Travelling { startedAt = endTime }
 
                                         _ ->
                                             train.status
@@ -636,7 +662,7 @@ moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Tr
                 Train { train | t = newTClamped, isStuckOrDerailed = IsNotStuckOrDerailed }
 
 
-stoppedSpeed : Quantity Float units
+stoppedSpeed : Quantity Float (Rate TileLocalUnit Seconds)
 stoppedSpeed =
     Quantity 0.1
 
@@ -659,7 +685,7 @@ owner (Train train) =
 stuckOrDerailed : Effect.Time.Posix -> Train -> IsStuckOrDerailed
 stuckOrDerailed time (Train train) =
     case status time (Train train) of
-        Travelling ->
+        Travelling _ ->
             train.isStuckOrDerailed
 
         WaitingAtHome ->
@@ -940,7 +966,7 @@ path time (Train train) =
         TeleportingHome _ ->
             train.path
 
-        Travelling ->
+        Travelling _ ->
             train.path
 
         StoppedAtPostOffice _ ->
@@ -1164,7 +1190,7 @@ startTeleportingHome time (Train train) =
         { train
             | status =
                 case status time (Train train) of
-                    Travelling ->
+                    Travelling _ ->
                         TeleportingHome time
 
                     TeleportingHome _ ->
@@ -1181,7 +1207,7 @@ startTeleportingHome time (Train train) =
 leaveHome : Effect.Time.Posix -> Train -> Train
 leaveHome time (Train train) =
     case status time (Train train) of
-        Travelling ->
+        Travelling _ ->
             Train train
 
         TeleportingHome _ ->
@@ -1190,7 +1216,7 @@ leaveHome time (Train train) =
         WaitingAtHome ->
             Train
                 { train
-                    | status = Travelling
+                    | status = Travelling { startedAt = time }
                     , t = 0.5
                     , position = train.home
                     , path = train.homePath

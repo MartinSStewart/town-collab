@@ -274,7 +274,6 @@ keyMsg textScale width ctrlDown shiftDown key model =
                         lines : List (List String)
                         lines =
                             addLineBreaks textScale width state.text
-                                |> Debug.log "down"
                     in
                     { state
                         | cursorIndex =
