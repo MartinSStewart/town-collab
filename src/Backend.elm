@@ -439,6 +439,175 @@ initTileCountBot time model =
         { model2 | tileCountBot = Just bot }
 
 
+updateTrains :
+    Effect.Time.Posix
+    -> Effect.Time.Posix
+    -> IdDict TrainId Train
+    -> BackendModel
+    ->
+        { mail : IdDict MailId BackendMail
+        , mailChanges : List ( Id MailId, BackendMail )
+        , diff : IdDict TrainId TrainDiff
+        }
+updateTrains oldTime time newTrains model =
+    IdDict.merge
+        (\_ _ a -> a)
+        (\trainId oldTrain newTrain state ->
+            let
+                diff : IdDict TrainId TrainDiff
+                diff =
+                    IdDict.insert trainId (Train.diff newTrain) state.diff
+            in
+            case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
+                ( TeleportingHome _, WaitingAtHome ) ->
+                    List.foldl
+                        (\( mailId, mail ) state2 ->
+                            case mail.status of
+                                MailInTransit mailTrainId ->
+                                    if trainId == mailTrainId then
+                                        let
+                                            mail2 =
+                                                { mail | status = MailWaitingPickup }
+                                        in
+                                        { mail = IdDict.insert mailId mail2 state2.mail
+                                        , mailChanges = ( mailId, mail2 ) :: state2.mailChanges
+                                        , diff = state2.diff
+                                        }
+
+                                    else
+                                        state2
+
+                                _ ->
+                                    state2
+                        )
+                        { state | diff = diff }
+                        (IdDict.toList state.mail)
+
+                ( StoppedAtPostOffice _, _ ) ->
+                    { state | diff = diff }
+
+                ( _, StoppedAtPostOffice { userId } ) ->
+                    case Train.carryingMail state.mail trainId of
+                        Just ( mailId, mail ) ->
+                            if mail.to == userId then
+                                let
+                                    mail2 =
+                                        { mail | status = MailReceived { deliveryTime = time } }
+                                in
+                                { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                , mailChanges = ( mailId, mail2 ) :: state.mailChanges
+                                , diff = diff
+                                }
+
+                            else
+                                { state | diff = diff }
+
+                        Nothing ->
+                            case
+                                MailEditor.getMailFrom userId state.mail
+                                    |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
+                            of
+                                ( mailId, mail ) :: _ ->
+                                    let
+                                        mail2 =
+                                            { mail | status = MailInTransit trainId }
+                                    in
+                                    { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                    , mailChanges = ( mailId, mail2 ) :: state.mailChanges
+                                    , diff = diff
+                                    }
+
+                                [] ->
+                                    { state | diff = diff }
+
+                _ ->
+                    { state | diff = diff }
+        )
+        (\trainId train state ->
+            { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
+        )
+        model.lastWorldUpdateTrains
+        newTrains
+        { mailChanges = [], mail = model.mail, diff = IdDict.empty }
+
+
+handleEmailNotifications isProduction time model mergeTrains =
+    List.foldl
+        (\( _, mail ) state ->
+            case ( IdDict.get mail.to model.users, mail.status ) of
+                ( Just user, MailReceived _ ) ->
+                    case user.cursor of
+                        Just _ ->
+                            state
+
+                        Nothing ->
+                            case user.userType of
+                                HumanUser humanUser ->
+                                    if humanUser.allowEmailNotifications then
+                                        let
+                                            ( loginToken, model2 ) =
+                                                generateSecretId time state.model
+
+                                            _ =
+                                                Debug.log "notification" loginEmailUrl
+
+                                            loginEmailUrl : String
+                                            loginEmailUrl =
+                                                Env.domain
+                                                    ++ Route.encode
+                                                        (InternalRoute
+                                                            { viewPoint =
+                                                                Grid.getPostOffice mail.to state.model.grid
+                                                                    |> Maybe.withDefault Coord.origin
+                                                            , page = MailEditorRoute
+                                                            , loginOrInviteToken = LoginToken2 loginToken |> Just
+                                                            }
+                                                        )
+                                        in
+                                        { model =
+                                            { model2
+                                                | pendingLoginTokens =
+                                                    AssocList.insert
+                                                        loginToken
+                                                        { requestTime = time
+                                                        , userId = mail.to
+                                                        }
+                                                        model2.pendingLoginTokens
+                                            }
+                                        , cmds =
+                                            sendEmail
+                                                isProduction
+                                                (SentMailNotification time humanUser.emailAddress)
+                                                (NonemptyString 'Y' "ou got a letter!")
+                                                ("You received a letter. You can view it directly by clicking on this link "
+                                                    ++ loginEmailUrl
+                                                )
+                                                (Email.Html.div
+                                                    []
+                                                    [ Email.Html.text "You received a letter. You can view it directly by "
+                                                    , Email.Html.a
+                                                        [ Email.Html.Attributes.href loginEmailUrl ]
+                                                        [ Email.Html.text "clicking here" ]
+                                                    , Email.Html.text "."
+                                                    ]
+                                                )
+                                                humanUser.emailAddress
+                                                :: state.cmds
+                                        }
+
+                                    else
+                                        state
+
+                                BotUser ->
+                                    state
+
+                _ ->
+                    state
+        )
+        { model = model, cmds = [] }
+        mergeTrains.mailChanges
+
+
 handleWorldUpdate : Bool -> Effect.Time.Posix -> Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 handleWorldUpdate isProduction oldTime time model =
     let
@@ -461,162 +630,13 @@ handleWorldUpdate isProduction oldTime time model =
             , diff : IdDict TrainId TrainDiff
             }
         mergeTrains =
-            IdDict.merge
-                (\_ _ a -> a)
-                (\trainId oldTrain newTrain state ->
-                    let
-                        diff : IdDict TrainId TrainDiff
-                        diff =
-                            IdDict.insert trainId (Train.diff newTrain) state.diff
-                    in
-                    case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
-                        ( TeleportingHome _, WaitingAtHome ) ->
-                            List.foldl
-                                (\( mailId, mail ) state2 ->
-                                    case mail.status of
-                                        MailInTransit mailTrainId ->
-                                            if trainId == mailTrainId then
-                                                let
-                                                    mail2 =
-                                                        { mail | status = MailWaitingPickup }
-                                                in
-                                                { mail = IdDict.insert mailId mail2 state2.mail
-                                                , mailChanges = ( mailId, mail2 ) :: state2.mailChanges
-                                                , diff = state2.diff
-                                                }
+            updateTrains oldTime time newTrains model
 
-                                            else
-                                                state2
-
-                                        _ ->
-                                            state2
-                                )
-                                { state | diff = diff }
-                                (IdDict.toList state.mail)
-
-                        ( StoppedAtPostOffice _, _ ) ->
-                            { state | diff = diff }
-
-                        ( _, StoppedAtPostOffice { userId } ) ->
-                            case Train.carryingMail state.mail trainId of
-                                Just ( mailId, mail ) ->
-                                    if mail.to == userId then
-                                        let
-                                            mail2 =
-                                                { mail | status = MailReceived { deliveryTime = time } }
-                                        in
-                                        { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
-                                        , mailChanges = ( mailId, mail2 ) :: state.mailChanges
-                                        , diff = diff
-                                        }
-
-                                    else
-                                        { state | diff = diff }
-
-                                Nothing ->
-                                    case
-                                        MailEditor.getMailFrom userId state.mail
-                                            |> List.filter (\( _, mail ) -> mail.status == MailWaitingPickup)
-                                    of
-                                        ( mailId, mail ) :: _ ->
-                                            let
-                                                mail2 =
-                                                    { mail | status = MailInTransit trainId }
-                                            in
-                                            { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
-                                            , mailChanges = ( mailId, mail2 ) :: state.mailChanges
-                                            , diff = diff
-                                            }
-
-                                        [] ->
-                                            { state | diff = diff }
-
-                        _ ->
-                            { state | diff = diff }
-                )
-                (\trainId train state ->
-                    { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
-                )
-                model.lastWorldUpdateTrains
-                newTrains
-                { mailChanges = [], mail = model.mail, diff = IdDict.empty }
-
+        emailNotifications : { model : BackendModel, cmds : List (Command BackendOnly ToFrontend BackendMsg) }
         emailNotifications =
-            List.foldl
-                (\( _, mail ) state ->
-                    case ( IdDict.get mail.to model.users, mail.status ) of
-                        ( Just user, MailReceived _ ) ->
-                            case user.cursor of
-                                Just _ ->
-                                    state
+            handleEmailNotifications isProduction time model mergeTrains
 
-                                Nothing ->
-                                    case user.userType of
-                                        HumanUser humanUser ->
-                                            if humanUser.allowEmailNotifications then
-                                                let
-                                                    ( loginToken, model2 ) =
-                                                        generateSecretId time state.model
-
-                                                    _ =
-                                                        Debug.log "notification" loginEmailUrl
-
-                                                    loginEmailUrl : String
-                                                    loginEmailUrl =
-                                                        Env.domain
-                                                            ++ Route.encode
-                                                                (InternalRoute
-                                                                    { viewPoint =
-                                                                        Grid.getPostOffice mail.to state.model.grid
-                                                                            |> Maybe.withDefault Coord.origin
-                                                                    , page = MailEditorRoute
-                                                                    , loginOrInviteToken = LoginToken2 loginToken |> Just
-                                                                    }
-                                                                )
-                                                in
-                                                { model =
-                                                    { model2
-                                                        | pendingLoginTokens =
-                                                            AssocList.insert
-                                                                loginToken
-                                                                { requestTime = time
-                                                                , userId = mail.to
-                                                                }
-                                                                model2.pendingLoginTokens
-                                                    }
-                                                , cmds =
-                                                    sendEmail
-                                                        isProduction
-                                                        (SentMailNotification time humanUser.emailAddress)
-                                                        (NonemptyString 'Y' "ou got a letter!")
-                                                        ("You received a letter. You can view it directly by clicking on this link "
-                                                            ++ loginEmailUrl
-                                                        )
-                                                        (Email.Html.div
-                                                            []
-                                                            [ Email.Html.text "You received a letter. You can view it directly by "
-                                                            , Email.Html.a
-                                                                [ Email.Html.Attributes.href loginEmailUrl ]
-                                                                [ Email.Html.text "clicking here" ]
-                                                            , Email.Html.text "."
-                                                            ]
-                                                        )
-                                                        humanUser.emailAddress
-                                                        :: state.cmds
-                                                }
-
-                                            else
-                                                state
-
-                                        BotUser ->
-                                            state
-
-                        _ ->
-                            state
-                )
-                { model = model, cmds = [] }
-                mergeTrains.mailChanges
-
+        model3 : BackendModel
         model3 =
             emailNotifications.model
 
@@ -654,86 +674,7 @@ handleWorldUpdate isProduction oldTime time model =
                 model3
 
         ( newAnimals, animalDiff ) =
-            case model.trainsAndAnimalsDisabled of
-                TrainsAndAnimalsEnabled ->
-                    let
-                        newAnimals2 : IdDict AnimalId Animal
-                        newAnimals2 =
-                            IdDict.map
-                                (\id animal ->
-                                    if Duration.from (Animal.moveEndTime animal) time |> Quantity.lessThanZero then
-                                        animal
-
-                                    else
-                                        let
-                                            start =
-                                                animal.endPosition
-
-                                            maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
-                                            maybeMove =
-                                                Random.step
-                                                    (randomMovement start)
-                                                    (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis time))
-                                                    |> Tuple.first
-                                        in
-                                        case maybeMove of
-                                            Just { endPosition, delay } ->
-                                                let
-                                                    size =
-                                                        (Animal.getData animal.animalType).size
-                                                            |> Units.pixelToTileVector
-                                                            |> Vector2d.scaleBy 0.5
-                                                in
-                                                { position = start
-                                                , startTime = Duration.addTo time delay
-                                                , endPosition =
-                                                    case Grid.rayIntersection2 True size start endPosition model.grid of
-                                                        Just { intersection } ->
-                                                            LineSegmentExtra.extendLineEnd
-                                                                start
-                                                                intersection
-                                                                (Quantity.negate Animal.moveCollisionThreshold)
-
-                                                        Nothing ->
-                                                            endPosition
-                                                , animalType = animal.animalType
-                                                }
-
-                                            Nothing ->
-                                                animal
-                                )
-                                model.animals
-                    in
-                    ( newAnimals2
-                    , IdDict.merge
-                        (\_ _ list -> list)
-                        (\id old new list ->
-                            if old.endPosition == new.endPosition then
-                                list
-
-                            else
-                                ( id
-                                , { position = new.position
-                                  , endPosition = new.endPosition
-                                  , startTime = new.startTime
-                                  }
-                                )
-                                    :: list
-                        )
-                        (\_ _ list -> list)
-                        model.animals
-                        newAnimals2
-                        []
-                    )
-
-                TrainsAndAnimalsDisabled ->
-                    ( model.animals, [] )
-
-        --_ =
-        --    Debug.log "a"
-        --        ( Duration.from oldTime time |> Duration.inSeconds
-        --        , IdDict.values newTrains |> List.map (Train.trainPosition time)
-        --        )
+            updateAnimals model time
     in
     ( { model3
         | lastWorldUpdate = Just time
@@ -758,6 +699,96 @@ handleWorldUpdate isProduction oldTime time model =
         , Effect.Task.perform (GotTimeAfterWorldUpdate time) Effect.Time.now
         ]
     )
+
+
+updateAnimals :
+    BackendModel
+    -> Effect.Time.Posix
+    ->
+        ( IdDict AnimalId Animal
+        , List
+            ( Id AnimalId
+            , { position : Point2d WorldUnit WorldUnit
+              , endPosition : Point2d WorldUnit WorldUnit
+              , startTime : Effect.Time.Posix
+              }
+            )
+        )
+updateAnimals model time =
+    case model.trainsAndAnimalsDisabled of
+        TrainsAndAnimalsEnabled ->
+            let
+                newAnimals2 : IdDict AnimalId Animal
+                newAnimals2 =
+                    IdDict.map
+                        (\id animal ->
+                            if Duration.from (Animal.moveEndTime animal) time |> Quantity.lessThanZero then
+                                animal
+
+                            else
+                                let
+                                    start =
+                                        animal.endPosition
+
+                                    maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
+                                    maybeMove =
+                                        Random.step
+                                            (randomMovement start)
+                                            (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis time))
+                                            |> Tuple.first
+                                in
+                                case maybeMove of
+                                    Just { endPosition, delay } ->
+                                        let
+                                            size =
+                                                (Animal.getData animal.animalType).size
+                                                    |> Units.pixelToTileVector
+                                                    |> Vector2d.scaleBy 0.5
+                                        in
+                                        { position = start
+                                        , startTime = Duration.addTo time delay
+                                        , endPosition =
+                                            case Grid.rayIntersection2 True size start endPosition model.grid of
+                                                Just { intersection } ->
+                                                    LineSegmentExtra.extendLineEnd
+                                                        start
+                                                        intersection
+                                                        (Quantity.negate Animal.moveCollisionThreshold)
+
+                                                Nothing ->
+                                                    endPosition
+                                        , animalType = animal.animalType
+                                        }
+
+                                    Nothing ->
+                                        animal
+                        )
+                        model.animals
+            in
+            ( newAnimals2
+            , IdDict.merge
+                (\_ _ list -> list)
+                (\id old new list ->
+                    if old.endPosition == new.endPosition then
+                        list
+
+                    else
+                        ( id
+                        , { position = new.position
+                          , endPosition = new.endPosition
+                          , startTime = new.startTime
+                          }
+                        )
+                            :: list
+                )
+                (\_ _ list -> list)
+                model.animals
+                newAnimals2
+                []
+            )
+
+        TrainsAndAnimalsDisabled ->
+            ( model.animals, [] )
 
 
 randomMovement :
