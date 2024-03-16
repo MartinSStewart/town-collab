@@ -383,6 +383,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , oneTimePasswordInput = TextInput.init
             , loginError = Nothing
             , hyperlinkInput = TextInputMultiline.init |> TextInputMultiline.withText "example.com"
+            , lastTrainUpdate = time
             }
                 |> setCurrentTool HandToolButton
     in

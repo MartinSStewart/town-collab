@@ -1217,6 +1217,7 @@ updateLoaded audioData msg model =
                     { model
                         | time = time
                         , localTime = localTime
+                        , lastTrainUpdate = time
                         , trains =
                             case localGrid.trainsDisabled of
                                 TrainsAndAnimalsDisabled ->
@@ -1225,7 +1226,7 @@ updateLoaded audioData msg model =
                                 TrainsAndAnimalsEnabled ->
                                     Train.moveTrains
                                         time
-                                        (Duration.from model.time time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
+                                        (Duration.from model.lastTrainUpdate time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
                                         model.trains
                                         { grid = localGrid.grid, mail = IdDict.empty }
                         , removedTileParticles =
@@ -1260,11 +1261,6 @@ updateLoaded audioData msg model =
                         _ ->
                             model2
 
-                --_ =
-                --    Debug.log "frontend"
-                --        ( Duration.from model.time time |> Duration.inSeconds
-                --        , IdDict.values model2.trains |> List.map (Train.trainPosition time)
-                --        )
                 model4 =
                     LoadingPage.updateMeshes model3
 

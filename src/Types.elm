@@ -232,6 +232,7 @@ type alias FrontendLoaded =
     , lastHotkeyChange : Maybe Time.Posix
     , loginError : Maybe LoginError
     , hyperlinkInput : TextInputMultiline.Model
+    , lastTrainUpdate : Time.Posix
     }
 
 
