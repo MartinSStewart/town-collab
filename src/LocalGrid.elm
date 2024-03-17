@@ -1301,7 +1301,9 @@ updateServerChange serverChange model =
             )
 
         ServerNewNpcs npcs ->
-            ( model
+            ( { model
+                | npcs = List.Nonempty.foldl (\( npcId, npc ) state -> IdDict.insert npcId npc state) model.npcs npcs
+              }
             , NoOutMsg
             )
 

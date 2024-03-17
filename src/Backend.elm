@@ -756,7 +756,9 @@ randomPerson houses createdAt =
         (\house name ->
             { name = name
             , home = house.position
-            , position = Coord.toPoint2d house.position
+            , position =
+                Units.pixelToTilePoint house.buildingData.entrancePoint
+                    |> Point2d.translateBy (Coord.toVector2d house.position)
             , createdAt = createdAt
             }
         )

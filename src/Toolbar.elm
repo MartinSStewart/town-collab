@@ -29,7 +29,7 @@ import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
 import Hyperlink exposing (Hyperlink)
-import Id
+import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Extra as List
 import List.Nonempty
@@ -185,6 +185,7 @@ findHyperlink startPos flattenedValues =
 normalView : Coord Pixels -> FrontendLoaded -> Hover -> Ui.Element UiHover
 normalView windowSize model hover =
     let
+        maybeCurrentUserId : Maybe (Id UserId)
         maybeCurrentUserId =
             LocalGrid.currentUserId model
 
@@ -205,6 +206,7 @@ normalView windowSize model hover =
                 )
                 (IdDict.toList localModel.cursors)
 
+        otherUsersOnline : Int
         otherUsersOnline =
             case localModel.userStatus of
                 LoggedIn { userId } ->

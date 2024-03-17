@@ -4601,6 +4601,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                     []
            )
         ++ drawAnimals gridViewBounds renderData model
+        ++ drawNpcs gridViewBounds renderData model
         ++ drawFlags renderData model
         ++ [ Effect.WebGL.entityWith
                 [ Shaders.blend, Shaders.scissorBox renderData.scissors ]
@@ -4737,6 +4738,74 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                     Nothing
         )
         (IdDict.toList localGrid.animals)
+
+
+drawNpcs : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
+    let
+        localGrid : LocalGrid_
+        localGrid =
+            LocalGrid.localModel model.localModel
+
+        ( textureW, textureH ) =
+            Effect.WebGL.Texture.size texture
+    in
+    List.filterMap
+        (\( npcId, npc ) ->
+            let
+                position =
+                    npc.position
+            in
+            if BoundingBox2d.contains position viewBounds_ then
+                let
+                    point =
+                        Point2d.unwrap position
+
+                    ( sizeW, sizeH ) =
+                        ( 7, 17 )
+
+                    texturePos =
+                        Coord.xy 486 0
+                in
+                Effect.WebGL.entityWith
+                    [ Shaders.blend
+                    , Shaders.scissorBox scissors
+                    , Shaders.depthTest
+                    ]
+                    Shaders.instancedVertexShader
+                    Shaders.fragmentShader
+                    Train.instancedMesh
+                    { view = viewMatrix
+                    , texture = texture
+                    , lights = lights
+                    , depth = depth
+                    , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
+                    , color = Vec4.vec4 1 1 1 1
+                    , userId = Shaders.noUserIdSelected
+                    , time = time
+                    , opacityAndUserId0 = Sprite.opaque
+                    , position0 =
+                        Vec3.vec3
+                            (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2) |> round |> toFloat)
+                            (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2) |> round |> toFloat)
+                            0
+                    , primaryColor0 = Color.unwrap Color.white |> toFloat
+                    , secondaryColor0 = Color.unwrap Color.black |> toFloat
+                    , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
+                    , texturePosition0 =
+                        Coord.xRaw texturePos
+                            + textureW
+                            * Coord.yRaw texturePos
+                            |> toFloat
+                    , night = nightFactor
+                    , waterReflection = 0
+                    }
+                    |> Just
+
+            else
+                Nothing
+        )
+        (IdDict.toList localGrid.npcs)
 
 
 drawFlags : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity

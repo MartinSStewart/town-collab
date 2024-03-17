@@ -444,128 +444,128 @@ tileToTileGroup tile =
 
 
 type alias BuildingData =
-    {}
+    { entrancePoint : Coord Pixels }
 
 
 isBuilding : Tile -> Maybe BuildingData
 isBuilding tile =
     case tile of
         HouseLeft ->
-            Just {}
+            Just { entrancePoint = Coord.xy 5 44 }
 
         HouseUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 32 15 }
 
         HouseRight ->
-            Just {}
+            Just { entrancePoint = Coord.xy 35 46 }
 
         HouseDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 28 51 }
 
         PostOffice ->
-            Just {}
+            Just { entrancePoint = Coord.xy 51 64 }
 
         LogCabinDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 20 55 }
 
         LogCabinRight ->
-            Just {}
+            Just { entrancePoint = Coord.xy 41 41 }
 
         LogCabinUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 20 16 }
 
         LogCabinLeft ->
-            Just {}
+            Just { entrancePoint = Coord.xy -1 41 }
 
         HospitalDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         HospitalLeft ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         HospitalUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         HospitalRight ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         ApartmentDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         ApartmentLeft ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         ApartmentRight ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         ApartmentUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         CornerHouseUpLeft ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         CornerHouseUpRight ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         CornerHouseDownLeft ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         CornerHouseDownRight ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         OfficeDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         OfficeUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         FireTruckGarage ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         TownHouse0 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         TownHouse1 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         TownHouse2 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         TownHouse3 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         TownHouse4 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         RowHouse0 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         RowHouse1 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         RowHouse2 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         RowHouse3 ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         ConvenienceStoreDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         ConvenienceStoreUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         BeautySalonDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         BeautySalonUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         CheckmartDown ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         CheckmartUp ->
-            Just {}
+            Just { entrancePoint = Coord.xy 0 0 }
 
         _ ->
             Nothing
@@ -2696,7 +2696,7 @@ houseUp =
 
 houseLeft : TileData units
 houseLeft =
-    { texturePosition = Coord.xy 11 8 |> Coord.multiply Units.tileSize
+    { texturePosition = Coord.xy 220 144
     , size = Coord.xy 2 4
     , tileCollision =
         [ ( 0, 1 )
