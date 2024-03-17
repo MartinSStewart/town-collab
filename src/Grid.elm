@@ -18,6 +18,7 @@ module Grid exposing
     , foregroundMesh2
     , from
     , fromData
+    , getBuildings
     , getCell
     , getCell2
     , getPostOffice
@@ -70,7 +71,7 @@ import Set
 import Shaders
 import Sprite exposing (Vertex)
 import Terrain exposing (TerrainType(..), TerrainValue)
-import Tile exposing (RailPathType(..), Tile(..), TileData)
+import Tile exposing (BuildingData, RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit, TileLocalUnit, WorldUnit)
 import User exposing (FrontendUser)
 import Vector2d exposing (Vector2d)
@@ -1042,6 +1043,24 @@ getPostOffice userId (Grid grid) =
 
                             else
                                 Nothing
+                        )
+            )
+
+
+getBuildings :
+    Grid BackendHistory
+    -> List { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
+getBuildings (Grid grid) =
+    Dict.toList grid
+        |> List.concatMap
+            (\( position, cell ) ->
+                GridCell.getBuildings cell
+                    |> List.map
+                        (\a ->
+                            { position = cellAndLocalCoordToWorld ( Coord.tuple position, a.position )
+                            , userId = a.userId
+                            , buildingData = a.buildingData
+                            }
                         )
             )
 

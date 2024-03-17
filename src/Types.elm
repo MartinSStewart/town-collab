@@ -415,6 +415,7 @@ type alias Person =
     { name : PersonName
     , home : Coord WorldUnit
     , position : Point2d WorldUnit WorldUnit
+    , createdAt : Time.Posix
     }
 
 

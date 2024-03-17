@@ -1,5 +1,6 @@
 module Tile exposing
-    ( Category(..)
+    ( BuildingData
+    , Category(..)
     , CollisionMask(..)
     , DefaultColor(..)
     , Direction(..)
@@ -29,6 +30,7 @@ module Tile exposing
     , getTileGroupData
     , hasCollision
     , hasCollisionWithCoord
+    , isBuilding
     , pathDirection
     , railDataReverse
     , railPathData
@@ -439,6 +441,134 @@ tileToTileGroup tile =
                             Nothing
                 )
                 allTileGroups
+
+
+type alias BuildingData =
+    {}
+
+
+isBuilding : Tile -> Maybe BuildingData
+isBuilding tile =
+    case tile of
+        HouseLeft ->
+            Just {}
+
+        HouseUp ->
+            Just {}
+
+        HouseRight ->
+            Just {}
+
+        HouseDown ->
+            Just {}
+
+        PostOffice ->
+            Just {}
+
+        LogCabinDown ->
+            Just {}
+
+        LogCabinRight ->
+            Just {}
+
+        LogCabinUp ->
+            Just {}
+
+        LogCabinLeft ->
+            Just {}
+
+        HospitalDown ->
+            Just {}
+
+        HospitalLeft ->
+            Just {}
+
+        HospitalUp ->
+            Just {}
+
+        HospitalRight ->
+            Just {}
+
+        ApartmentDown ->
+            Just {}
+
+        ApartmentLeft ->
+            Just {}
+
+        ApartmentRight ->
+            Just {}
+
+        ApartmentUp ->
+            Just {}
+
+        CornerHouseUpLeft ->
+            Just {}
+
+        CornerHouseUpRight ->
+            Just {}
+
+        CornerHouseDownLeft ->
+            Just {}
+
+        CornerHouseDownRight ->
+            Just {}
+
+        OfficeDown ->
+            Just {}
+
+        OfficeUp ->
+            Just {}
+
+        FireTruckGarage ->
+            Just {}
+
+        TownHouse0 ->
+            Just {}
+
+        TownHouse1 ->
+            Just {}
+
+        TownHouse2 ->
+            Just {}
+
+        TownHouse3 ->
+            Just {}
+
+        TownHouse4 ->
+            Just {}
+
+        RowHouse0 ->
+            Just {}
+
+        RowHouse1 ->
+            Just {}
+
+        RowHouse2 ->
+            Just {}
+
+        RowHouse3 ->
+            Just {}
+
+        ConvenienceStoreDown ->
+            Just {}
+
+        ConvenienceStoreUp ->
+            Just {}
+
+        BeautySalonDown ->
+            Just {}
+
+        BeautySalonUp ->
+            Just {}
+
+        CheckmartDown ->
+            Just {}
+
+        CheckmartUp ->
+            Just {}
+
+        _ ->
+            Nothing
 
 
 type alias TileGroupData =

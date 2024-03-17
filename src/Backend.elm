@@ -38,7 +38,7 @@ import Env
 import Grid exposing (Grid)
 import GridCell exposing (BackendHistory)
 import Hyperlink
-import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, PersonId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
 import LineSegmentExtra
@@ -48,19 +48,21 @@ import LoadingPage
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Maybe.Extra as Maybe
+import PersonName
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity
 import Random
+import Random.List
 import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import SHA224
-import Set
+import Set exposing (Set)
 import String.Nonempty exposing (NonemptyString(..))
-import Tile exposing (RailPathType(..))
+import Tile exposing (BuildingData, RailPathType(..))
 import TileCountBot
 import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
-import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), ToBackend(..), ToFrontend(..))
+import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), Person, ToBackend(..), ToFrontend(..))
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
@@ -699,6 +701,53 @@ handleWorldUpdate isProduction oldTime time model =
         , Effect.Task.perform (GotTimeAfterWorldUpdate time) Effect.Time.now
         ]
     )
+
+
+updatePeople : Effect.Time.Posix -> BackendModel -> IdDict PersonId Person
+updatePeople newTime model =
+    let
+        occupied : Set ( Int, Int )
+        occupied =
+            IdDict.values model.people
+                |> List.map (\person -> Coord.toTuple person.home)
+                |> Set.fromList
+
+        validHouses : List { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
+        validHouses =
+            Grid.getBuildings model.grid
+                |> List.filter (\a -> Set.member (Coord.toTuple a.position) occupied |> not)
+    in
+    case Nonempty.fromList validHouses of
+        Just nonempty ->
+            let
+                person : Person
+                person =
+                    Random.step
+                        (randomPerson nonempty newTime)
+                        (Random.initialSeed (Effect.Time.posixToMillis newTime))
+                        |> Tuple.first
+            in
+            IdDict.insert (IdDict.nextId model.people) person model.people
+
+        Nothing ->
+            model.people
+
+
+randomPerson :
+    Nonempty { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
+    -> Effect.Time.Posix
+    -> Random.Generator Person
+randomPerson houses createdAt =
+    Random.map2
+        (\house name ->
+            { name = name
+            , home = house.position
+            , position = Coord.toPoint2d house.position
+            , createdAt = createdAt
+            }
+        )
+        (Nonempty.sample houses)
+        (Nonempty.sample PersonName.names)
 
 
 updateAnimals :
