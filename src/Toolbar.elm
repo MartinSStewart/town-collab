@@ -223,8 +223,9 @@ normalView windowSize model hover =
                 Ui.none
 
             else
-                Ui.el
-                    { padding = Ui.noPadding
+                Ui.elWithId
+                    { id = BlockInputContainer
+                    , padding = Ui.noPadding
                     , inFront = easterEgg
                     , borderAndFill = Ui.defaultElBorderAndFill
                     }
@@ -296,8 +297,9 @@ normalView windowSize model hover =
                 _ ->
                     Nothing
     in
-    Ui.bottomCenter
-        { size = windowSize
+    Ui.bottomCenterWithId
+        { id = WorldContainer
+        , size = windowSize
         , inFront =
             (if model.hideUi then
                 []
@@ -357,8 +359,12 @@ normalView windowSize model hover =
                             , if model.showOnlineUsers then
                                 Ui.topRight
                                     { size = model.windowSize }
-                                    (Ui.el
-                                        { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = Ui.defaultElBorderAndFill }
+                                    (Ui.elWithId
+                                        { id = BlockInputContainer
+                                        , padding = Ui.paddingXY 8 8
+                                        , inFront = []
+                                        , borderAndFill = Ui.defaultElBorderAndFill
+                                        }
                                         (Ui.column
                                             { spacing = 16, padding = Ui.noPadding }
                                             [ onlineUsersButton otherUsersOnline model
@@ -471,8 +477,9 @@ normalView windowSize model hover =
                                     mapSize2 =
                                         mapSize model.windowSize
                                   in
-                                  Ui.el
-                                    { padding =
+                                  Ui.elWithId
+                                    { id = BlockInputContainer
+                                    , padding =
                                         { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
                                         , bottomRight = Coord.origin
                                         }
@@ -485,7 +492,6 @@ normalView windowSize model hover =
                                     , inFront = []
                                     }
                                     Ui.none
-                                    |> Ui.ignoreInputs
                                     |> Ui.center { size = model.windowSize }
                                 ]
 
@@ -516,8 +522,9 @@ onlineUsersButton otherUsersOnline model =
 
 notificationsView : LoggedIn_ -> Ui.Element UiHover
 notificationsView loggedIn =
-    Ui.el
-        { padding = Ui.paddingXY 0 8
+    Ui.elWithId
+        { id = BlockInputContainer
+        , padding = Ui.paddingXY 0 8
         , inFront = []
         , borderAndFill = Ui.defaultElBorderAndFill
         }
@@ -829,6 +836,7 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
 settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
 settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
     let
+        musicVolumeInput : Ui.Element UiHover
         musicVolumeInput =
             volumeControl
                 "Music volume "
@@ -836,8 +844,9 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                 RaiseMusicVolume
                 musicVolume
     in
-    Ui.el
-        { padding = Ui.paddingXY 8 8
+    Ui.elWithId
+        { id = BlockInputContainer
+        , padding = Ui.paddingXY 8 8
         , inFront = []
         , borderAndFill = Ui.defaultElBorderAndFill
         }

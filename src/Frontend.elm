@@ -879,12 +879,12 @@ updateLoaded audioData msg model =
                                         ReportTool ->
                                             ( model2, Command.none )
 
-                                UiHover (top :: _) ->
+                                UiHover (( id, { relativePositionToUi } ) :: _) ->
                                     uiUpdate
                                         audioData
-                                        top.id
-                                        (Ui.MouseDown { elementPosition = top.relativePositionToUi })
-                                        { model2 | focus = Just top.id }
+                                        id
+                                        (Ui.MouseDown { elementPosition = relativePositionToUi })
+                                        { model2 | focus = Just id }
 
                                 _ ->
                                     ( model2, Command.none )
@@ -920,7 +920,8 @@ updateLoaded audioData msg model =
                                     model.viewPoint
 
                                 WorldPage _ ->
-                                    Toolbar.offsetViewPoint model mouseState.hover mouseState.start mousePosition |> NormalViewPoint
+                                    Toolbar.offsetViewPoint model mouseState.hover mouseState.start mousePosition
+                                        |> NormalViewPoint
 
                                 AdminPage _ ->
                                     model.viewPoint
@@ -932,31 +933,37 @@ updateLoaded audioData msg model =
                     )
 
                 ( SecondButton, _, _ ) ->
-                    let
-                        position =
-                            Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
+                    case Ui.hover (Coord.roundPoint mousePosition) model.ui of
+                        ( WorldContainer, _ ) :: _ ->
+                            let
+                                position : Coord WorldUnit
+                                position =
+                                    Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
 
-                        maybeTile :
-                            Maybe
-                                { userId : Id UserId
-                                , tile : Tile
-                                , position : Coord WorldUnit
-                                , colors : Colors
-                                , time : Effect.Time.Posix
-                                }
-                        maybeTile =
-                            Grid.getTile position (LocalGrid.localModel model.localModel).grid
-                    in
-                    ( { model
-                        | contextMenu =
-                            Just
-                                { change = maybeTile
-                                , position = position
-                                , linkCopied = False
-                                }
-                      }
-                    , Command.none
-                    )
+                                maybeTile :
+                                    Maybe
+                                        { userId : Id UserId
+                                        , tile : Tile
+                                        , position : Coord WorldUnit
+                                        , colors : Colors
+                                        , time : Effect.Time.Posix
+                                        }
+                                maybeTile =
+                                    Grid.getTile position (LocalGrid.localModel model.localModel).grid
+                            in
+                            ( { model
+                                | contextMenu =
+                                    Just
+                                        { change = maybeTile
+                                        , position = position
+                                        , linkCopied = False
+                                        }
+                              }
+                            , Command.none
+                            )
+
+                        _ ->
+                            ( model, Command.none )
 
                 _ ->
                     ( model, Command.none )
@@ -1011,7 +1018,7 @@ updateLoaded audioData msg model =
                     WorldPage _ ->
                         case LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model) of
                             UiHover list ->
-                                if List.any (\{ id } -> id == TileContainer) list then
+                                if List.any (\( id, _ ) -> id == TileContainer) list then
                                     changeTileCategory (scrollThreshold > 0) model
 
                                 else
@@ -1092,11 +1099,11 @@ updateLoaded audioData msg model =
                                     MapHover ->
                                         ( placeTileHelper model2, Command.none )
 
-                                    UiHover (top :: _) ->
+                                    UiHover (( id, { relativePositionToUi } ) :: _) ->
                                         uiUpdate
                                             audioData
-                                            top.id
-                                            (Ui.MouseMove { elementPosition = top.relativePositionToUi })
+                                            id
+                                            (Ui.MouseMove { elementPosition = relativePositionToUi })
                                             model2
 
                                     AnimalHover _ ->
@@ -2196,9 +2203,9 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
         sameUiHover : Maybe UiHover
         sameUiHover =
             case ( hoverAt2, previousMouseState.hover ) of
-                ( UiHover (new :: _), UiHover (old :: _) ) ->
-                    if new.id == old.id then
-                        Just new.id
+                ( UiHover (( newId, _ ) :: _), UiHover (( oldId, _ ) :: _) ) ->
+                    if newId == oldId then
+                        Just newId
 
                     else
                         Nothing
@@ -2450,10 +2457,10 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     else
                         ( model2, Command.none )
 
-                UiHover (top :: _) ->
+                UiHover (( id, _ ) :: _) ->
                     case sameUiHover of
                         Just _ ->
-                            uiUpdate audioData top.id Ui.MousePressed model2
+                            uiUpdate audioData id Ui.MousePressed model2
 
                         Nothing ->
                             ( model2, Command.none )
@@ -3129,6 +3136,12 @@ uiUpdate audioData id event model =
             onPress audioData event (\() -> ( changeTileCategory False model, Command.none )) model
 
         TileContainer ->
+            ( model, Command.none )
+
+        WorldContainer ->
+            ( model, Command.none )
+
+        BlockInputContainer ->
             ( model, Command.none )
 
 
@@ -4049,8 +4062,8 @@ cursorSprite hover model =
                     case model.page of
                         MailPage mailEditor ->
                             case hover of
-                                UiHover (top :: _) ->
-                                    case top.id of
+                                UiHover (( id, _ ) :: _) ->
+                                    case id of
                                         MailEditorHover uiHover ->
                                             MailEditor.cursorSprite model.windowSize uiHover mailEditor
 

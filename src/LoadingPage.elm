@@ -1167,10 +1167,7 @@ hoverAt model mousePosition =
                 |> Coord.roundPoint
     in
     case Ui.hover mousePosition2 model.ui of
-        Ui.InputHover data ->
-            UiHover data
-
-        Ui.NoHover ->
+        ( WorldContainer, _ ) :: _ ->
             let
                 mouseWorldPosition_ : Point2d WorldUnit WorldUnit
                 mouseWorldPosition_ =
@@ -1296,6 +1293,9 @@ hoverAt model mousePosition =
                                 Nothing ->
                                     MapHover
 
+        list ->
+            UiHover list
+
 
 animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
 animalActualPosition animalId model =
@@ -1357,13 +1357,8 @@ shortDelayDuration =
 showWorldPreview : Hover -> Maybe ( Coord WorldUnit, { relativePositionToUi : Coord Pixels } )
 showWorldPreview hoverAt2 =
     case hoverAt2 of
-        UiHover (top :: _) ->
-            case top.id of
-                MapChangeNotification changeAt ->
-                    Just ( changeAt, { relativePositionToUi = top.relativePositionToUi } )
-
-                _ ->
-                    Nothing
+        UiHover (( MapChangeNotification changeAt, { relativePositionToUi } ) :: _) ->
+            Just ( changeAt, { relativePositionToUi = relativePositionToUi } )
 
         _ ->
             Nothing

@@ -70,7 +70,6 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail)
-import NpcName exposing (NpcName)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -318,7 +317,7 @@ type Hover
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
     | AnimalHover { animalId : Id AnimalId, animal : Animal }
-    | UiHover (List { id : UiHover, relativePositionToUi : Coord Pixels })
+    | UiHover (List ( UiHover, { relativePositionToUi : Coord Pixels } ))
 
 
 type UiHover
@@ -366,6 +365,8 @@ type UiHover
     | CategoryNextPageButton
     | CategoryPreviousPageButton
     | TileContainer
+    | WorldContainer
+    | BlockInputContainer
 
 
 type alias BackendModel =
