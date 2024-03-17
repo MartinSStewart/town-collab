@@ -1168,10 +1168,7 @@ hoverAt model mousePosition =
     in
     case Ui.hover mousePosition2 model.ui of
         Ui.InputHover data ->
-            UiHover data.id { position = data.position }
-
-        Ui.BackgroundHover ->
-            UiBackgroundHover
+            UiHover data
 
         Ui.NoHover ->
             let
@@ -1357,13 +1354,13 @@ shortDelayDuration =
     Duration.milliseconds 100
 
 
-showWorldPreview : Hover -> Maybe ( Coord WorldUnit, { position : Coord Pixels } )
+showWorldPreview : Hover -> Maybe ( Coord WorldUnit, { relativePositionToUi : Coord Pixels } )
 showWorldPreview hoverAt2 =
     case hoverAt2 of
-        UiHover id data ->
-            case id of
+        UiHover (top :: _) ->
+            case top.id of
                 MapChangeNotification changeAt ->
-                    Just ( changeAt, data )
+                    Just ( changeAt, { relativePositionToUi = top.relativePositionToUi } )
 
                 _ ->
                     Nothing

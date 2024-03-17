@@ -32,7 +32,7 @@ import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), Npc, ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -42,7 +42,7 @@ import Effect.Time
 import Grid exposing (Grid, GridData)
 import GridCell exposing (FrontendHistory)
 import Hyperlink exposing (Hyperlink)
-import Id exposing (AnimalId, Id, MailId, TrainId, UserId)
+import Id exposing (AnimalId, Id, MailId, NpcId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import LineSegment2d
@@ -80,6 +80,7 @@ type alias LocalGrid_ =
     , mail : IdDict MailId FrontendMail
     , trains : IdDict TrainId Train
     , trainsDisabled : AreTrainsAndAnimalsDisabled
+    , npcs : IdDict NpcId Npc
     }
 
 
@@ -129,28 +130,30 @@ init :
         | userStatus : UserStatus
         , grid : GridData
         , viewBounds : Bounds CellUnit
-        , cows : IdDict AnimalId Animal
+        , animals : IdDict AnimalId Animal
         , cursors : IdDict UserId Cursor
         , users : IdDict UserId FrontendUser
         , inviteTree : InviteTree
         , mail : IdDict MailId FrontendMail
         , trains : IdDict TrainId Train
         , trainsDisabled : AreTrainsAndAnimalsDisabled
+        , npcs : IdDict NpcId Npc
     }
     -> LocalModel Change LocalGrid
-init { grid, userStatus, viewBounds, cows, cursors, users, inviteTree, mail, trains, trainsDisabled } =
+init data =
     LocalGrid
-        { grid = Grid.dataToGrid grid
-        , userStatus = userStatus
-        , viewBounds = viewBounds
+        { grid = Grid.dataToGrid data.grid
+        , userStatus = data.userStatus
+        , viewBounds = data.viewBounds
         , previewBounds = Nothing
-        , animals = cows
-        , cursors = cursors
-        , users = users
-        , inviteTree = inviteTree
-        , mail = mail
-        , trains = trains
-        , trainsDisabled = trainsDisabled
+        , animals = data.animals
+        , cursors = data.cursors
+        , users = data.users
+        , inviteTree = data.inviteTree
+        , mail = data.mail
+        , trains = data.trains
+        , trainsDisabled = data.trainsDisabled
+        , npcs = data.npcs
         }
         |> LocalModel.init
 
@@ -1294,6 +1297,11 @@ updateServerChange serverChange model =
                             Maybe.map (\admin -> { admin | lastCacheRegeneration = Just regenTime }) loggedIn.adminData
                     }
                 )
+            , NoOutMsg
+            )
+
+        ServerNewNpcs npcs ->
+            ( model
             , NoOutMsg
             )
 

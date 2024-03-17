@@ -16,7 +16,7 @@ import AssocList
 import Bounds exposing (Bounds)
 import Bytes exposing (Endianness(..))
 import Bytes.Decode
-import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), ServerChange(..), UserStatus(..), ViewBoundsChange2)
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), Npc, ServerChange(..), UserStatus(..), ViewBoundsChange2)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -38,7 +38,7 @@ import Env
 import Grid exposing (Grid)
 import GridCell exposing (BackendHistory)
 import Hyperlink
-import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, PersonId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, NpcId, OneTimePasswordId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Lamdera
 import LineSegmentExtra
@@ -48,12 +48,11 @@ import LoadingPage
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Maybe.Extra as Maybe
-import PersonName
+import NpcName
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity
 import Random
-import Random.List
 import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import SHA224
 import Set exposing (Set)
@@ -62,7 +61,7 @@ import Tile exposing (BuildingData, RailPathType(..))
 import TileCountBot
 import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
-import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), Person, ToBackend(..), ToFrontend(..))
+import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), ToBackend(..), ToFrontend(..))
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
@@ -139,7 +138,7 @@ init =
             , errors = []
             , trains = IdDict.empty
             , animals = IdDict.empty
-            , people = IdDict.empty
+            , npcs = IdDict.empty
             , lastWorldUpdateTrains = IdDict.empty
             , lastWorldUpdate = Nothing
             , mail = IdDict.empty
@@ -677,6 +676,9 @@ handleWorldUpdate isProduction oldTime time model =
 
         ( newAnimals, animalDiff ) =
             updateAnimals model time
+
+        ( newNpcs, npcCmds ) =
+            updatePeople time model
     in
     ( { model3
         | lastWorldUpdate = Just time
@@ -684,6 +686,7 @@ handleWorldUpdate isProduction oldTime time model =
         , lastWorldUpdateTrains = model3.trains
         , mail = mergeTrains.mail
         , animals = newAnimals
+        , npcs = newNpcs
       }
     , Command.batch
         [ Command.batch emailNotifications.cmds
@@ -699,16 +702,17 @@ handleWorldUpdate isProduction oldTime time model =
             Nothing ->
                 Command.none
         , Effect.Task.perform (GotTimeAfterWorldUpdate time) Effect.Time.now
+        , npcCmds
         ]
     )
 
 
-updatePeople : Effect.Time.Posix -> BackendModel -> IdDict PersonId Person
+updatePeople : Effect.Time.Posix -> BackendModel -> ( IdDict NpcId Npc, Command BackendOnly ToFrontend msg )
 updatePeople newTime model =
     let
         occupied : Set ( Int, Int )
         occupied =
-            IdDict.values model.people
+            IdDict.values model.npcs
                 |> List.map (\person -> Coord.toTuple person.home)
                 |> Set.fromList
 
@@ -720,23 +724,33 @@ updatePeople newTime model =
     case Nonempty.fromList validHouses of
         Just nonempty ->
             let
-                person : Person
-                person =
+                npc : Npc
+                npc =
                     Random.step
                         (randomPerson nonempty newTime)
                         (Random.initialSeed (Effect.Time.posixToMillis newTime))
                         |> Tuple.first
+
+                npcId : Id NpcId
+                npcId =
+                    IdDict.nextId model.npcs
             in
-            IdDict.insert (IdDict.nextId model.people) person model.people
+            ( IdDict.insert npcId npc model.npcs
+            , ServerNewNpcs (Nonempty.singleton ( npcId, npc ))
+                |> Change.ServerChange
+                |> Nonempty.singleton
+                |> ChangeBroadcast
+                |> Effect.Lamdera.broadcast
+            )
 
         Nothing ->
-            model.people
+            ( model.npcs, Command.none )
 
 
 randomPerson :
     Nonempty { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
     -> Effect.Time.Posix
-    -> Random.Generator Person
+    -> Random.Generator Npc
 randomPerson houses createdAt =
     Random.map2
         (\house name ->
@@ -747,7 +761,7 @@ randomPerson houses createdAt =
             }
         )
         (Nonempty.sample houses)
-        (Nonempty.sample PersonName.names)
+        (Nonempty.sample NpcName.names)
 
 
 updateAnimals :
@@ -2676,7 +2690,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
             , viewBounds = viewBounds
             , trains = model3.trains
             , mail = IdDict.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
-            , cows = model3.animals
+            , animals = model3.animals
             , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
             , users = IdDict.map (\_ a -> backendUserToFrontend a) model3.users
             , inviteTree =
@@ -2684,6 +2698,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                     |> Maybe.withDefault (InviteTree { userId = adminId, invited = [] })
             , isGridReadOnly = model.isGridReadOnly
             , trainsDisabled = model.trainsAndAnimalsDisabled
+            , npcs = model.npcs
             }
 
         frontendUser : FrontendUser

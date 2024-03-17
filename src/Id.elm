@@ -3,8 +3,8 @@ module Id exposing
     , EventId(..)
     , Id(..)
     , MailId(..)
+    , NpcId(..)
     , OneTimePasswordId(..)
-    , PersonId(..)
     , SecretId(..)
     , TrainId(..)
     , UserId(..)
@@ -46,7 +46,7 @@ type AnimalId
     = CowId Never
 
 
-type PersonId
+type NpcId
     = PersonId Never
 
 

@@ -1419,15 +1419,18 @@ toolbarUi handColor loggedIn model currentToolButton =
                     content =
                         toolbarTileGroups tileGroups loggedIn.tileHotkeys currentToolButton handColor model
                   in
-                  Ui.row
-                    { spacing = -2, padding = Ui.noPadding }
-                    [ nextPreviousTilesButton (pageIndex > 0) False (Coord.yRaw toolbarTileGroupsSize)
-                    , Ui.topLeft { size = toolbarTileGroupsSize } content
-                    , nextPreviousTilesButton
-                        (List.isEmpty remainingTileGroups |> not)
-                        True
-                        (Coord.yRaw toolbarTileGroupsSize)
-                    ]
+                  Ui.elWithId
+                    { padding = Ui.noPadding, inFront = [], borderAndFill = NoBorderOrFill, id = TileContainer }
+                    (Ui.row
+                        { spacing = -2, padding = Ui.noPadding }
+                        [ nextPreviousTilesButton (pageIndex > 0) False (Coord.yRaw toolbarTileGroupsSize)
+                        , Ui.topLeft { size = toolbarTileGroupsSize } content
+                        , nextPreviousTilesButton
+                            (List.isEmpty remainingTileGroups |> not)
+                            True
+                            (Coord.yRaw toolbarTileGroupsSize)
+                        ]
+                    )
                 ]
             , selectedToolView handColor model currentToolButton
             ]
@@ -2084,16 +2087,13 @@ canDragView hover =
         TrainHover _ ->
             True
 
-        UiBackgroundHover ->
-            False
-
         MapHover ->
             True
 
         AnimalHover _ ->
             True
 
-        UiHover _ _ ->
+        UiHover _ ->
             False
 
 

@@ -25,6 +25,7 @@ module Ui exposing
     , defaultButtonBorderAndFillFocus
     , defaultElBorderAndFill
     , el
+    , elWithId
     , findInput
     , hover
     , ignoreInputs
@@ -132,6 +133,7 @@ type Element id
         , borderAndFill : BorderAndFill
         , inFront : List (Element id)
         , cachedSize : Coord Pixels
+        , id : Maybe id
         }
         (Element id)
     | Quads { size : Coord Pixels, vertices : List Vertex }
@@ -466,6 +468,22 @@ el data element2 =
         , borderAndFill = data.borderAndFill
         , inFront = data.inFront
         , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
+        , id = Nothing
+        }
+        element2
+
+
+elWithId :
+    { padding : Padding, inFront : List (Element id), borderAndFill : BorderAndFill, id : id }
+    -> Element id
+    -> Element id
+elWithId data element2 =
+    Single
+        { padding = data.padding
+        , borderAndFill = data.borderAndFill
+        , inFront = data.inFront
+        , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
+        , id = Just data.id
         }
         element2
 
@@ -487,6 +505,7 @@ centerHorizontally data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = Coord.xy data.parentWidth childSizeY
+        , id = Nothing
         }
         element2
 
@@ -510,6 +529,7 @@ center data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -531,6 +551,7 @@ topLeft data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -555,6 +576,7 @@ topLeft2 data element2 =
         , inFront = data.inFront
         , borderAndFill = data.borderAndFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -579,6 +601,7 @@ topCenter data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -600,6 +623,7 @@ topRight data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -624,6 +648,7 @@ centerRight data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -645,6 +670,7 @@ bottomLeft data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -669,6 +695,7 @@ bottomCenter data element2 =
         , inFront = data.inFront
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -703,27 +730,27 @@ quads =
 
 type HoverType id msg
     = NoHover
-    | InputHover { id : id, position : Coord Pixels }
-    | BackgroundHover
+    | InputHover (List { id : id, relativePositionToUi : Coord Pixels })
 
 
 hover : Coord Pixels -> Element id -> HoverType id msg
 hover point element2 =
-    hoverHelper point Coord.origin element2
+    hoverHelper NoHover point Coord.origin element2
 
 
-hoverHelper : Coord Pixels -> Coord Pixels -> Element id -> HoverType id msg
-hoverHelper point elementPosition element2 =
+hoverHelper : HoverType id msg -> Coord Pixels -> Coord Pixels -> Element id -> HoverType id msg
+hoverHelper hovers point elementPosition element2 =
     case element2 of
         Text _ ->
-            NoHover
+            hovers
 
         TextInput data ->
             if Bounds.fromCoordAndSize elementPosition (TextInput.size data.textScale (Quantity data.width)) |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition }
+                InputHover [ { id = data.id, relativePositionToUi = elementPosition } ]
+                    |> combineHovers hovers
 
             else
-                NoHover
+                hovers
 
         TextInputMultiline data ->
             if
@@ -732,108 +759,110 @@ hoverHelper point elementPosition element2 =
                     (TextInputMultiline.size data.textScale (Quantity data.width) data.state)
                     |> Bounds.contains point
             then
-                InputHover { id = data.id, position = elementPosition }
+                InputHover [ { id = data.id, relativePositionToUi = elementPosition } ]
+                    |> combineHovers hovers
 
             else
-                NoHover
+                hovers
 
         Button data _ ->
             if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition }
+                InputHover [ { id = data.id, relativePositionToUi = elementPosition } ]
+                    |> combineHovers hovers
 
             else
-                NoHover
+                hovers
 
         Row data children ->
-            hoverRowColumnHelper True point elementPosition data children
+            hoverRowColumnHelper hovers True point elementPosition data children
 
         Column data children ->
-            hoverRowColumnHelper False point elementPosition data children
+            hoverRowColumnHelper hovers False point elementPosition data children
 
         Single data child ->
             let
                 hover2 : HoverType id msg
                 hover2 =
-                    List.foldl
-                        (\inFront hover4 ->
-                            case hover4 of
-                                NoHover ->
-                                    hoverHelper point elementPosition inFront
-
-                                InputHover _ ->
-                                    hover4
-
-                                BackgroundHover ->
-                                    hover4
-                        )
-                        NoHover
-                        data.inFront
+                    hoverHelper hovers point (elementPosition |> Coord.plus data.padding.topLeft) child
 
                 hover3 : HoverType id msg
                 hover3 =
-                    case hover2 of
-                        NoHover ->
-                            hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
-
-                        InputHover _ ->
-                            hover2
-
-                        BackgroundHover ->
-                            hover2
+                    List.foldr
+                        (\inFront hover4 ->
+                            hoverHelper hover4 point elementPosition inFront
+                        )
+                        hover2
+                        data.inFront
             in
-            case ( data.borderAndFill, hover3 ) of
-                ( BorderAndFill _, NoHover ) ->
+            case data.borderAndFill of
+                BorderAndFill _ ->
                     if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                        BackgroundHover
+                        case data.id of
+                            Just id ->
+                                combineHovers
+                                    (InputHover [ { id = id, relativePositionToUi = elementPosition } ])
+                                    hover3
+
+                            Nothing ->
+                                combineHovers hovers hover3
 
                     else
-                        NoHover
+                        hover3
 
                 _ ->
                     hover3
 
         Quads _ ->
-            NoHover
+            hovers
 
         Empty ->
-            NoHover
+            hovers
 
         IgnoreInputs _ ->
-            NoHover
+            hovers
+
+
+combineHovers : HoverType id msg -> HoverType id msg -> HoverType id msg
+combineHovers under over =
+    case ( under, over ) of
+        ( InputHover list, InputHover overList ) ->
+            InputHover (overList ++ list)
+
+        ( NoHover, _ ) ->
+            over
+
+        ( _, NoHover ) ->
+            under
 
 
 hoverRowColumnHelper :
-    Bool
+    HoverType id msg
+    -> Bool
     -> Coord Pixels
     -> Coord Pixels
     -> RowColumn
     -> List (Element id)
     -> HoverType id msg
-hoverRowColumnHelper isRow point elementPosition data children =
+hoverRowColumnHelper hovers isRow point elementPosition data children =
     List.foldl
         (\child state ->
-            case state.hover of
-                NoHover ->
-                    let
-                        ( sizeX, sizeY ) =
-                            size child |> Coord.toTuple
-                    in
-                    { elementPosition =
-                        state.elementPosition
-                            |> Coord.plus
-                                (if isRow then
-                                    Coord.xy (sizeX + data.spacing) 0
+            let
+                ( sizeX, sizeY ) =
+                    size child |> Coord.toTuple
+            in
+            { elementPosition =
+                state.elementPosition
+                    |> Coord.plus
+                        (if isRow then
+                            Coord.xy (sizeX + data.spacing) 0
 
-                                 else
-                                    Coord.xy 0 (sizeY + data.spacing)
-                                )
-                    , hover = hoverHelper point state.elementPosition child
-                    }
-
-                _ ->
-                    state
+                         else
+                            Coord.xy 0 (sizeY + data.spacing)
+                        )
+            , hover = hoverHelper state.hover point state.elementPosition child
+            }
         )
-        { elementPosition = elementPosition |> Coord.plus data.padding.topLeft, hover = NoHover }
+        { elementPosition = elementPosition |> Coord.plus data.padding.topLeft, hover = hovers }
         children
         |> .hover
 

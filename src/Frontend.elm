@@ -879,12 +879,12 @@ updateLoaded audioData msg model =
                                         ReportTool ->
                                             ( model2, Command.none )
 
-                                UiHover id data ->
+                                UiHover (top :: _) ->
                                     uiUpdate
                                         audioData
-                                        id
-                                        (Ui.MouseDown { elementPosition = data.position })
-                                        { model2 | focus = Just id }
+                                        top.id
+                                        (Ui.MouseDown { elementPosition = top.relativePositionToUi })
+                                        { model2 | focus = Just top.id }
 
                                 _ ->
                                     ( model2, Command.none )
@@ -988,7 +988,6 @@ updateLoaded audioData msg model =
                                     model.zoomFactor + 1
                                 )
                                     |> clamp 1 3
-                            , scrollThreshold = 0
                         }
 
                     else
@@ -1000,24 +999,34 @@ updateLoaded audioData msg model =
                                 tileRotationHelper audioData -1 currentTile model
 
                             _ ->
-                                { model | scrollThreshold = 0 }
+                                model
             in
             ( if abs scrollThreshold > 50 then
-                case model.page of
+                (case model.page of
                     MailPage mailEditor ->
                         { model
-                            | page =
-                                MailEditor.scroll (scrollThreshold > 0) audioData model mailEditor |> MailPage
+                            | page = MailEditor.scroll (scrollThreshold > 0) audioData model mailEditor |> MailPage
                         }
 
                     WorldPage _ ->
-                        worldZoom ()
+                        case LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model) of
+                            UiHover list ->
+                                if List.any (\{ id } -> id == TileContainer) list then
+                                    changeTileCategory (scrollThreshold > 0) model
+
+                                else
+                                    model
+
+                            _ ->
+                                worldZoom ()
 
                     AdminPage _ ->
                         model
 
                     InviteTreePage ->
                         model
+                )
+                    |> (\model2 -> { model2 | scrollThreshold = 0 })
 
               else
                 { model | scrollThreshold = scrollThreshold }
@@ -1071,7 +1080,7 @@ updateLoaded audioData msg model =
                         case model2.mouseLeft of
                             MouseButtonDown { hover } ->
                                 case hover of
-                                    UiBackgroundHover ->
+                                    UiHover [] ->
                                         ( model2, Command.none )
 
                                     TileHover _ ->
@@ -1083,8 +1092,12 @@ updateLoaded audioData msg model =
                                     MapHover ->
                                         ( placeTileHelper model2, Command.none )
 
-                                    UiHover uiHover data ->
-                                        uiUpdate audioData uiHover (Ui.MouseMove { elementPosition = data.position }) model2
+                                    UiHover (top :: _) ->
+                                        uiUpdate
+                                            audioData
+                                            top.id
+                                            (Ui.MouseMove { elementPosition = top.relativePositionToUi })
+                                            model2
 
                                     AnimalHover _ ->
                                         ( placeTileHelper model2, Command.none )
@@ -1411,7 +1424,6 @@ tileRotationHelper audioData offset tile model =
                                 |> Quantity.lessThan (Sound.length audioData model.sounds WhooshSound)
                         )
                         model.lastTileRotation
-            , scrollThreshold = 0
         }
 
 
@@ -2184,9 +2196,9 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
         sameUiHover : Maybe UiHover
         sameUiHover =
             case ( hoverAt2, previousMouseState.hover ) of
-                ( UiHover new _, UiHover old _ ) ->
-                    if new == old then
-                        Just new
+                ( UiHover (new :: _), UiHover (old :: _) ) ->
+                    if new.id == old.id then
+                        Just new.id
 
                     else
                         Nothing
@@ -2199,10 +2211,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                 | mouseLeft = MouseButtonUp { current = mousePosition }
                 , contextMenu =
                     case hoverAt2 of
-                        UiHover _ _ ->
-                            model.contextMenu
-
-                        UiBackgroundHover ->
+                        UiHover _ ->
                             model.contextMenu
 
                         _ ->
@@ -2282,7 +2291,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
         Nothing ->
             case hoverAt2 of
-                UiBackgroundHover ->
+                UiHover [] ->
                     ( model2, Command.none )
 
                 TileHover data ->
@@ -2441,10 +2450,10 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     else
                         ( model2, Command.none )
 
-                UiHover id _ ->
+                UiHover (top :: _) ->
                     case sameUiHover of
                         Just _ ->
-                            uiUpdate audioData id Ui.MousePressed model2
+                            uiUpdate audioData top.id Ui.MousePressed model2
 
                         Nothing ->
                             ( model2, Command.none )
@@ -3114,47 +3123,38 @@ uiUpdate audioData id event model =
                 model
 
         CategoryNextPageButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    ( { model
-                        | tileCategoryPageIndex =
-                            AssocList.update
-                                model.selectedTileCategory
-                                (\maybe ->
-                                    Maybe.withDefault 0 maybe
-                                        |> (+) 1
-                                        |> min
-                                            (Tile.categoryToTiles model.selectedTileCategory
-                                                |> List.length
-                                                |> (\a -> a // Toolbar.toolbarTileGroupsMaxPerPage)
-                                            )
-                                        |> Just
-                                )
-                                model.tileCategoryPageIndex
-                      }
-                    , Command.none
-                    )
-                )
-                model
+            onPress audioData event (\() -> ( changeTileCategory True model, Command.none )) model
 
         CategoryPreviousPageButton ->
-            onPress
-                audioData
-                event
-                (\() ->
-                    ( { model
-                        | tileCategoryPageIndex =
-                            AssocList.update
-                                model.selectedTileCategory
-                                (\maybe -> Maybe.withDefault 0 maybe |> (+) -1 |> max 0 |> Just)
-                                model.tileCategoryPageIndex
-                      }
-                    , Command.none
+            onPress audioData event (\() -> ( changeTileCategory False model, Command.none )) model
+
+        TileContainer ->
+            ( model, Command.none )
+
+
+changeTileCategory : Bool -> FrontendLoaded -> FrontendLoaded
+changeTileCategory nextCategory model =
+    { model
+        | tileCategoryPageIndex =
+            AssocList.update
+                model.selectedTileCategory
+                (\maybe ->
+                    (if nextCategory then
+                        Maybe.withDefault 0 maybe
+                            |> (+) 1
+                            |> min
+                                (Tile.categoryToTiles model.selectedTileCategory
+                                    |> List.length
+                                    |> (\a -> a // Toolbar.toolbarTileGroupsMaxPerPage)
+                                )
+
+                     else
+                        Maybe.withDefault 0 maybe |> (+) -1 |> max 0
                     )
+                        |> Just
                 )
-                model
+                model.tileCategoryPageIndex
+    }
 
 
 textInputUpdate :
@@ -4049,8 +4049,13 @@ cursorSprite hover model =
                     case model.page of
                         MailPage mailEditor ->
                             case hover of
-                                UiHover (MailEditorHover uiHover) _ ->
-                                    MailEditor.cursorSprite model.windowSize uiHover mailEditor
+                                UiHover (top :: _) ->
+                                    case top.id of
+                                        MailEditorHover uiHover ->
+                                            MailEditor.cursorSprite model.windowSize uiHover mailEditor
+
+                                        _ ->
+                                            { cursorType = DefaultCursor, scale = 1 }
 
                                 _ ->
                                     { cursorType = DefaultCursor, scale = 1 }
@@ -4058,7 +4063,7 @@ cursorSprite hover model =
                         AdminPage _ ->
                             { cursorType =
                                 case hover of
-                                    UiHover _ _ ->
+                                    UiHover (_ :: _) ->
                                         PointerCursor
 
                                     _ ->
@@ -4075,7 +4080,7 @@ cursorSprite hover model =
                                     case LocalGrid.currentTool model of
                                         TilePlacerTool _ ->
                                             case hover of
-                                                UiBackgroundHover ->
+                                                UiHover [] ->
                                                     DefaultCursor
 
                                                 TileHover _ ->
@@ -4090,12 +4095,12 @@ cursorSprite hover model =
                                                 AnimalHover _ ->
                                                     NoCursor
 
-                                                UiHover _ _ ->
+                                                UiHover _ ->
                                                     PointerCursor
 
                                         HandTool ->
                                             case hover of
-                                                UiBackgroundHover ->
+                                                UiHover [] ->
                                                     DefaultCursor
 
                                                 TileHover data ->
@@ -4115,12 +4120,12 @@ cursorSprite hover model =
                                                 AnimalHover _ ->
                                                     CursorSprite PointerSpriteCursor
 
-                                                UiHover _ _ ->
+                                                UiHover _ ->
                                                     PointerCursor
 
                                         TilePickerTool ->
                                             case hover of
-                                                UiBackgroundHover ->
+                                                UiHover [] ->
                                                     DefaultCursor
 
                                                 TileHover _ ->
@@ -4135,12 +4140,12 @@ cursorSprite hover model =
                                                 AnimalHover _ ->
                                                     CursorSprite EyeDropperSpriteCursor
 
-                                                UiHover _ _ ->
+                                                UiHover _ ->
                                                     PointerCursor
 
                                         TextTool _ ->
                                             case hover of
-                                                UiBackgroundHover ->
+                                                UiHover [] ->
                                                     DefaultCursor
 
                                                 TileHover _ ->
@@ -4155,12 +4160,12 @@ cursorSprite hover model =
                                                 AnimalHover _ ->
                                                     CursorSprite TextSpriteCursor
 
-                                                UiHover _ _ ->
+                                                UiHover _ ->
                                                     PointerCursor
 
                                         ReportTool ->
                                             case hover of
-                                                UiBackgroundHover ->
+                                                UiHover [] ->
                                                     DefaultCursor
 
                                                 TileHover _ ->
@@ -4175,7 +4180,7 @@ cursorSprite hover model =
                                                 AnimalHover _ ->
                                                     CursorSprite GavelSpriteCursor
 
-                                                UiHover _ _ ->
+                                                UiHover _ ->
                                                     PointerCursor
                             , scale = 1
                             }
@@ -4183,7 +4188,7 @@ cursorSprite hover model =
                         InviteTreePage ->
                             { cursorType =
                                 case hover of
-                                    UiHover _ _ ->
+                                    UiHover (_ :: _) ->
                                         PointerCursor
 
                                     _ ->
@@ -4205,7 +4210,7 @@ cursorSprite hover model =
         Nothing ->
             { cursorType =
                 case hover of
-                    UiHover _ _ ->
+                    UiHover (_ :: _) ->
                         PointerCursor
 
                     _ ->
@@ -4469,7 +4474,7 @@ canvasView audioData model =
             ++ (case LoadingPage.showWorldPreview hoverAt2 of
                     Just ( changeAt, data ) ->
                         drawWorldPreview
-                            (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.position))
+                            (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.relativePositionToUi))
                             (LocalGrid.notificationViewportSize |> Units.tileToPixel)
                             (Coord.toPoint2d changeAt)
                             1

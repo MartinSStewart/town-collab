@@ -22,7 +22,6 @@ module Types exposing
     , LoginError(..)
     , MouseButtonState(..)
     , Page(..)
-    , Person
     , RemovedTileParticle
     , SubmitStatus(..)
     , ToBackend(..)
@@ -44,7 +43,7 @@ import AssocSet
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsAndAnimalsDisabled, BackendReport, Change, UserStatus)
+import Change exposing (AreTrainsAndAnimalsDisabled, BackendReport, Change, Npc, UserStatus)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -63,7 +62,7 @@ import Grid exposing (Grid, GridData)
 import GridCell exposing (BackendHistory)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel
-import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, PersonId, SecretId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, NpcId, OneTimePasswordId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
@@ -71,7 +70,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail)
-import PersonName exposing (PersonName)
+import NpcName exposing (NpcName)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -319,8 +318,7 @@ type Hover
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
     | AnimalHover { animalId : Id AnimalId, animal : Animal }
-    | UiBackgroundHover
-    | UiHover UiHover { position : Coord Pixels }
+    | UiHover (List { id : UiHover, relativePositionToUi : Coord Pixels })
 
 
 type UiHover
@@ -367,6 +365,7 @@ type UiHover
     | HyperlinkInput
     | CategoryNextPageButton
     | CategoryPreviousPageButton
+    | TileContainer
 
 
 type alias BackendModel =
@@ -382,7 +381,7 @@ type alias BackendModel =
     , errors : List ( Effect.Time.Posix, BackendError )
     , trains : IdDict TrainId Train
     , animals : IdDict AnimalId Animal
-    , people : IdDict PersonId Person
+    , npcs : IdDict NpcId Npc
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : IdDict MailId BackendMail
@@ -408,14 +407,6 @@ type alias BackendModel =
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
     , tileCountBot : Maybe TileCountBot.Model
-    }
-
-
-type alias Person =
-    { name : PersonName
-    , home : Coord WorldUnit
-    , position : Point2d WorldUnit WorldUnit
-    , createdAt : Time.Posix
     }
 
 
@@ -553,10 +544,11 @@ type alias LoadingData_ =
     , viewBounds : Bounds CellUnit
     , trains : IdDict TrainId Train
     , mail : IdDict MailId FrontendMail
-    , cows : IdDict AnimalId Animal
+    , animals : IdDict AnimalId Animal
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree
     , isGridReadOnly : Bool
     , trainsDisabled : AreTrainsAndAnimalsDisabled
+    , npcs : IdDict NpcId Npc
     }

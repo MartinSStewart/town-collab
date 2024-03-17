@@ -1,6 +1,6 @@
-module PersonName exposing
+module NpcName exposing
     ( Error(..)
-    , PersonName(..)
+    , NpcName(..)
     , fromString
     , names
     , toString
@@ -10,7 +10,7 @@ import List.Nonempty exposing (Nonempty(..))
 import String.Nonempty exposing (NonemptyString(..))
 
 
-type PersonName
+type NpcName
     = PersonName NonemptyString
 
 
@@ -18,7 +18,7 @@ type Error
     = PersonNameTooShort
 
 
-fromString : String -> Result Error PersonName
+fromString : String -> Result Error NpcName
 fromString text =
     case String.Nonempty.fromString text of
         Just name ->
@@ -28,12 +28,12 @@ fromString text =
             Err PersonNameTooShort
 
 
-toString : PersonName -> String
+toString : NpcName -> String
 toString (PersonName a) =
     String.Nonempty.toString a
 
 
-names : Nonempty PersonName
+names : Nonempty NpcName
 names =
     [ "Sven Svensson"
     , "Alice Alicesson"
