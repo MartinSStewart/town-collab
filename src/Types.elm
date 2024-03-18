@@ -43,7 +43,7 @@ import AssocSet
 import Audio
 import Bounds exposing (Bounds)
 import Browser
-import Change exposing (AreTrainsAndAnimalsDisabled, BackendReport, Change, Npc, UserStatus)
+import Change exposing (AreTrainsAndAnimalsDisabled, BackendReport, Change, UserStatus)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor, CursorMeshes)
@@ -70,6 +70,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalGrid exposing (LocalGrid)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail)
+import Npc exposing (Npc)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)

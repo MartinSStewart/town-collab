@@ -8,7 +8,6 @@ module Change exposing
     , LoggedIn_
     , MovementChange
     , NotLoggedIn_
-    , Npc
     , Report
     , ServerChange(..)
     , TileHotkey(..)
@@ -36,7 +35,7 @@ import Id exposing (AnimalId, EventId, Id, MailId, NpcId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (BackendMail, MailStatus)
-import NpcName exposing (NpcName)
+import Npc exposing (Npc)
 import Point2d exposing (Point2d)
 import Set exposing (Set)
 import Tile exposing (TileGroup)
@@ -176,20 +175,13 @@ type ServerChange
     | ServerAnimalMovement (Nonempty ( Id AnimalId, MovementChange ))
     | ServerRegenerateCache Effect.Time.Posix
     | ServerNewNpcs (Nonempty ( Id NpcId, Npc ))
+    | ServerNpcMovement (Nonempty ( Id NpcId, MovementChange ))
 
 
 type alias MovementChange =
     { startTime : Effect.Time.Posix
     , position : Point2d WorldUnit WorldUnit
     , endPosition : Point2d WorldUnit WorldUnit
-    }
-
-
-type alias Npc =
-    { name : NpcName
-    , home : Coord WorldUnit
-    , position : Point2d WorldUnit WorldUnit
-    , createdAt : Effect.Time.Posix
     }
 
 

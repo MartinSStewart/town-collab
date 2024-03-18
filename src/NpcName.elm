@@ -39,6 +39,9 @@ names =
     , "Alice Alicesson"
     , "James Jamesson"
     , "Zane Umbra"
+    , "Mr. Smiggles"
+    , "Sir Bob"
+    , "Dorey Doe"
     ]
         |> List.filterMap (\text -> fromString text |> Result.toMaybe)
         |> List.Nonempty.fromList

@@ -16,7 +16,7 @@ import AssocList
 import Bounds exposing (Bounds)
 import Bytes exposing (Endianness(..))
 import Bytes.Decode
-import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), Npc, ServerChange(..), UserStatus(..), ViewBoundsChange2)
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), MovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
@@ -48,6 +48,7 @@ import LoadingPage
 import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Maybe.Extra as Maybe
+import Npc exposing (Npc)
 import NpcName
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
@@ -709,41 +710,131 @@ handleWorldUpdate isProduction oldTime time model =
 
 updatePeople : Effect.Time.Posix -> BackendModel -> ( IdDict NpcId Npc, Command BackendOnly ToFrontend msg )
 updatePeople newTime model =
-    let
-        occupied : Set ( Int, Int )
-        occupied =
-            IdDict.values model.npcs
-                |> List.map (\person -> Coord.toTuple person.home)
-                |> Set.fromList
-
-        validHouses : List { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
-        validHouses =
-            Grid.getBuildings model.grid
-                |> List.filter (\a -> Set.member (Coord.toTuple a.position) occupied |> not)
-    in
-    case Nonempty.fromList validHouses of
-        Just nonempty ->
+    case model.trainsAndAnimalsDisabled of
+        TrainsAndAnimalsEnabled ->
             let
-                npc : Npc
-                npc =
-                    Random.step
-                        (randomPerson nonempty newTime)
-                        (Random.initialSeed (Effect.Time.posixToMillis newTime))
-                        |> Tuple.first
+                occupied : Set ( Int, Int )
+                occupied =
+                    IdDict.values model.npcs
+                        |> List.map (\person -> Coord.toTuple person.home)
+                        |> Set.fromList
 
-                npcId : Id NpcId
-                npcId =
-                    IdDict.nextId model.npcs
+                validHouses : List { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
+                validHouses =
+                    Grid.getBuildings model.grid
+                        |> List.filter (\a -> Set.member (Coord.toTuple a.position) occupied |> not)
+
+                ( npcs2, newNpcCmd ) =
+                    case Nonempty.fromList validHouses of
+                        Just nonempty ->
+                            let
+                                npc : Npc
+                                npc =
+                                    Random.step
+                                        (randomPerson nonempty newTime)
+                                        (Random.initialSeed (Effect.Time.posixToMillis newTime))
+                                        |> Tuple.first
+
+                                npcId : Id NpcId
+                                npcId =
+                                    IdDict.nextId model.npcs
+                            in
+                            ( IdDict.insert npcId npc model.npcs
+                            , ServerNewNpcs (Nonempty.singleton ( npcId, npc ))
+                                |> Change.ServerChange
+                                |> Nonempty.singleton
+                                |> ChangeBroadcast
+                                |> Effect.Lamdera.broadcast
+                            )
+
+                        Nothing ->
+                            ( model.npcs, Command.none )
+
+                newNpcs2 : IdDict NpcId Npc
+                newNpcs2 =
+                    IdDict.map
+                        (\id npc ->
+                            if Duration.from (Npc.moveEndTime npc) newTime |> Quantity.lessThanZero then
+                                npc
+
+                            else
+                                let
+                                    start : Point2d WorldUnit WorldUnit
+                                    start =
+                                        npc.endPosition
+
+                                    maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
+                                    maybeMove =
+                                        Random.step
+                                            (randomMovement start)
+                                            (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis newTime))
+                                            |> Tuple.first
+                                in
+                                case maybeMove of
+                                    Just { endPosition, delay } ->
+                                        let
+                                            size =
+                                                Units.pixelToTileVector Npc.size |> Vector2d.scaleBy 0.5
+                                        in
+                                        { npc
+                                            | position = start
+                                            , startTime = Duration.addTo newTime delay
+                                            , endPosition =
+                                                case Grid.rayIntersection2 True size start endPosition model.grid of
+                                                    Just { intersection } ->
+                                                        LineSegmentExtra.extendLineEnd
+                                                            start
+                                                            intersection
+                                                            (Quantity.negate Npc.moveCollisionThreshold)
+
+                                                    Nothing ->
+                                                        endPosition
+                                        }
+
+                                    Nothing ->
+                                        npc
+                        )
+                        npcs2
+
+                movedNpcs : List ( Id NpcId, MovementChange )
+                movedNpcs =
+                    IdDict.merge
+                        (\_ _ list -> list)
+                        (\id old new list ->
+                            if old.endPosition == new.endPosition then
+                                list
+
+                            else
+                                ( id
+                                , { position = new.position
+                                  , endPosition = new.endPosition
+                                  , startTime = new.startTime
+                                  }
+                                )
+                                    :: list
+                        )
+                        (\_ _ list -> list)
+                        npcs2
+                        newNpcs2
+                        []
             in
-            ( IdDict.insert npcId npc model.npcs
-            , ServerNewNpcs (Nonempty.singleton ( npcId, npc ))
-                |> Change.ServerChange
-                |> Nonempty.singleton
-                |> ChangeBroadcast
-                |> Effect.Lamdera.broadcast
+            ( newNpcs2
+            , Command.batch
+                [ case Nonempty.fromList movedNpcs of
+                    Just nonempty ->
+                        ServerNpcMovement nonempty
+                            |> Change.ServerChange
+                            |> Nonempty.singleton
+                            |> ChangeBroadcast
+                            |> Effect.Lamdera.broadcast
+
+                    Nothing ->
+                        Command.none
+                , newNpcCmd
+                ]
             )
 
-        Nothing ->
+        TrainsAndAnimalsDisabled ->
             ( model.npcs, Command.none )
 
 
@@ -754,11 +845,16 @@ randomPerson :
 randomPerson houses createdAt =
     Random.map2
         (\house name ->
+            let
+                position =
+                    Units.pixelToTilePoint house.buildingData.entrancePoint
+                        |> Point2d.translateBy (Coord.toVector2d house.position)
+            in
             { name = name
             , home = house.position
-            , position =
-                Units.pixelToTilePoint house.buildingData.entrancePoint
-                    |> Point2d.translateBy (Coord.toVector2d house.position)
+            , position = position
+            , startTime = createdAt
+            , endPosition = position
             , createdAt = createdAt
             }
         )

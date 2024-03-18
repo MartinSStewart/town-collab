@@ -32,7 +32,7 @@ import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), Npc, ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -50,6 +50,7 @@ import List.Nonempty exposing (Nonempty)
 import LocalModel exposing (LocalModel)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
 import Maybe.Extra as Maybe
+import Npc exposing (Npc)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
 import Random
@@ -1303,6 +1304,28 @@ updateServerChange serverChange model =
         ServerNewNpcs npcs ->
             ( { model
                 | npcs = List.Nonempty.foldl (\( npcId, npc ) state -> IdDict.insert npcId npc state) model.npcs npcs
+              }
+            , NoOutMsg
+            )
+
+        ServerNpcMovement newMovement ->
+            ( { model
+                | npcs =
+                    List.Nonempty.foldl
+                        (\( npcId, movement ) dict ->
+                            IdDict.update2
+                                npcId
+                                (\npc ->
+                                    { npc
+                                        | position = movement.position
+                                        , endPosition = movement.endPosition
+                                        , startTime = movement.startTime
+                                    }
+                                )
+                                dict
+                        )
+                        model.npcs
+                        newMovement
               }
             , NoOutMsg
             )

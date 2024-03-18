@@ -60,6 +60,7 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
+import Npc
 import PingData
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -4753,8 +4754,9 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
     List.filterMap
         (\( npcId, npc ) ->
             let
+                position : Point2d WorldUnit WorldUnit
                 position =
-                    npc.position
+                    Npc.actualPositionWithoutCursor model.time npc
             in
             if BoundingBox2d.contains position viewBounds_ then
                 let
@@ -4762,10 +4764,14 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                         Point2d.unwrap position
 
                     ( sizeW, sizeH ) =
-                        ( 7, 17 )
+                        Coord.toTuple Npc.size
 
                     texturePos =
-                        Coord.xy 486 0
+                        Duration.from npc.startTime model.time
+                            |> Duration.inSeconds
+                            |> (*) 5
+                            |> round
+                            |> Npc.walkingUpTexturePosition
                 in
                 Effect.WebGL.entityWith
                     [ Shaders.blend
