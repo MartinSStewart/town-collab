@@ -3,6 +3,7 @@ module Npc exposing
     , actualPositionWithoutCursor
     , moveCollisionThreshold
     , moveEndTime
+    , offset
     , size
     , walkingRightTexturePosition
     , walkingUpTexturePosition
@@ -46,6 +47,11 @@ walkingUpTexturePosition frameNumber =
 idleTexturePosition : Coord Pixels
 idleTexturePosition =
     Coord.xy 494 0
+
+
+offset : Coord Pixels
+offset =
+    Coord.xy -5 -15
 
 
 size : Coord Pixels

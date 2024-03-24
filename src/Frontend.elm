@@ -4792,8 +4792,20 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                     , opacityAndUserId0 = Sprite.opaque
                     , position0 =
                         Vec3.vec3
-                            (toFloat Units.tileWidth * point.x - toFloat (sizeW // 2) |> round |> toFloat)
-                            (toFloat Units.tileHeight * point.y - toFloat (sizeH // 2) |> round |> toFloat)
+                            (toFloat Units.tileWidth
+                                * point.x
+                                + toFloat (Coord.xRaw Npc.offset)
+                                - toFloat (sizeW // 2)
+                                |> round
+                                |> toFloat
+                            )
+                            (toFloat Units.tileHeight
+                                * point.y
+                                + toFloat (Coord.yRaw Npc.offset)
+                                - toFloat (sizeH // 2)
+                                |> round
+                                |> toFloat
+                            )
                             0
                     , primaryColor0 = Color.unwrap Color.white |> toFloat
                     , secondaryColor0 = Color.unwrap Color.black |> toFloat
