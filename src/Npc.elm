@@ -1,22 +1,33 @@
 module Npc exposing
     ( Npc
     , actualPositionWithoutCursor
+    , getNpcPath
+    , idleTexturePosition
     , moveCollisionThreshold
     , moveEndTime
     , offset
+    , randomMovement
     , size
     , walkingRightTexturePosition
     , walkingUpTexturePosition
     )
 
+import Angle
 import Coord exposing (Coord)
+import Direction2d
+import Direction4 exposing (Direction4(..), Turn(..))
 import Duration exposing (Duration, Seconds)
 import Effect.Time
+import Grid exposing (Grid)
+import Id exposing (Id, NpcId)
 import NpcName exposing (NpcName)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
+import Random
+import Tile
 import Units exposing (WorldUnit)
+import Vector2d
 
 
 type alias Npc =
@@ -90,3 +101,137 @@ actualPositionWithoutCursor time npc =
     Quantity.ratio currentDistance distance
         |> clamp 0 1
         |> Point2d.interpolateFrom npc.position npc.endPosition
+
+
+isNpcWalkable : Grid a -> Coord WorldUnit -> Bool
+isNpcWalkable grid position =
+    case Grid.getTile position grid of
+        Just { tile } ->
+            case tile of
+                Tile.Sidewalk ->
+                    True
+
+                _ ->
+                    False
+
+        Nothing ->
+            False
+
+
+getNpcPath :
+    Id NpcId
+    -> Effect.Time.Posix
+    -> Grid a
+    -> Point2d WorldUnit WorldUnit
+    -> Maybe Direction4
+    -> Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
+getNpcPath npcId time grid position maybePreviousDirection =
+    let
+        gridPosition =
+            Coord.floorPoint position
+
+        seed =
+            Random.initialSeed (Id.toInt npcId + Effect.Time.posixToMillis time)
+
+        choices : List ( Float, Direction4 )
+        choices =
+            (case maybePreviousDirection of
+                Just previousDirection ->
+                    [ ( 0.33, previousDirection )
+                    , ( 0.33, Direction4.turn TurnLeft previousDirection )
+                    , ( 0.33, Direction4.turn TurnRight previousDirection )
+                    , ( 0.01, Direction4.turn TurnAround previousDirection )
+                    ]
+
+                Nothing ->
+                    [ ( 0.25, North ), ( 0.25, South ), ( 0.25, East ), ( 0.25, West ) ]
+            )
+                |> List.filter (\( _, direction ) -> isNpcWalkable grid (Coord.translateIn direction 1 gridPosition))
+    in
+    case choices of
+        head :: rest ->
+            let
+                maybeNewPosition : Maybe (Coord WorldUnit)
+                maybeNewPosition =
+                    Random.step
+                        (Random.weighted head rest
+                            |> Random.andThen
+                                (\direction ->
+                                    getNpcPathHelper grid (Coord.translateIn direction 1 gridPosition) direction 10
+                                )
+                            |> Random.map Just
+                        )
+                        seed
+                        |> Tuple.first
+            in
+            case maybeNewPosition of
+                Just newPosition ->
+                    { endPosition =
+                        Coord.toPoint2d newPosition
+                            |> Point2d.translateBy (Vector2d.fromTuple Units.tileUnit ( 0.5, 0.5 ))
+                    , delay = Quantity.zero
+                    }
+                        |> Just
+
+                Nothing ->
+                    Nothing
+
+        [] ->
+            Random.step (randomMovement position) seed |> Tuple.first
+
+
+getNpcPathHelper : Grid a -> Coord WorldUnit -> Direction4 -> Int -> Random.Generator (Coord WorldUnit)
+getNpcPathHelper grid position direction stepsLeft =
+    let
+        forwardPosition : Coord WorldUnit
+        forwardPosition =
+            Coord.translateIn direction 1 position
+    in
+    if stepsLeft > 0 && isNpcWalkable grid forwardPosition then
+        Random.weighted
+            ( 0.8, True )
+            (if
+                isNpcWalkable grid (Coord.translateIn (Direction4.turn TurnRight direction) 1 position)
+                    || isNpcWalkable grid (Coord.translateIn (Direction4.turn TurnLeft direction) 1 position)
+             then
+                [ ( 0.2, False ) ]
+
+             else
+                []
+            )
+            |> Random.andThen
+                (\moveForward ->
+                    if moveForward then
+                        getNpcPathHelper grid forwardPosition direction (stepsLeft - 1)
+
+                    else
+                        Random.constant position
+                )
+
+    else
+        Random.constant position
+
+
+randomMovement :
+    Point2d WorldUnit WorldUnit
+    -> Random.Generator (Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration })
+randomMovement position =
+    Random.map4
+        (\shouldMove direction distance delay ->
+            if shouldMove == 0 then
+                { endPosition =
+                    Point2d.translateIn
+                        (Direction2d.fromAngle (Angle.degrees direction))
+                        (Units.tileUnit distance)
+                        position
+                , delay = Duration.seconds delay
+                }
+                    |> Just
+
+            else
+                Nothing
+        )
+        (Random.int 0 2)
+        (Random.float 0 360)
+        (Random.float 2 10)
+        (Random.float 1 1.5)

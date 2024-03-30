@@ -22,6 +22,7 @@ module LocalGrid exposing
     , update
     , updateAnimalMovement
     , updateFromBackend
+    , updateNpcMovement
     , updateWorldUpdateDurations
     )
 
@@ -238,6 +239,7 @@ updateLocalChange localChange model =
                             else
                                 model.grid
                         , animals = updateAnimalMovement gridChange model.animals
+                        , npcs = updateNpcMovement gridChange model.npcs
                       }
                         |> addAnimals change.newCells
                     , TilesRemoved change.removed
@@ -708,6 +710,59 @@ updateAnimalMovement change animals =
         animals
 
 
+updateNpcMovement :
+    { a | position : Coord WorldUnit, change : Tile, time : Effect.Time.Posix }
+    -> IdDict NpcId Npc
+    -> IdDict NpcId Npc
+updateNpcMovement change npcs =
+    IdDict.map
+        (\_ npc ->
+            let
+                size : Vector2d WorldUnit WorldUnit
+                size =
+                    Npc.size
+                        |> Units.pixelToTileVector
+                        |> Vector2d.scaleBy 0.5
+                        |> Vector2d.plus (Vector2d.xy Npc.moveCollisionThreshold Npc.moveCollisionThreshold)
+
+                position : Point2d WorldUnit WorldUnit
+                position =
+                    Npc.actualPositionWithoutCursor change.time npc
+
+                changeBounds =
+                    Tile.worldMovementBounds size change.change change.position
+
+                inside =
+                    List.filter (BoundingBox2d.contains position) changeBounds
+            in
+            if List.isEmpty inside then
+                let
+                    maybeIntersection : Maybe (Point2d WorldUnit WorldUnit)
+                    maybeIntersection =
+                        List.concatMap
+                            (\bounds ->
+                                BoundingBox2dExtra.lineIntersection (LineSegment2d.from position npc.endPosition) bounds
+                            )
+                            changeBounds
+                            |> Quantity.minimumBy (Point2d.distanceFrom position)
+                in
+                case maybeIntersection of
+                    Just intersection ->
+                        { npc | endPosition = intersection }
+
+                    Nothing ->
+                        npc
+
+            else
+                let
+                    movedTo =
+                        moveOutOfCollision position changeBounds
+                in
+                { npc | position = movedTo, endPosition = movedTo }
+        )
+        npcs
+
+
 setTileHotkey :
     TileHotkey
     -> TileGroup
@@ -897,6 +952,7 @@ updateServerChange serverChange model =
                 { model2
                     | grid = Grid.addChangeFrontend gridChange model2.grid |> .grid
                     , animals = updateAnimalMovement gridChange model2.animals
+                    , npcs = updateNpcMovement gridChange model2.npcs
                 }
 
               else

@@ -4767,11 +4767,18 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                         Coord.toTuple Npc.size
 
                     texturePos =
-                        Duration.from npc.startTime model.time
-                            |> Duration.inSeconds
-                            |> (*) 5
-                            |> round
-                            |> Npc.walkingUpTexturePosition
+                        if
+                            (Duration.from model.time (Npc.moveEndTime npc) |> Quantity.lessThanZero)
+                                || (Duration.from npc.startTime model.time |> Quantity.lessThanZero)
+                        then
+                            Npc.idleTexturePosition
+
+                        else
+                            Duration.from npc.startTime model.time
+                                |> Duration.inSeconds
+                                |> (*) 5
+                                |> round
+                                |> Npc.walkingUpTexturePosition
                 in
                 Effect.WebGL.entityWith
                     [ Shaders.blend
@@ -4792,20 +4799,8 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                     , opacityAndUserId0 = Sprite.opaque
                     , position0 =
                         Vec3.vec3
-                            (toFloat Units.tileWidth
-                                * point.x
-                                + toFloat (Coord.xRaw Npc.offset)
-                                - toFloat (sizeW // 2)
-                                |> round
-                                |> toFloat
-                            )
-                            (toFloat Units.tileHeight
-                                * point.y
-                                + toFloat (Coord.yRaw Npc.offset)
-                                - toFloat (sizeH // 2)
-                                |> round
-                                |> toFloat
-                            )
+                            (toFloat Units.tileWidth * point.x + toFloat (Coord.xRaw Npc.offset) |> round |> toFloat)
+                            (toFloat Units.tileHeight * point.y + toFloat (Coord.yRaw Npc.offset) |> round |> toFloat)
                             0
                     , primaryColor0 = Color.unwrap Color.white |> toFloat
                     , secondaryColor0 = Color.unwrap Color.black |> toFloat

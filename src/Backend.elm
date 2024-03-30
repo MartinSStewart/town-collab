@@ -679,7 +679,7 @@ handleWorldUpdate isProduction oldTime time model =
             updateAnimals model time
 
         ( newNpcs, npcCmds ) =
-            updatePeople time model
+            updateNpc time model
     in
     ( { model3
         | lastWorldUpdate = Just time
@@ -708,8 +708,8 @@ handleWorldUpdate isProduction oldTime time model =
     )
 
 
-updatePeople : Effect.Time.Posix -> BackendModel -> ( IdDict NpcId Npc, Command BackendOnly ToFrontend msg )
-updatePeople newTime model =
+updateNpc : Effect.Time.Posix -> BackendModel -> ( IdDict NpcId Npc, Command BackendOnly ToFrontend msg )
+updateNpc newTime model =
     case model.trainsAndAnimalsDisabled of
         TrainsAndAnimalsEnabled ->
             let
@@ -765,10 +765,10 @@ updatePeople newTime model =
 
                                     maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
                                     maybeMove =
-                                        Random.step
-                                            (randomMovement start)
-                                            (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis newTime))
-                                            |> Tuple.first
+                                        Vector2d.from npc.position npc.endPosition
+                                            |> Coord.roundVector
+                                            |> Coord.direction4
+                                            |> Npc.getNpcPath id newTime model.grid start
                                 in
                                 case maybeMove of
                                     Just { endPosition, delay } ->
@@ -894,7 +894,7 @@ updateAnimals model time =
                                     maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
                                     maybeMove =
                                         Random.step
-                                            (randomMovement start)
+                                            (Npc.randomMovement start)
                                             (Random.initialSeed (Id.toInt id + Effect.Time.posixToMillis time))
                                             |> Tuple.first
                                 in
@@ -950,27 +950,6 @@ updateAnimals model time =
 
         TrainsAndAnimalsDisabled ->
             ( model.animals, [] )
-
-
-randomMovement :
-    Point2d WorldUnit WorldUnit
-    -> Random.Generator (Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration })
-randomMovement position =
-    Random.map4
-        (\shouldMove direction distance delay ->
-            if shouldMove == 0 then
-                { endPosition = Point2d.translateIn (Direction2d.fromAngle (Angle.degrees direction)) (Units.tileUnit distance) position
-                , delay = Duration.seconds delay
-                }
-                    |> Just
-
-            else
-                Nothing
-        )
-        (Random.int 0 2)
-        (Random.float 0 360)
-        (Random.float 2 10)
-        (Random.float 1 1.5)
 
 
 addError : Effect.Time.Posix -> BackendError -> BackendModel -> BackendModel
@@ -1696,6 +1675,7 @@ localGridChange time model localChange userId user =
                                 IdDict.union
                                     (LocalGrid.updateAnimalMovement localChange model.animals)
                                     (IdDict.fromList newAnimals)
+                            , npcs = LocalGrid.updateNpcMovement localChange model.npcs
                             , tileCountBot =
                                 case model.tileCountBot of
                                     Just tileCountBot ->
