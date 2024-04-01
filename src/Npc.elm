@@ -25,7 +25,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
 import Random
-import Tile
+import Tile exposing (Tile(..))
 import Units exposing (WorldUnit)
 import Vector2d
 
@@ -104,11 +104,29 @@ actualPositionWithoutCursor time npc =
 
 
 isNpcWalkable : Grid a -> Coord WorldUnit -> Bool
-isNpcWalkable grid position =
-    case Grid.getTile position grid of
+isNpcWalkable grid npcPosition =
+    case Grid.getTile npcPosition grid of
         Just { tile } ->
             case tile of
                 Tile.Sidewalk ->
+                    True
+
+                Tile.DirtPathHorizontal ->
+                    True
+
+                Tile.DirtPathVertical ->
+                    True
+
+                Tile.SidewalkHorizontalRailCrossing ->
+                    True
+
+                Tile.SidewalkVerticalRailCrossing ->
+                    True
+
+                Tile.RoadSidewalkCrossingHorizontal ->
+                    True
+
+                Tile.RoadSidewalkCrossingVertical ->
                     True
 
                 _ ->
@@ -116,6 +134,22 @@ isNpcWalkable grid position =
 
         Nothing ->
             False
+
+
+walkablePoints : Tile -> List (Coord Pixels)
+walkablePoints tile =
+    case tile of
+        Sidewalk ->
+            [ Coord.xy 5 4, Coord.xy 15 4, Coord.xy 5 13, Coord.xy 15 13 ]
+
+        DirtPathHorizontal ->
+            [ Coord.xy 12 9, Coord.xy 12 27 ]
+
+        DirtPathVertical ->
+            [ Coord.xy 10 10, Coord.xy 10 26 ]
+
+        _ ->
+            []
 
 
 getNpcPath :
