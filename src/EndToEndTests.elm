@@ -45,7 +45,15 @@ main =
         |> Effect.Test.startViewer
 
 
-handleRequest : Texture -> Texture -> Texture -> Texture -> Texture -> Texture -> { currentRequest : HttpRequest, pastRequests : List HttpRequest } -> HttpResponse
+handleRequest :
+    Texture
+    -> Texture
+    -> Texture
+    -> Texture
+    -> Texture
+    -> Texture
+    -> { currentRequest : HttpRequest, data : Effect.Test.Data FrontendModel BackendModel }
+    -> HttpResponse
 handleRequest depth lights texture trainDepth trainLights trainTexture { currentRequest } =
     if currentRequest.url == "/texture.png" && currentRequest.method == "GET" then
         Effect.Test.TextureHttpResponse
@@ -109,7 +117,7 @@ handleRequest depth lights texture trainDepth trainLights trainTexture { current
         NetworkErrorResponse
 
 
-handlePorts : { currentRequest : PortToJs, pastRequests : List PortToJs } -> Maybe ( String, Json.Decode.Value )
+handlePorts : { currentRequest : PortToJs, data : Effect.Test.Data FrontendModel BackendModel } -> Maybe ( String, Json.Decode.Value )
 handlePorts { currentRequest } =
     case currentRequest.portName of
         "user_agent_to_js" ->
@@ -348,17 +356,12 @@ clickOnUi :
     -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
 clickOnUi frontend0 id instructions =
     Effect.Test.andThen
-        (\state ->
-            case AssocList.get frontend0.clientId state.frontends of
-                Just frontend ->
-                    let
-                        (Audio.Model audioModel) =
-                            frontend.model
-                    in
+        (\data state ->
+            case AssocList.get frontend0.clientId data.frontends of
+                Just (Audio.Model audioModel) ->
                     case audioModel.userModel of
                         Loading _ ->
-                            Effect.Test.continueWith state
-                                |> Effect.Test.checkState (\_ -> Err "Currently in loading state")
+                            Effect.Test.checkState (\_ -> Err "Currently in loading state") state
 
                         Loaded loaded ->
                             let
@@ -380,17 +383,15 @@ clickOnUi frontend0 id instructions =
                             in
                             case maybePosition of
                                 Just position ->
-                                    Effect.Test.continueWith state
-                                        |> frontend0.update (Audio.UserMsg (Types.MouseDown MainButton position))
+                                    frontend0.update (Audio.UserMsg (Types.MouseDown MainButton position)) state
                                         |> shortWait
                                         |> frontend0.update (Audio.UserMsg (Types.MouseUp MainButton position))
 
                                 Nothing ->
-                                    Effect.Test.continueWith state
-                                        |> Effect.Test.checkState (\_ -> Err ("Couldn't find UI with ID: " ++ Debug.toString id))
+                                    Effect.Test.checkState (\_ -> Err ("Couldn't find UI with ID: " ++ Debug.toString id)) state
 
                 Nothing ->
-                    Effect.Test.continueWith state |> Effect.Test.checkState (\_ -> Err "Couldn't find frontend")
+                    Effect.Test.checkState (\_ -> Err "Couldn't find frontend") state
         )
         instructions
 
@@ -415,9 +416,7 @@ loadPage sessionId func state =
             url
             windowSize
             (\( state2, frontend0 ) ->
-                state2
-                    |> shortWait
-                    |> pressEnter frontend0
+                pressEnter frontend0 state2
                     |> shortWait
                     |> func frontend0
             )
@@ -434,10 +433,10 @@ loadAndLogin sessionId func state =
                 |> pressEnter frontend0
                 |> shortWait
                 |> Effect.Test.andThen
-                    (\state3 ->
-                        case List.filterMap isOneTimePasswordEmail state3.httpRequests of
+                    (\data state3 ->
+                        case List.filterMap isOneTimePasswordEmail data.httpRequests of
                             [ loginEmail ] ->
-                                Effect.Test.continueWith state3
+                                state3
                                     |> shortWait
                                     |> clickOnUi frontend0 Types.OneTimePasswordInput
                                     |> typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
@@ -445,8 +444,7 @@ loadAndLogin sessionId func state =
                                     |> shouldBeLoggedIn frontend0
 
                             _ ->
-                                Effect.Test.continueWith state3
-                                    |> Effect.Test.checkState (\_ -> Err "Login email not found")
+                                Effect.Test.checkState (\_ -> Err "Login email not found") state3
                     )
                 |> func frontend0
         )
@@ -469,20 +467,8 @@ tests depth lights texture trainDepth trainLights trainTexture =
             , backendApp = Backend.app_ True
             , handleHttpRequest = handleRequest depth lights texture trainDepth trainLights trainTexture
             , handlePortToJs = handlePorts
-            , handleFileUpload =
-                \request ->
-                    let
-                        _ =
-                            Debug.log "file request" request
-                    in
-                    CancelFileUpload
-            , handleMultipleFilesUpload =
-                \request ->
-                    let
-                        _ =
-                            Debug.log "files request" request
-                    in
-                    CancelMultipleFilesUpload
+            , handleFileUpload = \_ -> UnhandledFileUpload
+            , handleMultipleFilesUpload = \_ -> UnhandledMultiFileUpload
             , domain = url
             }
     in
@@ -530,26 +516,25 @@ tests depth lights texture trainDepth trainLights trainTexture =
                     |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
                     |> shortWait
                     |> Effect.Test.andThen
-                        (\state2 ->
-                            case List.filterMap isOneTimePasswordEmail state2.httpRequests of
+                        (\data state2 ->
+                            case List.filterMap isOneTimePasswordEmail data.httpRequests of
                                 [ loginEmail ] ->
-                                    Effect.Test.continueWith state2
-                                        |> loadPage
-                                            sessionId1
-                                            (\frontend1 state3 ->
-                                                state3
-                                                    |> Effect.Test.sendToBackend
-                                                        sessionId1
-                                                        frontend1.clientId
-                                                        (LoginAttemptRequest loginEmail.oneTimePassword)
-                                                    |> shortWait
-                                                    |> shouldBeLoggedOut frontend0
-                                                    |> shouldBeLoggedOut frontend1
-                                            )
+                                    loadPage
+                                        sessionId1
+                                        (\frontend1 state3 ->
+                                            state3
+                                                |> Effect.Test.sendToBackend
+                                                    sessionId1
+                                                    frontend1.clientId
+                                                    (LoginAttemptRequest loginEmail.oneTimePassword)
+                                                |> shortWait
+                                                |> shouldBeLoggedOut frontend0
+                                                |> shouldBeLoggedOut frontend1
+                                        )
+                                        state2
 
                                 _ ->
-                                    Effect.Test.continueWith state2
-                                        |> Effect.Test.checkState (\_ -> Err "Login email not found")
+                                    Effect.Test.checkState (\_ -> Err "Login email not found") state2
                         )
             )
     ]
@@ -569,12 +554,10 @@ checkFrontend :
     -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg userModel) toFrontend backendMsg backendModel
 checkFrontend clientId checkFunc =
     Effect.Test.checkState
-        (\state4 ->
-            case AssocList.get clientId state4.frontends of
-                Just frontend ->
-                    frontend.model
-                        |> (\(Audio.Model a) -> a.userModel)
-                        |> checkFunc
+        (\data ->
+            case AssocList.get clientId data.frontends of
+                Just (Audio.Model { userModel }) ->
+                    checkFunc userModel
 
                 Nothing ->
                     Err "Frontend 1 not found"
