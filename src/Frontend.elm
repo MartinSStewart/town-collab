@@ -4764,7 +4764,7 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                         Point2d.unwrap position
 
                     ( sizeW, sizeH ) =
-                        Coord.toTuple Npc.size
+                        Coord.toTuple Npc.textureSize
 
                     texturePos =
                         if

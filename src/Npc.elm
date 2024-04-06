@@ -8,6 +8,7 @@ module Npc exposing
     , offset
     , randomMovement
     , size
+    , textureSize
     , walkingRightTexturePosition
     , walkingUpTexturePosition
     )
@@ -65,9 +66,14 @@ offset =
     Coord.xy -5 -15
 
 
+textureSize : Coord Pixels
+textureSize =
+    Coord.xy 10 17
+
+
 size : Coord Pixels
 size =
-    Coord.xy 10 17
+    Coord.xy 8 5
 
 
 walkingRightTexturePosition : Int -> Coord Pixels
