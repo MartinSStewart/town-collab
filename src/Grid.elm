@@ -1084,19 +1084,6 @@ rayIntersection includeWater expandBoundsBy start end grid =
         line =
             LineSegment2d.from start end
 
-        minReach : Vector2d WorldUnit WorldUnit
-        minReach =
-            Vector2d.xy
-                (BoundingBox2d.minX Tile.aggregateMovementCollision)
-                (BoundingBox2d.minY Tile.aggregateMovementCollision)
-
-        maxReach : Vector2d WorldUnit WorldUnit
-        maxReach =
-            Vector2d.xy
-                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
-                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
-                |> Vector2d.reverse
-
         cellBounds : Bounds CellUnit
         cellBounds =
             Bounds.fromCoords
@@ -1134,6 +1121,21 @@ rayIntersection includeWater expandBoundsBy start end grid =
         |> Quantity.minimumBy (\a -> Point2d.distanceFrom start a.intersection)
 
 
+minReach : Vector2d WorldUnit WorldUnit
+minReach =
+    Vector2d.xy
+        (BoundingBox2d.minX Tile.aggregateMovementCollision)
+        (BoundingBox2d.minY Tile.aggregateMovementCollision)
+
+
+maxReach : Vector2d WorldUnit WorldUnit
+maxReach =
+    Vector2d.xy
+        (BoundingBox2d.maxX Tile.aggregateMovementCollision)
+        (BoundingBox2d.maxY Tile.aggregateMovementCollision)
+        |> Vector2d.reverse
+
+
 pointInside :
     Bool
     -> Vector2d WorldUnit WorldUnit
@@ -1142,19 +1144,6 @@ pointInside :
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 pointInside includeWater expandBoundsBy start grid =
     let
-        minReach : Vector2d WorldUnit WorldUnit
-        minReach =
-            Vector2d.xy
-                (BoundingBox2d.minX Tile.aggregateMovementCollision)
-                (BoundingBox2d.minY Tile.aggregateMovementCollision)
-
-        maxReach : Vector2d WorldUnit WorldUnit
-        maxReach =
-            Vector2d.xy
-                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
-                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
-                |> Vector2d.reverse
-
         pointMin : Point2d WorldUnit WorldUnit
         pointMin =
             Point2d.translateBy maxReach start
@@ -1274,19 +1263,6 @@ rayIntersection2 includeWater expandBoundsBy start end grid =
         line : LineSegment2d WorldUnit WorldUnit
         line =
             LineSegment2d.from start end
-
-        minReach : Vector2d WorldUnit WorldUnit
-        minReach =
-            Vector2d.xy
-                (BoundingBox2d.minX Tile.aggregateMovementCollision)
-                (BoundingBox2d.minY Tile.aggregateMovementCollision)
-
-        maxReach : Vector2d WorldUnit WorldUnit
-        maxReach =
-            Vector2d.xy
-                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
-                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
-                |> Vector2d.reverse
 
         pointMin : Point2d WorldUnit WorldUnit
         pointMin =

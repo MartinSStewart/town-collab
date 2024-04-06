@@ -14,21 +14,24 @@ module Npc exposing
     )
 
 import Angle
+import Bounds exposing (Bounds)
 import Coord exposing (Coord)
 import Direction2d
 import Direction4 exposing (Direction4(..), Turn(..))
 import Duration exposing (Duration, Seconds)
 import Effect.Time
 import Grid exposing (Grid)
+import GridCell
 import Id exposing (Id, NpcId)
+import List.Nonempty exposing (Nonempty(..))
 import NpcName exposing (NpcName)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
 import Random
 import Tile exposing (Tile(..))
-import Units exposing (WorldUnit)
-import Vector2d
+import Units exposing (CellUnit, WorldUnit)
+import Vector2d exposing (Vector2d)
 
 
 type alias Npc =
@@ -142,8 +145,8 @@ isNpcWalkable grid npcPosition =
             False
 
 
-walkablePoints : Tile -> List (Coord Pixels)
-walkablePoints tile =
+navPoints : Tile -> List (Coord Pixels)
+navPoints tile =
     case tile of
         Sidewalk ->
             [ Coord.xy 5 4, Coord.xy 15 4, Coord.xy 5 13, Coord.xy 15 13 ]
@@ -156,6 +159,67 @@ walkablePoints tile =
 
         _ ->
             []
+
+
+maxNavPointDistance =
+    Units.tileUnit 1.5
+
+
+maxNavPointVector : Vector2d WorldUnit coordinates
+maxNavPointVector =
+    Vector2d.xy maxNavPointDistance maxNavPointDistance
+
+
+getNavPoints : Point2d WorldUnit WorldUnit -> Grid a -> List (Point2d WorldUnit WorldUnit)
+getNavPoints npcPosition grid =
+    let
+        minPoint : Point2d WorldUnit WorldUnit
+        minPoint =
+            Point2d.translateBy (Vector2d.reverse maxNavPointDistance) npcPosition
+
+        maxPoint : Point2d WorldUnit WorldUnit
+        maxPoint =
+            Point2d.translateBy maxNavPointDistance npcPosition
+
+        cellBounds : Bounds CellUnit
+        cellBounds =
+            Bounds.fromCoords
+                (Nonempty
+                    (maxPoint |> Grid.worldToCellPoint |> Coord.floorPoint)
+                    [ minPoint |> Grid.worldToCellPoint |> Coord.floorPoint ]
+                )
+    in
+    Bounds.coordRangeFold
+        (\cellCoord list ->
+            case Grid.getCell cellCoord grid of
+                Just cell ->
+                    GridCell.flatten cell
+                        |> List.concatMap
+                            (\{ tile, position } ->
+                                List.map
+                                    (\tileCoord ->
+                                        let
+                                            navPoint : Point2d WorldUnit WorldUnit
+                                            navPoint =
+                                                Units.pixelToTilePoint tileCoord
+                                                    |> Point2d.translateBy (Grid.cellAndLocalCoordToWorld ( cellCoord, position ) |> Coord.toVector2d)
+                                        in
+                                        if Point2d.distanceFrom navPoint npcPosition |> Quantity.lessThan maxNavPointDistance then
+                                            Just navPoint
+
+                                        else
+                                            Nothing
+                                    )
+                                    (navPoints tile)
+                            )
+                        |> (\a -> a ++ list)
+
+                Nothing ->
+                    list
+        )
+        identity
+        cellBounds
+        []
 
 
 getNpcPath :
