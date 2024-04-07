@@ -61,8 +61,8 @@ import IdDict exposing (IdDict)
 import Keyboard
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
+import Local exposing (Local)
 import LocalGrid exposing (LocalGrid, LocalGrid_)
-import LocalModel exposing (LocalModel)
 import MailEditor
 import Math.Matrix4 as Mat4
 import Math.Vector4 as Vec4
@@ -259,7 +259,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , zoomFactor = loading.zoomFactor
             , page = WorldPage initWorldPage
             , viewPoint = viewpoint
-            , trains = loadedLocalModel.trains
             , time = time
             }
 
@@ -267,7 +266,6 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
         model =
             { key = loading.key
             , localModel = loadedLocalModel.localModel
-            , trains = loadedLocalModel.trains
             , meshes = Dict.empty
             , viewPoint = viewpoint
             , viewPointLastInterval = Point2d.origin
@@ -621,7 +619,7 @@ hardUpdateMeshes newModel =
                                     , colors = newCurrentTile_.colors
                                     , time = newModel.time
                                     }
-                                    newModel.trains
+                                    localModel.trains
                                     localModel.grid
                             then
                                 newCurrentTile
@@ -667,7 +665,6 @@ hardUpdateMeshes newModel =
             , page = newModel.page
             , mouseMiddle = newModel.mouseMiddle
             , viewPoint = newModel.viewPoint
-            , trains = newModel.trains
             , time = newModel.time
             }
     }
@@ -804,7 +801,7 @@ updateMeshes newModel =
                                     , colors = newCurrentTile_.colors
                                     , time = newModel.time
                                     }
-                                    newModel.trains
+                                    localModel.trains
                                     localModel.grid
                             then
                                 newCurrentTile
@@ -882,7 +879,6 @@ updateMeshes newModel =
             , page = newModel.page
             , mouseMiddle = newModel.mouseMiddle
             , viewPoint = newModel.viewPoint
-            , trains = newModel.trains
             , time = newModel.time
             }
     }
@@ -897,7 +893,7 @@ mouseWorldPosition :
         , page : Page
         , mouseMiddle : MouseButtonState
         , viewPoint : ViewPoint
-        , trains : IdDict TrainId Train
+        , localModel : Local Change LocalGrid
         , time : Time.Posix
         , currentTool : Tool
     }
@@ -927,7 +923,7 @@ cursorPosition :
             , page : Page
             , mouseMiddle : MouseButtonState
             , viewPoint : ViewPoint
-            , trains : IdDict TrainId Train
+            , localModel : Local Change LocalGrid
             , time : Time.Posix
             , currentTool : Tool
         }
@@ -938,7 +934,7 @@ cursorPosition tileData model =
         |> Coord.minus (tileData.size |> Coord.divide (Coord.tuple ( 2, 2 )))
 
 
-getHandColor : Id UserId -> { a | localModel : LocalModel b LocalGrid } -> Colors
+getHandColor : Id UserId -> { a | localModel : Local b LocalGrid } -> Colors
 getHandColor userId model =
     let
         localGrid : LocalGrid_
@@ -1037,7 +1033,7 @@ getTileColor tileGroup model =
             Tile.getTileGroupData tileGroup |> .defaultColors |> Tile.defaultToPrimaryAndSecondary
 
 
-getReports : LocalModel a LocalGrid -> List Report
+getReports : Local a LocalGrid -> List Report
 getReports localModel =
     case LocalGrid.localModel localModel |> .userStatus of
         LoggedIn loggedIn ->
@@ -1047,7 +1043,7 @@ getReports localModel =
             []
 
 
-getAdminReports : LocalModel a LocalGrid -> IdDict UserId (Nonempty BackendReport)
+getAdminReports : Local a LocalGrid -> IdDict UserId (Nonempty BackendReport)
 getAdminReports localModel =
     case LocalGrid.localModel localModel |> .userStatus of
         LoggedIn loggedIn ->
@@ -1219,7 +1215,7 @@ hoverAt model mousePosition =
                             Nothing
 
                         HandTool ->
-                            IdDict.toList model.trains
+                            IdDict.toList localGrid.trains
                                 |> List.filterMap
                                     (\( trainId, train ) ->
                                         let
@@ -1425,34 +1421,6 @@ handleOutMsg isFromBackend ( model, outMsg ) =
 
               else
                 handleRailToggleSound position model
-            , Command.none
-            )
-
-        LocalGrid.TeleportTrainHome trainId ->
-            ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome model.time) model.trains }
-            , Command.none
-            )
-
-        LocalGrid.TrainLeaveHome trainId ->
-            ( { model | trains = IdDict.update2 trainId (Train.leaveHome model.time) model.trains }
-            , Command.none
-            )
-
-        LocalGrid.TrainsUpdated diff ->
-            ( { model
-                | trains =
-                    IdDict.toList diff
-                        |> List.filterMap
-                            (\( trainId, diff_ ) ->
-                                case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
-                                    Just newTrain ->
-                                        Just ( trainId, newTrain )
-
-                                    Nothing ->
-                                        Nothing
-                            )
-                        |> IdDict.fromList
-              }
             , Command.none
             )
 

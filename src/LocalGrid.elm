@@ -33,7 +33,7 @@ import AssocSet
 import BoundingBox2d exposing (BoundingBox2d)
 import BoundingBox2dExtra
 import Bounds exposing (Bounds)
-import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled, BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
 import Cursor exposing (Cursor)
@@ -48,7 +48,7 @@ import IdDict exposing (IdDict)
 import Keyboard
 import LineSegment2d
 import List.Nonempty exposing (Nonempty)
-import LocalModel exposing (LocalModel)
+import Local exposing (Local)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
 import Maybe.Extra as Maybe
 import Npc exposing (Npc)
@@ -86,7 +86,7 @@ type alias LocalGrid_ =
     }
 
 
-currentUserId : { a | localModel : LocalModel Change LocalGrid } -> Maybe (Id UserId)
+currentUserId : { a | localModel : Local Change LocalGrid } -> Maybe (Id UserId)
 currentUserId model =
     case localModel model.localModel |> .userStatus of
         LoggedIn loggedIn ->
@@ -97,7 +97,7 @@ currentUserId model =
 
 
 currentTool :
-    { a | localModel : LocalModel Change LocalGrid, pressedKeys : AssocSet.Set Keyboard.Key, currentTool : Tool }
+    { a | localModel : Local Change LocalGrid, pressedKeys : AssocSet.Set Keyboard.Key, currentTool : Tool }
     -> Tool
 currentTool model =
     case currentUserId model of
@@ -122,9 +122,9 @@ keyDown key { pressedKeys } =
     AssocSet.member key pressedKeys
 
 
-localModel : LocalModel a LocalGrid -> LocalGrid_
+localModel : Local a LocalGrid -> LocalGrid_
 localModel localModel_ =
-    LocalModel.localModel localModel_ |> (\(LocalGrid a) -> a)
+    Local.localModel localModel_ |> (\(LocalGrid a) -> a)
 
 
 init :
@@ -141,7 +141,7 @@ init :
         , trainsDisabled : AreTrainsAndAnimalsDisabled
         , npcs : IdDict NpcId Npc
     }
-    -> LocalModel Change LocalGrid
+    -> Local Change LocalGrid
 init data =
     LocalGrid
         { grid = Grid.dataToGrid data.grid
@@ -157,17 +157,17 @@ init data =
         , trainsDisabled = data.trainsDisabled
         , npcs = data.npcs
         }
-        |> LocalModel.init
+        |> Local.init
 
 
-update : Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, OutMsg )
+update : Change -> Local Change LocalGrid -> ( Local Change LocalGrid, OutMsg )
 update change localModel_ =
-    LocalModel.update config change localModel_
+    Local.update config change localModel_
 
 
-updateFromBackend : Nonempty Change -> LocalModel Change LocalGrid -> ( LocalModel Change LocalGrid, List OutMsg )
+updateFromBackend : Nonempty Change -> Local Change LocalGrid -> ( Local Change LocalGrid, List OutMsg )
 updateFromBackend changes localModel_ =
-    LocalModel.updateFromBackend config changes localModel_
+    Local.updateFromBackend config changes localModel_
 
 
 incrementUndoCurrent : Coord CellUnit -> Coord CellLocalUnit -> Dict RawCellCoord Int -> Dict RawCellCoord Int
@@ -198,9 +198,6 @@ type OutMsg
     | HandColorOrNameChanged (Id UserId)
     | RailToggledBySelf (Coord WorldUnit)
     | RailToggledByAnother (Coord WorldUnit)
-    | TeleportTrainHome (Id TrainId)
-    | TrainLeaveHome (Id TrainId)
-    | TrainsUpdated (IdDict TrainId Train.TrainDiff)
     | ReceivedMail
     | ExportMail (List MailEditor.Content)
     | ImportMail
@@ -240,6 +237,13 @@ updateLocalChange localChange model =
                                 model.grid
                         , animals = updateAnimalMovement gridChange model.animals
                         , npcs = updateNpcMovement gridChange model.npcs
+                        , trains =
+                            case Train.handleAddingTrain model.trains loggedIn.userId gridChange.change gridChange.position of
+                                Just ( trainId, train ) ->
+                                    IdDict.insert trainId train model.trains
+
+                                Nothing ->
+                                    model.trains
                       }
                         |> addAnimals change.newCells
                     , TilesRemoved change.removed
@@ -412,12 +416,12 @@ updateLocalChange localChange model =
 
         TeleportHomeTrainRequest trainId time ->
             ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome time) model.trains }
-            , TeleportTrainHome trainId
+            , NoOutMsg
             )
 
         LeaveHomeTrainRequest trainId time ->
             ( { model | trains = IdDict.update2 trainId (Train.leaveHome time) model.trains }
-            , TrainLeaveHome trainId
+            , NoOutMsg
             )
 
         ViewedMail mailId ->
@@ -1099,12 +1103,12 @@ updateServerChange serverChange model =
 
         ServerTeleportHomeTrainRequest trainId time ->
             ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome time) model.trains }
-            , TeleportTrainHome trainId
+            , NoOutMsg
             )
 
         ServerLeaveHomeTrainRequest trainId time ->
             ( { model | trains = IdDict.update2 trainId (Train.leaveHome time) model.trains }
-            , TrainLeaveHome trainId
+            , NoOutMsg
             )
 
         ServerWorldUpdateBroadcast diff ->
@@ -1122,7 +1126,7 @@ updateServerChange serverChange model =
                             )
                         |> IdDict.fromList
               }
-            , TrainsUpdated diff
+            , NoOutMsg
             )
 
         ServerReceivedMail { mailId, from, content, deliveryTime } ->
@@ -1386,6 +1390,23 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
+        FakeServerAnimationFrame { previousTime, currentTime } ->
+            case model.trainsDisabled of
+                TrainsAndAnimalsDisabled ->
+                    ( model, NoOutMsg )
+
+                TrainsAndAnimalsEnabled ->
+                    ( { model
+                        | trains =
+                            Train.moveTrains
+                                currentTime
+                                (Duration.from previousTime currentTime |> Quantity.min Duration.minute |> Duration.subtractFrom currentTime)
+                                model.trains
+                                { grid = model.grid, mail = IdDict.empty }
+                      }
+                    , NoOutMsg
+                    )
+
 
 updateWorldUpdateDurations :
     Duration
@@ -1573,7 +1594,7 @@ update_ msg model =
             updateServerChange serverChange model
 
 
-config : LocalModel.Config Change LocalGrid OutMsg
+config : Local.Config Change LocalGrid OutMsg
 config =
     { msgEqual =
         \msg0 msg1 ->

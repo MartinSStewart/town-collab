@@ -67,8 +67,8 @@ import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
 import List.Nonempty exposing (Nonempty)
+import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
-import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail)
 import Npc exposing (Npc)
 import PingData exposing (PingData)
@@ -133,7 +133,7 @@ type LoadingLocalModel
 
 
 type alias LoadedLocalModel_ =
-    { localModel : LocalModel Change LocalGrid
+    { localModel : Local Change LocalGrid
     , trains : IdDict TrainId Train
     , mail : IdDict MailId FrontendMail
     }
@@ -154,8 +154,7 @@ type ToolButton
 
 type alias FrontendLoaded =
     { key : Effect.Browser.Navigation.Key
-    , localModel : LocalModel Change LocalGrid
-    , trains : IdDict TrainId Train
+    , localModel : Local Change LocalGrid
     , meshes : Dict RawCellCoord { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
@@ -249,7 +248,7 @@ type alias WorldPage2 =
 
 
 type alias UpdateMeshesData =
-    { localModel : LocalModel Change LocalGrid
+    { localModel : Local Change LocalGrid
     , pressedKeys : AssocSet.Set Keyboard.Key
     , currentTool : Tool
     , mouseLeft : MouseButtonState
@@ -259,7 +258,6 @@ type alias UpdateMeshesData =
     , page : Page
     , mouseMiddle : MouseButtonState
     , viewPoint : ViewPoint
-    , trains : IdDict TrainId Train
     , time : Effect.Time.Posix
     }
 

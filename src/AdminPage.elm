@@ -11,8 +11,8 @@ import Env
 import Id exposing (Id, MailId)
 import IdDict
 import Keyboard
+import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
-import LocalModel exposing (LocalModel)
 import MailEditor exposing (MailStatus(..), MailStatus2(..))
 import Pixels exposing (Pixels)
 import Round
@@ -62,7 +62,7 @@ type OutMsg
 
 
 type alias Config a =
-    { a | localModel : LocalModel Change LocalGrid, time : Effect.Time.Posix }
+    { a | localModel : Local Change LocalGrid, time : Effect.Time.Posix }
 
 
 update : Config a -> Hover -> UiEvent -> Model -> ( Model, OutMsg )

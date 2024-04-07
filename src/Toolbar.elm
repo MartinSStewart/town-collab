@@ -17,7 +17,7 @@ module Toolbar exposing
 
 import AdminPage
 import AssocList
-import Change exposing (AreTrainsAndAnimalsDisabled(..), LoggedIn_, UserStatus(..))
+import Change exposing (AreTrainsAndAnimalsDisabled(..), Change, LoggedIn_, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
@@ -33,7 +33,8 @@ import Id exposing (Id, UserId)
 import IdDict exposing (IdDict)
 import List.Extra as List
 import List.Nonempty
-import LocalGrid
+import Local exposing (Local)
+import LocalGrid exposing (LocalGrid)
 import MailEditor
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -1989,9 +1990,9 @@ screenToWorld :
         , mouseLeft : MouseButtonState
         , mouseMiddle : MouseButtonState
         , viewPoint : ViewPoint
-        , trains : IdDict Id.TrainId Train.Train
         , time : Effect.Time.Posix
         , currentTool : Tool
+        , localModel : Local Change LocalGrid
     }
     -> Point2d sourceUnits Pixels
     -> Point2d WorldUnit WorldUnit
@@ -2064,7 +2065,7 @@ offsetViewPoint :
         | devicePixelRatio : Float
         , zoomFactor : Int
         , viewPoint : ViewPoint
-        , trains : IdDict Id.TrainId Train.Train
+        , localModel : Local Change LocalGrid
         , time : Effect.Time.Posix
     }
     -> Hover
@@ -2116,9 +2117,9 @@ actualViewPoint :
         , devicePixelRatio : Float
         , zoomFactor : Int
         , viewPoint : ViewPoint
-        , trains : IdDict Id.TrainId Train.Train
         , time : Effect.Time.Posix
         , currentTool : Tool
+        , localModel : Local Change LocalGrid
     }
     -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
@@ -2148,7 +2149,7 @@ actualViewPoint model =
 
 
 actualViewPointHelper :
-    { a | viewPoint : ViewPoint, trains : IdDict Id.TrainId Train.Train, time : Effect.Time.Posix }
+    { a | viewPoint : ViewPoint, localModel : Local Change LocalGrid, time : Effect.Time.Posix }
     -> Point2d WorldUnit WorldUnit
 actualViewPointHelper model =
     case model.viewPoint of
@@ -2156,7 +2157,7 @@ actualViewPointHelper model =
             viewPoint
 
         TrainViewPoint trainViewPoint ->
-            case IdDict.get trainViewPoint.trainId model.trains of
+            case IdDict.get trainViewPoint.trainId (LocalGrid.localModel model.localModel).trains of
                 Just train ->
                     let
                         t =

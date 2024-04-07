@@ -53,8 +53,8 @@ import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LoadingPage
+import Local exposing (Local)
 import LocalGrid exposing (LocalGrid_)
-import LocalModel
 import MailEditor exposing (MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -173,7 +173,7 @@ audioLoaded audioData model =
 
         allTrains : List ( Id TrainId, Train )
         allTrains =
-            IdDict.toList model.trains
+            IdDict.toList localModel.trains
 
         movingTrains : List { playbackRate : Float, volume : Float }
         movingTrains =
@@ -289,7 +289,7 @@ audioLoaded audioData model =
                 _ ->
                     Audio.silence
         )
-        (IdDict.toList model.trains)
+        (IdDict.toList localModel.trains)
         |> Audio.group
     , case model.lastTrainWhistle of
         Just time ->
@@ -707,13 +707,13 @@ removeLastCursorMove : FrontendLoaded -> FrontendLoaded
 removeLastCursorMove newModel2 =
     let
         localModel =
-            LocalModel.unwrap newModel2.localModel
+            Local.unwrap newModel2.localModel
     in
     case ( localModel.localMsgs, newModel2.pendingChanges ) of
         ( (Change.LocalChange eventIdA (Change.MoveCursor _)) :: rest, ( eventIdB, Change.MoveCursor _ ) :: restPending ) ->
             if eventIdA == eventIdB then
                 { newModel2
-                    | localModel = { localModel | localMsgs = rest } |> LocalModel.unsafe
+                    | localModel = { localModel | localMsgs = rest } |> Local.unsafe
                     , pendingChanges = restPending
                 }
 
@@ -1136,6 +1136,10 @@ updateLoaded audioData msg model =
                 viewBounds =
                     viewBoundingBox model
 
+                localState : LocalGrid_
+                localState =
+                    LocalGrid.localModel model.localModel
+
                 playTrainWhistle =
                     (case model.lastTrainWhistle of
                         Just whistleTime ->
@@ -1146,7 +1150,7 @@ updateLoaded audioData msg model =
                     )
                         && List.any
                             (\( _, train ) -> BoundingBox2d.contains (Train.trainPosition model.time train) viewBounds)
-                            (IdDict.toList model.trains)
+                            (IdDict.toList localState.trains)
 
                 musicEnd : Effect.Time.Posix
                 musicEnd =
@@ -1192,10 +1196,6 @@ updateLoaded audioData msg model =
                 time =
                     Duration.addTo localTime (PingData.pingOffset model)
 
-                localGrid : LocalGrid_
-                localGrid =
-                    LocalGrid.localModel model.localModel
-
                 oldViewPoint : Point2d WorldUnit WorldUnit
                 oldViewPoint =
                     Toolbar.actualViewPoint model
@@ -1239,17 +1239,6 @@ updateLoaded audioData msg model =
                         | time = time
                         , localTime = localTime
                         , lastTrainUpdate = time
-                        , trains =
-                            case localGrid.trainsDisabled of
-                                TrainsAndAnimalsDisabled ->
-                                    model.trains
-
-                                TrainsAndAnimalsEnabled ->
-                                    Train.moveTrains
-                                        time
-                                        (Duration.from model.lastTrainUpdate time |> Quantity.min Duration.minute |> Duration.subtractFrom time)
-                                        model.trains
-                                        { grid = localGrid.grid, mail = IdDict.empty }
                         , removedTileParticles =
                             List.filter
                                 (\item -> Duration.from item.time model.time |> Quantity.lessThan (Duration.seconds 1))
@@ -1311,6 +1300,17 @@ updateLoaded audioData msg model =
 
                     else
                         Ui.view model4.focus newUi
+                , localModel =
+                    LocalGrid.updateFromBackend
+                        (Nonempty
+                            ({ previousTime = model.lastTrainUpdate, currentTime = time }
+                                |> Change.FakeServerAnimationFrame
+                                |> Change.ServerChange
+                            )
+                            []
+                        )
+                        model4.localModel
+                        |> Tuple.first
               }
             , Command.none
             )
@@ -2014,10 +2014,13 @@ tileInteraction :
     -> Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
 tileInteraction currentUserId2 { tile, userId, position } model =
     let
+        localState =
+            LocalGrid.localModel model.localModel
+
         handleTrainHouse : Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
         handleTrainHouse =
             case
-                IdDict.toList model.trains
+                IdDict.toList localState.trains
                     |> List.find (\( _, train ) -> Train.home train == position)
             of
                 Just ( trainId, train ) ->
@@ -3537,11 +3540,14 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                 grid : Grid FrontendHistory
                 grid =
                     LocalGrid.localModel model.localModel |> .grid
+
+                localState =
+                    LocalGrid.localModel model.localModel
             in
             if isDragPlacement && hasCollision then
                 model
 
-            else if not (LoadingPage.canPlaceTile model.time change model.trains grid) then
+            else if not (LoadingPage.canPlaceTile model.time change localState.trains grid) then
                 if tile2 == EmptyTile then
                     { model
                         | lastTilePlaced =
@@ -3646,13 +3652,6 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
                             }
                     , removedTileParticles = removedTiles ++ model3.removedTileParticles
                     , debrisMesh = createDebrisMesh model.startTime (removedTiles ++ model3.removedTileParticles)
-                    , trains =
-                        case Train.handleAddingTrain model3.trains userId tile2 cursorPosition_ of
-                            Just ( trainId, train ) ->
-                                IdDict.insert trainId train model.trains
-
-                            Nothing ->
-                                model.trains
                 }
 
         Nothing ->
@@ -3859,7 +3858,6 @@ updateLoadedFromBackend msg model =
         LoadingData loadingData ->
             ( { model
                 | localModel = LocalGrid.init loadingData
-                , trains = loadingData.trains
                 , isReconnecting = False
                 , pendingChanges = []
               }
@@ -4595,7 +4593,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                         )
                         model.time
                         localGrid.mail
-                        model.trains
+                        localGrid.trains
                         viewBounds_
 
                 _ ->
@@ -4623,7 +4621,7 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
            , drawReports renderData model.reportsMesh
            ]
         ++ drawOtherCursors gridViewBounds renderData model
-        ++ Train.drawSpeechBubble renderData model.time model.trains
+        ++ Train.drawSpeechBubble renderData model.time localGrid.trains
 
 
 drawReports : RenderData -> Effect.WebGL.Mesh Vertex -> Effect.WebGL.Entity
@@ -4877,6 +4875,10 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
     let
         textureSize =
             Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
+
+        localGrid : LocalGrid_
+        localGrid =
+            LocalGrid.localModel model.localModel
     in
     case
         ( LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
@@ -4959,8 +4961,8 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                                 }
                             , time = model.time
                             }
-                            model.trains
-                            (LocalGrid.localModel model.localModel |> .grid)
+                            localGrid.trains
+                            localGrid.grid
                     then
                         Vec4.vec4 1 1 1 0.5
 
@@ -5000,8 +5002,8 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                                 }
                             , time = model.time
                             }
-                            model.trains
-                            (LocalGrid.localModel model.localModel |> .grid)
+                            localGrid.trains
+                            localGrid.grid
                     then
                         Vec4.vec4 0 0 0 0.5
 

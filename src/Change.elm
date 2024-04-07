@@ -176,6 +176,8 @@ type ServerChange
     | ServerRegenerateCache Effect.Time.Posix
     | ServerNewNpcs (Nonempty ( Id NpcId, Npc ))
     | ServerNpcMovement (Nonempty ( Id NpcId, MovementChange ))
+    | -- This event doesn't actually come from the server. Instead it's triggered on every frontend animation frame. In theory this could involve the backend sending out this message every 16.6ms but that would be a waste of resources so it's better to just trigger it directly from the frontend.
+      FakeServerAnimationFrame { previousTime : Effect.Time.Posix, currentTime : Effect.Time.Posix }
 
 
 type alias MovementChange =
