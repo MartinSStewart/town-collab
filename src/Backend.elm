@@ -750,49 +750,49 @@ updateNpc newTime model =
 
                 newNpcs2 : IdDict NpcId Npc
                 newNpcs2 =
-                    IdDict.map
-                        (\id npc ->
-                            if Duration.from (Npc.moveEndTime npc) newTime |> Quantity.lessThanZero then
-                                npc
-
-                            else
-                                let
-                                    start : Point2d WorldUnit WorldUnit
-                                    start =
-                                        npc.endPosition
-
-                                    maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
-                                    maybeMove =
-                                        Vector2d.from npc.position npc.endPosition
-                                            |> Coord.roundVector
-                                            |> Coord.direction4
-                                            |> Npc.getNpcPath id newTime model.grid start
-                                in
-                                case maybeMove of
-                                    Just { endPosition, delay } ->
-                                        let
-                                            size =
-                                                Units.pixelToTileVector Npc.size |> Vector2d.scaleBy 0.5
-                                        in
-                                        { npc
-                                            | position = start
-                                            , startTime = Duration.addTo newTime delay
-                                            , endPosition =
-                                                case Grid.rayIntersection2 True size start endPosition model.grid of
-                                                    Just { intersection } ->
-                                                        LineSegmentExtra.extendLineEnd
-                                                            start
-                                                            intersection
-                                                            (Quantity.negate Npc.moveCollisionThreshold)
-
-                                                    Nothing ->
-                                                        endPosition
-                                        }
-
-                                    Nothing ->
-                                        npc
-                        )
-                        npcs2
+                    --IdDict.map
+                    --    (\id npc ->
+                    --        if Duration.from (Npc.moveEndTime npc) newTime |> Quantity.lessThanZero then
+                    --            npc
+                    --
+                    --        else
+                    --            let
+                    --                start : Point2d WorldUnit WorldUnit
+                    --                start =
+                    --                    npc.endPosition
+                    --
+                    --                maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
+                    --                maybeMove =
+                    --                    Vector2d.from npc.position npc.endPosition
+                    --                        |> Coord.roundVector
+                    --                        |> Coord.direction4
+                    --                        |> Npc.getNpcPath id newTime model.grid start
+                    --            in
+                    --            case maybeMove of
+                    --                Just { endPosition, delay } ->
+                    --                    let
+                    --                        size =
+                    --                            Units.pixelToTileVector Npc.size |> Vector2d.scaleBy 0.5
+                    --                    in
+                    --                    { npc
+                    --                        | position = start
+                    --                        , startTime = Duration.addTo newTime delay
+                    --                        , endPosition =
+                    --                            case Grid.rayIntersection2 True size start endPosition model.grid of
+                    --                                Just { intersection } ->
+                    --                                    LineSegmentExtra.extendLineEnd
+                    --                                        start
+                    --                                        intersection
+                    --                                        (Quantity.negate Npc.moveCollisionThreshold)
+                    --
+                    --                                Nothing ->
+                    --                                    endPosition
+                    --                    }
+                    --
+                    --                Nothing ->
+                    --                    npc
+                    --    )
+                    npcs2
 
                 movedNpcs : List ( Id NpcId, MovementChange )
                 movedNpcs =

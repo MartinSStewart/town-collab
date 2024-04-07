@@ -1,7 +1,6 @@
 module Npc exposing
     ( Npc
     , actualPositionWithoutCursor
-    , getNpcPath
     , idleTexturePosition
     , moveCollisionThreshold
     , moveEndTime
@@ -9,6 +8,7 @@ module Npc exposing
     , randomMovement
     , size
     , textureSize
+    , updateNpcPath
     , walkingRightTexturePosition
     , walkingUpTexturePosition
     )
@@ -223,66 +223,23 @@ getNavPoints npcPosition grid =
         []
 
 
-getNpcPath :
+updateNpcPath :
     Id NpcId
+    -> Npc
     -> Effect.Time.Posix
     -> Grid a
-    -> Point2d WorldUnit WorldUnit
-    -> Maybe Direction4
-    -> Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
-getNpcPath npcId time grid position maybePreviousDirection =
+    -> Npc
+updateNpcPath npcId npc time grid =
     let
-        gridPosition =
-            Coord.floorPoint position
-
-        seed =
-            Random.initialSeed (Id.toInt npcId + Effect.Time.posixToMillis time)
-
-        choices : List ( Float, Direction4 )
-        choices =
-            (case maybePreviousDirection of
-                Just previousDirection ->
-                    [ ( 0.33, previousDirection )
-                    , ( 0.33, Direction4.turn TurnLeft previousDirection )
-                    , ( 0.33, Direction4.turn TurnRight previousDirection )
-                    , ( 0.01, Direction4.turn TurnAround previousDirection )
-                    ]
-
-                Nothing ->
-                    [ ( 0.25, North ), ( 0.25, South ), ( 0.25, East ), ( 0.25, West ) ]
-            )
-                |> List.filter (\( _, direction ) -> isNpcWalkable grid (Coord.translateIn direction 1 gridPosition))
+        navPoints2 =
+            getNavPoints npc.endPosition grid
     in
-    case choices of
-        head :: rest ->
-            let
-                maybeNewPosition : Maybe (Coord WorldUnit)
-                maybeNewPosition =
-                    Random.step
-                        (Random.weighted head rest
-                            |> Random.andThen
-                                (\direction ->
-                                    getNpcPathHelper grid (Coord.translateIn direction 1 gridPosition) direction 10
-                                )
-                            |> Random.map Just
-                        )
-                        seed
-                        |> Tuple.first
-            in
-            case maybeNewPosition of
-                Just newPosition ->
-                    { endPosition =
-                        Coord.toPoint2d newPosition
-                            |> Point2d.translateBy (Vector2d.fromTuple Units.tileUnit ( 0.5, 0.5 ))
-                    , delay = Quantity.zero
-                    }
-                        |> Just
-
-                Nothing ->
-                    Nothing
+    case navPoints2 of
+        head :: _ ->
+            { npc | position = head, startTime = time }
 
         [] ->
-            Random.step (randomMovement position) seed |> Tuple.first
+            npc
 
 
 getNpcPathHelper : Grid a -> Coord WorldUnit -> Direction4 -> Int -> Random.Generator (Coord WorldUnit)
