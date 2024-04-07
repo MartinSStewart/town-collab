@@ -4752,7 +4752,7 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
             Effect.WebGL.Texture.size texture
     in
     List.filterMap
-        (\( npcId, npc ) ->
+        (\( _, npc ) ->
             let
                 position : Point2d WorldUnit WorldUnit
                 position =

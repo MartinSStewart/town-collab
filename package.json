@@ -1,5 +1,6 @@
 {
   "dependencies": {
+    "elm-format": "^0.8.7",
     "elm-review": "^2.10.2"
   }
 }

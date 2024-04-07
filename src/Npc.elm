@@ -41,6 +41,7 @@ type alias Npc =
     , startTime : Effect.Time.Posix
     , endPosition : Point2d WorldUnit WorldUnit
     , createdAt : Effect.Time.Posix
+    , visitedPositions : Nonempty (Point2d WorldUnit WorldUnit)
     }
 
 
@@ -175,11 +176,11 @@ getNavPoints npcPosition grid =
     let
         minPoint : Point2d WorldUnit WorldUnit
         minPoint =
-            Point2d.translateBy (Vector2d.reverse maxNavPointDistance) npcPosition
+            Point2d.translateBy (Vector2d.reverse maxNavPointVector) npcPosition
 
         maxPoint : Point2d WorldUnit WorldUnit
         maxPoint =
-            Point2d.translateBy maxNavPointDistance npcPosition
+            Point2d.translateBy maxNavPointVector npcPosition
 
         cellBounds : Bounds CellUnit
         cellBounds =
@@ -196,7 +197,7 @@ getNavPoints npcPosition grid =
                     GridCell.flatten cell
                         |> List.concatMap
                             (\{ tile, position } ->
-                                List.map
+                                List.filterMap
                                     (\tileCoord ->
                                         let
                                             navPoint : Point2d WorldUnit WorldUnit

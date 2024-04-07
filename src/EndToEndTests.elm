@@ -7,7 +7,6 @@ import Change exposing (UserStatus(..))
 import Coord
 import Dict
 import Duration
-import Effect.Http exposing (Response(..))
 import Effect.Lamdera
 import Effect.Test exposing (Config, FileUpload(..), HttpRequest, HttpResponse(..), MultipleFilesUpload(..), PortToJs)
 import Effect.WebGL.Texture exposing (Texture)

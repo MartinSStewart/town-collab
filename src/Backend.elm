@@ -9,7 +9,6 @@ module Backend exposing
     , localUndo
     )
 
-import Angle
 import Animal exposing (Animal)
 import Array exposing (Array)
 import AssocList
@@ -21,7 +20,6 @@ import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor
 import Dict
-import Direction2d
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
 import Effect.Command as Command exposing (BackendOnly, Command)
@@ -856,6 +854,7 @@ randomPerson houses createdAt =
             , startTime = createdAt
             , endPosition = position
             , createdAt = createdAt
+            , visitedPositions = Nonempty position []
             }
         )
         (Nonempty.sample houses)
