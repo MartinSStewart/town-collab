@@ -61,9 +61,9 @@ import Vector2d exposing (Vector2d)
 view : FrontendLoaded -> Hover -> Ui.Element UiHover
 view model hover =
     let
-        localModel : LocalGrid.LocalGrid_
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         ( cssWindowWidth, cssWindowHeight ) =
             Coord.toTuple model.cssWindowSize
@@ -216,9 +216,9 @@ normalView windowSize model hover =
                 NotLoggedIn _ ->
                     IdDict.size localModel.cursors
 
-        localModel : LocalGrid.LocalGrid_
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         toolbarElement : Ui.Element UiHover
         toolbarElement =
@@ -282,7 +282,7 @@ normalView windowSize model hover =
                                 ( cellPos, startPos ) =
                                     Grid.worldToCellAndLocalCoord tileHover.position
                             in
-                            case Grid.getCell cellPos (LocalGrid.localModel model.localModel).grid of
+                            case Grid.getCell cellPos (Local.model model.localModel).grid of
                                 Just cell ->
                                     case findHyperlink startPos (GridCell.flatten cell) of
                                         Just hyperlink ->
@@ -598,7 +598,7 @@ contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover
 contextMenuView toolbarHeight contextMenu model =
     let
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         contextMenuElement : Ui.Element UiHover
         contextMenuElement =
@@ -2157,7 +2157,7 @@ actualViewPointHelper model =
             viewPoint
 
         TrainViewPoint trainViewPoint ->
-            case IdDict.get trainViewPoint.trainId (LocalGrid.localModel model.localModel).trains of
+            case IdDict.get trainViewPoint.trainId (Local.model model.localModel).trains of
                 Just train ->
                     let
                         t =

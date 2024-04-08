@@ -72,7 +72,7 @@ update config hover event model =
             onPress
                 event
                 (\() ->
-                    case LocalGrid.localModel config.localModel |> .userStatus of
+                    case Local.model config.localModel |> .userStatus of
                         LoggedIn { isGridReadOnly } ->
                             ( model, Change.AdminSetGridReadOnly (not isGridReadOnly) |> OutMsgAdminChange )
 
@@ -87,7 +87,7 @@ update config hover event model =
                 (\() ->
                     ( model
                     , Change.AdminSetTrainsDisabled
-                        (case LocalGrid.localModel config.localModel |> .trainsDisabled of
+                        (case Local.model config.localModel |> .trainsDisabled of
                             TrainsAndAnimalsDisabled ->
                                 TrainsAndAnimalsEnabled
 
@@ -124,7 +124,7 @@ update config hover event model =
             onPress event (\() -> ( model, OutMsgAdminChange (Change.AdminRegenerateGridCellCache config.time) )) model
 
 
-adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
+adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid -> Ui.Element id
 adminView idMap windowSize isGridReadOnly adminData model localModel =
     let
         averageWorldUpdateDuration =

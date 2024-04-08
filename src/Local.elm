@@ -1,4 +1,4 @@
-module Local exposing (Config, Local, init, localModel, unsafe, unwrap, update, updateFromBackend)
+module Local exposing (Config, Local, init, model, unsafe, unwrap, update, updateFromBackend)
 
 import List.Nonempty exposing (Nonempty)
 
@@ -14,8 +14,8 @@ type alias Config msg model outMsg =
 
 
 init : model -> Local msg model
-init model =
-    Local { localMsgs = [], localModel = model, model = model }
+init model2 =
+    Local { localMsgs = [], localModel = model2, model = model2 }
 
 
 update : Config msg model outMsg -> msg -> Local msg model -> ( Local msg model, outMsg )
@@ -33,8 +33,8 @@ update config msg (Local localModel_) =
     )
 
 
-localModel : Local msg model -> model
-localModel (Local localModel_) =
+model : Local msg model -> model
+model (Local localModel_) =
     localModel_.localModel
 
 
@@ -57,7 +57,7 @@ updateFromBackend config msgs (Local localModel_) =
     let
         ( newModel, outMsgs ) =
             List.Nonempty.foldl
-                (\msg ( model, outMsgs2 ) -> config.update msg model |> Tuple.mapSecond (\a -> a :: outMsgs2))
+                (\msg ( model2, outMsgs2 ) -> config.update msg model2 |> Tuple.mapSecond (\a -> a :: outMsgs2))
                 ( localModel_.model, [] )
                 msgs
 
@@ -87,7 +87,7 @@ updateFromBackend config msgs (Local localModel_) =
         { localMsgs = List.reverse newLocalMsgs
         , localModel =
             List.foldl
-                (\msg model -> config.update msg model |> Tuple.first)
+                (\msg model2 -> config.update msg model2 |> Tuple.first)
                 newModel
                 newLocalMsgs
         , model = newModel

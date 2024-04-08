@@ -62,7 +62,7 @@ import Keyboard
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Local exposing (Local)
-import LocalGrid exposing (LocalGrid, LocalGrid_)
+import LocalGrid exposing (LocalGrid)
 import MailEditor
 import Math.Matrix4 as Mat4
 import Math.Vector4 as Vec4
@@ -297,7 +297,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , debrisMesh = Shaders.triangleFan []
             , lastTrainWhistle = Nothing
             , page =
-                case ( loading.route, LocalGrid.localModel loadedLocalModel.localModel |> .userStatus ) of
+                case ( loading.route, Local.model loadedLocalModel.localModel |> .userStatus ) of
                     ( MailEditorRoute, LoggedIn _ ) ->
                         MailEditor.init Nothing |> MailPage
 
@@ -341,7 +341,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
                 }
             , previousCursorPositions = IdDict.empty
             , handMeshes =
-                LocalGrid.localModel loadedLocalModel.localModel
+                Local.model loadedLocalModel.localModel
                     |> .users
                     |> IdDict.map
                         (\userId user ->
@@ -506,9 +506,9 @@ expandHyperlink startPos flattenedValues =
 hardUpdateMeshes : FrontendLoaded -> FrontendLoaded
 hardUpdateMeshes newModel =
     let
-        localModel : LocalGrid_
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel newModel.localModel
+            Local.model newModel.localModel
 
         newCells : Dict ( Int, Int ) (GridCell.Cell FrontendHistory)
         newCells =
@@ -632,7 +632,7 @@ hardUpdateMeshes newModel =
                     )
                     coord
                     newMaybeUserId
-                    (LocalGrid.localModel newModel.localModel |> .users)
+                    (Local.model newModel.localModel |> .users)
                     (GridCell.getToggledRailSplit newCell)
                     flattened
             , background =
@@ -678,11 +678,11 @@ updateMeshes newModel =
 
         oldCells : Dict ( Int, Int ) (GridCell.Cell FrontendHistory)
         oldCells =
-            LocalGrid.localModel oldModel.localModel |> .grid |> Grid.allCellsDict
+            Local.model oldModel.localModel |> .grid |> Grid.allCellsDict
 
-        localModel : LocalGrid_
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel newModel.localModel
+            Local.model newModel.localModel
 
         newCells : Dict ( Int, Int ) (GridCell.Cell FrontendHistory)
         newCells =
@@ -814,7 +814,7 @@ updateMeshes newModel =
                     )
                     coord
                     newMaybeUserId
-                    (LocalGrid.localModel newModel.localModel |> .users)
+                    (Local.model newModel.localModel |> .users)
                     (GridCell.getToggledRailSplit newCell)
                     flattened
             , background =
@@ -937,9 +937,9 @@ cursorPosition tileData model =
 getHandColor : Id UserId -> { a | localModel : Local b LocalGrid } -> Colors
 getHandColor userId model =
     let
-        localGrid : LocalGrid_
+        localGrid : LocalGrid
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
     in
     case IdDict.get userId localGrid.users of
         Just { handColor } ->
@@ -1035,7 +1035,7 @@ getTileColor tileGroup model =
 
 getReports : Local a LocalGrid -> List Report
 getReports localModel =
-    case LocalGrid.localModel localModel |> .userStatus of
+    case Local.model localModel |> .userStatus of
         LoggedIn loggedIn ->
             loggedIn.reports
 
@@ -1045,7 +1045,7 @@ getReports localModel =
 
 getAdminReports : Local a LocalGrid -> IdDict UserId (Nonempty BackendReport)
 getAdminReports localModel =
-    case LocalGrid.localModel localModel |> .userStatus of
+    case Local.model localModel |> .userStatus of
         LoggedIn loggedIn ->
             case loggedIn.adminData of
                 Just adminData ->
@@ -1080,7 +1080,7 @@ viewBoundsUpdate ( model, cmd ) =
             loadingCellBounds model
 
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         newBoundsContained =
             Bounds.containsBounds bounds localModel.viewBounds
@@ -1172,9 +1172,9 @@ hoverAt model mousePosition =
                 tileHover : Maybe Hover
                 tileHover =
                     let
-                        localModel : LocalGrid_
+                        localModel : LocalGrid
                         localModel =
-                            LocalGrid.localModel model.localModel
+                            Local.model model.localModel
                     in
                     case Grid.getTile (Coord.floorPoint mouseWorldPosition_) localModel.grid of
                         Just tile ->
@@ -1236,9 +1236,9 @@ hoverAt model mousePosition =
                         ReportTool ->
                             Nothing
 
-                localGrid : LocalGrid_
+                localGrid : LocalGrid
                 localGrid =
-                    LocalGrid.localModel model.localModel
+                    Local.model model.localModel
 
                 animalHovers : Maybe ( Id AnimalId, Animal )
                 animalHovers =
@@ -1297,7 +1297,7 @@ animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point
 animalActualPosition animalId model =
     let
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
     in
     case
         IdDict.toList localGrid.cursors
@@ -1389,7 +1389,7 @@ handleOutMsg isFromBackend ( model, outMsg ) =
             )
 
         LocalGrid.HandColorOrNameChanged userId ->
-            ( case LocalGrid.localModel model.localModel |> .users |> IdDict.get userId of
+            ( case Local.model model.localModel |> .users |> IdDict.get userId of
                 Just user ->
                     { model
                         | handMeshes =

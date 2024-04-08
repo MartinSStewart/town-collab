@@ -1653,7 +1653,7 @@ localGridChange time model localChange userId user =
 
             newAnimals : List ( Id AnimalId, Animal )
             newAnimals =
-                List.concatMap LocalGrid.getCowsForCell newCells
+                List.concatMap LocalGrid.getAnimalsForCell newCells
                     |> List.indexedMap (\index cow -> ( Id.fromInt (nextCowId + index), cow ))
         in
         case Train.canRemoveTiles time removed model.trains of
@@ -2427,7 +2427,7 @@ generateVisibleRegion oldBounds bounds model =
                         newCows : List Animal
                         newCows =
                             if data.isNew then
-                                LocalGrid.getCowsForCell coord
+                                LocalGrid.getAnimalsForCell coord
 
                             else
                                 []

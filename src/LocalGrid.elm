@@ -1,6 +1,5 @@
 module LocalGrid exposing
     ( LocalGrid
-    , LocalGrid_
     , OutMsg(..)
     , addNotification
     , addReported
@@ -8,11 +7,10 @@ module LocalGrid exposing
     , currentTool
     , currentUserId
     , deleteMail
-    , getCowsForCell
+    , getAnimalsForCell
     , incrementUndoCurrent
     , init
     , keyDown
-    , localModel
     , notificationViewportHalfSize
     , notificationViewportSize
     , placeAnimal
@@ -66,11 +64,7 @@ import User exposing (FrontendUser, InviteTree)
 import Vector2d exposing (Vector2d)
 
 
-type LocalGrid
-    = LocalGrid LocalGrid_
-
-
-type alias LocalGrid_ =
+type alias LocalGrid =
     { grid : Grid FrontendHistory
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
@@ -88,7 +82,7 @@ type alias LocalGrid_ =
 
 currentUserId : { a | localModel : Local Change LocalGrid } -> Maybe (Id UserId)
 currentUserId model =
-    case localModel model.localModel |> .userStatus of
+    case Local.model model.localModel |> .userStatus of
         LoggedIn loggedIn ->
             Just loggedIn.userId
 
@@ -122,11 +116,6 @@ keyDown key { pressedKeys } =
     AssocSet.member key pressedKeys
 
 
-localModel : Local a LocalGrid -> LocalGrid_
-localModel localModel_ =
-    Local.localModel localModel_ |> (\(LocalGrid a) -> a)
-
-
 init :
     { a
         | userStatus : UserStatus
@@ -143,20 +132,19 @@ init :
     }
     -> Local Change LocalGrid
 init data =
-    LocalGrid
-        { grid = Grid.dataToGrid data.grid
-        , userStatus = data.userStatus
-        , viewBounds = data.viewBounds
-        , previewBounds = Nothing
-        , animals = data.animals
-        , cursors = data.cursors
-        , users = data.users
-        , inviteTree = data.inviteTree
-        , mail = data.mail
-        , trains = data.trains
-        , trainsDisabled = data.trainsDisabled
-        , npcs = data.npcs
-        }
+    { grid = Grid.dataToGrid data.grid
+    , userStatus = data.userStatus
+    , viewBounds = data.viewBounds
+    , previewBounds = Nothing
+    , animals = data.animals
+    , cursors = data.cursors
+    , users = data.users
+    , inviteTree = data.inviteTree
+    , mail = data.mail
+    , trains = data.trains
+    , trainsDisabled = data.trainsDisabled
+    , npcs = data.npcs
+    }
         |> Local.init
 
 
@@ -205,7 +193,7 @@ type OutMsg
     | VisitedHyperlinkOutMsg Hyperlink
 
 
-updateLocalChange : LocalChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+updateLocalChange : LocalChange -> LocalGrid -> ( LocalGrid, OutMsg )
 updateLocalChange localChange model =
     case localChange of
         LocalGridChange gridChange ->
@@ -780,7 +768,7 @@ setTileHotkey hotkey tileGroup user =
     }
 
 
-updateLoggedIn : LocalGrid_ -> (Change.LoggedIn_ -> Change.LoggedIn_) -> LocalGrid_
+updateLoggedIn : LocalGrid -> (Change.LoggedIn_ -> Change.LoggedIn_) -> LocalGrid
 updateLoggedIn model updateFunc =
     case model.userStatus of
         LoggedIn loggedIn ->
@@ -927,12 +915,12 @@ addNotification position notifications =
         position :: notifications
 
 
-updateServerChange : ServerChange -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+updateServerChange : ServerChange -> LocalGrid -> ( LocalGrid, OutMsg )
 updateServerChange serverChange model =
     case serverChange of
         ServerGridChange { gridChange, newAnimals } ->
             let
-                model2 : LocalGrid_
+                model2 : LocalGrid
                 model2 =
                     updateLoggedIn
                         { model | animals = IdDict.fromList newAnimals |> IdDict.union model.animals }
@@ -1430,7 +1418,7 @@ updateWorldUpdateDurations duration model =
     }
 
 
-logout : LocalGrid_ -> ( LocalGrid_, OutMsg )
+logout : LocalGrid -> ( LocalGrid, OutMsg )
 logout model =
     case model.userStatus of
         LoggedIn loggedIn ->
@@ -1487,7 +1475,7 @@ removeReported userId position reported =
         reported
 
 
-pickupCow : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+pickupCow : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid -> ( LocalGrid, OutMsg )
 pickupCow userId cowId position time model =
     ( { model
         | cursors =
@@ -1508,7 +1496,7 @@ pickupCow userId cowId position time model =
     )
 
 
-dropAnimal : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+dropAnimal : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid -> ( LocalGrid, OutMsg )
 dropAnimal userId animalId position model =
     ( { model
         | cursors =
@@ -1562,7 +1550,7 @@ moveOutOfCollision position bounds =
         |> Maybe.withDefault position
 
 
-moveCursor : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+moveCursor : Id UserId -> Point2d WorldUnit WorldUnit -> LocalGrid -> ( LocalGrid, OutMsg )
 moveCursor userId position model =
     ( { model
         | cursors =
@@ -1584,7 +1572,7 @@ moveCursor userId position model =
     )
 
 
-update_ : Change -> LocalGrid_ -> ( LocalGrid_, OutMsg )
+update_ : Change -> LocalGrid -> ( LocalGrid, OutMsg )
 update_ msg model =
     case msg of
         LocalChange _ localChange ->
@@ -1604,7 +1592,7 @@ config =
 
                 _ ->
                     msg0 == msg1
-    , update = \msg (LocalGrid model) -> update_ msg model |> Tuple.mapFirst LocalGrid
+    , update = update_
     }
 
 
@@ -1659,7 +1647,7 @@ addAnimals newCells model =
         | animals =
             List.foldl
                 (\newCell dict ->
-                    getCowsForCell newCell
+                    getAnimalsForCell newCell
                         |> List.foldl (\cow dict2 -> IdDict.insert (IdDict.nextId dict2) cow dict2) dict
                 )
                 model.animals
@@ -1667,8 +1655,8 @@ addAnimals newCells model =
     }
 
 
-getCowsForCell : Coord CellUnit -> List Animal
-getCowsForCell newCell =
+getAnimalsForCell : Coord CellUnit -> List Animal
+getAnimalsForCell newCell =
     Random.step
         (randomAnimals newCell)
         (Random.initialSeed

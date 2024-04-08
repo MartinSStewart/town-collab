@@ -54,7 +54,7 @@ import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LoadingPage
 import Local exposing (Local)
-import LocalGrid exposing (LocalGrid_)
+import LocalGrid exposing (LocalGrid)
 import MailEditor exposing (MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
@@ -158,9 +158,9 @@ audio audioData model =
 audioLoaded : AudioData -> FrontendLoaded -> Audio
 audioLoaded audioData model =
     let
-        localModel : LocalGrid_
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         timeOffset =
             PingData.pingOffset model
@@ -950,7 +950,7 @@ updateLoaded audioData msg model =
                                         , time : Effect.Time.Posix
                                         }
                                 maybeTile =
-                                    Grid.getTile position (LocalGrid.localModel model.localModel).grid
+                                    Grid.getTile position (Local.model model.localModel).grid
                             in
                             ( { model
                                 | contextMenu =
@@ -1136,9 +1136,9 @@ updateLoaded audioData msg model =
                 viewBounds =
                     viewBoundingBox model
 
-                localState : LocalGrid_
+                localState : LocalGrid
                 localState =
-                    LocalGrid.localModel model.localModel
+                    Local.model model.localModel
 
                 playTrainWhistle =
                     (case model.lastTrainWhistle of
@@ -1960,7 +1960,7 @@ setTileFromHotkey rawKey string model =
         Nothing ->
             let
                 localModel =
-                    LocalGrid.localModel model.localModel
+                    Local.model model.localModel
             in
             if string == " " then
                 LoadingPage.setCurrentTool (TilePlacerToolButton EmptyTileGroup) model
@@ -1985,7 +1985,7 @@ isHoldingCow : FrontendLoaded -> Maybe { cowId : Id AnimalId, pickupTime : Effec
 isHoldingCow model =
     let
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
     in
     case LocalGrid.currentUserId model of
         Just userId ->
@@ -2015,7 +2015,7 @@ tileInteraction :
 tileInteraction currentUserId2 { tile, userId, position } model =
     let
         localState =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         handleTrainHouse : Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
         handleTrainHouse =
@@ -2059,7 +2059,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                         else
                             let
                                 localModel =
-                                    LocalGrid.localModel model.localModel
+                                    Local.model model.localModel
                             in
                             case localModel.users |> IdDict.get userId of
                                 Just user ->
@@ -2169,7 +2169,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                 ( cellPos, startPos ) =
                     Grid.worldToCellAndLocalCoord position
             in
-            case Grid.getCell cellPos (LocalGrid.localModel model.localModel).grid of
+            case Grid.getCell cellPos (Local.model model.localModel).grid of
                 Just cell ->
                     case Toolbar.findHyperlink startPos (GridCell.flatten cell) of
                         Just hyperlink ->
@@ -2499,7 +2499,7 @@ handleMailEditorOutMsg outMsg model =
 
 sendInvite : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend msg )
 sendInvite model =
-    case ( LocalGrid.localModel model.localModel |> .userStatus, model.inviteSubmitStatus ) of
+    case ( Local.model model.localModel |> .userStatus, model.inviteSubmitStatus ) of
         ( LoggedIn loggedIn, NotSubmitted _ ) ->
             case Toolbar.validateInviteEmailAddress loggedIn.emailAddress model.inviteTextInput.current.text of
                 Ok emailAddress ->
@@ -2766,7 +2766,7 @@ uiUpdate audioData id event model =
                 (\() ->
                     let
                         localModel =
-                            LocalGrid.localModel model.localModel
+                            Local.model model.localModel
                     in
                     ( { model
                         | topMenuOpened =
@@ -2889,7 +2889,7 @@ uiUpdate audioData id event model =
                 audioData
                 event
                 (\() ->
-                    case LocalGrid.localModel model.localModel |> .userStatus of
+                    case Local.model model.localModel |> .userStatus of
                         LoggedIn loggedIn ->
                             LoadingPage.updateLocalModel
                                 (Change.SetAllowEmailNotifications (not loggedIn.allowEmailNotifications))
@@ -3478,7 +3478,7 @@ setTrainViewPoint trainId model =
 
 canOpenMailEditor : FrontendLoaded -> Maybe (IdDict UserId (List MailEditor.Content))
 canOpenMailEditor model =
-    case ( model.page, model.currentTool, LocalGrid.localModel model.localModel |> .userStatus ) of
+    case ( model.page, model.currentTool, Local.model model.localModel |> .userStatus ) of
         ( WorldPage _, HandTool, LoggedIn loggedIn ) ->
             Just loggedIn.mailDrafts
 
@@ -3539,10 +3539,10 @@ placeTileAt cursorPosition_ isDragPlacement tileGroup index model =
 
                 grid : Grid FrontendHistory
                 grid =
-                    LocalGrid.localModel model.localModel |> .grid
+                    Local.model model.localModel |> .grid
 
                 localState =
-                    LocalGrid.localModel model.localModel
+                    Local.model model.localModel
             in
             if isDragPlacement && hasCollision then
                 model
@@ -4288,7 +4288,7 @@ getNightFactor : FrontendLoaded -> Float
 getNightFactor model =
     let
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         timeOfDay : TimeOfDay
         timeOfDay =
@@ -4535,9 +4535,9 @@ canvasView audioData model =
 drawWorld : Bool -> RenderData -> Hover -> BoundingBox2d WorldUnit WorldUnit -> FrontendLoaded -> List Effect.WebGL.Entity
 drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
     let
-        localGrid : LocalGrid_
+        localGrid : LocalGrid
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         textureSize : Vec2
         textureSize =
@@ -4647,9 +4647,9 @@ drawReports { nightFactor, lights, texture, viewMatrix, depth } reportsMesh =
 drawAnimals : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
 drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
-        localGrid : LocalGrid_
+        localGrid : LocalGrid
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         ( textureW, textureH ) =
             Effect.WebGL.Texture.size texture
@@ -4742,9 +4742,9 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
 drawNpcs : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
 drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
-        localGrid : LocalGrid_
+        localGrid : LocalGrid
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         ( textureW, textureH ) =
             Effect.WebGL.Texture.size texture
@@ -4876,9 +4876,9 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
         textureSize =
             Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
 
-        localGrid : LocalGrid_
+        localGrid : LocalGrid
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
     in
     case
         ( LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model)
@@ -5028,7 +5028,7 @@ drawMap model =
                 let
                     grid : Grid FrontendHistory
                     grid =
-                        LocalGrid.localModel model.localModel |> .grid
+                        Local.model model.localModel |> .grid
 
                     viewPoint =
                         Toolbar.actualViewPoint model |> Point2d.unwrap
@@ -5189,7 +5189,7 @@ drawOtherCursors : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLo
 drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, scissors } model =
     let
         localGrid =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
     in
     (case LocalGrid.currentUserId model of
         Just userId ->
@@ -5261,7 +5261,7 @@ drawCursor :
     -> FrontendLoaded
     -> List Effect.WebGL.Entity
 drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePointer userId model =
-    case IdDict.get userId (LocalGrid.localModel model.localModel).cursors of
+    case IdDict.get userId (Local.model model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
                 CursorSprite mousePointer ->
@@ -5320,7 +5320,7 @@ getFlags : FrontendLoaded -> List { position : Point2d WorldUnit WorldUnit, isRe
 getFlags model =
     let
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         hasMailWaitingPickup : Id UserId -> Bool
         hasMailWaitingPickup userId =
