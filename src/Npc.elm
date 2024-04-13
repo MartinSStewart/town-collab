@@ -114,39 +114,6 @@ actualPositionWithoutCursor time npc =
         |> Point2d.interpolateFrom npc.position npc.endPosition
 
 
-isNpcWalkable : Grid a -> Coord WorldUnit -> Bool
-isNpcWalkable grid npcPosition =
-    case Grid.getTile npcPosition grid of
-        Just { tile } ->
-            case tile of
-                Tile.Sidewalk ->
-                    True
-
-                Tile.DirtPathHorizontal ->
-                    True
-
-                Tile.DirtPathVertical ->
-                    True
-
-                Tile.SidewalkHorizontalRailCrossing ->
-                    True
-
-                Tile.SidewalkVerticalRailCrossing ->
-                    True
-
-                Tile.RoadSidewalkCrossingHorizontal ->
-                    True
-
-                Tile.RoadSidewalkCrossingVertical ->
-                    True
-
-                _ ->
-                    False
-
-        Nothing ->
-            False
-
-
 navPoints : Tile -> List (Coord Pixels)
 navPoints tile =
     case tile of
@@ -154,7 +121,7 @@ navPoints tile =
             [ Coord.xy 5 4, Coord.xy 15 4, Coord.xy 5 13, Coord.xy 15 13 ]
 
         DirtPathHorizontal ->
-            [ Coord.xy 12 9, Coord.xy 12 27 ]
+            [ Coord.xy 12 9, Coord.xy 27 9 ]
 
         DirtPathVertical ->
             [ Coord.xy 10 10, Coord.xy 10 26 ]
@@ -212,7 +179,12 @@ getNavPoints npcPosition grid =
                                                 Point2d.distanceFrom navPoint npcPosition
                                         in
                                         if (distance |> Quantity.lessThan maxNavPointDistance) && (distance |> Quantity.greaterThan (Quantity.unsafe 0.01)) then
-                                            Just navPoint
+                                            case Grid.rayIntersection2 True (Units.pixelToTileVector size |> Vector2d.scaleBy 0.5) npcPosition navPoint grid of
+                                                Just _ ->
+                                                    Nothing
+
+                                                Nothing ->
+                                                    Just navPoint
 
                                         else
                                             Nothing
@@ -232,13 +204,13 @@ getNavPoints npcPosition grid =
 updateNpcPath : Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
 updateNpcPath time grid npcId npc =
     if Duration.from time (moveEndTime npc) |> Quantity.lessThanOrEqualToZero then
-        case getNavPoints npc.endPosition grid |> List.Extra.minimumBy (navPointWeighting npc) of
+        case getNavPoints npc.endPosition grid |> List.Extra.minimumBy (navPointWeighting npcId npc) of
             Just head ->
                 { npc
                     | position = npc.endPosition
                     , endPosition = head
                     , startTime = time
-                    , visitedPositions = List.Nonempty.take 5 npc.visitedPositions |> List.Nonempty.cons npc.endPosition
+                    , visitedPositions = List.Nonempty.take 6 npc.visitedPositions |> List.Nonempty.cons npc.endPosition
                 }
 
             Nothing ->
@@ -248,46 +220,20 @@ updateNpcPath time grid npcId npc =
         npc
 
 
-navPointWeighting : Npc -> Point2d WorldUnit WorldUnit -> Float
-navPointWeighting npc navPoint =
+navPointWeighting : Id NpcId -> Npc -> Point2d WorldUnit WorldUnit -> Float
+navPointWeighting npcId npc navPoint =
+    let
+        scaleFactor : Float
+        scaleFactor =
+            Random.step (Random.float 0.9 1.1) (Random.initialSeed (Id.toInt npcId)) |> Tuple.first
+    in
     List.Nonempty.foldl
         (\visited total ->
-            2 / max (Quantity.unwrap (Point2d.distanceFrom navPoint visited)) 0.1
+            total + 2 / max (Quantity.unwrap (Point2d.distanceFrom navPoint visited)) 0.1
         )
         0
         npc.visitedPositions
-
-
-getNpcPathHelper : Grid a -> Coord WorldUnit -> Direction4 -> Int -> Random.Generator (Coord WorldUnit)
-getNpcPathHelper grid position direction stepsLeft =
-    let
-        forwardPosition : Coord WorldUnit
-        forwardPosition =
-            Coord.translateIn direction 1 position
-    in
-    if stepsLeft > 0 && isNpcWalkable grid forwardPosition then
-        Random.weighted
-            ( 0.8, True )
-            (if
-                isNpcWalkable grid (Coord.translateIn (Direction4.turn TurnRight direction) 1 position)
-                    || isNpcWalkable grid (Coord.translateIn (Direction4.turn TurnLeft direction) 1 position)
-             then
-                [ ( 0.2, False ) ]
-
-             else
-                []
-            )
-            |> Random.andThen
-                (\moveForward ->
-                    if moveForward then
-                        getNpcPathHelper grid forwardPosition direction (stepsLeft - 1)
-
-                    else
-                        Random.constant position
-                )
-
-    else
-        Random.constant position
+        |> (*) scaleFactor
 
 
 randomMovement :
