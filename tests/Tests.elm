@@ -24,6 +24,7 @@ import TextInputMultiline
 import Tile exposing (Tile(..))
 import TileCountBot
 import Time
+import Toolbar
 import Train exposing (Train)
 import Units
 import Unsafe

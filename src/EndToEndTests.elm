@@ -403,6 +403,16 @@ windowSize =
     { width = 1000, height = 600 }
 
 
+makeItDayTime :
+    Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+makeItDayTime frontendActions state =
+    clickOnUi frontendActions SettingsButton state
+        |> clickOnUi frontendActions AlwaysDayTimeOfDayButton
+        |> clickOnUi frontendActions CloseSettings
+
+
 loadPage :
     Effect.Lamdera.SessionId
     ->
@@ -479,6 +489,7 @@ tests depth lights texture trainDepth trainLights trainTexture =
             (\frontend0 state ->
                 state
                     |> clickOnUi frontend0 (CategoryButton Rail)
+                    |> makeItDayTime frontend0
                     |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton TrainHouseGroup))
                     |> clickOnScreen frontend0 (Point2d.pixels 300 300)
                     |> frontend0.update (Audio.UserMsg (MouseWheel { deltaY = 100, deltaMode = DeltaPixel }))

@@ -120,7 +120,11 @@ subscriptions model =
                 Duration.seconds 4
             )
             WorldUpdateTimeElapsed
-        , Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
+        , if Dict.isEmpty model.userSessions then
+            Subscription.none
+
+          else
+            Effect.Time.every (Duration.seconds 10) (\_ -> CheckConnectionTimeElapsed)
         , Effect.Time.every (Duration.minutes 15) TileCountBotUpdate
         ]
 

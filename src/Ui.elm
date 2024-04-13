@@ -1093,7 +1093,7 @@ findInput id element =
 
 findInputHelper : id -> Coord Pixels -> Element id -> Maybe (InputType id)
 findInputHelper id position element =
-    case element of
+    (case element of
         Text _ ->
             Nothing
 
@@ -1167,22 +1167,31 @@ findInputHelper id position element =
                 |> .result
 
         Single data child ->
-            let
-                position2 =
-                    Coord.plus data.padding.topLeft position
-            in
-            case List.findMap (findInputHelper id position2) (child :: data.inFront) of
+            case List.findMap (findInputHelper id position) data.inFront of
                 Just result ->
                     Just result
 
                 Nothing ->
-                    findInputHelper id position2 child
+                    findInputHelper id (Coord.plus data.padding.topLeft position) child
 
         Quads _ ->
             Nothing
 
         Empty ->
             Nothing
+    )
+        |> (\a ->
+                case a of
+                    Just b ->
+                        let
+                            _ =
+                                Debug.log "findInputHelper" ( id, position, String.left 100 (Debug.toString element) )
+                        in
+                        Just b
+
+                    Nothing ->
+                        Nothing
+           )
 
 
 tabForward : id -> Element id -> id
