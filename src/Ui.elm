@@ -1093,7 +1093,7 @@ findInput id element =
 
 findInputHelper : id -> Coord Pixels -> Element id -> Maybe (InputType id)
 findInputHelper id position element =
-    (case element of
+    case element of
         Text _ ->
             Nothing
 
@@ -1179,19 +1179,6 @@ findInputHelper id position element =
 
         Empty ->
             Nothing
-    )
-        |> (\a ->
-                case a of
-                    Just b ->
-                        let
-                            _ =
-                                Debug.log "findInputHelper" ( id, position, String.left 100 (Debug.toString element) )
-                        in
-                        Just b
-
-                    Nothing ->
-                        Nothing
-           )
 
 
 tabForward : id -> Element id -> id

@@ -16,7 +16,8 @@ import Frontend
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Html.Parser
-import Id exposing (OneTimePasswordId, SecretId)
+import Id exposing (Id(..), OneTimePasswordId, SecretId)
+import IdDict
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -27,6 +28,7 @@ import Point2d exposing (Point2d)
 import Postmark
 import Tile exposing (Category(..), TileGroup(..))
 import Toolbar
+import Train exposing (IsStuckOrDerailed(..), Status(..))
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, FrontendMsg_(..), Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend, ToolButton(..), UiHover(..))
 import Ui
 import Unsafe
@@ -510,6 +512,25 @@ tests depth lights texture trainDepth trainLights trainTexture =
                     |> Effect.Test.simulateTime (Duration.seconds 6)
                     |> clickOnScreen frontend0 (Point2d.pixels 1400 300)
                     |> Effect.Test.simulateTime (Duration.seconds 6)
+                    |> clickOnScreen frontend0 (Point2d.pixels 1120 314)
+                    |> Effect.Test.simulateTime (Duration.seconds 1.5)
+                    |> Effect.Test.checkState
+                        (\state2 ->
+                            case IdDict.values state2.backend.trains |> List.map (Train.status state2.time) of
+                                [ first, second ] ->
+                                    case ( first, second ) of
+                                        ( Travelling _, WaitingAtHome ) ->
+                                            Ok ()
+
+                                        ( WaitingAtHome, Travelling _ ) ->
+                                            Ok ()
+
+                                        _ ->
+                                            Err "Unexpected train state"
+
+                                _ ->
+                                    Err "Both trains not found"
+                        )
             )
     , Effect.Test.start config "Can't log in for a different session"
         |> loadPage
