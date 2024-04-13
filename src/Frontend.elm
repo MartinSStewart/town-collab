@@ -969,20 +969,20 @@ updateLoaded audioData msg model =
                 _ ->
                     ( model, Command.none )
 
-        MouseWheel event ->
+        MouseWheel { deltaMode, deltaY } ->
             let
                 scrollThreshold : Float
                 scrollThreshold =
                     model.scrollThreshold
-                        + (case event.deltaMode of
+                        + (case deltaMode of
                             DeltaPixel ->
-                                event.deltaY
+                                deltaY
 
                             DeltaLine ->
-                                event.deltaY * 30
+                                deltaY * 30
 
                             DeltaPage ->
-                                event.deltaY * 1000
+                                deltaY * 1000
                           )
 
                 worldZoom () =
@@ -4451,7 +4451,7 @@ canvasView audioData model =
          , Html.Attributes.style "width" (String.fromInt cssWindowWidth ++ "px")
          , Html.Attributes.style "height" (String.fromInt cssWindowHeight ++ "px")
          , Html.Events.preventDefaultOn "keydown" (Json.Decode.succeed ( NoOpFrontendMsg, True ))
-         , Html.Events.Extra.Wheel.onWheel MouseWheel
+         , Html.Events.Extra.Wheel.onWheel (\a -> MouseWheel { deltaY = a.deltaY, deltaMode = a.deltaMode })
          ]
             ++ LoadingPage.mouseListeners model
         )

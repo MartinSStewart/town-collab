@@ -61,7 +61,7 @@ import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
 import GridCell exposing (BackendHistory)
 import Html.Events.Extra.Mouse exposing (Button)
-import Html.Events.Extra.Wheel
+import Html.Events.Extra.Wheel exposing (DeltaMode)
 import Id exposing (AnimalId, EventId, Id, MailId, NpcId, OneTimePasswordId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
@@ -483,7 +483,7 @@ type FrontendMsg_
     | MouseDown Button (Point2d Pixels Pixels)
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
-    | MouseWheel Html.Events.Extra.Wheel.Event
+    | MouseWheel { deltaY : Float, deltaMode : DeltaMode }
     | MouseLeave
     | ShortIntervalElapsed Effect.Time.Posix
     | AnimationFrame Effect.Time.Posix

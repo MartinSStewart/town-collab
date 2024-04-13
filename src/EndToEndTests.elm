@@ -14,11 +14,13 @@ import EmailAddress exposing (EmailAddress)
 import Env
 import Frontend
 import Html.Events.Extra.Mouse exposing (Button(..))
+import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Html.Parser
 import Id exposing (OneTimePasswordId, SecretId)
 import Json.Decode
 import Json.Encode
 import Keyboard
+import Local
 import LocalGrid
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -250,7 +252,7 @@ shouldBeLoggedIn frontend0 =
                 Loading loading ->
                     case loading.localModel of
                         LoadedLocalModel loadedLocalModel ->
-                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
+                            case (Local.model loadedLocalModel.localModel).userStatus of
                                 LoggedIn _ ->
                                     Ok ()
 
@@ -261,7 +263,7 @@ shouldBeLoggedIn frontend0 =
                             Err "Local model not loaded"
 
                 Loaded loaded ->
-                    case (LocalGrid.localModel loaded.localModel).userStatus of
+                    case (Local.model loaded.localModel).userStatus of
                         LoggedIn _ ->
                             Ok ()
 
@@ -279,7 +281,7 @@ shouldBeLoggedOut frontend0 =
                 Loading loading ->
                     case loading.localModel of
                         LoadedLocalModel loadedLocalModel ->
-                            case (LocalGrid.localModel loadedLocalModel.localModel).userStatus of
+                            case (Local.model loadedLocalModel.localModel).userStatus of
                                 LoggedIn _ ->
                                     Err "Should be logged out"
 
@@ -290,7 +292,7 @@ shouldBeLoggedOut frontend0 =
                             Err "Local model not loaded"
 
                 Loaded loaded ->
-                    case (LocalGrid.localModel loaded.localModel).userStatus of
+                    case (Local.model loaded.localModel).userStatus of
                         LoggedIn _ ->
                             Err "Should be logged out"
 
@@ -315,6 +317,7 @@ typeText frontend0 text instructions =
             frontend0.update (Audio.UserMsg (Types.KeyDown keyEvent)) instructions2
                 |> shortWait
                 |> frontend0.update (Audio.UserMsg (Types.KeyUp keyEvent))
+                |> shortWait
         )
         instructions
         text
@@ -385,6 +388,7 @@ clickOnUi frontend0 id instructions =
                                     frontend0.update (Audio.UserMsg (Types.MouseDown MainButton position)) state
                                         |> shortWait
                                         |> frontend0.update (Audio.UserMsg (Types.MouseUp MainButton position))
+                                        |> shortWait
 
                                 Nothing ->
                                     Effect.Test.checkState (\_ -> Err ("Couldn't find UI with ID: " ++ Debug.toString id)) state
@@ -416,7 +420,6 @@ loadPage sessionId func state =
             windowSize
             (\( state2, frontend0 ) ->
                 pressEnter frontend0 state2
-                    |> shortWait
                     |> func frontend0
             )
 
@@ -430,16 +433,13 @@ loadAndLogin sessionId func state =
                 |> clickOnUi frontend0 Types.EmailAddressTextInputHover
                 |> typeText frontend0 Env.adminEmail2
                 |> pressEnter frontend0
-                |> shortWait
                 |> Effect.Test.andThen
                     (\data state3 ->
                         case List.filterMap isOneTimePasswordEmail data.httpRequests of
                             [ loginEmail ] ->
                                 state3
-                                    |> shortWait
                                     |> clickOnUi frontend0 Types.OneTimePasswordInput
                                     |> typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
-                                    |> shortWait
                                     |> shouldBeLoggedIn frontend0
 
                             _ ->
@@ -479,13 +479,12 @@ tests depth lights texture trainDepth trainLights trainTexture =
             (\frontend0 state ->
                 state
                     |> clickOnUi frontend0 (CategoryButton Rail)
-                    |> shortWait
                     |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton TrainHouseGroup))
-                    |> shortWait
                     |> clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    |> frontend0.update (Audio.UserMsg (MouseWheel { deltaY = 100, deltaMode = DeltaPixel }))
                     |> shortWait
+                    |> clickOnScreen frontend0 (Point2d.pixels 1400 300)
                     |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton RailStraightGroup))
-                    |> shortWait
                     |> clickOnScreen frontend0 (Point2d.pixels 340 310)
                     |> (\state2 ->
                             List.foldl
@@ -495,16 +494,11 @@ tests depth lights texture trainDepth trainLights trainTexture =
                                 state2
                                 (List.range 0 50)
                        )
-                    |> shortWait
                     |> clickOnUi frontend0 (ToolButtonHover HandToolButton)
-                    |> shortWait
                     |> clickOnScreen frontend0 (Point2d.pixels 300 300)
-                    |> (\state2 ->
-                            List.foldl
-                                (\_ state3 -> Effect.Test.simulateTime (Duration.seconds 0.1) state3)
-                                state2
-                                (List.range 1 120)
-                       )
+                    |> Effect.Test.simulateTime (Duration.seconds 6)
+                    |> clickOnScreen frontend0 (Point2d.pixels 1400 300)
+                    |> Effect.Test.simulateTime (Duration.seconds 6)
             )
     , Effect.Test.start config "Can't log in for a different session"
         |> loadPage
@@ -543,7 +537,7 @@ shortWait :
     Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
     -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
 shortWait =
-    Effect.Test.simulateTime (Duration.milliseconds 50)
+    Effect.Test.simulateTime (Duration.milliseconds 34)
 
 
 checkFrontend :
