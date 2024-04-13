@@ -23,6 +23,7 @@ import Effect.Time
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, NpcId)
+import List.Extra
 import List.Nonempty exposing (Nonempty(..))
 import NpcName exposing (NpcName)
 import Pixels exposing (Pixels)
@@ -162,6 +163,7 @@ navPoints tile =
             []
 
 
+maxNavPointDistance : Quantity Float WorldUnit
 maxNavPointDistance =
     Units.tileUnit 1.5
 
@@ -204,8 +206,12 @@ getNavPoints npcPosition grid =
                                             navPoint =
                                                 Units.pixelToTilePoint tileCoord
                                                     |> Point2d.translateBy (Grid.cellAndLocalCoordToWorld ( cellCoord, position ) |> Coord.toVector2d)
+
+                                            distance : Quantity Float WorldUnit
+                                            distance =
+                                                Point2d.distanceFrom navPoint npcPosition
                                         in
-                                        if Point2d.distanceFrom navPoint npcPosition |> Quantity.lessThan maxNavPointDistance then
+                                        if (distance |> Quantity.lessThan maxNavPointDistance) && (distance |> Quantity.greaterThan (Quantity.unsafe 0.01)) then
                                             Just navPoint
 
                                         else
@@ -223,23 +229,33 @@ getNavPoints npcPosition grid =
         []
 
 
-updateNpcPath :
-    Id NpcId
-    -> Npc
-    -> Effect.Time.Posix
-    -> Grid a
-    -> Npc
-updateNpcPath npcId npc time grid =
-    let
-        navPoints2 =
-            getNavPoints npc.endPosition grid
-    in
-    case navPoints2 of
-        head :: _ ->
-            { npc | position = head, startTime = time }
+updateNpcPath : Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
+updateNpcPath time grid npcId npc =
+    if Duration.from time (moveEndTime npc) |> Quantity.lessThanOrEqualToZero then
+        case getNavPoints npc.endPosition grid |> List.Extra.minimumBy (navPointWeighting npc) of
+            Just head ->
+                { npc
+                    | position = npc.endPosition
+                    , endPosition = head
+                    , startTime = time
+                    , visitedPositions = List.Nonempty.take 5 npc.visitedPositions |> List.Nonempty.cons npc.endPosition
+                }
 
-        [] ->
-            npc
+            Nothing ->
+                npc
+
+    else
+        npc
+
+
+navPointWeighting : Npc -> Point2d WorldUnit WorldUnit -> Float
+navPointWeighting npc navPoint =
+    List.Nonempty.foldl
+        (\visited total ->
+            2 / max (Quantity.unwrap (Point2d.distanceFrom navPoint visited)) 0.1
+        )
+        0
+        npc.visitedPositions
 
 
 getNpcPathHelper : Grid a -> Coord WorldUnit -> Direction4 -> Int -> Random.Generator (Coord WorldUnit)

@@ -1391,6 +1391,7 @@ updateServerChange serverChange model =
                                 (Duration.from previousTime currentTime |> Quantity.min Duration.minute |> Duration.subtractFrom currentTime)
                                 model.trains
                                 { grid = model.grid, mail = IdDict.empty }
+                        , npcs = IdDict.map (Npc.updateNpcPath currentTime model.grid) model.npcs
                       }
                     , NoOutMsg
                     )
