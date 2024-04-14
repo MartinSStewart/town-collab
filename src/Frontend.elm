@@ -4090,22 +4090,32 @@ cursorSprite hover model =
 
                                 else
                                     case LocalGrid.currentTool model of
-                                        TilePlacerTool _ ->
+                                        TilePlacerTool { tileGroup } ->
+                                            let
+                                                tilePlaceCursor : CursorType
+                                                tilePlaceCursor =
+                                                    case tileGroup of
+                                                        EmptyTileGroup ->
+                                                            CursorSprite EraserSpriteCursor
+
+                                                        _ ->
+                                                            CursorSprite DefaultSpriteCursor
+                                            in
                                             case hover of
                                                 UiHover [] ->
                                                     DefaultCursor
 
                                                 TileHover _ ->
-                                                    NoCursor
+                                                    tilePlaceCursor
 
                                                 TrainHover _ ->
-                                                    NoCursor
+                                                    tilePlaceCursor
 
                                                 MapHover ->
-                                                    NoCursor
+                                                    tilePlaceCursor
 
                                                 AnimalHover _ ->
-                                                    NoCursor
+                                                    tilePlaceCursor
 
                                                 UiHover _ ->
                                                     PointerCursor
@@ -4964,7 +4974,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                             localGrid.trains
                             localGrid.grid
                     then
-                        Vec4.vec4 1 1 1 0.5
+                        Vec4.vec4 1 1 1 0.7
 
                     else
                         Vec4.vec4 1 0 0 0.5
@@ -5266,6 +5276,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
             case showMousePointer.cursorType of
                 CursorSprite mousePointer ->
                     let
+                        point : { x : Float, y : Float }
                         point =
                             LoadingPage.cursorActualPosition True userId cursor model
                                 |> Point2d.unwrap
