@@ -449,11 +449,7 @@ addChange :
     -> (List GridCell.Value -> a)
     -> GridChange
     -> Grid a
-    ->
-        { grid : Grid a
-        , removed : List RemovedTile
-        , newCells : List (Coord CellUnit)
-        }
+    -> { grid : Grid a, removed : List RemovedTile, newCells : List (Coord CellUnit) }
 addChange emptyHistory getHistory setHistory change grid =
     let
         ( cellPosition, localPosition ) =
@@ -752,6 +748,7 @@ getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
             Ground
 
 
+backgroundMesh : Coord CellUnit -> Effect.WebGL.Mesh Vertex
 backgroundMesh cellPosition =
     let
         lookup : Array2D TerrainValue
@@ -888,15 +885,15 @@ backgroundMesh cellPosition =
 
 tileMesh : Tile -> Coord Pixels -> Int -> Colors -> List Vertex
 tileMesh tile position scale colors =
-    let
-        data : TileData unit
-        data =
-            Tile.getData tile
-    in
     if tile == EmptyTile then
         []
 
     else
+        let
+            data : TileData unit
+            data =
+                Tile.getData tile
+        in
         tileMeshHelper2
             Sprite.opaque
             colors
@@ -912,14 +909,7 @@ tileMesh tile position scale colors =
             data.size
 
 
-tileMeshHelper2 :
-    Float
-    -> Colors
-    -> Coord unit2
-    -> Int
-    -> Coord unit
-    -> Coord unit
-    -> List Vertex
+tileMeshHelper2 : Float -> Colors -> Coord unit2 -> Int -> Coord unit -> Coord unit -> List Vertex
 tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale texturePosition size =
     Sprite.spriteWithZAndOpacityAndUserId
         opacityAndUserId
