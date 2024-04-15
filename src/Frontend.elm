@@ -4466,7 +4466,7 @@ canvasView audioData model =
             ++ LoadingPage.mouseListeners model
         )
         (drawWorld True renderData hoverAt2 viewBounds_ model
-            ++ drawTilePlacer renderData audioData model
+            ++ drawTilePlacer renderData model
             ++ (case model.page of
                     MailPage _ ->
                         [ MailEditor.backgroundLayer renderData ]
@@ -4534,7 +4534,7 @@ canvasView audioData model =
                )
             ++ (case LocalGrid.currentUserId model of
                     Just userId ->
-                        drawCursor renderData showMousePointer userId model
+                        drawCursor renderData showMousePointer userId model audioData
 
                     Nothing ->
                         []
@@ -4880,8 +4880,34 @@ drawFlags { nightFactor, lights, texture, viewMatrix, depth, time, scissors } mo
         (getFlags model)
 
 
-drawTilePlacer : RenderData -> AudioData -> FrontendLoaded -> List Effect.WebGL.Entity
-drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioData model =
+cursorOffsetX : AudioData -> FrontendLoaded -> Quantity Float Pixels
+cursorOffsetX audioData model =
+    case model.lastTilePlaced of
+        Just lastPlacedTile ->
+            let
+                timeElapsed =
+                    Duration.from lastPlacedTile.time model.time
+            in
+            if
+                (timeElapsed |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound))
+                    && (lastPlacedTile.tile == EmptyTile)
+            then
+                timeElapsed
+                    |> Duration.inSeconds
+                    |> (*) 40
+                    |> cos
+                    |> (*) 2
+                    |> Pixels.pixels
+
+            else
+                lastPlacementOffset audioData model
+
+        Nothing ->
+            lastPlacementOffset audioData model
+
+
+drawTilePlacer : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
+drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } model =
     let
         textureSize =
             Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
@@ -4913,32 +4939,6 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
 
                 tileSize =
                     Tile.getData currentTile2 |> .size
-
-                offsetX : Float
-                offsetX =
-                    case model.lastTilePlaced of
-                        Just lastPlacedTile ->
-                            let
-                                timeElapsed =
-                                    Duration.from lastPlacedTile.time model.time
-                            in
-                            if
-                                (timeElapsed
-                                    |> Quantity.lessThan (Sound.length audioData model.sounds EraseSound)
-                                )
-                                    && (lastPlacedTile.tile == EmptyTile)
-                            then
-                                timeElapsed
-                                    |> Duration.inSeconds
-                                    |> (*) 40
-                                    |> cos
-                                    |> (*) 2
-
-                            else
-                                lastPlacementOffset audioData model
-
-                        Nothing ->
-                            lastPlacementOffset audioData model
             in
             [ Effect.WebGL.entityWith
                 [ Shaders.blend ]
@@ -4948,7 +4948,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                 { view =
                     viewMatrix
                         |> Mat4.translate3
-                            (toFloat mouseX * toFloat Units.tileWidth + offsetX)
+                            (toFloat mouseX * toFloat Units.tileWidth)
                             (toFloat mouseY * toFloat Units.tileHeight)
                             0
                 , texture = texture
@@ -4956,10 +4956,7 @@ drawTilePlacer { nightFactor, lights, viewMatrix, texture, depth, time } audioDa
                 , depth = depth
                 , textureSize = textureSize
                 , color =
-                    if currentTile.tileGroup == EmptyTileGroup then
-                        Vec4.vec4 1 1 1 1
-
-                    else if
+                    if
                         LoadingPage.canPlaceTile
                             model.time
                             { position = mousePosition
@@ -5170,7 +5167,7 @@ mapOverlayMesh =
         |> Sprite.toMesh
 
 
-lastPlacementOffset : AudioData -> FrontendLoaded -> Float
+lastPlacementOffset : AudioData -> FrontendLoaded -> Quantity Float Pixels
 lastPlacementOffset audioData model =
     case model.lastPlacementError of
         Just time ->
@@ -5187,12 +5184,13 @@ lastPlacementOffset audioData model =
                     |> (*) 40
                     |> cos
                     |> (*) 2
+                    |> Pixels.pixels
 
             else
-                0
+                Quantity.zero
 
         Nothing ->
-            0
+            Quantity.zero
 
 
 drawOtherCursors : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
@@ -5269,8 +5267,9 @@ drawCursor :
     -> { cursorType : CursorType, scale : Int }
     -> Id UserId
     -> FrontendLoaded
+    -> AudioData
     -> List Effect.WebGL.Entity
-drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePointer userId model =
+drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePointer userId model audioData =
     case IdDict.get userId (Local.model model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
@@ -5284,8 +5283,13 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                     case IdDict.get userId model.handMeshes of
                         Just mesh ->
                             let
+                                scale : Float
                                 scale =
                                     toFloat showMousePointer.scale
+
+                                offsetX : Quantity Float Pixels
+                                offsetX =
+                                    cursorOffsetX audioData model
                             in
                             [ Effect.WebGL.entityWith
                                 [ Shaders.blend ]
@@ -5294,7 +5298,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                                 (Cursor.getSpriteMesh mousePointer mesh)
                                 { view =
                                     Mat4.makeTranslate3
-                                        (round (point.x * toFloat Units.tileWidth * toFloat model.zoomFactor)
+                                        (round ((point.x * toFloat Units.tileWidth + Pixels.inPixels offsetX) * toFloat model.zoomFactor)
                                             |> toFloat
                                             |> (*) (1 / toFloat model.zoomFactor)
                                         )
