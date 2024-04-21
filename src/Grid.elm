@@ -964,6 +964,8 @@ regenerateGridCellCacheFrontend (Grid grid) =
         |> Grid
 
 
+{-| Returns a tile, if any, that collides with the given world coord.
+-}
 getTile :
     Coord WorldUnit
     -> Grid a

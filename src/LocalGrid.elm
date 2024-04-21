@@ -1349,17 +1349,27 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
-        ServerNewNpcs npcs ->
-            ( { model
-                | npcs = List.Nonempty.foldl (\( npcId, npc ) state -> IdDict.insert npcId npc state) model.npcs npcs
-              }
-            , NoOutMsg
-            )
+        ServerNpcUpdate { maybeNewNpc, relocatedNpcs, movementChanges } ->
+            let
+                npcs2 : IdDict NpcId Npc
+                npcs2 =
+                    List.foldl
+                        (\( npcId, position ) npcs -> IdDict.update2 npcId (\npc -> { npc | home = position }) npcs)
+                        model.npcs
+                        relocatedNpcs
 
-        ServerNpcMovement newMovement ->
+                npcs3 : IdDict NpcId Npc
+                npcs3 =
+                    case maybeNewNpc of
+                        Just ( newNpcId, newNpc ) ->
+                            IdDict.insert newNpcId newNpc npcs2
+
+                        Nothing ->
+                            npcs2
+            in
             ( { model
                 | npcs =
-                    List.Nonempty.foldl
+                    List.foldl
                         (\( npcId, movement ) dict ->
                             IdDict.update2
                                 npcId
@@ -1372,8 +1382,8 @@ updateServerChange serverChange model =
                                 )
                                 dict
                         )
-                        model.npcs
-                        newMovement
+                        npcs3
+                        movementChanges
               }
             , NoOutMsg
             )

@@ -721,19 +721,53 @@ updateNpc newTime model =
                         |> List.map (\person -> Coord.toTuple person.home)
                         |> Set.fromList
 
+                homelessNpcs : List ( Id NpcId, Npc )
+                homelessNpcs =
+                    IdDict.toList model.npcs
+                        |> List.filter (\( _, npc ) -> Npc.isHomeless model.grid npc)
+
                 validHouses : List { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
                 validHouses =
                     Grid.getBuildings model.grid
-                        |> List.filter (\a -> Set.member (Coord.toTuple a.position) occupied |> not)
+                        |> List.filter
+                            (\a ->
+                                not (Set.member (Coord.toTuple a.position) occupied)
+                                    && (Maybe.map .userId model.tileCountBot /= Just a.userId)
+                            )
 
-                ( npcs2, newNpcCmd ) =
-                    case Nonempty.fromList validHouses of
+                { relocatedNpcs, validHouses2 } =
+                    List.foldl
+                        (\( homelessNpcId, homelessNpc ) state ->
+                            case
+                                List.find
+                                    (\validHouse ->
+                                        Point2d.distanceFrom
+                                            (Coord.toPoint2d validHouse.position)
+                                            (Coord.toPoint2d homelessNpc.home)
+                                            |> Quantity.lessThan (Units.tileUnit 3)
+                                    )
+                                    state.validHouses2
+                            of
+                                Just validHouse ->
+                                    { validHouses2 = List.remove validHouse state.validHouses2
+                                    , relocatedNpcs = ( homelessNpcId, validHouse.position ) :: state.relocatedNpcs
+                                    }
+
+                                Nothing ->
+                                    state
+                        )
+                        { validHouses2 = validHouses, relocatedNpcs = [] }
+                        homelessNpcs
+
+                maybeNewNpc : Maybe ( Id NpcId, Npc )
+                maybeNewNpc =
+                    case Nonempty.fromList validHouses2 of
                         Just nonempty ->
                             let
                                 npc : Npc
                                 npc =
                                     Random.step
-                                        (randomPerson nonempty newTime)
+                                        (randomNpc nonempty newTime)
                                         (Random.initialSeed (Effect.Time.posixToMillis newTime))
                                         |> Tuple.first
 
@@ -741,19 +775,29 @@ updateNpc newTime model =
                                 npcId =
                                     IdDict.nextId model.npcs
                             in
-                            ( IdDict.insert npcId npc model.npcs
-                            , ServerNewNpcs (Nonempty.singleton ( npcId, npc ))
-                                |> Change.ServerChange
-                                |> Nonempty.singleton
-                                |> ChangeBroadcast
-                                |> Effect.Lamdera.broadcast
-                            )
+                            Just ( npcId, npc )
 
                         Nothing ->
-                            ( model.npcs, Command.none )
+                            Nothing
 
-                newNpcs2 : IdDict NpcId Npc
-                newNpcs2 =
+                npcs2 : IdDict NpcId Npc
+                npcs2 =
+                    List.foldl
+                        (\( npcId, position ) npcs -> IdDict.update2 npcId (\npc -> { npc | home = position }) npcs)
+                        model.npcs
+                        relocatedNpcs
+
+                npcs3 : IdDict NpcId Npc
+                npcs3 =
+                    case maybeNewNpc of
+                        Just ( newNpcId, newNpc ) ->
+                            IdDict.insert newNpcId newNpc npcs2
+
+                        Nothing ->
+                            npcs2
+
+                npcs4 : IdDict NpcId Npc
+                npcs4 =
                     --IdDict.map
                     --    (\id npc ->
                     --        if Duration.from (Npc.moveEndTime npc) newTime |> Quantity.lessThanZero then
@@ -796,7 +840,7 @@ updateNpc newTime model =
                     --                Nothing ->
                     --                    npc
                     --    )
-                    npcs2
+                    npcs3
 
                 movedNpcs : List ( Id NpcId, MovementChange )
                 movedNpcs =
@@ -817,34 +861,34 @@ updateNpc newTime model =
                         )
                         (\_ _ list -> list)
                         npcs2
-                        newNpcs2
+                        npcs4
                         []
             in
-            ( newNpcs2
-            , Command.batch
-                [ case Nonempty.fromList movedNpcs of
-                    Just nonempty ->
-                        ServerNpcMovement nonempty
-                            |> Change.ServerChange
-                            |> Nonempty.singleton
-                            |> ChangeBroadcast
-                            |> Effect.Lamdera.broadcast
+            ( npcs4
+            , if maybeNewNpc == Nothing && List.isEmpty relocatedNpcs && List.isEmpty movedNpcs then
+                Command.none
 
-                    Nothing ->
-                        Command.none
-                , newNpcCmd
-                ]
+              else
+                ServerNpcUpdate
+                    { maybeNewNpc = maybeNewNpc
+                    , relocatedNpcs = relocatedNpcs
+                    , movementChanges = movedNpcs
+                    }
+                    |> Change.ServerChange
+                    |> Nonempty.singleton
+                    |> ChangeBroadcast
+                    |> Effect.Lamdera.broadcast
             )
 
         TrainsAndAnimalsDisabled ->
             ( model.npcs, Command.none )
 
 
-randomPerson :
+randomNpc :
     Nonempty { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
     -> Effect.Time.Posix
     -> Random.Generator Npc
-randomPerson houses createdAt =
+randomNpc houses createdAt =
     Random.map2
         (\house name ->
             let

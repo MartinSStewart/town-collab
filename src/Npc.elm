@@ -2,6 +2,7 @@ module Npc exposing
     ( Npc
     , actualPositionWithoutCursor
     , idleTexturePosition
+    , isHomeless
     , moveCollisionThreshold
     , moveEndTime
     , offset
@@ -44,6 +45,16 @@ type alias Npc =
     , createdAt : Effect.Time.Posix
     , visitedPositions : Nonempty (Point2d WorldUnit WorldUnit)
     }
+
+
+isHomeless : Grid a -> Npc -> Bool
+isHomeless grid npc =
+    case Grid.getTile npc.home grid of
+        Just a ->
+            a.position /= npc.home
+
+        Nothing ->
+            True
 
 
 moveCollisionThreshold : Quantity Float WorldUnit
