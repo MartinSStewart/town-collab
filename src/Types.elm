@@ -316,6 +316,7 @@ type Hover
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
     | AnimalHover { animalId : Id AnimalId, animal : Animal }
+    | NpcHover { npcId : Id NpcId, npc : Npc }
     | UiHover (List ( UiHover, { relativePositionToUi : Coord Pixels } ))
 
 

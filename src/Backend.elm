@@ -1938,7 +1938,7 @@ updateLocalChange sessionId clientId time change model =
         Change.InvalidChange ->
             ( model, OriginalChange, BroadcastToNoOne )
 
-        PickupAnimal animalId position time2 ->
+        PickupAnimalOrNpc animalId position time2 ->
             asUser2
                 (\userId _ ->
                     if model.isGridReadOnly then
@@ -1997,12 +1997,12 @@ updateLocalChange sessionId clientId time change model =
                                     }
                                 )
                                 model
-                            , PickupAnimal animalId position (adjustEventTime time time2) |> NewLocalChange
+                            , PickupAnimalOrNpc animalId position (adjustEventTime time time2) |> NewLocalChange
                             , ServerPickupAnimal userId animalId position time2 |> BroadcastToEveryoneElse
                             )
                 )
 
-        DropAnimal animalOrNpcId position time2 ->
+        DropAnimalOrNpc animalOrNpcId position time2 ->
             asUser2
                 (\userId _ ->
                     case IdDict.get userId model.users |> Maybe.andThen .cursor of
@@ -2043,7 +2043,7 @@ updateLocalChange sessionId clientId time change model =
                                                                 model.npcs
                                                     }
                                             )
-                                        , DropAnimal animalOrNpcId position (adjustEventTime time time2) |> NewLocalChange
+                                        , DropAnimalOrNpc animalOrNpcId position (adjustEventTime time time2) |> NewLocalChange
                                         , ServerDropAnimal userId animalOrNpcId position |> BroadcastToEveryoneElse
                                         )
 

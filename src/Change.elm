@@ -55,8 +55,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | PickupAnimal AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | DropAnimal AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | PickupAnimalOrNpc AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | DropAnimalOrNpc AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors

@@ -2,6 +2,7 @@ module Npc exposing
     ( Npc
     , actualPositionWithoutCursor
     , idleTexturePosition
+    , inside
     , isHomeless
     , moveCollisionThreshold
     , moveEndTime
@@ -15,6 +16,7 @@ module Npc exposing
     )
 
 import Angle
+import BoundingBox2d
 import Bounds exposing (Bounds)
 import Coord exposing (Coord)
 import Direction2d
@@ -270,3 +272,11 @@ randomMovement position =
         (Random.float 0 360)
         (Random.float 2 10)
         (Random.float 1 1.5)
+
+
+inside : Point2d WorldUnit WorldUnit -> Npc -> Bool
+inside point npc =
+    BoundingBox2d.from
+        (Point2d.translateBy (Units.pixelToTileVector offset) npc.position)
+        (Point2d.translateBy (Units.pixelToTileVector (Coord.plus textureSize offset)) npc.position)
+        |> BoundingBox2d.contains point

@@ -1132,6 +1132,9 @@ updateLoaded audioData msg model =
                                     AnimalHover _ ->
                                         ( placeTileHelper model2, Command.none )
 
+                                    NpcHover _ ->
+                                        ( placeTileHelper model2, Command.none )
+
                             _ ->
                                 ( model2, Command.none )
                    )
@@ -1705,11 +1708,17 @@ keyMsgCanvasUpdate audioData rawKey key model =
 
                                 HandTool ->
                                     case isHolding model of
-                                        Just { cowId } ->
-                                            LoadingPage.updateLocalModel (Change.DropAnimal cowId (LoadingPage.mouseWorldPosition model) model.time) model
+                                        HoldingAnimalOrNpc holding ->
+                                            LoadingPage.updateLocalModel
+                                                (Change.DropAnimalOrNpc
+                                                    holding.animalOrNpcId
+                                                    (LoadingPage.mouseWorldPosition model)
+                                                    model.time
+                                                )
+                                                model
                                                 |> Tuple.first
 
-                                        Nothing ->
+                                        NotHolding ->
                                             { model
                                                 | viewPoint =
                                                     case model.viewPoint of
@@ -2311,18 +2320,24 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                    )
     in
     case isHolding model2 of
-        Just { cowId } ->
+        HoldingAnimalOrNpc holding ->
             if isSmallDistance2 then
                 let
                     ( model3, _ ) =
-                        LoadingPage.updateLocalModel (Change.DropAnimal cowId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                        LoadingPage.updateLocalModel
+                            (Change.DropAnimalOrNpc
+                                holding.animalOrNpcId
+                                (LoadingPage.mouseWorldPosition model2)
+                                model2.time
+                            )
+                            model2
                 in
                 ( model3, Command.none )
 
             else
                 ( model2, Command.none )
 
-        Nothing ->
+        NotHolding ->
             case hoverAt2 of
                 UiHover [] ->
                     ( model2, Command.none )
@@ -2476,7 +2491,13 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                     if isSmallDistance2 then
                         let
                             ( model3, _ ) =
-                                LoadingPage.updateLocalModel (Change.PickupAnimal animalId (LoadingPage.mouseWorldPosition model2) model2.time) model2
+                                LoadingPage.updateLocalModel
+                                    (Change.PickupAnimalOrNpc
+                                        (AnimalId animalId)
+                                        (LoadingPage.mouseWorldPosition model2)
+                                        model2.time
+                                    )
+                                    model2
                         in
                         ( model3, Command.none )
 
@@ -2490,6 +2511,23 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
                         Nothing ->
                             ( model2, Command.none )
+
+                NpcHover { npcId } ->
+                    if isSmallDistance2 then
+                        let
+                            ( model3, _ ) =
+                                LoadingPage.updateLocalModel
+                                    (Change.PickupAnimalOrNpc
+                                        (NpcId npcId)
+                                        (LoadingPage.mouseWorldPosition model2)
+                                        model2.time
+                                    )
+                                    model2
+                        in
+                        ( model3, Command.none )
+
+                    else
+                        ( model2, Command.none )
 
 
 handleMailEditorOutMsg :
@@ -4107,7 +4145,7 @@ cursorSprite hover model =
 
                         WorldPage _ ->
                             { cursorType =
-                                if isHolding model /= Nothing then
+                                if isHolding model /= NotHolding then
                                     CursorSprite PinchSpriteCursor
 
                                 else
@@ -4142,6 +4180,9 @@ cursorSprite hover model =
                                                 UiHover _ ->
                                                     PointerCursor
 
+                                                NpcHover _ ->
+                                                    tilePlaceCursor
+
                                         HandTool ->
                                             case hover of
                                                 UiHover [] ->
@@ -4167,6 +4208,9 @@ cursorSprite hover model =
                                                 UiHover _ ->
                                                     PointerCursor
 
+                                                NpcHover _ ->
+                                                    CursorSprite PointerSpriteCursor
+
                                         TilePickerTool ->
                                             case hover of
                                                 UiHover [] ->
@@ -4186,6 +4230,9 @@ cursorSprite hover model =
 
                                                 UiHover _ ->
                                                     PointerCursor
+
+                                                NpcHover _ ->
+                                                    CursorSprite EyeDropperSpriteCursor
 
                                         TextTool _ ->
                                             case hover of
@@ -4207,6 +4254,9 @@ cursorSprite hover model =
                                                 UiHover _ ->
                                                     PointerCursor
 
+                                                NpcHover _ ->
+                                                    CursorSprite TextSpriteCursor
+
                                         ReportTool ->
                                             case hover of
                                                 UiHover [] ->
@@ -4226,6 +4276,9 @@ cursorSprite hover model =
 
                                                 UiHover _ ->
                                                     PointerCursor
+
+                                                NpcHover _ ->
+                                                    CursorSprite GavelSpriteCursor
                             , scale = 1
                             }
 
@@ -4782,71 +4835,72 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
             Effect.WebGL.Texture.size texture
     in
     List.filterMap
-        (\( _, npc ) ->
-            let
-                position : Point2d WorldUnit WorldUnit
-                position =
-                    Npc.actualPositionWithoutCursor model.time npc
-            in
-            if BoundingBox2d.contains position viewBounds_ then
-                let
-                    point =
-                        Point2d.unwrap position
+        (\( npcId, npc ) ->
+            case LoadingPage.npcActualPosition npcId model of
+                Just { position, isHeld } ->
+                    if BoundingBox2d.contains position viewBounds_ then
+                        let
+                            point =
+                                Point2d.unwrap position
 
-                    ( sizeW, sizeH ) =
-                        Coord.toTuple Npc.textureSize
+                            ( sizeW, sizeH ) =
+                                Coord.toTuple Npc.textureSize
 
-                    texturePos =
-                        if
-                            (Duration.from model.time (Npc.moveEndTime npc) |> Quantity.lessThanZero)
-                                || (Duration.from npc.startTime model.time |> Quantity.lessThanZero)
-                        then
-                            Npc.idleTexturePosition
+                            texturePos =
+                                if
+                                    (Duration.from model.time (Npc.moveEndTime npc) |> Quantity.lessThanZero)
+                                        || (Duration.from npc.startTime model.time |> Quantity.lessThanZero)
+                                        || isHeld
+                                then
+                                    Npc.idleTexturePosition
 
-                        else
-                            Duration.from npc.startTime model.time
-                                |> Duration.inSeconds
-                                |> (*) 5
-                                |> round
-                                |> Npc.walkingUpTexturePosition
-                in
-                Effect.WebGL.entityWith
-                    [ Shaders.blend
-                    , Shaders.scissorBox scissors
-                    , Shaders.depthTest
-                    ]
-                    Shaders.instancedVertexShader
-                    Shaders.fragmentShader
-                    Train.instancedMesh
-                    { view = viewMatrix
-                    , texture = texture
-                    , lights = lights
-                    , depth = depth
-                    , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
-                    , color = Vec4.vec4 1 1 1 1
-                    , userId = Shaders.noUserIdSelected
-                    , time = time
-                    , opacityAndUserId0 = Sprite.opaque
-                    , position0 =
-                        Vec3.vec3
-                            (toFloat Units.tileWidth * point.x + toFloat (Coord.xRaw Npc.offset) |> round |> toFloat)
-                            (toFloat Units.tileHeight * point.y + toFloat (Coord.yRaw Npc.offset) |> round |> toFloat)
-                            0
-                    , primaryColor0 = Color.unwrap Color.white |> toFloat
-                    , secondaryColor0 = Color.unwrap Color.black |> toFloat
-                    , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
-                    , texturePosition0 =
-                        Coord.xRaw texturePos
-                            + textureW
-                            * Coord.yRaw texturePos
-                            |> toFloat
-                    , night = nightFactor
-                    , waterReflection = 0
-                    }
-                    |> Just
+                                else
+                                    Duration.from npc.startTime model.time
+                                        |> Duration.inSeconds
+                                        |> (*) 5
+                                        |> round
+                                        |> Npc.walkingUpTexturePosition
+                        in
+                        Effect.WebGL.entityWith
+                            [ Shaders.blend
+                            , Shaders.scissorBox scissors
+                            , Shaders.depthTest
+                            ]
+                            Shaders.instancedVertexShader
+                            Shaders.fragmentShader
+                            Train.instancedMesh
+                            { view = viewMatrix
+                            , texture = texture
+                            , lights = lights
+                            , depth = depth
+                            , textureSize = Vec2.vec2 (toFloat textureW) (toFloat textureH)
+                            , color = Vec4.vec4 1 1 1 1
+                            , userId = Shaders.noUserIdSelected
+                            , time = time
+                            , opacityAndUserId0 = Sprite.opaque
+                            , position0 =
+                                Vec3.vec3
+                                    (toFloat Units.tileWidth * point.x + toFloat (Coord.xRaw Npc.offset) |> round |> toFloat)
+                                    (toFloat Units.tileHeight * point.y + toFloat (Coord.yRaw Npc.offset) |> round |> toFloat)
+                                    0
+                            , primaryColor0 = Color.unwrap Color.white |> toFloat
+                            , secondaryColor0 = Color.unwrap Color.black |> toFloat
+                            , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
+                            , texturePosition0 =
+                                Coord.xRaw texturePos
+                                    + textureW
+                                    * Coord.yRaw texturePos
+                                    |> toFloat
+                            , night = nightFactor
+                            , waterReflection = 0
+                            }
+                            |> Just
 
-            else
-                Nothing
+                    else
+                        Nothing
+
+                Nothing ->
+                    Nothing
         )
         (IdDict.toList localGrid.npcs)
 
@@ -5247,10 +5301,10 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                             Shaders.fragmentShader
                             (Cursor.getSpriteMesh
                                 (case cursor.holding of
-                                    Just _ ->
+                                    HoldingAnimalOrNpc _ ->
                                         PinchSpriteCursor
 
-                                    Nothing ->
+                                    NotHolding ->
                                         Cursor.fromOtherUsersTool cursor.currentTool
                                 )
                                 mesh

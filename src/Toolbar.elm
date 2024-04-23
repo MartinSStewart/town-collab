@@ -2108,6 +2108,9 @@ canDragView hover =
         UiHover _ ->
             False
 
+        NpcHover _ ->
+            True
+
 
 actualViewPoint :
     { a

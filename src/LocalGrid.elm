@@ -294,7 +294,7 @@ updateLocalChange localChange model =
         InvalidChange ->
             ( model, NoOutMsg )
 
-        PickupAnimal animalOrNpcId position time ->
+        PickupAnimalOrNpc animalOrNpcId position time ->
             case model.userStatus of
                 LoggedIn loggedIn ->
                     pickupCow loggedIn.userId animalOrNpcId position time model
@@ -302,7 +302,7 @@ updateLocalChange localChange model =
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
-        DropAnimal animalId position _ ->
+        DropAnimalOrNpc animalId position _ ->
             case model.userStatus of
                 LoggedIn loggedIn ->
                     dropAnimal loggedIn.userId animalId position model

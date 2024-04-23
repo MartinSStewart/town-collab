@@ -17,6 +17,7 @@ module LoadingPage exposing
     , mouseListeners
     , mouseScreenPosition
     , mouseWorldPosition
+    , npcActualPosition
     , setCurrentTool
     , setCurrentToolWithColors
     , shortDelayDuration
@@ -56,7 +57,7 @@ import Html exposing (Html)
 import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Hyperlink
-import Id exposing (AnimalId, Id, TrainId, UserId)
+import Id exposing (AnimalId, Id, NpcId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import List.Extra as List
@@ -66,6 +67,7 @@ import LocalGrid exposing (LocalGrid)
 import MailEditor
 import Math.Matrix4 as Mat4
 import Math.Vector4 as Vec4
+import Npc exposing (Npc)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Ports
@@ -1243,12 +1245,6 @@ hoverAt model mousePosition =
                 animalHovers : Maybe ( Id AnimalId, Animal )
                 animalHovers =
                     case model.currentTool of
-                        TilePlacerTool _ ->
-                            Nothing
-
-                        TilePickerTool ->
-                            Nothing
-
                         HandTool ->
                             IdDict.toList localGrid.animals
                                 |> List.filter
@@ -1259,17 +1255,41 @@ hoverAt model mousePosition =
                                                     False
 
                                                 else
-                                                    Animal.inside mouseWorldPosition_ { animal | position = a.position }
+                                                    Animal.inside
+                                                        mouseWorldPosition_
+                                                        { animal | position = a.position }
 
                                             Nothing ->
                                                 False
                                     )
-                                |> Quantity.maximumBy (\( _, cow ) -> Point2d.yCoordinate cow.position)
+                                |> Quantity.maximumBy (\( _, animal ) -> Point2d.yCoordinate animal.position)
 
-                        TextTool _ ->
+                        _ ->
                             Nothing
 
-                        ReportTool ->
+                npcHovers : Maybe ( Id NpcId, Npc )
+                npcHovers =
+                    case model.currentTool of
+                        HandTool ->
+                            IdDict.toList localGrid.npcs
+                                |> List.filter
+                                    (\( npcId, npc ) ->
+                                        case npcActualPosition npcId model of
+                                            Just a ->
+                                                if a.isHeld then
+                                                    False
+
+                                                else
+                                                    Npc.inside
+                                                        mouseWorldPosition_
+                                                        { npc | position = a.position }
+
+                                            Nothing ->
+                                                False
+                                    )
+                                |> Quantity.maximumBy (\( _, npc ) -> Point2d.yCoordinate npc.position)
+
+                        _ ->
                             Nothing
             in
             case trainHovers of
@@ -1277,11 +1297,21 @@ hoverAt model mousePosition =
                     TrainHover train
 
                 Nothing ->
-                    case animalHovers of
-                        Just ( animalId, animal ) ->
+                    case ( animalHovers, npcHovers ) of
+                        ( Just ( animalId, animal ), Nothing ) ->
                             AnimalHover { animalId = animalId, animal = animal }
 
-                        Nothing ->
+                        ( Nothing, Just ( npcId, npc ) ) ->
+                            NpcHover { npcId = npcId, npc = npc }
+
+                        ( Just ( animalId, animal ), Just ( npcId, npc ) ) ->
+                            if Point2d.yCoordinate npc.position |> Quantity.lessThan (Point2d.yCoordinate animal.position) then
+                                AnimalHover { animalId = animalId, animal = animal }
+
+                            else
+                                NpcHover { npcId = npcId, npc = npc }
+
+                        ( Nothing, Nothing ) ->
                             case tileHover of
                                 Just hover ->
                                     hover
@@ -1291,6 +1321,44 @@ hoverAt model mousePosition =
 
         list ->
             UiHover list
+
+
+npcActualPosition : Id NpcId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
+npcActualPosition npcId model =
+    let
+        localGrid : LocalGrid
+        localGrid =
+            Local.model model.localModel
+
+        cursorHoldingNpc : Maybe ( Id UserId, Cursor )
+        cursorHoldingNpc =
+            IdDict.toList localGrid.cursors
+                |> List.find
+                    (\( _, cursor ) ->
+                        case cursor.holding of
+                            HoldingAnimalOrNpc holding ->
+                                NpcId npcId == holding.animalOrNpcId
+
+                            NotHolding ->
+                                False
+                    )
+    in
+    case cursorHoldingNpc of
+        Just ( userId, cursor ) ->
+            { position =
+                cursorActualPosition (Just userId == LocalGrid.currentUserId model) userId cursor model
+                    |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.2 })
+            , isHeld = True
+            }
+                |> Just
+
+        Nothing ->
+            case IdDict.get npcId localGrid.npcs of
+                Just npc ->
+                    { position = Npc.actualPositionWithoutCursor model.time npc, isHeld = False } |> Just
+
+                Nothing ->
+                    Nothing
 
 
 animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
