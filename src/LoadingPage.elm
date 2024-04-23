@@ -39,7 +39,7 @@ import Change exposing (BackendReport, Change(..), Report, UserStatus(..))
 import Codec
 import Color exposing (Colors)
 import Coord exposing (Coord)
-import Cursor exposing (Cursor)
+import Cursor exposing (AnimalOrNpcId(..), Cursor, Holding(..))
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import Effect.Command as Command exposing (Command, FrontendOnly)
@@ -1296,13 +1296,24 @@ hoverAt model mousePosition =
 animalActualPosition : Id AnimalId -> FrontendLoaded -> Maybe { position : Point2d WorldUnit WorldUnit, isHeld : Bool }
 animalActualPosition animalId model =
     let
+        localGrid : LocalGrid
         localGrid =
             Local.model model.localModel
+
+        cursorHoldingAnimal : Maybe ( Id UserId, Cursor )
+        cursorHoldingAnimal =
+            IdDict.toList localGrid.cursors
+                |> List.find
+                    (\( _, cursor ) ->
+                        case cursor.holding of
+                            HoldingAnimalOrNpc holding ->
+                                AnimalId animalId == holding.animalOrNpcId
+
+                            NotHolding ->
+                                False
+                    )
     in
-    case
-        IdDict.toList localGrid.cursors
-            |> List.find (\( _, cursor ) -> Just animalId == Maybe.map .cowId cursor.holdingCow)
-    of
+    case cursorHoldingAnimal of
         Just ( userId, cursor ) ->
             { position =
                 cursorActualPosition (Just userId == LocalGrid.currentUserId model) userId cursor model

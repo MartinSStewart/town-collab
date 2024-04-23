@@ -14,6 +14,7 @@ module LocalGrid exposing
     , notificationViewportHalfSize
     , notificationViewportSize
     , placeAnimal
+    , placeNpc
     , removeReported
     , restoreMail
     , setTileHotkey
@@ -34,7 +35,7 @@ import Bounds exposing (Bounds)
 import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), BackendReport, Change(..), LocalChange(..), ServerChange(..), TileHotkey, UserStatus(..))
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
-import Cursor exposing (Cursor)
+import Cursor exposing (AnimalOrNpcId(..), Cursor, Holding(..))
 import Dict exposing (Dict)
 import Duration exposing (Duration)
 import Effect.Time
@@ -293,10 +294,10 @@ updateLocalChange localChange model =
         InvalidChange ->
             ( model, NoOutMsg )
 
-        PickupAnimal animalId position time ->
+        PickupAnimal animalOrNpcId position time ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    pickupCow loggedIn.userId animalId position time model
+                    pickupCow loggedIn.userId animalOrNpcId position time model
 
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
@@ -1486,8 +1487,8 @@ removeReported userId position reported =
         reported
 
 
-pickupCow : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid -> ( LocalGrid, OutMsg )
-pickupCow userId cowId position time model =
+pickupCow : Id UserId -> AnimalOrNpcId -> Point2d WorldUnit WorldUnit -> Effect.Time.Posix -> LocalGrid -> ( LocalGrid, OutMsg )
+pickupCow userId animalOrNpcId position time model =
     ( { model
         | cursors =
             IdDict.update
@@ -1495,11 +1496,17 @@ pickupCow userId cowId position time model =
                 (\maybeCursor ->
                     case maybeCursor of
                         Just cursor ->
-                            { cursor | position = position, holdingCow = Just { cowId = cowId, pickupTime = time } }
+                            { cursor
+                                | position = position
+                                , holding = HoldingAnimalOrNpc { animalOrNpcId = animalOrNpcId, pickupTime = time }
+                            }
                                 |> Just
 
                         Nothing ->
-                            Cursor.defaultCursor position (Just { cowId = cowId, pickupTime = time }) |> Just
+                            Cursor.defaultCursor
+                                position
+                                (HoldingAnimalOrNpc { animalOrNpcId = animalOrNpcId, pickupTime = time })
+                                |> Just
                 )
                 model.cursors
       }
@@ -1507,24 +1514,32 @@ pickupCow userId cowId position time model =
     )
 
 
-dropAnimal : Id UserId -> Id AnimalId -> Point2d WorldUnit WorldUnit -> LocalGrid -> ( LocalGrid, OutMsg )
-dropAnimal userId animalId position model =
-    ( { model
+dropAnimal : Id UserId -> AnimalOrNpcId -> Point2d WorldUnit WorldUnit -> LocalGrid -> ( LocalGrid, OutMsg )
+dropAnimal userId animalOrNpcId position model =
+    let
+        model2 =
+            case animalOrNpcId of
+                AnimalId animalId ->
+                    { model | animals = IdDict.update2 animalId (placeAnimal position model.grid) model.animals }
+
+                NpcId npcId ->
+                    { model | npcs = IdDict.update2 npcId (placeNpc position model.grid) model.npcs }
+    in
+    ( { model2
         | cursors =
             IdDict.update
                 userId
                 (\maybeCursor ->
                     case maybeCursor of
                         Just cursor ->
-                            { cursor | position = position, holdingCow = Nothing } |> Just
+                            { cursor | position = position, holding = NotHolding } |> Just
 
                         Nothing ->
-                            Cursor.defaultCursor position Nothing |> Just
+                            Cursor.defaultCursor position NotHolding |> Just
                 )
-                model.cursors
-        , animals = IdDict.update2 animalId (placeAnimal position model.grid) model.animals
+                model2.cursors
       }
-    , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model.cursors |> Maybe.map .position }
+    , OtherUserCursorMoved { userId = userId, previousPosition = IdDict.get userId model2.cursors |> Maybe.map .position }
     )
 
 
@@ -1537,6 +1552,26 @@ placeAnimal position grid animal =
                 True
                 (Animal.getData animal.animalType
                     |> .size
+                    |> Units.pixelToTileVector
+                    |> Vector2d.scaleBy 0.5
+                    |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
+                )
+                position
+                grid
+                |> List.map .bounds
+                |> moveOutOfCollision position
+    in
+    { animal | position = position2, endPosition = position2 }
+
+
+placeNpc : Point2d WorldUnit WorldUnit -> Grid a -> Npc -> Npc
+placeNpc position grid animal =
+    let
+        position2 : Point2d WorldUnit WorldUnit
+        position2 =
+            Grid.pointInside
+                True
+                (Npc.size
                     |> Units.pixelToTileVector
                     |> Vector2d.scaleBy 0.5
                     |> Vector2d.plus (Vector2d.xy Animal.moveCollisionThreshold Animal.moveCollisionThreshold)
@@ -1573,7 +1608,7 @@ moveCursor userId position model =
                             { cursor | position = position }
 
                         Nothing ->
-                            Cursor.defaultCursor position Nothing
+                            Cursor.defaultCursor position NotHolding
                     )
                         |> Just
                 )

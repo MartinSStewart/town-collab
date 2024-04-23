@@ -22,7 +22,7 @@ import AssocList
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
-import Cursor
+import Cursor exposing (AnimalOrNpcId)
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
@@ -55,8 +55,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | PickupAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | DropAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | PickupAnimal AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | DropAnimal AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors
@@ -140,8 +140,8 @@ type ServerChange
         , newAnimals : List ( Id AnimalId, Animal )
         }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerPickupAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | ServerDropAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
+    | ServerPickupAnimal (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | ServerDropAnimal (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit)
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected

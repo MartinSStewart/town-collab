@@ -16,7 +16,7 @@ import Change exposing (AreTrainsAndAnimalsDisabled(..), UserStatus(..))
 import Codec
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
-import Cursor exposing (CursorSprite(..), CursorType(..))
+import Cursor exposing (AnimalOrNpcId(..), CursorSprite(..), CursorType(..), Holding(..))
 import Dict exposing (Dict)
 import DisplayName
 import Duration exposing (Duration)
@@ -383,28 +383,50 @@ audioLoaded audioData model =
         Just userId ->
             case IdDict.get userId localModel.cursors of
                 Just cursor ->
-                    case cursor.holdingCow of
-                        Just { cowId, pickupTime } ->
-                            case IdDict.get cowId localModel.animals of
-                                Just animal ->
-                                    let
-                                        sounds : Nonempty ( Float, Sound )
-                                        sounds =
-                                            Animal.getData animal.animalType |> .sounds
-                                    in
-                                    playSound
-                                        (Random.step
-                                            (Random.weighted (List.Nonempty.head sounds) (List.Nonempty.tail sounds))
-                                            (Random.initialSeed (Effect.Time.posixToMillis pickupTime))
-                                            |> Tuple.first
-                                        )
-                                        pickupTime
-                                        |> Audio.scaleVolume 0.5
+                    case cursor.holding of
+                        HoldingAnimalOrNpc holding ->
+                            let
+                                seed =
+                                    Random.initialSeed (Effect.Time.posixToMillis holding.pickupTime)
+
+                                maybeSound =
+                                    case holding.animalOrNpcId of
+                                        AnimalId animalId ->
+                                            case IdDict.get animalId localModel.animals of
+                                                Just animal ->
+                                                    let
+                                                        sounds : Nonempty ( Float, Sound )
+                                                        sounds =
+                                                            Animal.getData animal.animalType |> .sounds
+                                                    in
+                                                    Random.step
+                                                        (Random.weighted
+                                                            (List.Nonempty.head sounds)
+                                                            (List.Nonempty.tail sounds)
+                                                        )
+                                                        seed
+                                                        |> Tuple.first
+                                                        |> Just
+
+                                                Nothing ->
+                                                    Nothing
+
+                                        NpcId npcId ->
+                                            case IdDict.get npcId localModel.npcs of
+                                                Just npc ->
+                                                    Nothing
+
+                                                Nothing ->
+                                                    Nothing
+                            in
+                            case maybeSound of
+                                Just sound ->
+                                    playSound sound holding.pickupTime |> Audio.scaleVolume 0.5
 
                                 Nothing ->
                                     Audio.silence
 
-                        Nothing ->
+                        NotHolding ->
                             Audio.silence
 
                 Nothing ->
@@ -1682,7 +1704,7 @@ keyMsgCanvasUpdate audioData rawKey key model =
                                     LoadingPage.setCurrentTool HandToolButton model
 
                                 HandTool ->
-                                    case isHoldingCow model of
+                                    case isHolding model of
                                         Just { cowId } ->
                                             LoadingPage.updateLocalModel (Change.DropAnimal cowId (LoadingPage.mouseWorldPosition model) model.time) model
                                                 |> Tuple.first
@@ -1981,8 +2003,8 @@ setTileFromHotkey rawKey string model =
     )
 
 
-isHoldingCow : FrontendLoaded -> Maybe { cowId : Id AnimalId, pickupTime : Effect.Time.Posix }
-isHoldingCow model =
+isHolding : FrontendLoaded -> Holding
+isHolding model =
     let
         localGrid =
             Local.model model.localModel
@@ -1991,13 +2013,13 @@ isHoldingCow model =
         Just userId ->
             case IdDict.get userId localGrid.cursors of
                 Just cursor ->
-                    cursor.holdingCow
+                    cursor.holding
 
                 Nothing ->
-                    Nothing
+                    NotHolding
 
         Nothing ->
-            Nothing
+            NotHolding
 
 
 isSmallDistance : { a | start : Point2d Pixels coordinates } -> Point2d Pixels coordinates -> Bool
@@ -2288,7 +2310,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
                                 m
                    )
     in
-    case isHoldingCow model2 of
+    case isHolding model2 of
         Just { cowId } ->
             if isSmallDistance2 then
                 let
@@ -4085,7 +4107,7 @@ cursorSprite hover model =
 
                         WorldPage _ ->
                             { cursorType =
-                                if isHoldingCow model /= Nothing then
+                                if isHolding model /= Nothing then
                                     CursorSprite PinchSpriteCursor
 
                                 else
@@ -5224,7 +5246,7 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                             Shaders.vertexShader
                             Shaders.fragmentShader
                             (Cursor.getSpriteMesh
-                                (case cursor.holdingCow of
+                                (case cursor.holding of
                                     Just _ ->
                                         PinchSpriteCursor
 

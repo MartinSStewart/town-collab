@@ -18,7 +18,7 @@ import Bytes.Decode
 import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), MovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
-import Cursor
+import Cursor exposing (AnimalOrNpcId(..), Holding(..))
 import Dict
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
@@ -1938,7 +1938,7 @@ updateLocalChange sessionId clientId time change model =
         Change.InvalidChange ->
             ( model, OriginalChange, BroadcastToNoOne )
 
-        PickupAnimal cowId position time2 ->
+        PickupAnimal animalId position time2 ->
             asUser2
                 (\userId _ ->
                     if model.isGridReadOnly then
@@ -1946,19 +1946,25 @@ updateLocalChange sessionId clientId time change model =
 
                     else
                         let
-                            isCowHeld =
+                            isAlreadyHeld : Bool
+                            isAlreadyHeld =
                                 IdDict.toList model.users
                                     |> List.any
                                         (\( _, user2 ) ->
                                             case user2.cursor of
                                                 Just cursor ->
-                                                    Maybe.map .cowId cursor.holdingCow == Just cowId
+                                                    case cursor.holding of
+                                                        HoldingAnimalOrNpc holding ->
+                                                            holding.animalOrNpcId == animalId
+
+                                                        NotHolding ->
+                                                            False
 
                                                 Nothing ->
                                                     False
                                         )
                         in
-                        if isCowHeld then
+                        if isAlreadyHeld then
                             ( model, InvalidChange, BroadcastToNoOne )
 
                         else
@@ -1971,29 +1977,39 @@ updateLocalChange sessionId clientId time change model =
                                                 Just cursor ->
                                                     { cursor
                                                         | position = position
-                                                        , holdingCow = Just { cowId = cowId, pickupTime = time2 }
+                                                        , holding =
+                                                            HoldingAnimalOrNpc
+                                                                { animalOrNpcId = animalId
+                                                                , pickupTime = time2
+                                                                }
                                                     }
                                                         |> Just
 
                                                 Nothing ->
-                                                    Cursor.defaultCursor position (Just { cowId = cowId, pickupTime = time2 })
+                                                    Cursor.defaultCursor
+                                                        position
+                                                        (HoldingAnimalOrNpc
+                                                            { animalOrNpcId = animalId
+                                                            , pickupTime = time2
+                                                            }
+                                                        )
                                                         |> Just
                                     }
                                 )
                                 model
-                            , PickupAnimal cowId position (adjustEventTime time time2) |> NewLocalChange
-                            , ServerPickupAnimal userId cowId position time2 |> BroadcastToEveryoneElse
+                            , PickupAnimal animalId position (adjustEventTime time time2) |> NewLocalChange
+                            , ServerPickupAnimal userId animalId position time2 |> BroadcastToEveryoneElse
                             )
                 )
 
-        DropAnimal animalId position time2 ->
+        DropAnimal animalOrNpcId position time2 ->
             asUser2
                 (\userId _ ->
                     case IdDict.get userId model.users |> Maybe.andThen .cursor of
                         Just cursor ->
-                            case cursor.holdingCow of
-                                Just holdingCow ->
-                                    if holdingCow.cowId == animalId then
+                            case cursor.holding of
+                                HoldingAnimalOrNpc holding ->
+                                    if holding.animalOrNpcId == animalOrNpcId then
                                         ( updateUser
                                             userId
                                             (\user2 ->
@@ -2001,28 +2017,40 @@ updateLocalChange sessionId clientId time change model =
                                                     | cursor =
                                                         case user2.cursor of
                                                             Just cursor2 ->
-                                                                { cursor2 | position = position, holdingCow = Nothing }
+                                                                { cursor2 | position = position, holding = NotHolding }
                                                                     |> Just
 
                                                             Nothing ->
-                                                                Cursor.defaultCursor position Nothing |> Just
+                                                                Cursor.defaultCursor position NotHolding |> Just
                                                 }
                                             )
-                                            { model
-                                                | animals =
-                                                    IdDict.update2
-                                                        animalId
-                                                        (LocalGrid.placeAnimal position model.grid)
-                                                        model.animals
-                                            }
-                                        , DropAnimal animalId position (adjustEventTime time time2) |> NewLocalChange
-                                        , ServerDropAnimal userId animalId position |> BroadcastToEveryoneElse
+                                            (case animalOrNpcId of
+                                                AnimalId animalId ->
+                                                    { model
+                                                        | animals =
+                                                            IdDict.update2
+                                                                animalId
+                                                                (LocalGrid.placeAnimal position model.grid)
+                                                                model.animals
+                                                    }
+
+                                                NpcId npcId ->
+                                                    { model
+                                                        | npcs =
+                                                            IdDict.update2
+                                                                npcId
+                                                                (LocalGrid.placeNpc position model.grid)
+                                                                model.npcs
+                                                    }
+                                            )
+                                        , DropAnimal animalOrNpcId position (adjustEventTime time time2) |> NewLocalChange
+                                        , ServerDropAnimal userId animalOrNpcId position |> BroadcastToEveryoneElse
                                         )
 
                                     else
                                         ( model, InvalidChange, BroadcastToNoOne )
 
-                                Nothing ->
+                                NotHolding ->
                                     ( model, InvalidChange, BroadcastToNoOne )
 
                         Nothing ->
@@ -2042,7 +2070,7 @@ updateLocalChange sessionId clientId time change model =
                                             { cursor | position = position } |> Just
 
                                         Nothing ->
-                                            Cursor.defaultCursor position Nothing |> Just
+                                            Cursor.defaultCursor position NotHolding |> Just
                             }
                         )
                         model
