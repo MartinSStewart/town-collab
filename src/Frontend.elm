@@ -796,6 +796,7 @@ updateLoaded audioData msg model =
             case Keyboard.anyKeyOriginal rawKey of
                 Just key ->
                     let
+                        model2 : FrontendLoaded
                         model2 =
                             { model | pressedKeys = AssocSet.insert key model.pressedKeys }
                     in
@@ -1073,6 +1074,7 @@ updateLoaded audioData msg model =
 
         MouseMove mousePosition ->
             let
+                placeTileHelper : FrontendLoaded -> FrontendLoaded
                 placeTileHelper model2 =
                     case LocalGrid.currentTool model2 of
                         TilePlacerTool { tileGroup, index } ->
@@ -1138,6 +1140,7 @@ updateLoaded audioData msg model =
                             _ ->
                                 ( model2, Command.none )
                    )
+                |> Tuple.mapFirst updateUiMesh
 
         ShortIntervalElapsed time ->
             let
@@ -1218,6 +1221,7 @@ updateLoaded audioData msg model =
 
         AnimationFrame localTime ->
             let
+                time : Time.Posix
                 time =
                     Duration.addTo localTime (PingData.pingOffset model)
 
@@ -1259,6 +1263,7 @@ updateLoaded audioData msg model =
                                 Nothing ->
                                     True
 
+                model2 : FrontendLoaded
                 model2 =
                     { model
                         | time = time
@@ -1285,6 +1290,7 @@ updateLoaded audioData msg model =
                                 model.scrollThreshold + 1
                     }
 
+                model3 : FrontendLoaded
                 model3 =
                     case ( ( movedViewWithArrowKeys, model.viewPoint ), model2.mouseLeft, model2.currentTool ) of
                         ( ( True, _ ), MouseButtonDown _, TilePlacerTool currentTile ) ->
@@ -1296,36 +1302,12 @@ updateLoaded audioData msg model =
                         _ ->
                             model2
 
+                model4 : FrontendLoaded
                 model4 =
                     LoadingPage.updateMeshes model3
-
-                newUi =
-                    Toolbar.view model4 (LoadingPage.hoverAt model4 (LoadingPage.mouseScreenPosition model4))
-
-                visuallyEqual =
-                    Ui.visuallyEqual newUi model4.ui
             in
             ( { model4
-                | ui = newUi
-                , previousFocus = model4.focus
-                , focus =
-                    if visuallyEqual then
-                        model4.focus
-
-                    else
-                        case Maybe.andThen (\id -> Ui.findInput id newUi) model4.focus of
-                            Just _ ->
-                                model4.focus
-
-                            Nothing ->
-                                Nothing
-                , uiMesh =
-                    if visuallyEqual && model4.focus == model4.previousFocus then
-                        model4.uiMesh
-
-                    else
-                        Ui.view model4.focus newUi
-                , localModel =
+                | localModel =
                     LocalGrid.updateFromBackend
                         (Nonempty
                             ({ previousTime = model.lastTrainUpdate, currentTime = time }
@@ -1337,6 +1319,7 @@ updateLoaded audioData msg model =
                         model4.localModel
                         |> Tuple.first
               }
+                |> updateUiMesh
             , Command.none
             )
 
@@ -1416,6 +1399,50 @@ updateLoaded audioData msg model =
 
         DepthTextureLoaded _ ->
             ( model, Command.none )
+
+
+updateUiMesh : FrontendLoaded -> FrontendLoaded
+updateUiMesh model =
+    let
+        newUi : Ui.Element UiHover
+        newUi =
+            Toolbar.view model (LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model))
+
+        visuallyEqual : Bool
+        visuallyEqual =
+            Ui.visuallyEqual newUi model.ui
+
+        newHover : Maybe UiHover
+        newHover =
+            case Ui.hover (LoadingPage.mouseScreenPosition model |> Coord.roundPoint) newUi of
+                ( id, _ ) :: _ ->
+                    Just id
+
+                [] ->
+                    Nothing
+    in
+    { model
+        | ui = newUi
+        , previousFocus = model.focus
+        , focus =
+            if visuallyEqual then
+                model.focus
+
+            else
+                case Maybe.andThen (\id -> Ui.findInput id newUi) model.focus of
+                    Just _ ->
+                        model.focus
+
+                    Nothing ->
+                        Nothing
+        , uiMesh =
+            if visuallyEqual && model.focus == model.previousFocus && newHover == model.previousHover then
+                model.uiMesh
+
+            else
+                Ui.view newHover model.focus newUi
+        , previousHover = newHover
+    }
 
 
 pasteTextTool : String -> FrontendLoaded -> ( FrontendLoaded, Command restriction toMsg msg )
@@ -2575,31 +2602,34 @@ sendInvite model =
 
 
 onPress :
-    AudioData
-    -> UiEvent
+    UiEvent
     -> (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
-    -> FrontendLoaded
-    -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
-onPress audioData event updateFunc model =
+    -> Maybe ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+onPress event updateFunc =
     case event of
         Ui.MousePressed ->
-            updateFunc ()
+            updateFunc () |> Just
 
         Ui.KeyDown _ Keyboard.Enter ->
-            updateFunc ()
+            updateFunc () |> Just
 
-        Ui.KeyDown rawKey key ->
-            keyMsgCanvasUpdate audioData rawKey key model
+        Ui.KeyDown _ _ ->
+            Nothing
 
         _ ->
-            ( model, Command.none )
+            Nothing
 
 
-uiUpdate : AudioData -> UiHover -> UiEvent -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
+uiUpdate :
+    AudioData
+    -> UiHover
+    -> UiEvent
+    -> FrontendLoaded
+    -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 uiUpdate audioData id event model =
-    case id of
+    (case id of
         CloseInviteUser ->
-            onPress audioData
+            onPress
                 event
                 (\() ->
                     ( { model
@@ -2614,10 +2644,9 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
                 )
-                model
 
         ShowInviteUser ->
-            onPress audioData
+            onPress
                 event
                 (\() ->
                     ( { model
@@ -2632,16 +2661,15 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
                 )
-                model
 
         SubmitInviteUser ->
-            onPress audioData event (\() -> sendInvite model) model
+            onPress event (\() -> sendInvite model)
 
         SendEmailButtonHover ->
-            onPress audioData event (\() -> sendEmail model) model
+            onPress event (\() -> sendEmail model)
 
         ToolButtonHover tool ->
-            onPress audioData event (\() -> ( LoadingPage.setCurrentTool tool model, Command.none )) model
+            onPress event (\() -> ( LoadingPage.setCurrentTool tool model, Command.none ))
 
         InviteEmailAddressTextInput ->
             textInputUpdate
@@ -2666,7 +2694,7 @@ uiUpdate audioData id event model =
                 model
 
         PrimaryColorInput ->
-            case event of
+            (case event of
                 Ui.MouseMove { elementPosition } ->
                     ( { model
                         | primaryColorTextInput =
@@ -2725,11 +2753,13 @@ uiUpdate audioData id event model =
                         Nothing ->
                             pasteTextTool text model
 
-                _ ->
+                Ui.MousePressed ->
                     ( model, Command.none )
+            )
+                |> Just
 
         SecondaryColorInput ->
-            case event of
+            (case event of
                 Ui.MouseMove { elementPosition } ->
                     ( { model
                         | secondaryColorTextInput =
@@ -2788,40 +2818,33 @@ uiUpdate audioData id event model =
                         Nothing ->
                             pasteTextTool text model
 
-                _ ->
+                Ui.MousePressed ->
                     ( model, Command.none )
+            )
+                |> Just
 
         LowerMusicVolume ->
             onPress
-                audioData
                 event
                 (\() -> { model | musicVolume = model.musicVolume - 1 |> max 0 } |> saveUserSettings)
-                model
 
         RaiseMusicVolume ->
             onPress
-                audioData
                 event
                 (\() -> { model | musicVolume = model.musicVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
-                model
 
         LowerSoundEffectVolume ->
             onPress
-                audioData
                 event
                 (\() -> { model | soundEffectVolume = model.soundEffectVolume - 1 |> max 0 } |> saveUserSettings)
-                model
 
         RaiseSoundEffectVolume ->
             onPress
-                audioData
                 event
                 (\() -> { model | soundEffectVolume = model.soundEffectVolume + 1 |> min Sound.maxVolume } |> saveUserSettings)
-                model
 
         SettingsButton ->
             onPress
-                audioData
                 event
                 (\() ->
                     let
@@ -2850,10 +2873,9 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
                 )
-                model
 
         CloseSettings ->
-            onPress audioData event (\() -> ( { model | topMenuOpened = Nothing }, Command.none )) model
+            onPress event (\() -> ( { model | topMenuOpened = Nothing }, Command.none ))
 
         DisplayNameTextInput ->
             case model.topMenuOpened of
@@ -2887,7 +2909,7 @@ uiUpdate audioData id event model =
                         model
 
                 _ ->
-                    ( model, Command.none )
+                    Nothing
 
         MailEditorHover mailEditorId ->
             case model.page of
@@ -2918,16 +2940,16 @@ uiUpdate audioData id event model =
                                         model.lastMailEditorToggle
                             }
                     in
-                    handleMailEditorOutMsg outMsg model2
+                    handleMailEditorOutMsg outMsg model2 |> Just
 
                 _ ->
-                    ( model, Command.none )
+                    Nothing
 
         YouGotMailButton ->
-            onPress audioData event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest )) model
+            onPress event (\() -> ( model, Effect.Lamdera.sendToBackend PostOfficePositionRequest ))
 
         ShowMapButton ->
-            onPress audioData
+            onPress
                 event
                 (\() ->
                     ( { model
@@ -2942,11 +2964,9 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
                 )
-                model
 
         AllowEmailNotificationsCheckbox ->
             onPress
-                audioData
                 event
                 (\() ->
                     case Local.model model.localModel |> .userStatus of
@@ -2959,18 +2979,14 @@ uiUpdate audioData id event model =
                         NotLoggedIn _ ->
                             ( model, Command.none )
                 )
-                model
 
         UsersOnlineButton ->
             onPress
-                audioData
                 event
                 (\_ -> ( { model | showOnlineUsers = not model.showOnlineUsers }, Command.none ))
-                model
 
         CopyPositionUrlButton ->
             onPress
-                audioData
                 event
                 (\() ->
                     case model.contextMenu of
@@ -2982,25 +2998,19 @@ uiUpdate audioData id event model =
                         Nothing ->
                             ( model, Command.none )
                 )
-                model
 
         ZoomInButton ->
             onPress
-                audioData
                 event
                 (\() -> ( { model | zoomFactor = model.zoomFactor + 1 |> min 3 }, Command.none ))
-                model
 
         ZoomOutButton ->
             onPress
-                audioData
                 event
                 (\() -> ( { model | zoomFactor = model.zoomFactor - 1 |> max 1 }, Command.none ))
-                model
 
         RotateLeftButton ->
             onPress
-                audioData
                 event
                 (\() ->
                     ( case model.currentTool of
@@ -3012,11 +3022,9 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
                 )
-                model
 
         RotateRightButton ->
             onPress
-                audioData
                 event
                 (\() ->
                     ( case model.currentTool of
@@ -3028,31 +3036,24 @@ uiUpdate audioData id event model =
                     , Command.none
                     )
                 )
-                model
 
         AutomaticTimeOfDayButton ->
             onPress
-                audioData
                 event
                 (\() -> LoadingPage.updateLocalModel (Change.SetTimeOfDay Automatic) model |> LoadingPage.handleOutMsg False)
-                model
 
         AlwaysDayTimeOfDayButton ->
             onPress
-                audioData
                 event
                 (\() -> LoadingPage.updateLocalModel (Change.SetTimeOfDay AlwaysDay) model |> LoadingPage.handleOutMsg False)
-                model
 
         AlwaysNightTimeOfDayButton ->
             onPress
-                audioData
                 event
                 (\() -> LoadingPage.updateLocalModel (Change.SetTimeOfDay AlwaysNight) model |> LoadingPage.handleOutMsg False)
-                model
 
         ShowAdminPage ->
-            onPress audioData event (\() -> ( { model | page = AdminPage AdminPage.init }, Command.none )) model
+            onPress event (\() -> ( { model | page = AdminPage AdminPage.init }, Command.none ))
 
         AdminHover adminHover ->
             case model.page of
@@ -3061,7 +3062,7 @@ uiUpdate audioData id event model =
                         ( adminPage2, outMsg ) =
                             AdminPage.update model adminHover event adminPage
                     in
-                    case outMsg of
+                    (case outMsg of
                         AdminPage.NoOutMsg ->
                             ( { model | page = AdminPage adminPage2 }, Command.none )
 
@@ -3076,68 +3077,58 @@ uiUpdate audioData id event model =
 
                         AdminPage.ResetTileCountBot ->
                             ( model, Effect.Lamdera.sendToBackend ResetTileBotRequest )
+                    )
+                        |> Just
 
                 _ ->
-                    ( model, Command.none )
+                    Nothing
 
         CategoryButton category ->
-            onPress audioData event (\() -> ( { model | selectedTileCategory = category }, Command.none )) model
+            onPress event (\() -> ( { model | selectedTileCategory = category }, Command.none ))
 
         NotificationsButton ->
-            onPress audioData
+            onPress
                 event
                 (\() -> LoadingPage.updateLocalModel (Change.ShowNotifications True) model |> LoadingPage.handleOutMsg False)
-                model
 
         CloseNotifications ->
-            onPress audioData
+            onPress
                 event
                 (\() -> LoadingPage.updateLocalModel (Change.ShowNotifications False) model |> LoadingPage.handleOutMsg False)
-                model
 
         MapChangeNotification coord ->
             onPress
-                audioData
                 event
                 (\() ->
                     ( model
                     , Effect.Browser.Navigation.pushUrl model.key (Route.encode (Route.internalRoute coord))
                     )
                 )
-                model
 
         ShowInviteTreeButton ->
             onPress
-                audioData
                 event
                 (\() -> ( { model | page = InviteTreePage }, Command.none ))
-                model
 
         CloseInviteTreeButton ->
             onPress
-                audioData
                 event
                 (\() -> ( { model | page = WorldPage LoadingPage.initWorldPage }, Command.none ))
-                model
 
         LogoutButton ->
             onPress
-                audioData
                 event
                 (\() ->
                     LoadingPage.updateLocalModel Change.Logout model |> LoadingPage.handleOutMsg False
                 )
-                model
 
         ClearNotificationsButton ->
             onPress
-                audioData
                 event
                 (\() ->
                     LoadingPage.updateLocalModel (Change.ClearNotifications model.time) model
                         |> LoadingPage.handleOutMsg False
                 )
-                model
 
         OneTimePasswordInput ->
             textInputUpdate
@@ -3194,19 +3185,33 @@ uiUpdate audioData id event model =
                 model
 
         CategoryNextPageButton ->
-            onPress audioData event (\() -> ( changeTileCategory True model, Command.none )) model
+            onPress event (\() -> ( changeTileCategory True model, Command.none ))
 
         CategoryPreviousPageButton ->
-            onPress audioData event (\() -> ( changeTileCategory False model, Command.none )) model
+            onPress event (\() -> ( changeTileCategory False model, Command.none ))
 
         TileContainer ->
-            ( model, Command.none )
+            Nothing
 
         WorldContainer ->
-            ( model, Command.none )
+            Nothing
 
         BlockInputContainer ->
-            ( model, Command.none )
+            Nothing
+    )
+        |> (\maybe ->
+                case maybe of
+                    Just a ->
+                        a
+
+                    Nothing ->
+                        case event of
+                            Ui.KeyDown keyRaw key ->
+                                keyMsgCanvasUpdate audioData keyRaw key model
+
+                            _ ->
+                                ( model, Command.none )
+           )
 
 
 changeTileCategory : Bool -> FrontendLoaded -> FrontendLoaded
@@ -3243,9 +3248,9 @@ textInputUpdate :
     -> (TextInput.Model -> FrontendLoaded)
     -> UiEvent
     -> FrontendLoaded
-    -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
+    -> Maybe ( FrontendLoaded, Command FrontendOnly toMsg msg )
 textInputUpdate textScale id textChanged onEnter textInput setTextInput event model =
-    case event of
+    (case event of
         Ui.PastedText text ->
             let
                 textInput2 =
@@ -3307,6 +3312,8 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
 
                 MouseButtonUp _ ->
                     ( model, Command.none )
+    )
+        |> Just
 
 
 textInputMultilineUpdate :
@@ -3318,9 +3325,9 @@ textInputMultilineUpdate :
     -> (TextInputMultiline.Model -> FrontendLoaded)
     -> UiEvent
     -> FrontendLoaded
-    -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
+    -> Maybe ( FrontendLoaded, Command FrontendOnly toMsg msg )
 textInputMultilineUpdate textScale width id textChanged textInput setTextInput event model =
-    case event of
+    (case event of
         Ui.PastedText text ->
             let
                 textInput2 =
@@ -3381,6 +3388,8 @@ textInputMultilineUpdate textScale width id textChanged textInput setTextInput e
 
                 MouseButtonUp _ ->
                     ( model, Command.none )
+    )
+        |> Just
 
 
 saveUserSettings : FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg )
@@ -4117,6 +4126,7 @@ cursorSprite hover model =
     case LocalGrid.currentUserId model of
         Just userId ->
             let
+                helper : () -> { cursorType : CursorType, scale : Int }
                 helper () =
                     case model.page of
                         MailPage mailEditor ->
@@ -4162,8 +4172,12 @@ cursorSprite hover model =
                                                             CursorSprite DefaultSpriteCursor
                                             in
                                             case hover of
-                                                UiHover [] ->
-                                                    DefaultCursor
+                                                UiHover elements ->
+                                                    if Ui.isHoveringOverInput elements then
+                                                        PointerCursor
+
+                                                    else
+                                                        DefaultCursor
 
                                                 TileHover _ ->
                                                     tilePlaceCursor
@@ -4177,16 +4191,17 @@ cursorSprite hover model =
                                                 AnimalHover _ ->
                                                     tilePlaceCursor
 
-                                                UiHover _ ->
-                                                    PointerCursor
-
                                                 NpcHover _ ->
                                                     tilePlaceCursor
 
                                         HandTool ->
                                             case hover of
-                                                UiHover [] ->
-                                                    DefaultCursor
+                                                UiHover elements ->
+                                                    if Ui.isHoveringOverInput elements then
+                                                        PointerCursor
+
+                                                    else
+                                                        DefaultCursor
 
                                                 TileHover data ->
                                                     case tileInteraction userId data model of
@@ -4205,16 +4220,17 @@ cursorSprite hover model =
                                                 AnimalHover _ ->
                                                     CursorSprite PointerSpriteCursor
 
-                                                UiHover _ ->
-                                                    PointerCursor
-
                                                 NpcHover _ ->
                                                     CursorSprite PointerSpriteCursor
 
                                         TilePickerTool ->
                                             case hover of
-                                                UiHover [] ->
-                                                    DefaultCursor
+                                                UiHover elements ->
+                                                    if Ui.isHoveringOverInput elements then
+                                                        PointerCursor
+
+                                                    else
+                                                        DefaultCursor
 
                                                 TileHover _ ->
                                                     CursorSprite EyeDropperSpriteCursor
@@ -4227,17 +4243,18 @@ cursorSprite hover model =
 
                                                 AnimalHover _ ->
                                                     CursorSprite EyeDropperSpriteCursor
-
-                                                UiHover _ ->
-                                                    PointerCursor
 
                                                 NpcHover _ ->
                                                     CursorSprite EyeDropperSpriteCursor
 
                                         TextTool _ ->
                                             case hover of
-                                                UiHover [] ->
-                                                    DefaultCursor
+                                                UiHover elements ->
+                                                    if Ui.isHoveringOverInput elements then
+                                                        PointerCursor
+
+                                                    else
+                                                        DefaultCursor
 
                                                 TileHover _ ->
                                                     CursorSprite TextSpriteCursor
@@ -4250,17 +4267,18 @@ cursorSprite hover model =
 
                                                 AnimalHover _ ->
                                                     CursorSprite TextSpriteCursor
-
-                                                UiHover _ ->
-                                                    PointerCursor
 
                                                 NpcHover _ ->
                                                     CursorSprite TextSpriteCursor
 
                                         ReportTool ->
                                             case hover of
-                                                UiHover [] ->
-                                                    DefaultCursor
+                                                UiHover elements ->
+                                                    if Ui.isHoveringOverInput elements then
+                                                        PointerCursor
+
+                                                    else
+                                                        DefaultCursor
 
                                                 TileHover _ ->
                                                     CursorSprite GavelSpriteCursor
@@ -4273,9 +4291,6 @@ cursorSprite hover model =
 
                                                 AnimalHover _ ->
                                                     CursorSprite GavelSpriteCursor
-
-                                                UiHover _ ->
-                                                    PointerCursor
 
                                                 NpcHover _ ->
                                                     CursorSprite GavelSpriteCursor

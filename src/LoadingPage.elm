@@ -333,6 +333,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
             , secondaryColorTextInput = TextInput.init
             , focus = Nothing
             , previousFocus = Nothing
+            , previousHover = Nothing
             , music =
                 { startTime = Duration.addTo time (Duration.seconds 10)
                 , sound =
@@ -976,6 +977,7 @@ setCurrentTool toolButton model =
                 ReportToolButton ->
                     { primaryColor = Color.white, secondaryColor = Color.black }
 
+        tool : Tool
         tool =
             case toolButton of
                 TilePlacerToolButton tileGroup ->
@@ -1158,13 +1160,7 @@ viewBoundsUpdate ( model, cmd ) =
 
 hoverAt : FrontendLoaded -> Point2d Pixels Pixels -> Hover
 hoverAt model mousePosition =
-    let
-        mousePosition2 : Coord Pixels
-        mousePosition2 =
-            mousePosition
-                |> Coord.roundPoint
-    in
-    case Ui.hover mousePosition2 model.ui of
+    case Ui.hover (Coord.roundPoint mousePosition) model.ui of
         ( WorldContainer, _ ) :: _ ->
             let
                 mouseWorldPosition_ : Point2d WorldUnit WorldUnit

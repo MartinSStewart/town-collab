@@ -202,6 +202,7 @@ type alias FrontendLoaded =
     , secondaryColorTextInput : TextInput.Model
     , previousFocus : Maybe UiHover
     , focus : Maybe UiHover
+    , previousHover : Maybe UiHover
     , music : { startTime : Effect.Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
     , handMeshes : IdDict UserId CursorMeshes
@@ -317,7 +318,7 @@ type Hover
     | MapHover
     | AnimalHover { animalId : Id AnimalId, animal : Animal }
     | NpcHover { npcId : Id NpcId, npc : Npc }
-    | UiHover (List ( UiHover, { relativePositionToUi : Coord Pixels } ))
+    | UiHover (List ( UiHover, { relativePositionToUi : Coord Pixels, ui : Ui.Element UiHover } ))
 
 
 type UiHover
