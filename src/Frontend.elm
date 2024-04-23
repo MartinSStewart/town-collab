@@ -80,7 +80,7 @@ import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Status(..), Train)
-import Types exposing (ContextMenu, FrontendLoaded, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadingLocalModel(..), MouseButtonState(..), Page(..), RemovedTileParticle, SubmitStatus(..), ToBackend(..), ToFrontend(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu(..), FrontendLoaded, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadingLocalModel(..), MouseButtonState(..), Page(..), RemovedTileParticle, SubmitStatus(..), ToBackend(..), ToFrontend(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (UiEvent)
 import Units exposing (WorldUnit)
 import Untrusted
@@ -359,11 +359,7 @@ audioLoaded audioData model =
     , playSound model.music.sound model.music.startTime |> Audio.scaleVolume 0.5
     , playWithConfig
         (\duration ->
-            { loop =
-                Just
-                    { loopStart = Quantity.zero
-                    , loopEnd = duration
-                    }
+            { loop = Just { loopStart = Quantity.zero, loopEnd = duration }
             , playbackRate = 1
             , startAt = Quantity.zero
             }
@@ -957,37 +953,46 @@ updateLoaded audioData msg model =
                     )
 
                 ( SecondButton, _, _ ) ->
-                    case Ui.hover (Coord.roundPoint mousePosition) model.ui of
-                        ( WorldContainer, _ ) :: _ ->
-                            let
-                                position : Coord WorldUnit
-                                position =
-                                    Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
-
-                                maybeTile :
-                                    Maybe
-                                        { userId : Id UserId
-                                        , tile : Tile
-                                        , position : Coord WorldUnit
-                                        , colors : Colors
-                                        , time : Effect.Time.Posix
-                                        }
-                                maybeTile =
-                                    Grid.getTile position (Local.model model.localModel).grid
-                            in
-                            ( { model
+                    ( case LoadingPage.hoverAt model mousePosition of
+                        MapHover ->
+                            { model
                                 | contextMenu =
-                                    Just
-                                        { change = maybeTile
-                                        , position = position
+                                    MapContextMenu
+                                        { change = Nothing
+                                        , position = Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
                                         , linkCopied = False
                                         }
-                              }
-                            , Command.none
-                            )
+                            }
+
+                        TileHover tile ->
+                            { model
+                                | contextMenu =
+                                    MapContextMenu
+                                        { change = Just tile
+                                        , position = Toolbar.screenToWorld model mousePosition |> Coord.floorPoint
+                                        , linkCopied = False
+                                        }
+                            }
+
+                        NpcHover { npcId } ->
+                            case LoadingPage.npcActualPosition npcId model of
+                                Just { position } ->
+                                    { model
+                                        | contextMenu =
+                                            NpcContextMenu
+                                                { npcId = npcId
+                                                , menuPosition =
+                                                    Toolbar.worldToScreen model position |> Coord.roundPoint
+                                                }
+                                    }
+
+                                Nothing ->
+                                    model
 
                         _ ->
-                            ( model, Command.none )
+                            model
+                    , Command.none
+                    )
 
                 _ ->
                     ( model, Command.none )
@@ -1716,8 +1721,8 @@ keyMsgCanvasUpdate audioData rawKey key model =
                     LoadingPage.updateLocalModel Change.LocalRedo model |> LoadingPage.handleOutMsg False
 
         ( Keyboard.Escape, _ ) ->
-            if model.contextMenu /= Nothing then
-                ( { model | contextMenu = Nothing }, Command.none )
+            if model.contextMenu /= NoContextMenu then
+                ( { model | contextMenu = NoContextMenu }, Command.none )
 
             else
                 case model.page of
@@ -2285,7 +2290,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
 
                         _ ->
                             if isSmallDistance2 then
-                                Nothing
+                                NoContextMenu
 
                             else
                                 model.contextMenu
@@ -2990,12 +2995,12 @@ uiUpdate audioData id event model =
                 event
                 (\() ->
                     case model.contextMenu of
-                        Just contextMenu ->
-                            ( { model | contextMenu = Just { contextMenu | linkCopied = True } }
+                        MapContextMenu contextMenu ->
+                            ( { model | contextMenu = MapContextMenu { contextMenu | linkCopied = True } }
                             , Ports.copyToClipboard (Env.domain ++ Route.encode (Route.internalRoute contextMenu.position))
                             )
 
-                        Nothing ->
+                        _ ->
                             ( model, Command.none )
                 )
 
@@ -4685,10 +4690,10 @@ drawWorld includeSunOrMoon renderData hoverAt2 viewBounds_ model =
                         , scissors = renderData.scissors
                         }
                         (case model.contextMenu of
-                            Just contextMenu ->
+                            MapContextMenu contextMenu ->
                                 Maybe.map .userId contextMenu.change
 
-                            Nothing ->
+                            _ ->
                                 Nothing
                         )
                         model.time
@@ -5494,12 +5499,12 @@ getFlags model =
 
 drawForeground :
     RenderData
-    -> Maybe ContextMenu
+    -> ContextMenu
     -> Tool
     -> Hover
     -> Dict ( Int, Int ) { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     -> List Effect.WebGL.Entity
-drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors } maybeContextMenu currentTool2 hoverAt2 meshes =
+drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors } contextMenu currentTool2 hoverAt2 meshes =
     Dict.toList meshes
         |> List.map
             (\( _, mesh ) ->
@@ -5519,16 +5524,16 @@ drawForeground { nightFactor, lights, viewMatrix, texture, depth, time, scissors
                     , textureSize = Effect.WebGL.Texture.size texture |> Coord.tuple |> Coord.toVec2
                     , color = Vec4.vec4 1 1 1 1
                     , userId =
-                        case maybeContextMenu of
-                            Just contextMenu ->
-                                case contextMenu.change of
+                        case contextMenu of
+                            MapContextMenu mapContextMenu ->
+                                case mapContextMenu.change of
                                     Just { userId } ->
                                         Id.toInt userId |> toFloat
 
                                     Nothing ->
                                         -3
 
-                            Nothing ->
+                            _ ->
                                 case currentTool2 of
                                     ReportTool ->
                                         case hoverAt2 of

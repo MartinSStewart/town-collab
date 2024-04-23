@@ -13,6 +13,7 @@ module Toolbar exposing
     , toolbarTileGroupsMaxPerPage
     , validateInviteEmailAddress
     , view
+    , worldToScreen
     )
 
 import AdminPage
@@ -50,7 +51,7 @@ import Tile exposing (Category(..), DefaultColor(..), Tile(..), TileData, TileGr
 import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Train
-import Types exposing (ContextMenu, FrontendLoaded, Hover(..), LoginError(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu(..), FrontendLoaded, Hover(..), LoginError(..), MapContextMenuData, MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
 import Unsafe
@@ -323,10 +324,27 @@ normalView windowSize model hover =
                     Nothing ->
                         Ui.none
                 , case model.contextMenu of
-                    Just contextMenu ->
+                    MapContextMenu contextMenu ->
                         contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
 
-                    Nothing ->
+                    NpcContextMenu menu ->
+                        Ui.el
+                            { padding = { topLeft = menu.menuPosition, bottomRight = Coord.origin }
+                            , inFront = []
+                            , borderAndFill = NoBorderOrFill
+                            }
+                            (Ui.el
+                                { padding = Ui.noPadding
+                                , inFront = []
+                                , borderAndFill = Ui.defaultElBorderAndFill
+                                }
+                                (Ui.text "test")
+                            )
+
+                    AnimalContextMenu record ->
+                        Ui.none
+
+                    NoContextMenu ->
                         Ui.none
                 , if isDisconnected model then
                     MailEditor.disconnectWarning model.windowSize
@@ -594,7 +612,7 @@ notificationsViewWidth =
     Ui.size notificationsHeader |> Coord.xRaw
 
 
-contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover
+contextMenuView : Int -> MapContextMenuData -> FrontendLoaded -> Ui.Element UiHover
 contextMenuView toolbarHeight contextMenu model =
     let
         localModel =

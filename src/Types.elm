@@ -4,7 +4,7 @@ module Types exposing
     , BackendMsg(..)
     , BackendUserData
     , BackendUserType(..)
-    , ContextMenu
+    , ContextMenu(..)
     , CssPixels
     , EmailResult(..)
     , FrontendLoaded
@@ -20,6 +20,7 @@ module Types exposing
     , LoadingData_
     , LoadingLocalModel(..)
     , LoginError(..)
+    , MapContextMenuData
     , MouseButtonState(..)
     , Page(..)
     , RemovedTileParticle
@@ -218,7 +219,7 @@ type alias FrontendLoaded =
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
     , showOnlineUsers : Bool
-    , contextMenu : Maybe ContextMenu
+    , contextMenu : ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
     , reportsMesh : Effect.WebGL.Mesh Vertex
     , lastReportTilePlaced : Maybe Effect.Time.Posix
@@ -263,7 +264,7 @@ type alias UpdateMeshesData =
     }
 
 
-type alias ContextMenu =
+type alias MapContextMenuData =
     { change :
         Maybe
             { userId : Id UserId
@@ -275,6 +276,13 @@ type alias ContextMenu =
     , position : Coord WorldUnit
     , linkCopied : Bool
     }
+
+
+type ContextMenu
+    = MapContextMenu MapContextMenuData
+    | NpcContextMenu { npcId : Id NpcId, menuPosition : Coord Pixels }
+    | AnimalContextMenu { animalId : Id AnimalId, menuPosition : Coord Pixels }
+    | NoContextMenu
 
 
 type TopMenu
