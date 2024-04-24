@@ -1,6 +1,6 @@
-module NpcName exposing
+module Name exposing
     ( Error(..)
-    , NpcName(..)
+    , Name(..)
     , fromString
     , sven
     , toString
@@ -9,8 +9,8 @@ module NpcName exposing
 import String.Nonempty exposing (NonemptyString(..))
 
 
-type NpcName
-    = NpcName NonemptyString
+type Name
+    = Name NonemptyString
 
 
 type Error
@@ -18,7 +18,7 @@ type Error
     | NameIsTooLong
 
 
-fromString : String -> Result Error NpcName
+fromString : String -> Result Error Name
 fromString text =
     case String.Nonempty.fromString text of
         Just name ->
@@ -26,17 +26,17 @@ fromString text =
                 Err NameIsTooLong
 
             else
-                NpcName name |> Ok
+                Name name |> Ok
 
         Nothing ->
             Err NameIsTooShort
 
 
-toString : NpcName -> String
-toString (NpcName a) =
+toString : Name -> String
+toString (Name a) =
     String.Nonempty.toString a
 
 
-sven : NpcName
+sven : Name
 sven =
-    NonemptyString 'S' "ven Svensson" |> NpcName
+    NonemptyString 'S' "ven Svensson" |> Name

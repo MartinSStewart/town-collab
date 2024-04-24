@@ -37,7 +37,7 @@ import List.Nonempty
 import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
 import MailEditor
-import NpcName
+import Name
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -342,7 +342,7 @@ normalView windowSize model hover =
                                             }
                                             (Ui.column
                                                 { spacing = 4, padding = Ui.noPadding }
-                                                [ Ui.text (NpcName.toString npc.name)
+                                                [ Ui.text (Name.toString npc.name)
                                                 , Ui.row
                                                     { spacing = 0, padding = Ui.noPadding }
                                                     [ Ui.text "I live at "
@@ -726,7 +726,7 @@ contextMenuView toolbarHeight contextMenu model =
                                                             |> List.filterMap
                                                                 (\( _, npc ) ->
                                                                     if npc.home == change.position then
-                                                                        Just (NpcName.toString npc.name)
+                                                                        Just (Name.toString npc.name)
 
                                                                     else
                                                                         Nothing

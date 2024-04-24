@@ -31,7 +31,7 @@ import GridCell
 import Id exposing (Id, NpcId, UserId)
 import List.Extra
 import List.Nonempty exposing (Nonempty(..))
-import NpcName exposing (NpcName)
+import Name exposing (Name)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
@@ -42,7 +42,7 @@ import Vector2d exposing (Vector2d)
 
 
 type alias Npc =
-    { name : NpcName
+    { name : Name
     , home : Coord WorldUnit
     , position : Point2d WorldUnit WorldUnit
     , startTime : Effect.Time.Posix
@@ -334,7 +334,7 @@ random houses createdAt =
         randomClothColor
 
 
-namesAndVoice : Nonempty ( NpcName, Voice )
+namesAndVoice : Nonempty ( Name, Voice )
 namesAndVoice =
     [ ( "Sven Svensson", OldMan )
     , ( "Alice Alicesson", OldWoman )
@@ -357,7 +357,7 @@ namesAndVoice =
     ]
         |> List.filterMap
             (\( text, voice ) ->
-                case NpcName.fromString text of
+                case Name.fromString text of
                     Ok name ->
                         Just ( name, voice )
 
@@ -365,7 +365,7 @@ namesAndVoice =
                         Nothing
             )
         |> List.Nonempty.fromList
-        |> Maybe.withDefault (Nonempty ( NpcName.sven, OldMan ) [])
+        |> Maybe.withDefault (Nonempty ( Name.sven, OldMan ) [])
 
 
 randomSkinColor : Random.Generator Color
