@@ -23,7 +23,6 @@ import Bounds exposing (Bounds)
 import Color exposing (Color)
 import Coord exposing (Coord)
 import Direction2d
-import Direction4 exposing (Direction4(..), Turn(..))
 import Duration exposing (Duration, Seconds)
 import Effect.Time
 import Grid exposing (Grid)
@@ -51,7 +50,20 @@ type alias Npc =
     , visitedPositions : Nonempty (Point2d WorldUnit WorldUnit)
     , skinColor : Color
     , clothColor : Color
+    , voice : Voice
     }
+
+
+type Voice
+    = OldMan
+    | OldWoman
+    | Man
+    | Woman
+    | DistinguishedMan
+    | DistinguishedWoman
+    | EdgyTeenBoy
+    | YoungGirl
+    | CoolKid
 
 
 isHomeless : Grid a -> Npc -> Bool
@@ -298,7 +310,7 @@ random :
     -> Random.Generator Npc
 random houses createdAt =
     Random.map4
-        (\house name skinColor clothColor ->
+        (\house ( name, voice ) skinColor clothColor ->
             let
                 position =
                     Units.pixelToTilePoint house.buildingData.entrancePoint
@@ -313,12 +325,44 @@ random houses createdAt =
             , visitedPositions = Nonempty position []
             , skinColor = skinColor
             , clothColor = clothColor
+            , voice = voice
             }
         )
         (List.Nonempty.sample houses)
-        (List.Nonempty.sample NpcName.names)
+        (List.Nonempty.sample namesAndVoice)
         randomSkinColor
         randomClothColor
+
+
+namesAndVoice : Nonempty ( NpcName, Voice )
+namesAndVoice =
+    [ ( "Sven Svensson", OldMan )
+    , ( "Alice Alicesson", OldWoman )
+    , ( "James Jamesson", DistinguishedMan )
+    , ( "Zane Umbra", EdgyTeenBoy )
+    , ( "Mr. Smiggles", DistinguishedMan )
+    , ( "Sir Bob", DistinguishedMan )
+    , ( "Dorey Doe", OldWoman )
+    , ( "Bumbu Balado", Man )
+    , ( "Gebey Björn", Woman )
+    , ( "Maheeeeen", Man )
+    , ( "Joey Pizza", CoolKid )
+    , ( "Bugless the Spy", DistinguishedMan )
+    , ( "Jobbaly Joe", Man )
+    , ( "Miss Lady", DistinguishedWoman )
+    , ( "Doris Digitell", Woman )
+    ]
+        |> List.filterMap
+            (\( text, voice ) ->
+                case NpcName.fromString text of
+                    Ok name ->
+                        Just ( name, voice )
+
+                    Err _ ->
+                        Nothing
+            )
+        |> List.Nonempty.fromList
+        |> Maybe.withDefault (Nonempty ( NpcName.sven, OldMan ) [])
 
 
 randomSkinColor : Random.Generator Color
