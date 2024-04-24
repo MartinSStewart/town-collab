@@ -29,7 +29,7 @@ module Types exposing
     , ToFrontend(..)
     , ToolButton(..)
     , TopMenu(..)
-    , UiHover(..)
+    , UiId(..)
     , UpdateMeshesData
     , UserSettings
     , ViewPoint(..)
@@ -190,7 +190,7 @@ type alias FrontendLoaded =
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix
-    , ui : Ui.Element UiHover
+    , ui : Ui.Element UiId
     , uiMesh : Effect.WebGL.Mesh Vertex
     , lastHouseClick : Maybe Effect.Time.Posix
     , eventIdCounter : Id EventId
@@ -201,9 +201,9 @@ type alias FrontendLoaded =
     , tileColors : AssocList.Dict TileGroup Colors
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
-    , previousFocus : Maybe UiHover
-    , focus : Maybe UiHover
-    , previousHover : Maybe UiHover
+    , previousFocus : Maybe UiId
+    , focus : Maybe UiId
+    , previousHover : Maybe UiId
     , music : { startTime : Effect.Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
     , handMeshes : IdDict UserId CursorMeshes
@@ -280,7 +280,7 @@ type alias MapContextMenuData =
 
 type ContextMenu
     = MapContextMenu MapContextMenuData
-    | NpcContextMenu { npcId : Id NpcId, menuPosition : Coord Pixels }
+    | NpcContextMenu { npcId : Id NpcId, openedAt : Coord Pixels }
     | AnimalContextMenu { animalId : Id AnimalId, menuPosition : Coord Pixels }
     | NoContextMenu
 
@@ -326,13 +326,13 @@ type Hover
     | MapHover
     | AnimalHover { animalId : Id AnimalId, animal : Animal }
     | NpcHover { npcId : Id NpcId, npc : Npc }
-    | UiHover (List ( UiHover, { relativePositionToUi : Coord Pixels, ui : Ui.Element UiHover } ))
+    | UiHover (List ( UiId, { relativePositionToUi : Coord Pixels, ui : Ui.Element UiId } ))
 
 
-type UiHover
-    = EmailAddressTextInputHover
-    | SendEmailButtonHover
-    | ToolButtonHover ToolButton
+type UiId
+    = EmailAddressTextInput
+    | SendEmailButton
+    | ToolButton ToolButton
     | PrimaryColorInput
     | SecondaryColorInput
     | ShowInviteUser
@@ -346,7 +346,7 @@ type UiHover
     | SettingsButton
     | CloseSettings
     | DisplayNameTextInput
-    | MailEditorHover MailEditor.Hover
+    | MailEditorUi MailEditor.Hover
     | YouGotMailButton
     | ShowMapButton
     | AllowEmailNotificationsCheckbox
@@ -360,7 +360,7 @@ type UiHover
     | AlwaysDayTimeOfDayButton
     | AlwaysNightTimeOfDayButton
     | ShowAdminPage
-    | AdminHover AdminPage.Hover
+    | AdminUi AdminPage.Hover
     | CategoryButton Category
     | NotificationsButton
     | CloseNotifications

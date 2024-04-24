@@ -84,7 +84,7 @@ import Tile exposing (Category(..), Tile(..), TileGroup(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Train)
-import Types exposing (ContextMenu(..), CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UiHover(..), UpdateMeshesData, ViewPoint(..), WorldPage2)
+import Types exposing (ContextMenu(..), CssPixels, FrontendLoaded, FrontendLoading, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadedLocalModel_, LoadingLocalModel(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToBackend(..), ToolButton(..), UiId(..), UpdateMeshesData, ViewPoint(..), WorldPage2)
 import Ui
 import Units exposing (CellUnit, WorldUnit)
 import Vector2d

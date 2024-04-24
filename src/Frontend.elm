@@ -80,7 +80,7 @@ import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Toolbar
 import Train exposing (Status(..), Train)
-import Types exposing (ContextMenu(..), FrontendLoaded, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadingLocalModel(..), MouseButtonState(..), Page(..), RemovedTileParticle, SubmitStatus(..), ToBackend(..), ToFrontend(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu(..), FrontendLoaded, FrontendModel_(..), FrontendMsg_(..), Hover(..), LoadingLocalModel(..), MouseButtonState(..), Page(..), RemovedTileParticle, SubmitStatus(..), ToBackend(..), ToFrontend(..), ToolButton(..), TopMenu(..), UiId(..), ViewPoint(..))
 import Ui exposing (UiEvent)
 import Units exposing (WorldUnit)
 import Untrusted
@@ -981,7 +981,7 @@ updateLoaded audioData msg model =
                                         | contextMenu =
                                             NpcContextMenu
                                                 { npcId = npcId
-                                                , menuPosition =
+                                                , openedAt =
                                                     Toolbar.worldToScreen model position |> Coord.roundPoint
                                                 }
                                     }
@@ -1409,7 +1409,7 @@ updateLoaded audioData msg model =
 updateUiMesh : FrontendLoaded -> FrontendLoaded
 updateUiMesh model =
     let
-        newUi : Ui.Element UiHover
+        newUi : Ui.Element UiId
         newUi =
             Toolbar.view model (LoadingPage.hoverAt model (LoadingPage.mouseScreenPosition model))
 
@@ -1417,7 +1417,7 @@ updateUiMesh model =
         visuallyEqual =
             Ui.visuallyEqual newUi model.ui
 
-        newHover : Maybe UiHover
+        newHover : Maybe UiId
         newHover =
             case Ui.hover (LoadingPage.mouseScreenPosition model |> Coord.roundPoint) newUi of
                 ( id, _ ) :: _ ->
@@ -1492,7 +1492,7 @@ tileRotationHelper audioData offset tile model =
         }
 
 
-previousFocus : FrontendLoaded -> Maybe UiHover
+previousFocus : FrontendLoaded -> Maybe UiId
 previousFocus model =
     case model.focus of
         Just hoverId ->
@@ -1502,7 +1502,7 @@ previousFocus model =
             Nothing
 
 
-nextFocus : FrontendLoaded -> Maybe UiHover
+nextFocus : FrontendLoaded -> Maybe UiId
 nextFocus model =
     case model.focus of
         Just hoverId ->
@@ -2267,7 +2267,7 @@ mainMouseButtonUp audioData mousePosition previousMouseState model =
         hoverAt2 =
             LoadingPage.hoverAt model mousePosition
 
-        sameUiHover : Maybe UiHover
+        sameUiHover : Maybe UiId
         sameUiHover =
             case ( hoverAt2, previousMouseState.hover ) of
                 ( UiHover (( newId, _ ) :: _), UiHover (( oldId, _ ) :: _) ) ->
@@ -2627,7 +2627,7 @@ onPress event updateFunc =
 
 uiUpdate :
     AudioData
-    -> UiHover
+    -> UiId
     -> UiEvent
     -> FrontendLoaded
     -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
@@ -2670,10 +2670,10 @@ uiUpdate audioData id event model =
         SubmitInviteUser ->
             onPress event (\() -> sendInvite model)
 
-        SendEmailButtonHover ->
+        SendEmailButton ->
             onPress event (\() -> sendEmail model)
 
-        ToolButtonHover tool ->
+        ToolButton tool ->
             onPress event (\() -> ( LoadingPage.setCurrentTool tool model, Command.none ))
 
         InviteEmailAddressTextInput ->
@@ -2687,10 +2687,10 @@ uiUpdate audioData id event model =
                 event
                 model
 
-        EmailAddressTextInputHover ->
+        EmailAddressTextInput ->
             textInputUpdate
                 2
-                EmailAddressTextInputHover
+                EmailAddressTextInput
                 (\_ model2 -> ( model2, Command.none ))
                 (\() -> sendEmail model)
                 model.loginEmailInput
@@ -2916,7 +2916,7 @@ uiUpdate audioData id event model =
                 _ ->
                     Nothing
 
-        MailEditorHover mailEditorId ->
+        MailEditorUi mailEditorId ->
             case model.page of
                 MailPage mailEditor ->
                     let
@@ -3060,7 +3060,7 @@ uiUpdate audioData id event model =
         ShowAdminPage ->
             onPress event (\() -> ( { model | page = AdminPage AdminPage.init }, Command.none ))
 
-        AdminHover adminHover ->
+        AdminUi adminHover ->
             case model.page of
                 AdminPage adminPage ->
                     let
@@ -3246,7 +3246,7 @@ changeTileCategory nextCategory model =
 
 textInputUpdate :
     Int
-    -> UiHover
+    -> UiId
     -> (TextInput.Model -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> (() -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> TextInput.Model
@@ -3324,7 +3324,7 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
 textInputMultilineUpdate :
     Int
     -> Int
-    -> UiHover
+    -> UiId
     -> (TextInputMultiline.Model -> FrontendLoaded -> ( FrontendLoaded, Command FrontendOnly toMsg msg ))
     -> TextInputMultiline.Model
     -> (TextInputMultiline.Model -> FrontendLoaded)
@@ -3424,7 +3424,7 @@ sendEmail model2 =
             ( model2, Command.none )
 
 
-isPrimaryColorInput : Maybe UiHover -> Bool
+isPrimaryColorInput : Maybe UiId -> Bool
 isPrimaryColorInput hover =
     case hover of
         Just PrimaryColorInput ->
@@ -3434,7 +3434,7 @@ isPrimaryColorInput hover =
             False
 
 
-isSecondaryColorInput : Maybe UiHover -> Bool
+isSecondaryColorInput : Maybe UiId -> Bool
 isSecondaryColorInput hover =
     case hover of
         Just SecondaryColorInput ->
@@ -3444,7 +3444,7 @@ isSecondaryColorInput hover =
             False
 
 
-setFocus : Maybe UiHover -> FrontendLoaded -> FrontendLoaded
+setFocus : Maybe UiId -> FrontendLoaded -> FrontendLoaded
 setFocus newFocus model =
     { model
         | focus = newFocus
@@ -4138,7 +4138,7 @@ cursorSprite hover model =
                             case hover of
                                 UiHover (( id, _ ) :: _) ->
                                     case id of
-                                        MailEditorHover uiHover ->
+                                        MailEditorUi uiHover ->
                                             MailEditor.cursorSprite model.windowSize uiHover mailEditor
 
                                         _ ->
@@ -4607,7 +4607,7 @@ canvasView audioData model =
                     MailPage mailEditor ->
                         let
                             ( mailPosition, mailSize ) =
-                                case Ui.findInput (MailEditorHover MailEditor.MailButton) model.ui of
+                                case Ui.findInput (MailEditorUi MailEditor.MailButton) model.ui of
                                     Just (Ui.ButtonType mailButton) ->
                                         ( mailButton.position, mailButton.data.cachedSize )
 

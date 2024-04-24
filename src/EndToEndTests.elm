@@ -29,7 +29,7 @@ import Postmark
 import Tile exposing (Category(..), TileGroup(..))
 import Toolbar
 import Train exposing (IsStuckOrDerailed(..), Status(..))
-import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, FrontendMsg_(..), Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend, ToolButton(..), UiHover(..))
+import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, FrontendMsg_(..), Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend, ToolButton(..), UiId(..))
 import Ui
 import Unsafe
 import Untrusted
@@ -355,7 +355,7 @@ clickOnScreen frontend0 position instructions =
 
 clickOnUi :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Types.UiHover
+    -> Types.UiId
     -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
 clickOnUi frontend0 id instructions =
@@ -442,7 +442,7 @@ loadAndLogin sessionId func state =
         (\frontend0 state2 ->
             state2
                 |> shouldBeLoggedOut frontend0
-                |> clickOnUi frontend0 Types.EmailAddressTextInputHover
+                |> clickOnUi frontend0 Types.EmailAddressTextInput
                 |> typeText frontend0 Env.adminEmail2
                 |> pressEnter frontend0
                 |> Effect.Test.andThen
@@ -492,12 +492,12 @@ tests depth lights texture trainDepth trainLights trainTexture =
                 state
                     |> clickOnUi frontend0 (CategoryButton Rail)
                     |> makeItDayTime frontend0
-                    |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton TrainHouseGroup))
+                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton TrainHouseGroup))
                     |> clickOnScreen frontend0 (Point2d.pixels 300 300)
                     |> frontend0.update (Audio.UserMsg (MouseWheel { deltaY = 100, deltaMode = DeltaPixel }))
                     |> shortWait
                     |> clickOnScreen frontend0 (Point2d.pixels 1400 300)
-                    |> clickOnUi frontend0 (ToolButtonHover (TilePlacerToolButton RailStraightGroup))
+                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton RailStraightGroup))
                     |> clickOnScreen frontend0 (Point2d.pixels 340 310)
                     |> (\state2 ->
                             List.foldl
@@ -507,7 +507,7 @@ tests depth lights texture trainDepth trainLights trainTexture =
                                 state2
                                 (List.range 0 50)
                        )
-                    |> clickOnUi frontend0 (ToolButtonHover HandToolButton)
+                    |> clickOnUi frontend0 (ToolButton HandToolButton)
                     |> clickOnScreen frontend0 (Point2d.pixels 300 300)
                     |> Effect.Test.simulateTime (Duration.seconds 6)
                     |> clickOnScreen frontend0 (Point2d.pixels 1400 300)

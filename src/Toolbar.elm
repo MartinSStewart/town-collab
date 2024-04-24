@@ -37,6 +37,7 @@ import List.Nonempty
 import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
 import MailEditor
+import NpcName
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -51,7 +52,7 @@ import Tile exposing (Category(..), DefaultColor(..), Tile(..), TileData, TileGr
 import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Train
-import Types exposing (ContextMenu(..), FrontendLoaded, Hover(..), LoginError(..), MapContextMenuData, MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu(..), FrontendLoaded, Hover(..), LoginError(..), MapContextMenuData, MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiId(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
 import Unsafe
@@ -59,7 +60,7 @@ import User
 import Vector2d exposing (Vector2d)
 
 
-view : FrontendLoaded -> Hover -> Ui.Element UiHover
+view : FrontendLoaded -> Hover -> Ui.Element UiId
 view model hover =
     let
         localModel : LocalGrid
@@ -79,7 +80,7 @@ view model hover =
             MailEditor.ui
                 (isDisconnected model)
                 windowSize
-                MailEditorHover
+                MailEditorUi
                 localModel.users
                 loggedIn.inbox
                 mailEditor
@@ -88,7 +89,7 @@ view model hover =
             case loggedIn.adminData of
                 Just adminData ->
                     AdminPage.adminView
-                        AdminHover
+                        AdminUi
                         windowSize
                         loggedIn.isGridReadOnly
                         adminData
@@ -184,14 +185,14 @@ findHyperlink startPos flattenedValues =
             Nothing
 
 
-normalView : Coord Pixels -> FrontendLoaded -> Hover -> Ui.Element UiHover
+normalView : Coord Pixels -> FrontendLoaded -> Hover -> Ui.Element UiId
 normalView windowSize model hover =
     let
         maybeCurrentUserId : Maybe (Id UserId)
         maybeCurrentUserId =
             LocalGrid.currentUserId model
 
-        onlineUsers : List (Ui.Element UiHover)
+        onlineUsers : List (Ui.Element UiId)
         onlineUsers =
             List.filterMap
                 (\( userId, _ ) ->
@@ -221,7 +222,7 @@ normalView windowSize model hover =
         localModel =
             Local.model model.localModel
 
-        toolbarElement : Ui.Element UiHover
+        toolbarElement : Ui.Element UiId
         toolbarElement =
             if model.hideUi then
                 Ui.none
@@ -328,18 +329,30 @@ normalView windowSize model hover =
                         contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
 
                     NpcContextMenu menu ->
+                        let
+                            menuContents : Ui.Element UiId
+                            menuContents =
+                                case IdDict.get menu.npcId localModel.npcs of
+                                    Just npc ->
+                                        Ui.el
+                                            { padding = Ui.paddingXY 8 4
+                                            , inFront = []
+                                            , borderAndFill = Ui.defaultElBorderAndFill
+                                            }
+                                            (Ui.text (NpcName.toString npc.name))
+
+                                    Nothing ->
+                                        Ui.text "NPC not found"
+                        in
                         Ui.el
-                            { padding = { topLeft = menu.menuPosition, bottomRight = Coord.origin }
+                            { padding =
+                                { topLeft = Coord.plus (Coord.xy 10 0) menu.openedAt
+                                , bottomRight = Coord.origin
+                                }
                             , inFront = []
                             , borderAndFill = NoBorderOrFill
                             }
-                            (Ui.el
-                                { padding = Ui.noPadding
-                                , inFront = []
-                                , borderAndFill = Ui.defaultElBorderAndFill
-                                }
-                                (Ui.text "test")
-                            )
+                            menuContents
 
                     AnimalContextMenu record ->
                         Ui.none
@@ -526,7 +539,7 @@ normalView windowSize model hover =
         toolbarElement
 
 
-onlineUsersButton : Int -> { a | showOnlineUsers : Bool } -> Ui.Element UiHover
+onlineUsersButton : Int -> { a | showOnlineUsers : Bool } -> Ui.Element UiId
 onlineUsersButton otherUsersOnline model =
     Ui.selectableButton
         { id = UsersOnlineButton
@@ -541,7 +554,7 @@ onlineUsersButton otherUsersOnline model =
         )
 
 
-notificationsView : LoggedIn_ -> Ui.Element UiHover
+notificationsView : LoggedIn_ -> Ui.Element UiId
 notificationsView loggedIn =
     Ui.elWithId
         { id = BlockInputContainer
@@ -596,7 +609,7 @@ notificationsView loggedIn =
         )
 
 
-notificationsHeader : Ui.Element UiHover
+notificationsHeader : Ui.Element UiId
 notificationsHeader =
     Ui.row
         { padding = Ui.paddingXY 8 0, spacing = 8 }
@@ -612,13 +625,13 @@ notificationsViewWidth =
     Ui.size notificationsHeader |> Coord.xRaw
 
 
-contextMenuView : Int -> MapContextMenuData -> FrontendLoaded -> Ui.Element UiHover
+contextMenuView : Int -> MapContextMenuData -> FrontendLoaded -> Ui.Element UiId
 contextMenuView toolbarHeight contextMenu model =
     let
         localModel =
             Local.model model.localModel
 
-        contextMenuElement : Ui.Element UiHover
+        contextMenuElement : Ui.Element UiId
         contextMenuElement =
             Ui.el
                 { padding = Ui.paddingXY 12 12, borderAndFill = NoBorderOrFill, inFront = [] }
@@ -854,10 +867,10 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
+settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiId
 settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
     let
-        musicVolumeInput : Ui.Element UiHover
+        musicVolumeInput : Ui.Element UiId
         musicVolumeInput =
             volumeControl
                 "Music volume "
@@ -950,7 +963,7 @@ volumeControl name lowerId raiseId volume =
         ]
 
 
-loggedOutSettingsView : TimeOfDay -> Int -> Int -> Ui.Element UiHover
+loggedOutSettingsView : TimeOfDay -> Int -> Int -> Ui.Element UiId
 loggedOutSettingsView timeOfDay musicVolume soundEffectVolume =
     Ui.el
         { padding = Ui.paddingXY 8 8
@@ -985,7 +998,7 @@ loggedOutSettingsView timeOfDay musicVolume soundEffectVolume =
         )
 
 
-timeOfDayRadio : TimeOfDay -> Ui.Element UiHover
+timeOfDayRadio : TimeOfDay -> Ui.Element UiId
 timeOfDayRadio timeOfDay =
     Ui.column
         { spacing = 4, padding = Ui.noPadding }
@@ -1037,10 +1050,10 @@ validateInviteEmailAddress emailAddress inviteEmailAddressText =
             Err "Invalid email"
 
 
-inviteView : EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
+inviteView : EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiId
 inviteView emailAddress inviteTextInput inviteSubmitStatus =
     let
-        inviteForm : Ui.Element UiHover
+        inviteForm : Ui.Element UiId
         inviteForm =
             Ui.column
                 { spacing = 8, padding = Ui.paddingXY 16 16 }
@@ -1050,7 +1063,7 @@ inviteView emailAddress inviteTextInput inviteSubmitStatus =
                 , content
                 ]
 
-        content : Ui.Element UiHover
+        content : Ui.Element UiId
         content =
             Ui.column
                 { spacing = 0, padding = Ui.noPadding }
@@ -1127,13 +1140,13 @@ loginToolbarUi :
     -> TextInput.Model
     -> TextInput.Model
     -> Maybe LoginError
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLoginError =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
 
-        loginUi : Ui.Element UiHover
+        loginUi : Ui.Element UiId
         loginUi =
             Ui.column
                 { spacing = 10, padding = Ui.paddingXY 20 10 }
@@ -1143,7 +1156,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                     [ Ui.row
                         { spacing = 10, padding = Ui.noPadding }
                         [ Ui.textInput
-                            { id = EmailAddressTextInputHover
+                            { id = EmailAddressTextInput
                             , width = 780
                             , isValid =
                                 if pressedSubmit2 then
@@ -1154,7 +1167,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                             , state = emailTextInput.current
                             }
                         , Ui.button
-                            { id = SendEmailButtonHover, padding = Ui.paddingXY 30 4 }
+                            { id = SendEmailButton, padding = Ui.paddingXY 30 4 }
                             (Ui.text "Send email")
                         ]
                     , case pressedSubmitEmail of
@@ -1212,7 +1225,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                                 Ui.none
                             )
 
-                submittedText : Ui.Element UiHover
+                submittedText : Ui.Element UiId
                 submittedText =
                     Ui.column
                         { spacing = 8, padding = Ui.noPadding }
@@ -1296,7 +1309,7 @@ toolbarUi :
             , hyperlinkInput : TextInputMultiline.Model
         }
     -> ToolButton
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 toolbarUi handColor loggedIn model currentToolButton =
     let
         showInvite =
@@ -1380,7 +1393,7 @@ toolbarUi handColor loggedIn model currentToolButton =
                         }
                         mapSprite
                     , Ui.selectableButton
-                        { id = ToolButtonHover ReportToolButton
+                        { id = ToolButton ReportToolButton
                         , padding = smallToolButtonPadding
                         }
                         (currentToolButton == ReportToolButton)
@@ -1488,7 +1501,7 @@ toolbarTileGroups :
     -> ToolButton
     -> Colors
     -> { a | hasCmdKey : Bool, tileColors : AssocList.Dict TileGroup Colors }
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 toolbarTileGroups category tileHotkeys currentToolButton handColor model =
     category
         |> List.map
@@ -1501,7 +1514,7 @@ toolbarTileGroups category tileHotkeys currentToolButton handColor model =
         |> Ui.row { spacing = 2, padding = Ui.noPadding }
 
 
-nextPreviousTilesButton : Bool -> Bool -> Int -> Ui.Element UiHover
+nextPreviousTilesButton : Bool -> Bool -> Int -> Ui.Element UiId
 nextPreviousTilesButton isEnabled isNext height =
     Ui.colorSprite
         { colors =
@@ -1589,7 +1602,7 @@ selectedToolView :
             , hyperlinkInput : TextInputMultiline.Model
         }
     -> ToolButton
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 selectedToolView handColor model currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
@@ -1744,7 +1757,7 @@ toolButtonUi :
     -> AssocList.Dict Change.TileHotkey TileGroup
     -> ToolButton
     -> ToolButton
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     let
         tileColors =
@@ -1806,7 +1819,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                 ReportToolButton ->
                     Nothing
 
-        label : Ui.Element UiHover
+        label : Ui.Element UiId
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
@@ -1825,7 +1838,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                     Cursor.gavelCursor2
     in
     Ui.customButton
-        { id = ToolButtonHover tool
+        { id = ToolButton tool
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of
