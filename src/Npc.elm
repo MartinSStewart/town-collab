@@ -238,15 +238,19 @@ getNavPoints npcPosition grid =
 
 updateNpcPath : Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
 updateNpcPath time grid npcId npc =
-    if Duration.from time (moveEndTime npc) |> Quantity.lessThanOrEqualToZero then
+    if Duration.from time (moveEndTime npc) |> Quantity.lessThanZero then
         case getNavPoints npc.endPosition grid |> List.Extra.minimumBy (navPointWeighting npcId npc) of
             Just head ->
-                { npc
-                    | position = npc.endPosition
-                    , endPosition = head
-                    , startTime = time
-                    , visitedPositions = List.Nonempty.take 6 npc.visitedPositions |> List.Nonempty.cons npc.endPosition
-                }
+                updateNpcPath
+                    time
+                    grid
+                    npcId
+                    { npc
+                        | position = npc.endPosition
+                        , endPosition = head
+                        , startTime = moveEndTime npc
+                        , visitedPositions = List.Nonempty.take 6 npc.visitedPositions |> List.Nonempty.cons npc.endPosition
+                    }
 
             Nothing ->
                 npc
@@ -353,6 +357,7 @@ namesAndVoice =
     , ( "Lefterston Grembridge", DistinguishedMan )
     , ( "Jeffree Wheeltow", Man )
     , ( "Avie Aaronston", Woman )
+    , ( "Dibble", Man )
     ]
         |> List.filterMap
             (\( text, voice ) ->

@@ -797,86 +797,27 @@ updateNpc newTime model =
 
                 npcs4 : IdDict NpcId Npc
                 npcs4 =
-                    --IdDict.map
-                    --    (\id npc ->
-                    --        if Duration.from (Npc.moveEndTime npc) newTime |> Quantity.lessThanZero then
-                    --            npc
-                    --
-                    --        else
-                    --            let
-                    --                start : Point2d WorldUnit WorldUnit
-                    --                start =
-                    --                    npc.endPosition
-                    --
-                    --                maybeMove : Maybe { endPosition : Point2d WorldUnit WorldUnit, delay : Duration }
-                    --                maybeMove =
-                    --                    Vector2d.from npc.position npc.endPosition
-                    --                        |> Coord.roundVector
-                    --                        |> Coord.direction4
-                    --                        |> Npc.getNpcPath id newTime model.grid start
-                    --            in
-                    --            case maybeMove of
-                    --                Just { endPosition, delay } ->
-                    --                    let
-                    --                        size =
-                    --                            Units.pixelToTileVector Npc.size |> Vector2d.scaleBy 0.5
-                    --                    in
-                    --                    { npc
-                    --                        | position = start
-                    --                        , startTime = Duration.addTo newTime delay
-                    --                        , endPosition =
-                    --                            case Grid.rayIntersection2 True size start endPosition model.grid of
-                    --                                Just { intersection } ->
-                    --                                    LineSegmentExtra.extendLineEnd
-                    --                                        start
-                    --                                        intersection
-                    --                                        (Quantity.negate Npc.moveCollisionThreshold)
-                    --
-                    --                                Nothing ->
-                    --                                    endPosition
-                    --                    }
-                    --
-                    --                Nothing ->
-                    --                    npc
-                    --    )
-                    npcs3
-
-                movedNpcs : List ( Id NpcId, MovementChange )
-                movedNpcs =
-                    IdDict.merge
-                        (\_ _ list -> list)
-                        (\id old new list ->
-                            if old.endPosition == new.endPosition then
-                                list
-
-                            else
-                                ( id
-                                , { position = new.position
-                                  , endPosition = new.endPosition
-                                  , startTime = new.startTime
-                                  }
-                                )
-                                    :: list
-                        )
-                        (\_ _ list -> list)
-                        npcs2
-                        npcs4
-                        []
+                    IdDict.map (Npc.updateNpcPath newTime model.grid) npcs3
             in
             ( npcs4
-            , if maybeNewNpc == Nothing && List.isEmpty relocatedNpcs && List.isEmpty movedNpcs then
-                Command.none
-
-              else
-                ServerNpcUpdate
-                    { maybeNewNpc = maybeNewNpc
-                    , relocatedNpcs = relocatedNpcs
-                    , movementChanges = movedNpcs
-                    }
-                    |> Change.ServerChange
-                    |> Nonempty.singleton
-                    |> ChangeBroadcast
-                    |> Effect.Lamdera.broadcast
+            , ServerNpcUpdate
+                { maybeNewNpc = maybeNewNpc
+                , relocatedNpcs = relocatedNpcs
+                , movementChanges =
+                    IdDict.map
+                        (\_ npc ->
+                            { position = npc.position
+                            , startTime = npc.startTime
+                            , endPosition = npc.endPosition
+                            }
+                        )
+                        npcs4
+                        |> IdDict.toList
+                }
+                |> Change.ServerChange
+                |> Nonempty.singleton
+                |> ChangeBroadcast
+                |> Effect.Lamdera.broadcast
             )
 
         TrainsAndAnimalsDisabled ->
