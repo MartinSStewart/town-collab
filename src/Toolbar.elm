@@ -326,7 +326,7 @@ normalView windowSize model hover =
                         Ui.none
                 , case model.contextMenu of
                     MapContextMenu contextMenu ->
-                        contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
+                        contextMenuView (Ui.size toolbarElement |> Coord.y) contextMenu model
 
                     NpcContextMenu menu ->
                         let
@@ -363,8 +363,8 @@ normalView windowSize model hover =
                         Ui.el
                             { padding =
                                 { topLeft =
-                                    if Coord.xRaw p0 + Coord.xRaw size > Coord.xRaw windowSize then
-                                        Coord.xy (Coord.xRaw p0 - Coord.xRaw size - 20) (Coord.yRaw p0)
+                                    if Coord.x p0 + Coord.x size > Coord.x windowSize then
+                                        Coord.xy (Coord.x p0 - Coord.x size - 20) (Coord.y p0)
 
                                     else
                                         p0
@@ -622,9 +622,9 @@ notificationsView loggedIn =
 coordToText : Coord WorldUnit -> String
 coordToText coord =
     "x="
-        ++ String.fromInt (Coord.xRaw coord)
+        ++ String.fromInt (Coord.x coord)
         ++ "&y="
-        ++ String.fromInt (Coord.yRaw coord)
+        ++ String.fromInt (Coord.y coord)
 
 
 coordLink : Ui.Padding -> Coord WorldUnit -> String -> Ui.Element UiId
@@ -652,7 +652,7 @@ notificationsHeader =
 
 notificationsViewWidth : Int
 notificationsViewWidth =
-    Ui.size notificationsHeader |> Coord.xRaw
+    Ui.size notificationsHeader |> Coord.x
 
 
 contextMenuView : Int -> MapContextMenuData -> FrontendLoaded -> Ui.Element UiId
@@ -673,9 +673,9 @@ contextMenuView toolbarHeight contextMenu model =
                         [ Ui.el
                             { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }
                             (Ui.text
-                                (String.fromInt (Coord.xRaw contextMenu.position)
+                                (String.fromInt (Coord.x contextMenu.position)
                                     ++ ","
-                                    ++ String.fromInt (Coord.yRaw contextMenu.position)
+                                    ++ String.fromInt (Coord.y contextMenu.position)
                                 )
                             )
                         , Ui.button
@@ -806,10 +806,10 @@ contextMenuView toolbarHeight contextMenu model =
             model.windowSize |> Coord.minus position |> Coord.minus (Ui.size contextMenuElement)
 
         fitsX =
-            Coord.xRaw fitsWindow > 0
+            Coord.x fitsWindow > 0
 
         fitsY =
-            Coord.yRaw fitsWindow > toolbarHeight
+            Coord.y fitsWindow > toolbarHeight
 
         offset =
             case ( fitsX, fitsY ) of
@@ -817,11 +817,11 @@ contextMenuView toolbarHeight contextMenu model =
                     position
 
                 ( True, False ) ->
-                    Coord.xy (Coord.xRaw position) (Coord.yRaw position2)
+                    Coord.xy (Coord.x position) (Coord.y position2)
                         |> Coord.minus (Ui.size contextMenuElement |> Coord.yOnly)
 
                 ( False, True ) ->
-                    Coord.xy (Coord.xRaw position2) (Coord.yRaw position)
+                    Coord.xy (Coord.x position2) (Coord.y position)
                         |> Coord.minus (Ui.size contextMenuElement |> Coord.xOnly)
 
                 ( False, False ) ->
@@ -988,7 +988,7 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                 [ Ui.text "Display name"
                 , Ui.textInput
                     { id = DisplayNameTextInput
-                    , width = Ui.size musicVolumeInput |> Coord.xRaw
+                    , width = Ui.size musicVolumeInput |> Coord.x
                     , isValid =
                         case DisplayName.fromString nameTextInput.current.text of
                             Ok _ ->
@@ -1152,7 +1152,7 @@ inviteView emailAddress inviteTextInput inviteSubmitStatus =
                     [ Ui.text "Enter email address to send an invite to"
                     , Ui.textInput
                         { id = InviteEmailAddressTextInput
-                        , width = Coord.xRaw toolbarUiSize |> (+) (-16 * 2)
+                        , width = Coord.x toolbarUiSize |> (+) (-16 * 2)
                         , isValid = True
                         , state = inviteTextInput.current
                         }
@@ -1196,7 +1196,7 @@ inviteView emailAddress inviteTextInput inviteSubmitStatus =
                 , Ui.center
                     { size = Ui.size content }
                     (Ui.wrappedText
-                        (Ui.size content |> Coord.xRaw |> (+) -16)
+                        (Ui.size content |> Coord.x |> (+) -16)
                         ("An invite email as been sent to " ++ EmailAddress.toString inviteEmailAddress)
                     )
                 ]
@@ -1279,7 +1279,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                     Ui.colorText Color.errorColor "Login expired, refresh the page to retry"
 
                 centerHorizontally item =
-                    Ui.centerHorizontally { parentWidth = Ui.size loginExpired |> Coord.xRaw } item
+                    Ui.centerHorizontally { parentWidth = Ui.size loginExpired |> Coord.x } item
 
                 ( isValid, statusUi ) =
                     case maybeLoginError of
@@ -1546,12 +1546,12 @@ toolbarUi handColor loggedIn model currentToolButton =
                     { padding = Ui.noPadding, inFront = [], borderAndFill = NoBorderOrFill, id = TileContainer }
                     (Ui.row
                         { spacing = -2, padding = Ui.noPadding }
-                        [ nextPreviousTilesButton (pageIndex > 0) False (Coord.yRaw toolbarTileGroupsSize)
+                        [ nextPreviousTilesButton (pageIndex > 0) False (Coord.y toolbarTileGroupsSize)
                         , Ui.topLeft { size = toolbarTileGroupsSize } content
                         , nextPreviousTilesButton
                             (List.isEmpty remainingTileGroups |> not)
                             True
-                            (Coord.yRaw toolbarTileGroupsSize)
+                            (Coord.y toolbarTileGroupsSize)
                         ]
                     )
                 ]
@@ -1747,7 +1747,7 @@ selectedToolView handColor model currentTool =
                                             model.primaryColorTextInput
                                             Color.black
                                             |> Ui.size
-                                            |> Coord.xRaw
+                                            |> Coord.x
                                         )
                                         0
                                 , bottomRight = Coord.xy 0 0
@@ -1799,7 +1799,7 @@ colorTextInput :
 colorTextInput id textInput color =
     let
         padding =
-            TextInput.size TextInput.defaultTextScale (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
+            TextInput.size TextInput.defaultTextScale (Quantity primaryColorInputWidth) |> Coord.y |> (\a -> a // 2)
     in
     Ui.row
         { spacing = -2, padding = Ui.noPadding }
@@ -2018,7 +2018,7 @@ tileMesh colors tile =
 
 primaryColorInputWidth : Int
 primaryColorInputWidth =
-    6 * Coord.xRaw Sprite.charSize * TextInput.defaultTextScale + Coord.xRaw TextInput.padding * 2 + 2
+    6 * Coord.x Sprite.charSize * TextInput.defaultTextScale + Coord.x TextInput.padding * 2 + 2
 
 
 buttonSize : Coord units

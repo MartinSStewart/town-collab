@@ -57,8 +57,8 @@ valueEncoder : Value -> Bytes.Encode.Encoder
 valueEncoder value =
     Bytes.Encode.sequence
         [ Bytes.Encode.unsignedInt16 BE (Id.toInt value.userId)
-        , Bytes.Encode.signedInt8 (Coord.xRaw value.position)
-        , Bytes.Encode.signedInt8 (Coord.yRaw value.position)
+        , Bytes.Encode.signedInt8 (Coord.x value.position)
+        , Bytes.Encode.signedInt8 (Coord.y value.position)
         , Tile.encoder value.tile
         , colorsEncoder value.colors
         , Bytes.Encode.float64 BE (Effect.Time.posixToMillis value.time |> toFloat)
@@ -264,7 +264,7 @@ updateMapPixelData cache =
 
                 index : Int
                 index =
-                    Coord.xRaw terrainPos + Coord.yRaw terrainPos * Terrain.terrainDivisionsPerCell
+                    Coord.x terrainPos + Coord.y terrainPos * Terrain.terrainDivisionsPerCell
 
                 currentValue : Int
                 currentValue =

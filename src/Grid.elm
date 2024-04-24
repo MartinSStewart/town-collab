@@ -605,9 +605,9 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                                 case
                                     List.find
                                         (\{ linkTopLeft, linkWidth } ->
-                                            (Coord.yRaw position2 - Coord.yRaw linkTopLeft == 0)
-                                                && (Coord.xRaw position2 >= Coord.xRaw linkTopLeft)
-                                                && (Coord.xRaw position2 <= Coord.xRaw linkTopLeft + linkWidth)
+                                            (Coord.y position2 - Coord.y linkTopLeft == 0)
+                                                && (Coord.x position2 >= Coord.x linkTopLeft)
+                                                && (Coord.x position2 <= Coord.x linkTopLeft + linkWidth)
                                         )
                                         hyperlinks
                                 of

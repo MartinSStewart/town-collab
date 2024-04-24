@@ -123,7 +123,7 @@ drawHighscore isFirstDraw time model =
         title =
             List.indexedMap
                 (\index char ->
-                    { position = Coord.xy (Coord.xRaw position + index) (Coord.yRaw position)
+                    { position = Coord.xy (Coord.x position + index) (Coord.y position)
                     , change = Tile.BigText char
                     , colors = textColor
                     , time = time
@@ -153,19 +153,19 @@ drawHighscore isFirstDraw time model =
                                 String.fromInt count ++ " x "
 
                             height =
-                                Coord.yRaw tileSize |> max 2
+                                Coord.y tileSize |> max 2
 
                             ( x2, y2, columnWidth ) =
-                                if state.y + height - Coord.yRaw position > 31 then
+                                if state.y + height - Coord.y position > 31 then
                                     ( state.x + state.columnWidth + 1
-                                    , Coord.yRaw position + 3
-                                    , String.length text + Coord.xRaw tileSize
+                                    , Coord.y position + 3
+                                    , String.length text + Coord.x tileSize
                                     )
 
                                 else
                                     ( state.x
                                     , state.y
-                                    , max state.columnWidth (String.length text + Coord.xRaw tileSize)
+                                    , max state.columnWidth (String.length text + Coord.x tileSize)
                                     )
                         in
                         { x = x2
@@ -192,7 +192,7 @@ drawHighscore isFirstDraw time model =
                                 ++ state.changes
                         }
                     )
-                    { x = Coord.xRaw position, y = Coord.yRaw position + 3, columnWidth = 0, changes = title }
+                    { x = Coord.x position, y = Coord.y position + 3, columnWidth = 0, changes = title }
                 |> .changes
     in
     if isFirstDraw then

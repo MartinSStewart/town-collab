@@ -399,18 +399,18 @@ cursorPosition textScale mousePosition position state =
     let
         mouseX : Int
         mouseX =
-            Coord.xRaw mousePosition
+            Coord.x mousePosition
 
         paddingX : Int
         paddingX =
-            Coord.xRaw padding
+            Coord.x padding
 
         positionX : Int
         positionX =
-            Coord.xRaw position
+            Coord.x position
     in
     toFloat (mouseX - (positionX + paddingX + textScale))
-        / toFloat (Coord.xRaw Sprite.charSize * textScale)
+        / toFloat (Coord.x Sprite.charSize * textScale)
         |> round
         |> clamp 0 (String.length state.text)
 
@@ -436,7 +436,7 @@ padding =
 
 size : Int -> Quantity Int units -> Coord units
 size textScale width =
-    ( width, Coord.yRaw Sprite.charSize * textScale + Coord.yRaw padding * 2 |> Quantity )
+    ( width, Coord.y Sprite.charSize * textScale + Coord.y padding * 2 |> Quantity )
 
 
 view : Int -> Coord units -> Quantity Int units -> Bool -> Bool -> State -> List Vertex
@@ -478,13 +478,13 @@ view textScale offset width hasFocus isValid current =
                     (offset
                         |> Coord.plus
                             (Coord.xy
-                                (current.cursorPosition * Coord.xRaw Sprite.charSize * textScale + Coord.xRaw padding)
-                                (Coord.yRaw padding)
+                                (current.cursorPosition * Coord.x Sprite.charSize * textScale + Coord.x padding)
+                                (Coord.y padding)
                             )
                     )
                     (Coord.xy
-                        (Coord.xRaw Sprite.charSize * textScale * current.cursorSize)
-                        (Coord.yRaw Sprite.charSize * textScale)
+                        (Coord.x Sprite.charSize * textScale * current.cursorSize)
+                        (Coord.y Sprite.charSize * textScale)
                     )
                     (Coord.xy 508 28)
                     (Coord.xy 1 1)
@@ -494,11 +494,11 @@ view textScale offset width hasFocus isValid current =
                 Sprite.sprite
                     (offset
                         |> Coord.plus
-                            (Coord.xy (current.cursorPosition * Coord.xRaw Sprite.charSize * textScale + Coord.xRaw padding) (Coord.yRaw padding))
+                            (Coord.xy (current.cursorPosition * Coord.x Sprite.charSize * textScale + Coord.x padding) (Coord.y padding))
                     )
                     (Coord.xy
                         textScale
-                        (Coord.yRaw Sprite.charSize * textScale)
+                        (Coord.y Sprite.charSize * textScale)
                     )
                     (Coord.xy 504 28)
                     (Coord.xy 1 1)

@@ -601,7 +601,7 @@ hardUpdateMeshes newModel =
                                     in
                                     Just
                                         { linkTopLeft = Grid.cellAndLocalCoordToWorld ( coord, linkPos )
-                                        , linkWidth = Coord.xRaw value.position - Coord.xRaw linkPos
+                                        , linkWidth = Coord.x value.position - Coord.x linkPos
                                         , isVisited = Set.member (Hyperlink.toString hyperlink) hyperlinksVisited
                                         }
 
@@ -783,7 +783,7 @@ updateMeshes newModel =
                                     in
                                     Just
                                         { linkTopLeft = Grid.cellAndLocalCoordToWorld ( coord, linkPos )
-                                        , linkWidth = Coord.xRaw value.position - Coord.xRaw linkPos
+                                        , linkWidth = Coord.x value.position - Coord.x linkPos
                                         , isVisited = Set.member (Hyperlink.toString hyperlink) hyperlinksVisited
                                         }
 

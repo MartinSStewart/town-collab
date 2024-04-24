@@ -51,10 +51,10 @@ randomSceneryItem bigTrees offset =
                         Tile.getData tile |> .size
 
                     x2 =
-                        modBy terrainSize x - Coord.xRaw size // 2
+                        modBy terrainSize x - Coord.x size // 2
 
                     y2 =
-                        modBy terrainSize y - (Coord.yRaw size - 1)
+                        modBy terrainSize y - (Coord.y size - 1)
                 in
                 ( tile, Coord.xy x2 y2 |> Coord.plus offset )
             )
@@ -77,8 +77,8 @@ randomSceneryItem bigTrees offset =
 
     else
         Random.map3 (\x y tile -> ( tile, Coord.xy x y |> Coord.plus offset ))
-            (Random.int 0 (terrainSize - Coord.xRaw treeSize))
-            (Random.int -1 (terrainSize - Coord.yRaw treeSize))
+            (Random.int 0 (terrainSize - Coord.x treeSize))
+            (Random.int -1 (terrainSize - Coord.y treeSize))
             (Random.weighted
                 ( 0.49, PineTree1 )
                 [ ( 0.49, PineTree2 )

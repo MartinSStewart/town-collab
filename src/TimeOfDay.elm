@@ -59,5 +59,5 @@ sunMoonPosition { windowSize, zoomFactor } factor =
                 -0.5 + 0.9 * ((factor - 0.5) * 2)
     in
     Coord.xy
-        ((toFloat (Coord.xRaw windowSize) * -0.3 / toFloat zoomFactor) |> round |> negate)
-        ((toFloat (Coord.yRaw windowSize) * yOffset / toFloat zoomFactor) |> round |> negate)
+        ((toFloat (Coord.x windowSize) * -0.3 / toFloat zoomFactor) |> round |> negate)
+        ((toFloat (Coord.y windowSize) * yOffset / toFloat zoomFactor) |> round |> negate)

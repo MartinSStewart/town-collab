@@ -986,7 +986,7 @@ viewHelper maybeHover focus position vertices element2 =
                 (\child state ->
                     { vertices = viewHelper maybeHover focus state.position state.vertices child
                     , position =
-                        Coord.xy (Coord.xRaw (size child) + data.spacing) 0
+                        Coord.xy (Coord.x (size child) + data.spacing) 0
                             |> Coord.plus state.position
                     }
                 )
@@ -1001,7 +1001,7 @@ viewHelper maybeHover focus position vertices element2 =
                 (\child state ->
                     { vertices = viewHelper maybeHover focus state.position state.vertices child
                     , position =
-                        Coord.xy 0 (Coord.yRaw (size child) + data.spacing)
+                        Coord.xy 0 (Coord.y (size child) + data.spacing)
                             |> Coord.plus state.position
                     }
                 )
@@ -1028,8 +1028,8 @@ viewHelper maybeHover focus position vertices element2 =
         Quads data ->
             List.map
                 (\v ->
-                    { x = v.x + toFloat (Coord.xRaw position)
-                    , y = v.y + toFloat (Coord.yRaw position)
+                    { x = v.x + toFloat (Coord.x position)
+                    , y = v.y + toFloat (Coord.y position)
                     , z = v.z
                     , texturePosition = v.texturePosition
                     , opacityAndUserId = v.opacityAndUserId
@@ -1104,8 +1104,8 @@ rowSize data children =
                 size2 =
                     size child
             in
-            ( Coord.xRaw size2 + data.spacing + x
-            , max (Coord.yRaw size2) y
+            ( Coord.x size2 + data.spacing + x
+            , max (Coord.y size2) y
             )
         )
         ( 0, 0 )
@@ -1128,8 +1128,8 @@ columnSize data children =
                 size2 =
                     size child
             in
-            ( max (Coord.xRaw size2) x
-            , Coord.yRaw size2 + data.spacing + y
+            ( max (Coord.x size2) x
+            , Coord.y size2 + data.spacing + y
             )
         )
         ( 0, 0 )
@@ -1199,7 +1199,7 @@ findInputHelper id position element =
                         Nothing ->
                             { result = findInputHelper id state.position child
                             , position =
-                                Coord.xy (Coord.xRaw (size child) + data.spacing) 0
+                                Coord.xy (Coord.x (size child) + data.spacing) 0
                                     |> Coord.plus state.position
                             }
                 )
@@ -1219,7 +1219,7 @@ findInputHelper id position element =
                         Nothing ->
                             { result = findInputHelper id state.position child
                             , position =
-                                Coord.xy 0 (Coord.yRaw (size child) + data.spacing)
+                                Coord.xy 0 (Coord.y (size child) + data.spacing)
                                     |> Coord.plus state.position
                             }
                 )

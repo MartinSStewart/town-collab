@@ -4435,12 +4435,12 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
         staticViewMatrix2 =
             staticMatrix windowWidth windowHeight viewZoom
                 |> Mat4.translate3
-                    (toFloat ((Coord.xRaw viewportPosition + Coord.xRaw viewportSize // 2) - windowWidth // 2)
+                    (toFloat ((Coord.x viewportPosition + Coord.x viewportSize // 2) - windowWidth // 2)
                         |> round
                         |> toFloat
                         |> (*) (1 / toFloat viewZoom)
                     )
-                    (toFloat ((Coord.yRaw viewportPosition + Coord.yRaw viewportSize // 2) - windowHeight // 2)
+                    (toFloat ((Coord.y viewportPosition + Coord.y viewportSize // 2) - windowHeight // 2)
                         |> round
                         |> toFloat
                         |> (*) (1 / toFloat viewZoom)
@@ -4462,10 +4462,10 @@ drawWorldPreview viewportPosition viewportSize viewPosition viewZoom renderData 
                 (viewPosition |> Point2d.translateBy offset)
 
         scissors =
-            { left = Coord.xRaw viewportPosition
-            , bottom = (windowHeight - Coord.yRaw viewportPosition) - Coord.yRaw viewportSize
-            , width = Coord.xRaw viewportSize
-            , height = Coord.yRaw viewportSize
+            { left = Coord.x viewportPosition
+            , bottom = (windowHeight - Coord.y viewportPosition) - Coord.y viewportSize
+            , width = Coord.x viewportSize
+            , height = Coord.y viewportSize
             }
     in
     Shaders.clearDepth
@@ -4591,7 +4591,7 @@ canvasView audioData model =
             ++ (case LoadingPage.showWorldPreview hoverAt2 of
                     Just ( changeAt, data ) ->
                         drawWorldPreview
-                            (Coord.xy Toolbar.notificationsViewWidth (Coord.yRaw data.relativePositionToUi))
+                            (Coord.xy Toolbar.notificationsViewWidth (Coord.y data.relativePositionToUi))
                             (LocalGrid.notificationViewportSize |> Units.tileToPixel)
                             (Coord.toPoint2d changeAt)
                             1
@@ -4826,9 +4826,9 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                             , secondaryColor0 = Color.unwrap Color.black |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
                             , texturePosition0 =
-                                Coord.xRaw texturePos
+                                Coord.x texturePos
                                     + textureW
-                                    * Coord.yRaw texturePos
+                                    * Coord.y texturePos
                                     |> toFloat
                             , night = nightFactor
                             , waterReflection = 0
@@ -4914,13 +4914,13 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                             , opacityAndUserId0 = Sprite.opaque
                             , position0 =
                                 Vec3.vec3
-                                    (toFloat Units.tileWidth * point.x + toFloat (Coord.xRaw Npc.offset) |> round |> toFloat)
-                                    (toFloat Units.tileHeight * point.y + toFloat (Coord.yRaw Npc.offset) |> round |> toFloat)
+                                    (toFloat Units.tileWidth * point.x + toFloat (Coord.x Npc.offset) |> round |> toFloat)
+                                    (toFloat Units.tileHeight * point.y + toFloat (Coord.y Npc.offset) |> round |> toFloat)
                                     0
                             , primaryColor0 = Color.unwrap npc.clothColor |> toFloat
                             , secondaryColor0 = Color.unwrap npc.skinColor |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
-                            , texturePosition0 = Coord.xRaw texturePos + textureW * Coord.yRaw texturePos |> toFloat
+                            , texturePosition0 = Coord.x texturePos + textureW * Coord.y texturePos |> toFloat
                             , night = nightFactor
                             , waterReflection = 0
                             }

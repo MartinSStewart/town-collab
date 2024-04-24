@@ -79,16 +79,16 @@ pixelToTile coord =
 pixelToTilePoint : Coord Pixels -> Point2d WorldUnit WorldUnit
 pixelToTilePoint ( Quantity x, Quantity y ) =
     Point2d.unsafe
-        { x = toFloat x / toFloat (Coord.xRaw tileSize)
-        , y = toFloat y / toFloat (Coord.yRaw tileSize)
+        { x = toFloat x / toFloat (Coord.x tileSize)
+        , y = toFloat y / toFloat (Coord.y tileSize)
         }
 
 
 pixelToTileVector : Coord Pixels -> Vector2d WorldUnit WorldUnit
 pixelToTileVector ( Quantity x, Quantity y ) =
     Vector2d.unsafe
-        { x = toFloat x / toFloat (Coord.xRaw tileSize)
-        , y = toFloat y / toFloat (Coord.yRaw tileSize)
+        { x = toFloat x / toFloat (Coord.x tileSize)
+        , y = toFloat y / toFloat (Coord.y tileSize)
         }
 
 
@@ -99,12 +99,12 @@ tileSize =
 
 tileWidth : Int
 tileWidth =
-    Coord.xRaw tileSize
+    Coord.x tileSize
 
 
 tileHeight : Int
 tileHeight =
-    Coord.yRaw tileSize
+    Coord.y tileSize
 
 
 screenFrame : Point2d WorldUnit WorldUnit -> Frame2d WorldUnit WorldUnit { defines : Pixels }

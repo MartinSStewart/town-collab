@@ -69,7 +69,7 @@ nameAndHand isOnline currentUserId userId user =
                 (DisplayName.nameAndId user.name userId)
             ]
         , Ui.center
-            { size = Coord.xy 30 (charScale * Coord.yRaw Sprite.charSize) }
+            { size = Coord.xy 30 (charScale * Coord.y Sprite.charSize) }
             (Ui.colorSprite
                 { colors = user.handColor
                 , size = Coord.xy 30 23
@@ -114,7 +114,7 @@ drawInviteTree currentUserId cursors dict (InviteTree tree) =
         , Ui.row
             { spacing = 0
             , padding =
-                { topLeft = Coord.xy (-1 + charScale * Coord.xRaw Sprite.charSize // 2) 0
+                { topLeft = Coord.xy (-1 + charScale * Coord.x Sprite.charSize // 2) 0
                 , bottomRight = Coord.origin
                 }
             }
@@ -124,9 +124,9 @@ drawInviteTree currentUserId cursors dict (InviteTree tree) =
                         { padding =
                             { topLeft =
                                 Coord.xy 2
-                                    (List.map (\element -> Ui.size element |> Coord.yRaw) rest
+                                    (List.map (\element -> Ui.size element |> Coord.y) rest
                                         |> List.sum
-                                        |> (+) (charScale + charScale * Coord.yRaw Sprite.charSize // 2)
+                                        |> (+) (charScale + charScale * Coord.y Sprite.charSize // 2)
                                     )
                             , bottomRight = Coord.origin
                             }

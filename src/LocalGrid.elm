@@ -1691,7 +1691,7 @@ getAnimalsForCell newCell =
     Random.step
         (randomAnimals newCell)
         (Random.initialSeed
-            (Coord.xRaw newCell * 10000 + Coord.yRaw newCell)
+            (Coord.x newCell * 10000 + Coord.y newCell)
         )
         |> Tuple.first
         |> List.filter

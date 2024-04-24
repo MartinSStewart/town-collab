@@ -695,7 +695,7 @@ images =
                     data =
                         getImageData image
                 in
-                data.textureSize |> Coord.xRaw |> (*) (imageButtonScale data.textureSize)
+                data.textureSize |> Coord.x |> (*) (imageButtonScale data.textureSize)
             )
         |> Array.fromList
 
@@ -1132,10 +1132,10 @@ moveCursor moveFunc model =
 
 cursorPositionToIndex : Coord TextUnit -> String -> Int
 cursorPositionToIndex cursorPosition text =
-    List.take (Coord.yRaw cursorPosition) (String.lines text)
+    List.take (Coord.y cursorPosition) (String.lines text)
         |> List.map (\a -> String.length a + 1)
         |> List.sum
-        |> (+) (Coord.xRaw cursorPosition)
+        |> (+) (Coord.x cursorPosition)
 
 
 indexToCursorPosition : Int -> String -> Coord TextUnit
@@ -1296,12 +1296,12 @@ mailSize =
 mailZoomFactor : Coord Pixels -> Int
 mailZoomFactor windowSize =
     min
-        (toFloat (Coord.xRaw windowSize) / (30 + mailWidth))
+        (toFloat (Coord.x windowSize) / (30 + mailWidth))
         (toFloat
-            (Coord.yRaw windowSize
+            (Coord.y windowSize
                 - toolbarMaxHeight
                 - (mainColumnSpacing * 2)
-                - Coord.yRaw (Ui.size (sendLetterButton identity ( Id.fromInt 0, DisplayName.default )))
+                - Coord.y (Ui.size (sendLetterButton identity ( Id.fromInt 0, DisplayName.default )))
             )
             / mailHeight
         )
@@ -1478,7 +1478,7 @@ submittedView idMap name =
             { spacing = 16, padding = Ui.noPadding }
             [ paragraph1
             , Ui.wrappedText
-                (Ui.size paragraph1 |> Coord.xRaw)
+                (Ui.size paragraph1 |> Coord.x)
                 ("Send a train to pick it up and deliver it to "
                     ++ DisplayName.toString name
                     ++ "'s post office."
@@ -1573,13 +1573,13 @@ mailView mailScale mailContent maybeTool =
             , vertices =
                 Sprite.rectangle
                     Color.outlineColor
-                    (Coord.xy (mailWidth - Coord.xRaw stampSize - 20) 20
+                    (Coord.xy (mailWidth - Coord.x stampSize - 20) 20
                         |> Coord.scalar mailScale
                     )
                     (Coord.scalar mailScale stampSize)
                     ++ Sprite.rectangle
                         Color.fillColor
-                        (Coord.xy (mailWidth - Coord.xRaw stampSize - 18) 22
+                        (Coord.xy (mailWidth - Coord.x stampSize - 18) 22
                             |> Coord.scalar mailScale
                         )
                         (stampSize |> Coord.minus (Coord.xy 4 4) |> Coord.scalar mailScale)
@@ -1881,7 +1881,7 @@ inboxView idMap users inbox model =
                                     |> Ui.text
                                     |> Ui.centerRight
                                         { size =
-                                            Coord.xy (mailWidth * 2) (Ui.size button |> Coord.yRaw)
+                                            Coord.xy (mailWidth * 2) (Ui.size button |> Coord.y)
                                                 |> Coord.minus (Coord.xOnly (Ui.size button))
                                                 |> Coord.minus (Coord.xy (2 * padding) 0)
                                         }
@@ -2005,11 +2005,11 @@ imageButtons idMap currentImageIndex =
                     imageButton idMap currentImageIndex state.index image
 
                 newHeight =
-                    state.height + Coord.yRaw (Ui.size button)
+                    state.height + Coord.y (Ui.size button)
             in
             if newHeight > toolbarMaxHeight then
                 { index = state.index + 1
-                , height = Coord.yRaw (Ui.size button)
+                , height = Coord.y (Ui.size button)
                 , columns = List.Nonempty.cons [ button ] state.columns
                 }
 
@@ -2030,7 +2030,7 @@ imageButtons idMap currentImageIndex =
 
 imageButtonScale : Coord units -> number
 imageButtonScale size =
-    if Coord.xRaw size < 36 && Coord.yRaw size < 36 then
+    if Coord.x size < 36 && Coord.y size < 36 then
         2
 
     else
