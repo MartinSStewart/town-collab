@@ -16,19 +16,18 @@ import Frontend
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Html.Parser
-import Id exposing (Id(..), OneTimePasswordId, SecretId)
+import Id exposing (OneTimePasswordId, SecretId)
 import IdDict
 import Json.Decode
 import Json.Encode
 import Keyboard
 import Local
-import LocalGrid
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark
 import Tile exposing (Category(..), TileGroup(..))
 import Toolbar
-import Train exposing (IsStuckOrDerailed(..), Status(..))
+import Train exposing (Status(..))
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, FrontendMsg_(..), Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend, ToolButton(..), UiId(..))
 import Ui
 import Unsafe

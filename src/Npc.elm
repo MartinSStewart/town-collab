@@ -1,5 +1,6 @@
 module Npc exposing
     ( Npc
+    , Voice
     , actualPositionWithoutCursor
     , idleTexturePosition
     , inside
@@ -62,7 +63,6 @@ type Voice
     | DistinguishedMan
     | DistinguishedWoman
     | EdgyTeenBoy
-    | YoungGirl
     | CoolKid
 
 
@@ -351,6 +351,9 @@ namesAndVoice =
     , ( "Jobbaly Joe", Man )
     , ( "Miss Lady", DistinguishedWoman )
     , ( "Doris Digitell", Woman )
+    , ( "Lefterston Grembridge", DistinguishedMan )
+    , ( "Jeffree Wheeltow", Man )
+    , ( "Avie Aaronston", Woman )
     ]
         |> List.filterMap
             (\( text, voice ) ->

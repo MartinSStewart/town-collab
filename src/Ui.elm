@@ -23,7 +23,6 @@ module Ui exposing
     , customButton
     , defaultButtonBorderAndFill
     , defaultButtonBorderAndFillFocus
-    , defaultButtonBorderAndFillHover
     , defaultElBorderAndFill
     , el
     , elWithId

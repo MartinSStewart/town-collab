@@ -16,7 +16,6 @@ import Bounds exposing (Bounds)
 import Bytes exposing (Endianness(..))
 import Bytes.Decode
 import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), MovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
-import Color
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor exposing (AnimalOrNpcId(..), Holding(..))
@@ -48,7 +47,6 @@ import LocalGrid
 import MailEditor exposing (BackendMail, MailStatus(..))
 import Maybe.Extra as Maybe
 import Npc exposing (Npc)
-import NpcName
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSend, PostmarkSendResponse)
 import Quantity

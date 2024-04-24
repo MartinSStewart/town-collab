@@ -31,7 +31,7 @@ import Grid
 import GridCell
 import Hyperlink exposing (Hyperlink)
 import Id exposing (Id, UserId)
-import IdDict exposing (IdDict)
+import IdDict
 import List.Extra as List
 import List.Nonempty
 import Local exposing (Local)
@@ -375,7 +375,7 @@ normalView windowSize model hover =
                             }
                             menuContents
 
-                    AnimalContextMenu record ->
+                    AnimalContextMenu _ ->
                         Ui.none
 
                     NoContextMenu ->

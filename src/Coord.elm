@@ -4,7 +4,6 @@ module Coord exposing
     , addTuple_
     , changeUnit
     , clamp
-    , direction4
     , divide
     , floorPoint
     , maxComponent
@@ -24,7 +23,6 @@ module Coord exposing
     , toTuple
     , toVec2
     , toVector2d
-    , translateIn
     , translateMat4
     , tuple
     , xOnly
@@ -34,7 +32,6 @@ module Coord exposing
     , yRaw
     )
 
-import Direction4 exposing (Direction4(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 exposing (Vec2)
 import Point2d exposing (Point2d)
@@ -59,41 +56,6 @@ origin =
 plus : Coord unit -> Coord unit -> Coord unit
 plus ( x0, y0 ) ( x1, y1 ) =
     ( Quantity.plus x0 x1, Quantity.plus y0 y1 )
-
-
-translateIn : Direction4 -> Int -> Coord unit -> Coord unit
-translateIn direction distance coord =
-    case direction of
-        North ->
-            xy 0 -distance |> plus coord
-
-        South ->
-            xy 0 distance |> plus coord
-
-        West ->
-            xy -distance 0 |> plus coord
-
-        East ->
-            xy distance 0 |> plus coord
-
-
-direction4 : Coord unit -> Maybe Direction4
-direction4 coord =
-    if coord == origin then
-        Nothing
-
-    else if abs (xRaw coord) > abs (yRaw coord) then
-        if xRaw coord > 0 then
-            Just East
-
-        else
-            Just West
-
-    else if yRaw coord > 0 then
-        Just South
-
-    else
-        Just North
 
 
 changeUnit : Coord a -> Coord b

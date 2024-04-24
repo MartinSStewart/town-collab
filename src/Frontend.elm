@@ -43,7 +43,7 @@ import Html.Events
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Hyperlink
-import Id exposing (AnimalId, Id, TrainId, UserId)
+import Id exposing (Id, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Json.Decode
 import Json.Encode
@@ -53,7 +53,7 @@ import Lamdera
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import LoadingPage
-import Local exposing (Local)
+import Local
 import LocalGrid exposing (LocalGrid)
 import MailEditor exposing (MailStatus(..))
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -409,7 +409,7 @@ audioLoaded audioData model =
 
                                         NpcId npcId ->
                                             case IdDict.get npcId localModel.npcs of
-                                                Just npc ->
+                                                Just _ ->
                                                     Nothing
 
                                                 Nothing ->
