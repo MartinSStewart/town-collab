@@ -10,6 +10,7 @@ module Animal exposing
     , inside
     , moveCollisionThreshold
     , moveEndTime
+    , random
     )
 
 import BoundingBox2d
@@ -19,9 +20,11 @@ import Coord exposing (Coord)
 import Duration exposing (Duration, Seconds)
 import Effect.Time
 import List.Nonempty exposing (Nonempty(..))
+import Name exposing (Name)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity, Rate)
+import Quantity exposing (Quantity(..), Rate)
+import Random
 import Sound exposing (Sound(..))
 import Units exposing (WorldUnit)
 import Vector2d
@@ -32,6 +35,7 @@ type alias Animal =
     , startTime : Effect.Time.Posix
     , endPosition : Point2d WorldUnit WorldUnit
     , animalType : AnimalType
+    , name : Name
     }
 
 
@@ -72,6 +76,7 @@ type AnimalType
     = Cow
     | Hamster
     | Sheep
+    | Pig
 
 
 type alias AnimalData =
@@ -142,6 +147,16 @@ getData animal =
             , speed = Quantity.per Duration.second (Units.tileUnit 1.5)
             }
 
+        Pig ->
+            { size = Coord.xy 16 12
+            , texturePosition = Coord.xy 220 378
+            , walkTexturePosition = Coord.xy 236 378
+            , texturePositionFlipped = Coord.xy 252 378
+            , walkTexturePositionFlipped = Coord.xy 268 378
+            , sounds = Nonempty ( 0.5, Sheep0 ) [ ( 0.5, Sheep1 ) ]
+            , speed = Quantity.per Duration.second (Units.tileUnit 1.5)
+            }
+
 
 defaultColors : Colors
 defaultColors =
@@ -164,3 +179,77 @@ inside point animal =
         (Point2d.translateBy (Vector2d.scaleBy 0.5 size) animal.position)
         (Point2d.translateBy (Vector2d.scaleBy -0.5 size) animal.position)
         |> BoundingBox2d.contains point
+
+
+random : AnimalType -> Coord WorldUnit -> Random.Generator Animal
+random animalType ( Quantity xOffset, Quantity yOffset ) =
+    Random.map3
+        (\name x y ->
+            let
+                position =
+                    Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y }
+            in
+            { position = position
+            , endPosition = position
+            , startTime = Effect.Time.millisToPosix 0
+            , animalType = animalType
+            , name = name
+            }
+        )
+        (randomName animalType)
+        (Random.float 0 Units.cellSize)
+        (Random.float 0 Units.cellSize)
+
+
+randomName : AnimalType -> Random.Generator Name
+randomName animalType =
+    case animalType of
+        Cow ->
+            List.Nonempty.sample cowNames
+
+        Hamster ->
+            List.Nonempty.sample hamsterNames
+
+        Sheep ->
+            List.Nonempty.sample sheepNames
+
+        Pig ->
+            List.Nonempty.sample pigNames
+
+
+cowNames =
+    [ "Mooferston"
+    , "Cow"
+    , "Bill the Cow"
+    ]
+        |> toNonempty
+
+
+hamsterNames =
+    [ "Hamshee"
+    , "Squishy Squeak"
+    ]
+        |> toNonempty
+
+
+sheepNames : Nonempty Name
+sheepNames =
+    [ "Baaa"
+    , "Sheepy Sheep"
+    , "McFluffy"
+    ]
+        |> toNonempty
+
+
+pigNames : Nonempty Name
+pigNames =
+    [ "Pigly Snort"
+    , "Booglis the Spy Pig"
+    ]
+        |> toNonempty
+
+
+toNonempty list =
+    List.filterMap (\text -> Name.fromString text |> Result.toMaybe) list
+        |> List.Nonempty.fromList
+        |> Maybe.withDefault (Nonempty Name.sven [])

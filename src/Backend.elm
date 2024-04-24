@@ -940,6 +940,7 @@ updateAnimals model time =
                                                 Nothing ->
                                                     endPosition
                                         , animalType = animal.animalType
+                                        , name = animal.name
                                         }
 
                                     Nothing ->

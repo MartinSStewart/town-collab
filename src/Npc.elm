@@ -83,7 +83,7 @@ moveCollisionThreshold =
 
 walkSpeed : Quantity Float (Rate WorldUnit Seconds)
 walkSpeed =
-    Quantity.per Duration.second (Units.tileUnit 2)
+    Quantity.per Duration.second (Units.tileUnit 1.5)
 
 
 walkingUpTexturePosition : Int -> Coord Pixels
@@ -347,7 +347,6 @@ namesAndVoice =
     , ( "Gebey Björn", Woman )
     , ( "Maheeeeen", Man )
     , ( "Joey Pizza", CoolKid )
-    , ( "Bugless the Spy", DistinguishedMan )
     , ( "Jobbaly Joe", Man )
     , ( "Miss Lady", DistinguishedWoman )
     , ( "Doris Digitell", Woman )

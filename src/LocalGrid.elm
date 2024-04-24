@@ -684,6 +684,7 @@ updateAnimalMovement change animals =
                         , position = animal.position
                         , startTime = animal.startTime
                         , endPosition = intersection
+                        , name = animal.name
                         }
 
                     Nothing ->
@@ -691,6 +692,7 @@ updateAnimalMovement change animals =
 
             else
                 let
+                    movedTo : Point2d WorldUnit WorldUnit
                     movedTo =
                         moveOutOfCollision position changeBounds
                 in
@@ -698,6 +700,7 @@ updateAnimalMovement change animals =
                 , position = movedTo
                 , startTime = animal.startTime
                 , endPosition = movedTo
+                , name = animal.name
                 }
         )
         animals
@@ -1662,29 +1665,11 @@ randomAnimalsHelper : Coord WorldUnit -> List Animal -> List AnimalType -> Rando
 randomAnimalsHelper worldCoord output list =
     case list of
         head :: rest ->
-            randomAnimal head worldCoord
+            Animal.random head worldCoord
                 |> Random.andThen (\animal -> randomAnimalsHelper worldCoord (animal :: output) rest)
 
         [] ->
             Random.constant output
-
-
-randomAnimal : AnimalType -> Coord WorldUnit -> Random.Generator Animal
-randomAnimal animalType ( Quantity xOffset, Quantity yOffset ) =
-    Random.map2
-        (\x y ->
-            let
-                position =
-                    Point2d.unsafe { x = toFloat xOffset + x, y = toFloat yOffset + y }
-            in
-            { position = position
-            , endPosition = position
-            , startTime = Effect.Time.millisToPosix 0
-            , animalType = animalType
-            }
-        )
-        (Random.float 0 Units.cellSize)
-        (Random.float 0 Units.cellSize)
 
 
 addAnimals : List (Coord CellUnit) -> { a | animals : IdDict AnimalId Animal } -> { a | animals : IdDict AnimalId Animal }
