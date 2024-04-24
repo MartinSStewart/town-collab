@@ -658,6 +658,7 @@ notificationsViewWidth =
 contextMenuView : Int -> MapContextMenuData -> FrontendLoaded -> Ui.Element UiId
 contextMenuView toolbarHeight contextMenu model =
     let
+        localModel : LocalGrid
         localModel =
             Local.model model.localModel
 
@@ -707,16 +708,65 @@ contextMenuView toolbarHeight contextMenu model =
 
                                                     NotLoggedIn _ ->
                                                         False
+
+                                            tileName : String
+                                            tileName =
+                                                case Tile.tileToTileGroup change.tile of
+                                                    Just { tileGroup } ->
+                                                        Tile.getTileGroupData tileGroup |> .name
+
+                                                    Nothing ->
+                                                        "Unknown tile"
+
+                                            occupants : List String
+                                            occupants =
+                                                case Tile.isBuilding change.tile of
+                                                    Just _ ->
+                                                        IdDict.toList localModel.npcs
+                                                            |> List.filterMap
+                                                                (\( _, npc ) ->
+                                                                    if npc.home == change.position then
+                                                                        Just (NpcName.toString npc.name)
+
+                                                                    else
+                                                                        Nothing
+                                                                )
+
+                                                    Nothing ->
+                                                        []
+
+                                            listToString : List String -> String
+                                            listToString list =
+                                                case list of
+                                                    [] ->
+                                                        ""
+
+                                                    [ single ] ->
+                                                        single
+
+                                                    [ first, second ] ->
+                                                        first ++ " and " ++ second
+
+                                                    head :: rest ->
+                                                        String.join "," rest ++ " and " ++ head
                                         in
-                                        "Placed by "
+                                        tileName
+                                            ++ " placed by "
                                             ++ name
                                             ++ (if isYou then
-                                                    " (you) "
+                                                    " (you)\n"
 
                                                 else
-                                                    " "
+                                                    "\n"
                                                )
                                             ++ durationToString model.time change.time
+                                            ++ (case occupants of
+                                                    _ :: _ ->
+                                                        "\n\n" ++ listToString occupants ++ " lives here"
+
+                                                    [] ->
+                                                        ""
+                                               )
                                             |> Ui.wrappedText 400
 
                                     Nothing ->
