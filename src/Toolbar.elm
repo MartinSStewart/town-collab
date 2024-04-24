@@ -334,19 +334,40 @@ normalView windowSize model hover =
                             menuContents =
                                 case IdDict.get menu.npcId localModel.npcs of
                                     Just npc ->
-                                        Ui.el
+                                        Ui.elWithId
                                             { padding = Ui.paddingXY 8 4
                                             , inFront = []
                                             , borderAndFill = Ui.defaultElBorderAndFill
+                                            , id = BlockInputContainer
                                             }
-                                            (Ui.text (NpcName.toString npc.name))
+                                            (Ui.column
+                                                { spacing = 4, padding = Ui.noPadding }
+                                                [ Ui.text (NpcName.toString npc.name)
+                                                , Ui.row
+                                                    { spacing = 0, padding = Ui.noPadding }
+                                                    [ Ui.text "I live at "
+                                                    , coordLink Ui.noPadding npc.home (coordToText npc.home)
+                                                    ]
+                                                ]
+                                            )
 
                                     Nothing ->
                                         Ui.text "NPC not found"
+
+                            size =
+                                Ui.size menuContents
+
+                            p0 =
+                                Coord.plus (Coord.xy 10 0) menu.openedAt
                         in
                         Ui.el
                             { padding =
-                                { topLeft = Coord.plus (Coord.xy 10 0) menu.openedAt
+                                { topLeft =
+                                    if Coord.xRaw p0 + Coord.xRaw size > Coord.xRaw windowSize then
+                                        Coord.xy (Coord.xRaw p0 - Coord.xRaw size - 20) (Coord.yRaw p0)
+
+                                    else
+                                        p0
                                 , bottomRight = Coord.origin
                                 }
                             , inFront = []
@@ -587,26 +608,35 @@ notificationsView loggedIn =
                         }
                         (List.map
                             (\coord ->
-                                "Change at "
-                                    ++ "x="
-                                    ++ String.fromInt (Coord.xRaw coord)
-                                    ++ "&y="
-                                    ++ String.fromInt (Coord.yRaw coord)
-                                    |> Ui.underlinedColorText Color.linkColor
-                                    |> Ui.customButton
-                                        { id = MapChangeNotification coord
-                                        , padding = Ui.paddingXY 8 4
-                                        , inFront = []
-                                        , borderAndFill = NoBorderOrFill
-                                        , borderAndFillFocus = FillOnly Color.fillColor2
-                                        }
-                                    |> Ui.el { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
+                                Ui.el
+                                    { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
+                                    (coordLink (Ui.paddingXY 8 4) coord ("Change at " ++ coordToText coord))
                             )
                             loggedIn.notifications
                         )
                     ]
             ]
         )
+
+
+coordToText : Coord WorldUnit -> String
+coordToText coord =
+    "x="
+        ++ String.fromInt (Coord.xRaw coord)
+        ++ "&y="
+        ++ String.fromInt (Coord.yRaw coord)
+
+
+coordLink : Ui.Padding -> Coord WorldUnit -> String -> Ui.Element UiId
+coordLink padding coord text =
+    Ui.customButton
+        { id = MapChangeNotification coord
+        , padding = padding
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , borderAndFillFocus = FillOnly Color.fillColor2
+        }
+        (Ui.underlinedColorText Color.linkColor text)
 
 
 notificationsHeader : Ui.Element UiId
