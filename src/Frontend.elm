@@ -4866,6 +4866,17 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                             ( sizeW, sizeH ) =
                                 Coord.toTuple Npc.textureSize
 
+                            frameNumber =
+                                Duration.from (Time.millisToPosix 0) model.time
+                                    |> Duration.inSeconds
+                                    |> (*) 5
+                                    |> round
+
+                            walkingVector : { x : Float, y : Float }
+                            walkingVector =
+                                Vector2d.from npc.position npc.endPosition |> Vector2d.unwrap
+
+                            texturePos : Coord Pixels
                             texturePos =
                                 if
                                     (Duration.from model.time (Npc.moveEndTime npc) |> Quantity.lessThanZero)
@@ -4874,12 +4885,15 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                                 then
                                     Npc.idleTexturePosition
 
+                                else if abs walkingVector.x > abs walkingVector.y then
+                                    if walkingVector.x > 0 then
+                                        Npc.walkingRightTexturePosition frameNumber
+
+                                    else
+                                        Npc.walkingLeftTexturePosition frameNumber
+
                                 else
-                                    Duration.from npc.startTime model.time
-                                        |> Duration.inSeconds
-                                        |> (*) 5
-                                        |> round
-                                        |> Npc.walkingUpTexturePosition
+                                    Npc.walkingUpTexturePosition frameNumber
                         in
                         Effect.WebGL.entityWith
                             [ Shaders.blend
@@ -4903,14 +4917,10 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                                     (toFloat Units.tileWidth * point.x + toFloat (Coord.xRaw Npc.offset) |> round |> toFloat)
                                     (toFloat Units.tileHeight * point.y + toFloat (Coord.yRaw Npc.offset) |> round |> toFloat)
                                     0
-                            , primaryColor0 = Color.unwrap Color.white |> toFloat
-                            , secondaryColor0 = Color.unwrap Color.black |> toFloat
+                            , primaryColor0 = Color.unwrap npc.clothColor |> toFloat
+                            , secondaryColor0 = Color.unwrap npc.skinColor |> toFloat
                             , size0 = Vec2.vec2 (toFloat sizeW) (toFloat sizeH)
-                            , texturePosition0 =
-                                Coord.xRaw texturePos
-                                    + textureW
-                                    * Coord.yRaw texturePos
-                                    |> toFloat
+                            , texturePosition0 = Coord.xRaw texturePos + textureW * Coord.yRaw texturePos |> toFloat
                             , night = nightFactor
                             , waterReflection = 0
                             }

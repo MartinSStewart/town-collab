@@ -7,10 +7,12 @@ module Npc exposing
     , moveCollisionThreshold
     , moveEndTime
     , offset
+    , random
     , randomMovement
     , size
     , textureSize
     , updateNpcPath
+    , walkingLeftTexturePosition
     , walkingRightTexturePosition
     , walkingUpTexturePosition
     )
@@ -18,6 +20,7 @@ module Npc exposing
 import Angle
 import BoundingBox2d
 import Bounds exposing (Bounds)
+import Color exposing (Color)
 import Coord exposing (Coord)
 import Direction2d
 import Direction4 exposing (Direction4(..), Turn(..))
@@ -25,7 +28,7 @@ import Duration exposing (Duration, Seconds)
 import Effect.Time
 import Grid exposing (Grid)
 import GridCell
-import Id exposing (Id, NpcId)
+import Id exposing (Id, NpcId, UserId)
 import List.Extra
 import List.Nonempty exposing (Nonempty(..))
 import NpcName exposing (NpcName)
@@ -33,7 +36,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity, Rate)
 import Random
-import Tile exposing (Tile(..))
+import Tile exposing (BuildingData, Tile(..))
 import Units exposing (CellUnit, WorldUnit)
 import Vector2d exposing (Vector2d)
 
@@ -46,6 +49,8 @@ type alias Npc =
     , endPosition : Point2d WorldUnit WorldUnit
     , createdAt : Effect.Time.Posix
     , visitedPositions : Nonempty (Point2d WorldUnit WorldUnit)
+    , skinColor : Color
+    , clothColor : Color
     }
 
 
@@ -71,7 +76,7 @@ walkSpeed =
 
 walkingUpTexturePosition : Int -> Coord Pixels
 walkingUpTexturePosition frameNumber =
-    Coord.xy 484 (modBy 5 frameNumber * 17)
+    Coord.xy 484 (modBy 8 frameNumber * 17)
 
 
 idleTexturePosition : Coord Pixels
@@ -97,6 +102,11 @@ size =
 walkingRightTexturePosition : Int -> Coord Pixels
 walkingRightTexturePosition frameNumber =
     Coord.xy 494 (modBy 6 frameNumber * 17 + 17)
+
+
+walkingLeftTexturePosition : Int -> Coord Pixels
+walkingLeftTexturePosition frameNumber =
+    Coord.xy 474 (modBy 6 frameNumber * 17 + 17)
 
 
 moveEndTime : Npc -> Effect.Time.Posix
@@ -280,3 +290,61 @@ inside point npc =
         (Point2d.translateBy (Units.pixelToTileVector offset) npc.position)
         (Point2d.translateBy (Units.pixelToTileVector (Coord.plus textureSize offset)) npc.position)
         |> BoundingBox2d.contains point
+
+
+random :
+    Nonempty { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
+    -> Effect.Time.Posix
+    -> Random.Generator Npc
+random houses createdAt =
+    Random.map4
+        (\house name skinColor clothColor ->
+            let
+                position =
+                    Units.pixelToTilePoint house.buildingData.entrancePoint
+                        |> Point2d.translateBy (Coord.toVector2d house.position)
+            in
+            { name = name
+            , home = house.position
+            , position = position
+            , startTime = createdAt
+            , endPosition = position
+            , createdAt = createdAt
+            , visitedPositions = Nonempty position []
+            , skinColor = skinColor
+            , clothColor = clothColor
+            }
+        )
+        (List.Nonempty.sample houses)
+        (List.Nonempty.sample NpcName.names)
+        randomSkinColor
+        randomClothColor
+
+
+randomSkinColor : Random.Generator Color
+randomSkinColor =
+    Random.weighted
+        ( 0.2, Color.rgb255 255 245 120 )
+        [ ( 0.2, Color.rgb255 200 180 50 )
+        , ( 0.2, Color.rgb255 150 100 0 )
+        , ( 0.2, Color.rgb255 80 70 0 )
+        , ( 0.05, Color.rgb255 250 250 30 )
+        , ( 0.05, Color.rgb255 250 200 230 )
+        , ( 0.05, Color.rgb255 150 180 230 )
+        , ( 0.05, Color.rgb255 20 230 20 )
+        ]
+
+
+randomClothColor : Random.Generator Color
+randomClothColor =
+    Random.weighted
+        ( 0.05, Color.rgb255 255 230 230 )
+        [ ( 0.05, Color.rgb255 150 150 150 )
+        , ( 0.05, Color.rgb255 80 80 80 )
+        , ( 0.05, Color.rgb255 150 180 255 )
+        , ( 0.05, Color.rgb255 157 225 157 )
+        , ( 0.05, Color.rgb255 250 250 250 )
+        , ( 0.05, Color.rgb255 255 245 247 )
+        , ( 0.05, Color.rgb255 245 247 255 )
+        , ( 0.05, Color.rgb255 255 137 10 )
+        ]

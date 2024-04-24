@@ -16,6 +16,7 @@ import Bounds exposing (Bounds)
 import Bytes exposing (Endianness(..))
 import Bytes.Decode
 import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), MovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
+import Color
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor exposing (AnimalOrNpcId(..), Holding(..))
@@ -767,7 +768,7 @@ updateNpc newTime model =
                                 npc : Npc
                                 npc =
                                     Random.step
-                                        (randomNpc nonempty newTime)
+                                        (Npc.random nonempty newTime)
                                         (Random.initialSeed (Effect.Time.posixToMillis newTime))
                                         |> Tuple.first
 
@@ -882,31 +883,6 @@ updateNpc newTime model =
 
         TrainsAndAnimalsDisabled ->
             ( model.npcs, Command.none )
-
-
-randomNpc :
-    Nonempty { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
-    -> Effect.Time.Posix
-    -> Random.Generator Npc
-randomNpc houses createdAt =
-    Random.map2
-        (\house name ->
-            let
-                position =
-                    Units.pixelToTilePoint house.buildingData.entrancePoint
-                        |> Point2d.translateBy (Coord.toVector2d house.position)
-            in
-            { name = name
-            , home = house.position
-            , position = position
-            , startTime = createdAt
-            , endPosition = position
-            , createdAt = createdAt
-            , visitedPositions = Nonempty position []
-            }
-        )
-        (Nonempty.sample houses)
-        (Nonempty.sample NpcName.names)
 
 
 updateAnimals :
