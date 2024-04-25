@@ -217,14 +217,18 @@ randomName animalType =
             List.Nonempty.sample pigNames
 
 
+cowNames : Nonempty Name
 cowNames =
     [ "Mooferston"
     , "Cow"
     , "Bill the Cow"
+    , "Bessy"
+    , "Ma Cowbell"
     ]
         |> toNonempty
 
 
+hamsterNames : Nonempty Name
 hamsterNames =
     [ "Hamshee"
     , "Squishy Squeak"
@@ -237,6 +241,13 @@ sheepNames =
     [ "Baaa"
     , "Sheepy Sheep"
     , "McFluffy"
+    , "Sheeply"
+    , "Sheepskate"
+    , "Count Sheepington"
+    , "McScruffenstein"
+    , "McFlufferston"
+    , "Sheela the Sheep"
+    , "Sheepard"
     ]
         |> toNonempty
 

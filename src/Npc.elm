@@ -355,9 +355,14 @@ namesAndVoice =
     , ( "Miss Lady", DistinguishedWoman )
     , ( "Doris Digitell", Woman )
     , ( "Lefterston Grembridge", DistinguishedMan )
-    , ( "Jeffree Wheeltow", Man )
+    , ( "Jeffree Wheeltoe", Man )
     , ( "Avie Aaronston", Woman )
     , ( "Dibble", Man )
+    , ( "Brontsen Broodly", Man )
+    , ( "Mrs. Lemonene", Woman )
+    , ( "Otorow Elesly", Man )
+    , ( "Emma Intsin", Woman )
+    , ( "Os", Man )
     ]
         |> List.filterMap
             (\( text, voice ) ->
