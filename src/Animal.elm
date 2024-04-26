@@ -224,6 +224,7 @@ cowNames =
     , "Bill the Cow"
     , "Bessy"
     , "Ma Cowbell"
+    , "Cow-ard"
     ]
         |> toNonempty
 
@@ -232,6 +233,8 @@ hamsterNames : Nonempty Name
 hamsterNames =
     [ "Hamshee"
     , "Squishy Squeak"
+    , "Hamster Prime"
+    , "Beanbag"
     ]
         |> toNonempty
 
@@ -248,6 +251,7 @@ sheepNames =
     , "McFlufferston"
     , "Sheela the Sheep"
     , "Sheepard"
+    , "Baaby"
     ]
         |> toNonempty
 
@@ -256,6 +260,8 @@ pigNames : Nonempty Name
 pigNames =
     [ "Pigly Snort"
     , "Booglis the Spy Pig"
+    , "Big Pork"
+    , "Porkie"
     ]
         |> toNonempty
 
