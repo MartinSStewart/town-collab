@@ -158,7 +158,12 @@ type ServerChange
     | ServerMailStatusChanged (Id MailId) MailStatus
     | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
-    | ServerWorldUpdateBroadcast (IdDict TrainId TrainDiff)
+    | ServerWorldUpdateBroadcast
+        { trainDiff : IdDict TrainId TrainDiff
+        , maybeNewNpc : Maybe ( Id NpcId, Npc )
+        , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
+        , movementChanges : List ( Id NpcId, MovementChange )
+        }
     | ServerWorldUpdateDuration Duration
     | ServerReceivedMail
         { mailId : Id MailId
@@ -176,11 +181,6 @@ type ServerChange
     | ServerLogout
     | ServerAnimalMovement (Nonempty ( Id AnimalId, MovementChange ))
     | ServerRegenerateCache Effect.Time.Posix
-    | ServerNpcUpdate
-        { maybeNewNpc : Maybe ( Id NpcId, Npc )
-        , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
-        , movementChanges : List ( Id NpcId, MovementChange )
-        }
     | -- This event doesn't actually come from the server. Instead it's triggered on every frontend animation frame. In theory this could involve the backend sending out this message every 16.6ms but that would be a waste of resources so it's better to just trigger it directly from the frontend.
       FakeServerAnimationFrame { previousTime : Effect.Time.Posix, currentTime : Effect.Time.Posix }
     | ServerRenameAnimalOrNpc AnimalOrNpcId Name

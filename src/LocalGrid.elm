@@ -1122,10 +1122,43 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
-        ServerWorldUpdateBroadcast diff ->
+        ServerWorldUpdateBroadcast { trainDiff, maybeNewNpc, relocatedNpcs, movementChanges } ->
+            let
+                npcs2 : IdDict NpcId Npc
+                npcs2 =
+                    List.foldl
+                        (\( npcId, position ) npcs -> IdDict.update2 npcId (\npc -> { npc | home = position }) npcs)
+                        model.npcs
+                        relocatedNpcs
+
+                npcs3 : IdDict NpcId Npc
+                npcs3 =
+                    case maybeNewNpc of
+                        Just ( newNpcId, newNpc ) ->
+                            IdDict.insert newNpcId newNpc npcs2
+
+                        Nothing ->
+                            npcs2
+            in
             ( { model
-                | trains =
-                    IdDict.toList diff
+                | npcs =
+                    List.foldl
+                        (\( npcId, movement ) dict ->
+                            IdDict.update2
+                                npcId
+                                (\npc ->
+                                    { npc
+                                        | position = movement.position
+                                        , endPosition = movement.endPosition
+                                        , startTime = movement.startTime
+                                    }
+                                )
+                                dict
+                        )
+                        npcs3
+                        movementChanges
+                , trains =
+                    IdDict.toList trainDiff
                         |> List.filterMap
                             (\( trainId, diff_ ) ->
                                 case IdDict.get trainId model.trains |> Train.applyDiff diff_ of
@@ -1369,45 +1402,6 @@ updateServerChange serverChange model =
                             Maybe.map (\admin -> { admin | lastCacheRegeneration = Just regenTime }) loggedIn.adminData
                     }
                 )
-            , NoOutMsg
-            )
-
-        ServerNpcUpdate { maybeNewNpc, relocatedNpcs, movementChanges } ->
-            let
-                npcs2 : IdDict NpcId Npc
-                npcs2 =
-                    List.foldl
-                        (\( npcId, position ) npcs -> IdDict.update2 npcId (\npc -> { npc | home = position }) npcs)
-                        model.npcs
-                        relocatedNpcs
-
-                npcs3 : IdDict NpcId Npc
-                npcs3 =
-                    case maybeNewNpc of
-                        Just ( newNpcId, newNpc ) ->
-                            IdDict.insert newNpcId newNpc npcs2
-
-                        Nothing ->
-                            npcs2
-            in
-            ( { model
-                | npcs =
-                    List.foldl
-                        (\( npcId, movement ) dict ->
-                            IdDict.update2
-                                npcId
-                                (\npc ->
-                                    { npc
-                                        | position = movement.position
-                                        , endPosition = movement.endPosition
-                                        , startTime = movement.startTime
-                                    }
-                                )
-                                dict
-                        )
-                        npcs3
-                        movementChanges
-              }
             , NoOutMsg
             )
 

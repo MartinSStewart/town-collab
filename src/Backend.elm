@@ -643,6 +643,12 @@ handleWorldUpdate isProduction oldTime time model =
         model3 =
             emailNotifications.model
 
+        ( newNpcs, npcChanges ) =
+            updateNpc time model
+
+        ( newAnimals, animalDiff ) =
+            updateAnimals model time
+
         broadcastChanges : Command BackendOnly ToFrontend BackendMsg
         broadcastChanges =
             broadcast
@@ -652,7 +658,15 @@ handleWorldUpdate isProduction oldTime time model =
                             getUserFromSessionId sessionId model3 |> Maybe.map Tuple.first
                     in
                     Nonempty
-                        (Change.ServerChange (ServerWorldUpdateBroadcast mergeTrains.diff))
+                        (Change.ServerChange
+                            (ServerWorldUpdateBroadcast
+                                { trainDiff = mergeTrains.diff
+                                , maybeNewNpc = npcChanges.maybeNewNpc
+                                , relocatedNpcs = npcChanges.relocatedNpcs
+                                , movementChanges = npcChanges.movementChanges
+                                }
+                            )
+                        )
                         (List.map
                             (\( mailId, mail ) ->
                                 (case ( Just mail.to == maybeUserId, mail.status ) of
@@ -675,12 +689,6 @@ handleWorldUpdate isProduction oldTime time model =
                         |> Just
                 )
                 model3
-
-        ( newAnimals, animalDiff ) =
-            updateAnimals model time
-
-        ( newNpcs, npcCmds ) =
-            updateNpc time model
     in
     ( { model3
         | lastWorldUpdate = Just time
@@ -704,12 +712,20 @@ handleWorldUpdate isProduction oldTime time model =
             Nothing ->
                 Command.none
         , Effect.Task.perform (GotTimeAfterWorldUpdate time) Effect.Time.now
-        , npcCmds
         ]
     )
 
 
-updateNpc : Effect.Time.Posix -> BackendModel -> ( IdDict NpcId Npc, Command BackendOnly ToFrontend msg )
+updateNpc :
+    Effect.Time.Posix
+    -> BackendModel
+    ->
+        ( IdDict NpcId Npc
+        , { maybeNewNpc : Maybe ( Id NpcId, Npc )
+          , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
+          , movementChanges : List ( Id NpcId, MovementChange )
+          }
+        )
 updateNpc newTime model =
     case model.trainsAndAnimalsDisabled of
         TrainsAndAnimalsEnabled ->
@@ -800,10 +816,9 @@ updateNpc newTime model =
                     IdDict.map (Npc.updateNpcPath newTime model.grid) npcs3
             in
             ( npcs4
-            , ServerNpcUpdate
-                { maybeNewNpc = maybeNewNpc
-                , relocatedNpcs = relocatedNpcs
-                , movementChanges =
+            , { maybeNewNpc = maybeNewNpc
+              , relocatedNpcs = relocatedNpcs
+              , movementChanges =
                     IdDict.map
                         (\_ npc ->
                             { position = npc.position
@@ -813,15 +828,11 @@ updateNpc newTime model =
                         )
                         npcs4
                         |> IdDict.toList
-                }
-                |> Change.ServerChange
-                |> Nonempty.singleton
-                |> ChangeBroadcast
-                |> Effect.Lamdera.broadcast
+              }
             )
 
         TrainsAndAnimalsDisabled ->
-            ( model.npcs, Command.none )
+            ( model.npcs, { maybeNewNpc = Nothing, relocatedNpcs = [], movementChanges = [] } )
 
 
 updateAnimals :

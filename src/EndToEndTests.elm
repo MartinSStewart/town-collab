@@ -484,6 +484,28 @@ tests depth lights texture trainDepth trainLights trainTexture =
     in
     [ Effect.Test.start config "Login with one time password"
         |> loadAndLogin sessionId0 (\_ state -> state)
+    , Effect.Test.start config "Test NPC movement"
+        |> loadAndLogin
+            sessionId0
+            (\frontend0 state ->
+                state
+                    |> clickOnUi frontend0 (CategoryButton Buildings)
+                    |> makeItDayTime frontend0
+                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton HouseGroup))
+                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    |> Effect.Test.simulateTime (Duration.seconds 9)
+                    |> clickOnUi frontend0 (CategoryButton Road)
+                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton SidewalkGroup))
+                    |> (\state2 ->
+                            List.foldl
+                                (\index state3 ->
+                                    clickOnScreen frontend0 (Point2d.pixels (300 + toFloat index * 20) 340) state3
+                                )
+                                state2
+                                (List.range 0 10)
+                       )
+                    |> Effect.Test.simulateTime (Duration.seconds 5)
+            )
     , Effect.Test.start config "Test train movement"
         |> loadAndLogin
             sessionId0
