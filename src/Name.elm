@@ -2,6 +2,7 @@ module Name exposing
     ( Error(..)
     , Name(..)
     , fromString
+    , maxLength
     , sven
     , toString
     )
@@ -18,12 +19,25 @@ type Error
     | NameIsTooLong
 
 
+maxLength : number
+maxLength =
+    20
+
+
+minLength : number
+minLength =
+    2
+
+
 fromString : String -> Result Error Name
 fromString text =
     case String.Nonempty.fromString text of
         Just name ->
-            if String.length text > 20 then
+            if String.length text > maxLength then
                 Err NameIsTooLong
+
+            else if String.length text < minLength then
+                Err NameIsTooShort
 
             else
                 Name name |> Ok

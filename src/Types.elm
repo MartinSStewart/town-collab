@@ -280,8 +280,8 @@ type alias MapContextMenuData =
 
 type ContextMenu
     = MapContextMenu MapContextMenuData
-    | NpcContextMenu { npcId : Id NpcId, openedAt : Coord Pixels }
-    | AnimalContextMenu { animalId : Id AnimalId, menuPosition : Coord Pixels }
+    | NpcContextMenu { npcId : Id NpcId, openedAt : Coord Pixels, nameInput : TextInput.Model }
+    | AnimalContextMenu { animalId : Id AnimalId, openedAt : Coord Pixels, nameInput : TextInput.Model }
     | NoContextMenu
 
 
@@ -376,6 +376,8 @@ type UiId
     | TileContainer
     | WorldContainer
     | BlockInputContainer
+    | NpcContextMenuInput
+    | AnimalContextMenuInput
 
 
 type alias BackendModel =

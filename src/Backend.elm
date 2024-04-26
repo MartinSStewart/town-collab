@@ -2302,6 +2302,15 @@ updateLocalChange sessionId clientId time change model =
                     )
                 )
 
+        RenameAnimalOrNpc animalOrNpcId name ->
+            asUser2
+                (\_ _ ->
+                    ( LocalGrid.renameAnimalOrNpc animalOrNpcId name model
+                    , OriginalChange
+                    , BroadcastToEveryoneElse (ServerRenameAnimalOrNpc animalOrNpcId name)
+                    )
+                )
+
 
 updateHumanUser : (HumanUserData -> HumanUserData) -> Id UserId -> BackendUserData -> BackendModel -> BackendModel
 updateHumanUser updateFunc userId user model =

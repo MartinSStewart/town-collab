@@ -60,6 +60,7 @@ import Math.Matrix4 as Mat4 exposing (Mat4)
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Math.Vector3 as Vec3
 import Math.Vector4 as Vec4
+import Name
 import Npc
 import PingData
 import Pixels exposing (Pixels)
@@ -974,7 +975,7 @@ updateLoaded audioData msg model =
                                         }
                             }
 
-                        NpcHover { npcId } ->
+                        NpcHover { npcId, npc } ->
                             case LoadingPage.npcActualPosition npcId model of
                                 Just { position } ->
                                     { model
@@ -983,6 +984,25 @@ updateLoaded audioData msg model =
                                                 { npcId = npcId
                                                 , openedAt =
                                                     Toolbar.worldToScreen model position |> Coord.roundPoint
+                                                , nameInput =
+                                                    TextInput.withText (Name.toString npc.name) TextInput.init
+                                                }
+                                    }
+
+                                Nothing ->
+                                    model
+
+                        AnimalHover { animalId, animal } ->
+                            case LoadingPage.animalActualPosition animalId model of
+                                Just { position } ->
+                                    { model
+                                        | contextMenu =
+                                            AnimalContextMenu
+                                                { animalId = animalId
+                                                , openedAt =
+                                                    Toolbar.worldToScreen model position |> Coord.roundPoint
+                                                , nameInput =
+                                                    TextInput.withText (Name.toString animal.name) TextInput.init
                                                 }
                                     }
 
@@ -3203,6 +3223,58 @@ uiUpdate audioData id event model =
 
         BlockInputContainer ->
             Nothing
+
+        NpcContextMenuInput ->
+            case model.contextMenu of
+                NpcContextMenu menu ->
+                    textInputUpdate
+                        2
+                        NpcContextMenuInput
+                        (\nameInput model2 ->
+                            case Name.fromString nameInput.current.text of
+                                Ok name ->
+                                    LoadingPage.updateLocalModel
+                                        (Change.RenameAnimalOrNpc (NpcId menu.npcId) name)
+                                        model2
+                                        |> LoadingPage.handleOutMsg False
+
+                                Err _ ->
+                                    ( model2, Command.none )
+                        )
+                        (\() -> ( model, Command.none ))
+                        menu.nameInput
+                        (\a -> { model | contextMenu = NpcContextMenu { menu | nameInput = a } })
+                        event
+                        model
+
+                _ ->
+                    Nothing
+
+        AnimalContextMenuInput ->
+            case model.contextMenu of
+                AnimalContextMenu menu ->
+                    textInputUpdate
+                        2
+                        AnimalContextMenuInput
+                        (\nameInput model2 ->
+                            case Name.fromString nameInput.current.text of
+                                Ok name ->
+                                    LoadingPage.updateLocalModel
+                                        (Change.RenameAnimalOrNpc (AnimalId menu.animalId) name)
+                                        model2
+                                        |> LoadingPage.handleOutMsg False
+
+                                Err _ ->
+                                    ( model2, Command.none )
+                        )
+                        (\() -> ( model, Command.none ))
+                        menu.nameInput
+                        (\a -> { model | contextMenu = AnimalContextMenu { menu | nameInput = a } })
+                        event
+                        model
+
+                _ ->
+                    Nothing
     )
         |> (\maybe ->
                 case maybe of

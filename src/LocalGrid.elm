@@ -16,6 +16,7 @@ module LocalGrid exposing
     , placeAnimal
     , placeNpc
     , removeReported
+    , renameAnimalOrNpc
     , restoreMail
     , setTileHotkey
     , update
@@ -50,6 +51,7 @@ import List.Nonempty exposing (Nonempty)
 import Local exposing (Local)
 import MailEditor exposing (FrontendMail, MailStatus(..), MailStatus2(..))
 import Maybe.Extra as Maybe
+import Name exposing (Name)
 import Npc exposing (Npc)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
@@ -635,6 +637,23 @@ updateLocalChange localChange model =
                 )
             , VisitedHyperlinkOutMsg hyperlink
             )
+
+        RenameAnimalOrNpc animalOrNpcId name ->
+            ( renameAnimalOrNpc animalOrNpcId name model, NoOutMsg )
+
+
+renameAnimalOrNpc :
+    AnimalOrNpcId
+    -> Name
+    -> { a | animals : IdDict AnimalId Animal, npcs : IdDict NpcId Npc }
+    -> { a | animals : IdDict AnimalId Animal, npcs : IdDict NpcId Npc }
+renameAnimalOrNpc animalOrNpcId name model =
+    case animalOrNpcId of
+        AnimalId animalId ->
+            { model | animals = IdDict.update2 animalId (\animal -> { animal | name = name }) model.animals }
+
+        NpcId npcId ->
+            { model | npcs = IdDict.update2 npcId (\npc -> { npc | name = name }) model.npcs }
 
 
 resetUpdateDuration : AdminData -> AdminData
@@ -1409,6 +1428,9 @@ updateServerChange serverChange model =
                       }
                     , NoOutMsg
                     )
+
+        ServerRenameAnimalOrNpc animalOrNpcId name ->
+            ( renameAnimalOrNpc animalOrNpcId name model, NoOutMsg )
 
 
 updateWorldUpdateDurations :

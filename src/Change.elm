@@ -35,6 +35,7 @@ import Id exposing (AnimalId, EventId, Id, MailId, NpcId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (BackendMail, MailStatus)
+import Name exposing (Name)
 import Npc exposing (Npc)
 import Point2d exposing (Point2d)
 import Set exposing (Set)
@@ -79,6 +80,7 @@ type LocalChange
     | ViewBoundsChange ViewBoundsChange2
     | ClearNotifications Effect.Time.Posix
     | VisitedHyperlink Hyperlink
+    | RenameAnimalOrNpc AnimalOrNpcId Name
 
 
 type alias ViewBoundsChange2 =
@@ -181,6 +183,7 @@ type ServerChange
         }
     | -- This event doesn't actually come from the server. Instead it's triggered on every frontend animation frame. In theory this could involve the backend sending out this message every 16.6ms but that would be a waste of resources so it's better to just trigger it directly from the frontend.
       FakeServerAnimationFrame { previousTime : Effect.Time.Posix, currentTime : Effect.Time.Posix }
+    | ServerRenameAnimalOrNpc AnimalOrNpcId Name
 
 
 type alias MovementChange =

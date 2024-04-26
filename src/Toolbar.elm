@@ -17,6 +17,7 @@ module Toolbar exposing
     )
 
 import AdminPage
+import Animal exposing (AnimalData)
 import AssocList
 import Change exposing (AreTrainsAndAnimalsDisabled(..), Change, LoggedIn_, UserStatus(..))
 import Color exposing (Color, Colors)
@@ -37,7 +38,8 @@ import List.Nonempty
 import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
 import MailEditor
-import Name
+import Name exposing (Error(..), Name)
+import Npc
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -329,54 +331,53 @@ normalView windowSize model hover =
                         contextMenuView (Ui.size toolbarElement |> Coord.y) contextMenu model
 
                     NpcContextMenu menu ->
-                        let
-                            menuContents : Ui.Element UiId
-                            menuContents =
-                                case IdDict.get menu.npcId localModel.npcs of
-                                    Just npc ->
-                                        Ui.elWithId
-                                            { padding = Ui.paddingXY 8 4
-                                            , inFront = []
-                                            , borderAndFill = Ui.defaultElBorderAndFill
-                                            , id = BlockInputContainer
-                                            }
-                                            (Ui.column
-                                                { spacing = 4, padding = Ui.noPadding }
-                                                [ Ui.text (Name.toString npc.name)
-                                                , Ui.row
-                                                    { spacing = 0, padding = Ui.noPadding }
-                                                    [ Ui.text "I live at "
-                                                    , coordLink Ui.noPadding npc.home (coordToText npc.home)
-                                                    ]
+                        (case IdDict.get menu.npcId localModel.npcs of
+                            Just npc ->
+                                Ui.column
+                                    { spacing = 4, padding = Ui.noPadding }
+                                    (nameTextInput NpcContextMenuInput menu.nameInput
+                                        ++ [ Ui.colorSprite
+                                                { colors = { primaryColor = npc.clothColor, secondaryColor = npc.skinColor }
+                                                , size = Coord.scalar 3 Npc.textureSize
+                                                , texturePosition = Npc.idleTexturePosition
+                                                , textureSize = Npc.textureSize
+                                                }
+                                           , Ui.row
+                                                { spacing = 0, padding = Ui.noPadding }
+                                                [ Ui.text "I live at "
+                                                , coordLink Ui.noPadding npc.home (coordToText npc.home)
                                                 ]
-                                            )
+                                           ]
+                                    )
 
-                                    Nothing ->
-                                        Ui.text "NPC not found"
+                            Nothing ->
+                                Ui.text "NPC not found"
+                        )
+                            |> contextMenuContainer windowSize menu
 
-                            size =
-                                Ui.size menuContents
+                    AnimalContextMenu menu ->
+                        (case IdDict.get menu.animalId localModel.animals of
+                            Just animal ->
+                                let
+                                    data : AnimalData
+                                    data =
+                                        Animal.getData animal.animalType
+                                in
+                                Ui.column
+                                    { spacing = 4, padding = Ui.noPadding }
+                                    (nameTextInput AnimalContextMenuInput menu.nameInput
+                                        ++ [ Ui.sprite
+                                                { size = Coord.scalar 3 data.size
+                                                , texturePosition = data.texturePosition
+                                                , textureSize = data.size
+                                                }
+                                           ]
+                                    )
 
-                            p0 =
-                                Coord.plus (Coord.xy 10 0) menu.openedAt
-                        in
-                        Ui.el
-                            { padding =
-                                { topLeft =
-                                    if Coord.x p0 + Coord.x size > Coord.x windowSize then
-                                        Coord.xy (Coord.x p0 - Coord.x size - 20) (Coord.y p0)
-
-                                    else
-                                        p0
-                                , bottomRight = Coord.origin
-                                }
-                            , inFront = []
-                            , borderAndFill = NoBorderOrFill
-                            }
-                            menuContents
-
-                    AnimalContextMenu _ ->
-                        Ui.none
+                            Nothing ->
+                                Ui.text "NPC not found"
+                        )
+                            |> contextMenuContainer windowSize menu
 
                     NoContextMenu ->
                         Ui.none
@@ -465,13 +466,13 @@ normalView windowSize model hover =
                         NotLoggedIn _ ->
                             Ui.none
                     , case model.topMenuOpened of
-                        Just (SettingsMenu nameTextInput) ->
+                        Just (SettingsMenu nameInput) ->
                             case localModel.userStatus of
                                 LoggedIn loggedIn ->
                                     settingsView
                                         model.musicVolume
                                         model.soundEffectVolume
-                                        nameTextInput
+                                        nameInput
                                         loggedIn
 
                                 NotLoggedIn _ ->
@@ -558,6 +559,37 @@ normalView windowSize model hover =
                    )
         }
         toolbarElement
+
+
+nameTextInput : UiId -> TextInput.Model -> List (Ui.Element UiId)
+nameTextInput id nameInput =
+    let
+        result : Result Name.Error Name
+        result =
+            Name.fromString nameInput.current.text
+    in
+    [ Ui.textInput
+        { id = id
+        , width = Coord.x Sprite.charSize * 2 * (Name.maxLength + 2)
+        , isValid =
+            case result of
+                Ok _ ->
+                    True
+
+                Err _ ->
+                    False
+        , state = nameInput.current
+        }
+    , case result of
+        Ok _ ->
+            Ui.none
+
+        Err NameIsTooLong ->
+            Ui.colorText Color.errorColor "Too long"
+
+        Err NameIsTooShort ->
+            Ui.colorText Color.errorColor "Too short"
+    ]
 
 
 onlineUsersButton : Int -> { a | showOnlineUsers : Bool } -> Ui.Element UiId
@@ -653,6 +685,42 @@ notificationsHeader =
 notificationsViewWidth : Int
 notificationsViewWidth =
     Ui.size notificationsHeader |> Coord.x
+
+
+contextMenuContainer : Coord units -> { a | openedAt : Coord Pixels } -> Ui.Element UiId -> Ui.Element UiId
+contextMenuContainer windowSize menu contents =
+    let
+        contents2 : Ui.Element UiId
+        contents2 =
+            Ui.elWithId
+                { padding = Ui.paddingXY 8 8
+                , inFront = []
+                , borderAndFill = Ui.defaultElBorderAndFill
+                , id = BlockInputContainer
+                }
+                contents
+
+        size =
+            Ui.size contents
+
+        p0 : Coord Pixels
+        p0 =
+            Coord.plus (Coord.xy 10 0) menu.openedAt
+    in
+    Ui.el
+        { padding =
+            { topLeft =
+                if Coord.x p0 + Coord.x size > Coord.x windowSize then
+                    Coord.xy (Coord.x p0 - Coord.x size - 20) (Coord.y p0)
+
+                else
+                    p0
+            , bottomRight = Coord.origin
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        }
+        contents2
 
 
 contextMenuView : Int -> MapContextMenuData -> FrontendLoaded -> Ui.Element UiId
@@ -948,7 +1016,7 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
 
 
 settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiId
-settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
+settingsView musicVolume soundEffectVolume nameInput loggedIn =
     let
         musicVolumeInput : Ui.Element UiId
         musicVolumeInput =
@@ -990,13 +1058,13 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                     { id = DisplayNameTextInput
                     , width = Ui.size musicVolumeInput |> Coord.x
                     , isValid =
-                        case DisplayName.fromString nameTextInput.current.text of
+                        case DisplayName.fromString nameInput.current.text of
                             Ok _ ->
                                 True
 
                             Err _ ->
                                 False
-                    , state = nameTextInput.current
+                    , state = nameInput.current
                     }
                 ]
              , Ui.checkbox
