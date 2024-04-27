@@ -490,28 +490,28 @@ isBuilding tile =
             Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         ApartmentDown ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         ApartmentLeft ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         ApartmentRight ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         ApartmentUp ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         CornerHouseUpLeft ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         CornerHouseUpRight ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         CornerHouseDownLeft ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         CornerHouseDownRight ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         OfficeDown ->
             Just { entrancePoint = Coord.xy 0 0, isHome = False }
@@ -523,31 +523,31 @@ isBuilding tile =
             Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         TownHouse0 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         TownHouse1 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         TownHouse2 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         TownHouse3 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         TownHouse4 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         RowHouse0 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         RowHouse1 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         RowHouse2 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         RowHouse3 ->
-            Just { entrancePoint = Coord.xy 0 0, isHome = True }
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
 
         ConvenienceStoreDown ->
             Just { entrancePoint = Coord.xy 0 0, isHome = False }

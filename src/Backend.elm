@@ -1927,7 +1927,7 @@ updateLocalChange sessionId clientId time change model =
                                 )
                                 model
                             , PickupAnimalOrNpc animalId position (adjustEventTime time time2) |> NewLocalChange
-                            , ServerPickupAnimal userId animalId position time2 |> BroadcastToEveryoneElse
+                            , ServerPickupAnimalOrNpc userId animalId position time2 |> BroadcastToEveryoneElse
                             )
                 )
 
@@ -1938,6 +1938,10 @@ updateLocalChange sessionId clientId time change model =
                         Just cursor ->
                             case cursor.holding of
                                 HoldingAnimalOrNpc holding ->
+                                    let
+                                        time3 =
+                                            adjustEventTime time time2
+                                    in
                                     if holding.animalOrNpcId == animalOrNpcId then
                                         ( updateUser
                                             userId
@@ -1968,12 +1972,12 @@ updateLocalChange sessionId clientId time change model =
                                                         | npcs =
                                                             IdDict.update2
                                                                 npcId
-                                                                (LocalGrid.placeNpc position model.grid)
+                                                                (LocalGrid.placeNpc time position model.grid)
                                                                 model.npcs
                                                     }
                                             )
-                                        , DropAnimalOrNpc animalOrNpcId position (adjustEventTime time time2) |> NewLocalChange
-                                        , ServerDropAnimal userId animalOrNpcId position |> BroadcastToEveryoneElse
+                                        , DropAnimalOrNpc animalOrNpcId position time3 |> NewLocalChange
+                                        , ServerDropAnimalOrNpc userId animalOrNpcId position time3 |> BroadcastToEveryoneElse
                                         )
 
                                     else

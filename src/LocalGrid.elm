@@ -304,10 +304,10 @@ updateLocalChange localChange model =
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
 
-        DropAnimalOrNpc animalId position _ ->
+        DropAnimalOrNpc animalId position time ->
             case model.userStatus of
                 LoggedIn loggedIn ->
-                    dropAnimal loggedIn.userId animalId position model
+                    dropAnimal time loggedIn.userId animalId position model
 
                 NotLoggedIn _ ->
                     ( model, NoOutMsg )
@@ -980,11 +980,11 @@ updateServerChange serverChange model =
             , NoOutMsg
             )
 
-        ServerPickupAnimal userId cowId position time ->
+        ServerPickupAnimalOrNpc userId cowId position time ->
             pickupCow userId cowId position time model
 
-        ServerDropAnimal userId cowId position ->
-            dropAnimal userId cowId position model
+        ServerDropAnimalOrNpc userId cowId position time ->
+            dropAnimal time userId cowId position model
 
         ServerMoveCursor userId position ->
             moveCursor userId position model
@@ -1534,8 +1534,14 @@ pickupCow userId animalOrNpcId position time model =
     )
 
 
-dropAnimal : Id UserId -> AnimalOrNpcId -> Point2d WorldUnit WorldUnit -> LocalGrid -> ( LocalGrid, OutMsg )
-dropAnimal userId animalOrNpcId position model =
+dropAnimal :
+    Effect.Time.Posix
+    -> Id UserId
+    -> AnimalOrNpcId
+    -> Point2d WorldUnit WorldUnit
+    -> LocalGrid
+    -> ( LocalGrid, OutMsg )
+dropAnimal time userId animalOrNpcId position model =
     let
         model2 =
             case animalOrNpcId of
@@ -1543,7 +1549,7 @@ dropAnimal userId animalOrNpcId position model =
                     { model | animals = IdDict.update2 animalId (placeAnimal position model.grid) model.animals }
 
                 NpcId npcId ->
-                    { model | npcs = IdDict.update2 npcId (placeNpc position model.grid) model.npcs }
+                    { model | npcs = IdDict.update2 npcId (placeNpc time position model.grid) model.npcs }
     in
     ( { model2
         | cursors =
@@ -1584,8 +1590,8 @@ placeAnimal position grid animal =
     { animal | position = position2, endPosition = position2 }
 
 
-placeNpc : Point2d WorldUnit WorldUnit -> Grid a -> Npc -> Npc
-placeNpc position grid animal =
+placeNpc : Effect.Time.Posix -> Point2d WorldUnit WorldUnit -> Grid a -> Npc -> Npc
+placeNpc time position grid animal =
     let
         position2 : Point2d WorldUnit WorldUnit
         position2 =
@@ -1601,7 +1607,7 @@ placeNpc position grid animal =
                 |> List.map .bounds
                 |> moveOutOfCollision position
     in
-    { animal | position = position2, endPosition = position2 }
+    { animal | position = position2, endPosition = position2, startTime = time }
 
 
 moveOutOfCollision :

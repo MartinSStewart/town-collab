@@ -143,8 +143,8 @@ type ServerChange
         , newAnimals : List ( Id AnimalId, Animal )
         }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerPickupAnimal (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | ServerDropAnimal (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit)
+    | ServerPickupAnimalOrNpc (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | ServerDropAnimalOrNpc (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected
