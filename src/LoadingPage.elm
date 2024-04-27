@@ -1080,15 +1080,19 @@ updateLocalModel msg model =
 viewBoundsUpdate : ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ) -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ )
 viewBoundsUpdate ( model, cmd ) =
     let
+        bounds : Bounds CellUnit
         bounds =
             loadingCellBounds model
 
+        localModel : LocalGrid
         localModel =
             Local.model model.localModel
 
+        newBoundsContained : Bool
         newBoundsContained =
             Bounds.containsBounds bounds localModel.viewBounds
 
+        mousePosition : Point2d Pixels Pixels
         mousePosition =
             case model.mouseLeft of
                 MouseButtonDown { current } ->
@@ -1097,6 +1101,7 @@ viewBoundsUpdate ( model, cmd ) =
                 MouseButtonUp { current } ->
                     current
 
+        getPreviewBounds : Coord WorldUnit -> Bounds CellUnit
         getPreviewBounds viewPosition =
             Nonempty
                 (viewPosition
@@ -1111,6 +1116,7 @@ viewBoundsUpdate ( model, cmd ) =
                 ]
                 |> Bounds.fromCoords
 
+        newPreview : Maybe (Bounds CellUnit)
         newPreview =
             case ( showWorldPreview (hoverAt model mousePosition), localModel.previewBounds ) of
                 ( Just ( position, _ ), Just oldPreviewBounds ) ->

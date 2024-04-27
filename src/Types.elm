@@ -31,6 +31,7 @@ module Types exposing
     , TopMenu(..)
     , UiId(..)
     , UpdateMeshesData
+    , UserSession
     , UserSettings
     , ViewPoint(..)
     , WorldPage2
@@ -380,14 +381,15 @@ type UiId
     | AnimalContextMenuInput
 
 
+type alias UserSession =
+    { clientIds : AssocList.Dict ClientId (List (Bounds CellUnit))
+    , userId : Maybe (Id UserId)
+    }
+
+
 type alias BackendModel =
     { grid : Grid BackendHistory
-    , userSessions :
-        Dict
-            Lamdera.SessionId
-            { clientIds : AssocList.Dict ClientId (List (Bounds CellUnit))
-            , userId : Maybe (Id UserId)
-            }
+    , userSessions : Dict Lamdera.SessionId UserSession
     , users : IdDict UserId BackendUserData
     , secretLinkCounter : Int
     , errors : List ( Effect.Time.Posix, BackendError )

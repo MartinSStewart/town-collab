@@ -237,12 +237,13 @@ getNavPoints npcPosition grid =
         []
 
 
-updateNpcPath : Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
-updateNpcPath time grid npcId npc =
-    if Duration.from time (moveEndTime npc) |> Quantity.lessThanZero then
+updateNpcPath : Int -> Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
+updateNpcPath stepsLeft time grid npcId npc =
+    if (Duration.from time (moveEndTime npc) |> Quantity.lessThanZero) && stepsLeft > 0 then
         case getNavPoints npc.endPosition grid |> List.Extra.minimumBy (navPointWeighting npcId npc) of
             Just head ->
                 updateNpcPath
+                    (stepsLeft - 1)
                     time
                     grid
                     npcId

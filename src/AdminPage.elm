@@ -176,6 +176,8 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                 ("Disable trains and animals ("
                     ++ String.fromInt (IdDict.size localModel.trains)
                     ++ " trains, "
+                    ++ String.fromInt (IdDict.size localModel.npcs)
+                    ++ " NPCs,"
                     ++ String.fromInt (IdDict.size localModel.animals)
                     ++ " animals)"
                 )

@@ -59,7 +59,7 @@ import Tile exposing (BuildingData, RailPathType(..))
 import TileCountBot
 import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
-import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), ToBackend(..), ToFrontend(..))
+import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), ToBackend(..), ToFrontend(..), UserSession)
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
@@ -292,9 +292,9 @@ update isProduction msg model =
             in
             ( LocalGrid.updateWorldUpdateDurations duration model
             , broadcast
-                (\sessionId_ _ ->
-                    case getUserFromSessionId sessionId_ model of
-                        Just ( userId2, _ ) ->
+                (\_ _ sessionUserId _ ->
+                    case sessionUserId of
+                        Just userId2 ->
                             if userId2 == adminId then
                                 Nonempty (Change.ServerChange (ServerWorldUpdateDuration duration)) []
                                     |> ChangeBroadcast
@@ -333,7 +333,7 @@ update isProduction msg model =
             )
 
         CheckConnectionTimeElapsed ->
-            ( model, broadcast (\_ _ -> Just CheckConnectionBroadcast) model )
+            ( model, broadcast (\_ _ _ _ -> Just CheckConnectionBroadcast) model )
 
         SentMailNotification sendTime emailAddress result ->
             case result of
@@ -652,24 +652,30 @@ handleWorldUpdate isProduction oldTime time model =
         broadcastChanges : Command BackendOnly ToFrontend BackendMsg
         broadcastChanges =
             broadcast
-                (\sessionId _ ->
-                    let
-                        maybeUserId =
-                            getUserFromSessionId sessionId model3 |> Maybe.map Tuple.first
-                    in
+                (\_ _ sessionUserId viewBounds ->
                     Nonempty
                         (Change.ServerChange
                             (ServerWorldUpdateBroadcast
                                 { trainDiff = mergeTrains.diff
                                 , maybeNewNpc = npcChanges.maybeNewNpc
                                 , relocatedNpcs = npcChanges.relocatedNpcs
-                                , movementChanges = npcChanges.movementChanges
+                                , movementChanges =
+                                    List.filter
+                                        (\( _, movementChange ) ->
+                                            let
+                                                ( cellPoint, _ ) =
+                                                    Grid.worldToCellAndLocalCoord
+                                                        (Coord.roundPoint movementChange.position)
+                                            in
+                                            List.any (Bounds.contains cellPoint) viewBounds
+                                        )
+                                        npcChanges.movementChanges
                                 }
                             )
                         )
                         (List.map
                             (\( mailId, mail ) ->
-                                (case ( Just mail.to == maybeUserId, mail.status ) of
+                                (case ( Just mail.to == sessionUserId, mail.status ) of
                                     ( True, MailReceived { deliveryTime } ) ->
                                         ServerReceivedMail
                                             { mailId = mailId
@@ -814,7 +820,7 @@ updateNpc newTime model =
 
                 npcs4 : IdDict NpcId Npc
                 npcs4 =
-                    IdDict.map (Npc.updateNpcPath newTime model.grid) npcs3
+                    IdDict.map (Npc.updateNpcPath 20 newTime model.grid) npcs3
             in
             ( npcs4
             , { maybeNewNpc = maybeNewNpc
@@ -1020,7 +1026,7 @@ broadcastBotLocalChange userId time changes model =
             in
             ( model3
             , broadcast
-                (\sessionId_ _ ->
+                (\sessionId_ _ sessionUserId _ ->
                     Nonempty.toList serverChanges
                         |> List.filterMap
                             (\broadcastTo ->
@@ -1029,8 +1035,8 @@ broadcastBotLocalChange userId time changes model =
                                         Change.ServerChange serverChange |> Just
 
                                     BroadcastToAdmin serverChange ->
-                                        case getUserFromSessionId sessionId_ model of
-                                            Just ( userId2, _ ) ->
+                                        case sessionUserId of
+                                            Just userId2 ->
                                                 if userId2 == adminId then
                                                     Change.ServerChange serverChange |> Just
 
@@ -1135,7 +1141,7 @@ broadcastLocalChange isProduction time sessionId clientId changes model =
       }
     , Command.batch
         [ broadcast
-            (\sessionId_ clientId_ ->
+            (\sessionId_ clientId_ sessionUserId _ ->
                 if clientId == clientId_ then
                     ChangeBroadcast allLocalChanges |> Just
 
@@ -1148,8 +1154,8 @@ broadcastLocalChange isProduction time sessionId clientId changes model =
                                         Change.ServerChange serverChange |> Just
 
                                     BroadcastToAdmin serverChange ->
-                                        case getUserFromSessionId sessionId_ model of
-                                            Just ( userId2, _ ) ->
+                                        case sessionUserId of
+                                            Just userId2 ->
                                                 if userId2 == adminId then
                                                     Change.ServerChange serverChange |> Just
 
@@ -1505,7 +1511,7 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
                                             in
                                             ( model2
                                             , broadcast
-                                                (\sessionId2 _ ->
+                                                (\sessionId2 _ _ _ ->
                                                     if sessionId2 == sessionId then
                                                         ServerYouLoggedIn loggedIn frontendUser
                                                             |> Change.ServerChange
@@ -2822,7 +2828,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
         , case ( maybeToken, userStatus ) of
             ( Just _, LoggedIn loggedIn ) ->
                 broadcast
-                    (\sessionId2 clientId2 ->
+                    (\sessionId2 clientId2 _ _ ->
                         if clientId2 == clientId then
                             Nothing
 
@@ -2988,13 +2994,20 @@ createBotUser name model =
     )
 
 
-broadcast : (SessionId -> ClientId -> Maybe ToFrontend) -> BackendModel -> Command BackendOnly ToFrontend BackendMsg
+broadcast :
+    (SessionId -> ClientId -> Maybe (Id UserId) -> List (Bounds CellUnit) -> Maybe ToFrontend)
+    -> BackendModel
+    -> Command BackendOnly ToFrontend BackendMsg
 broadcast msgFunc model =
     model.userSessions
         |> Dict.toList
         |> List.concatMap
-            (\( sessionId, { clientIds } ) ->
-                AssocList.keys clientIds |> List.map (Tuple.pair (Effect.Lamdera.sessionIdFromString sessionId))
+            (\( sessionId, session ) ->
+                AssocList.toList session.clientIds
+                    |> List.filterMap
+                        (\( clientId, viewBounds ) ->
+                            msgFunc (Effect.Lamdera.sessionIdFromString sessionId) clientId session.userId viewBounds
+                                |> Maybe.map (Effect.Lamdera.sendToFrontend clientId)
+                        )
             )
-        |> List.filterMap (\( sessionId, clientId ) -> msgFunc sessionId clientId |> Maybe.map (Effect.Lamdera.sendToFrontend clientId))
         |> Command.batch

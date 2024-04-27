@@ -1419,7 +1419,16 @@ updateServerChange serverChange model =
                                 (Duration.from previousTime currentTime |> Quantity.min Duration.minute |> Duration.subtractFrom currentTime)
                                 model.trains
                                 { grid = model.grid, mail = IdDict.empty }
-                        , npcs = IdDict.map (Npc.updateNpcPath currentTime model.grid) model.npcs
+                        , npcs =
+                            IdDict.map
+                                (\npcId npc ->
+                                    if isInLoadedRegion npc.position model then
+                                        Npc.updateNpcPath 20 currentTime model.grid npcId npc
+
+                                    else
+                                        npc
+                                )
+                                model.npcs
                       }
                     , NoOutMsg
                     )
@@ -1428,15 +1437,31 @@ updateServerChange serverChange model =
             ( renameAnimalOrNpc animalOrNpcId name model, NoOutMsg )
 
 
+isInLoadedRegion : Point2d WorldUnit WorldUnit -> LocalGrid -> Bool
+isInLoadedRegion point model =
+    let
+        ( cellPoint, _ ) =
+            Grid.worldToCellAndLocalCoord (Coord.roundPoint point)
+    in
+    case model.previewBounds of
+        Just previewBounds ->
+            Bounds.contains cellPoint model.viewBounds || Bounds.contains cellPoint previewBounds
+
+        Nothing ->
+            Bounds.contains cellPoint model.viewBounds
+
+
 updateWorldUpdateDurations :
     Duration
     -> { a | worldUpdateDurations : Array Duration }
     -> { a | worldUpdateDurations : Array Duration }
 updateWorldUpdateDurations duration model =
     let
+        newArray : Array Duration
         newArray =
             Array.push duration model.worldUpdateDurations
 
+        maxSize : number
         maxSize =
             1000
     in
