@@ -5,7 +5,6 @@
 * Rapidly placing tiles is laggy
 * Context menu doesn't show tile info in text cursor mode
 * Cows are missing color in context menu
-* Show NPC count in admin panel
-* Performance issues on client side due to all NPCs being simulated
+* Performance issues in Firefox. Will need to replicate the production data locally to figure out what is wrong.
 * NPC home preview will jump back and forth sometimes
 * NPC home preview appears in wrong position on screen relative to the context menu
