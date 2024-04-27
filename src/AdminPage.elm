@@ -177,7 +177,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                     ++ String.fromInt (IdDict.size localModel.trains)
                     ++ " trains, "
                     ++ String.fromInt (IdDict.size localModel.npcs)
-                    ++ " NPCs,"
+                    ++ " NPCs, "
                     ++ String.fromInt (IdDict.size localModel.animals)
                     ++ " animals)"
                 )
