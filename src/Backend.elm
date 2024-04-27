@@ -116,7 +116,7 @@ subscriptions model =
                 Duration.minute
 
              else
-                Duration.seconds 4
+                Duration.seconds 1
             )
             WorldUpdateTimeElapsed
         , if Dict.isEmpty model.userSessions then

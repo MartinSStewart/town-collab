@@ -8,3 +8,4 @@
 * Performance issues in Firefox. Will need to replicate the production data locally to figure out what is wrong.
 * NPC home preview will jump back and forth sometimes
 * NPC home preview appears in wrong position on screen relative to the context menu
+* NPCs should be put in some unloaded state so they don't try to make up for lost simulation time when visible again
