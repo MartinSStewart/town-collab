@@ -1,8 +1,10 @@
 module Cursor exposing
-    ( Cursor
+    ( AnimalOrNpcId(..)
+    , Cursor
     , CursorMeshes
     , CursorSprite(..)
     , CursorType(..)
+    , Holding(..)
     , OtherUsersTool(..)
     , defaultColors
     , defaultCursor
@@ -29,7 +31,7 @@ import Effect.Time
 import Effect.WebGL
 import Html
 import Html.Attributes
-import Id exposing (AnimalId, Id, UserId)
+import Id exposing (AnimalId, Id, NpcId, UserId)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Sprite exposing (Vertex)
@@ -37,17 +39,27 @@ import Ui
 import Units exposing (WorldUnit)
 
 
+type AnimalOrNpcId
+    = AnimalId (Id AnimalId)
+    | NpcId (Id NpcId)
+
+
+type Holding
+    = HoldingAnimalOrNpc { animalOrNpcId : AnimalOrNpcId, pickupTime : Effect.Time.Posix }
+    | NotHolding
+
+
 type alias Cursor =
     { position : Point2d WorldUnit WorldUnit
-    , holdingCow : Maybe { cowId : Id AnimalId, pickupTime : Effect.Time.Posix }
+    , holding : Holding
     , currentTool : OtherUsersTool
     }
 
 
-defaultCursor : Point2d WorldUnit WorldUnit -> Maybe { cowId : Id AnimalId, pickupTime : Effect.Time.Posix } -> Cursor
-defaultCursor position holdingCow =
+defaultCursor : Point2d WorldUnit WorldUnit -> Holding -> Cursor
+defaultCursor position holding =
     { position = position
-    , holdingCow = holdingCow
+    , holding = holding
     , currentTool = HandTool
     }
 

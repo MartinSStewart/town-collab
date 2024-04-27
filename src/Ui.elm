@@ -2,7 +2,6 @@ module Ui exposing
     ( BorderAndFill(..)
     , ButtonData
     , Element(..)
-    , HoverType(..)
     , InputType(..)
     , Padding
     , RowColumn
@@ -10,6 +9,7 @@ module Ui exposing
     , TextInputMultilineData
     , UiEvent(..)
     , bottomCenter
+    , bottomCenterWithId
     , bottomLeft
     , button
     , center
@@ -25,9 +25,10 @@ module Ui exposing
     , defaultButtonBorderAndFillFocus
     , defaultElBorderAndFill
     , el
+    , elWithId
     , findInput
     , hover
-    , ignoreInputs
+    , isHoveringOverInput
     , noPadding
     , none
     , outlinedText
@@ -81,6 +82,7 @@ type alias ButtonData id =
     , padding : Padding
     , borderAndFill : BorderAndFill
     , borderAndFillFocus : BorderAndFill
+    , borderAndFillHover : BorderAndFill
     , cachedSize : Coord Pixels
     , inFront : List (Element id)
     }
@@ -132,11 +134,11 @@ type Element id
         , borderAndFill : BorderAndFill
         , inFront : List (Element id)
         , cachedSize : Coord Pixels
+        , id : Maybe id
         }
         (Element id)
     | Quads { size : Coord Pixels, vertices : List Vertex }
     | Empty
-    | IgnoreInputs (Element id)
 
 
 type BorderAndFill
@@ -195,6 +197,7 @@ visuallyEqual a b =
             (aButton.padding == bButton.padding)
                 && (aButton.borderAndFill == bButton.borderAndFill)
                 && (aButton.borderAndFillFocus == bButton.borderAndFillFocus)
+                && (aButton.borderAndFillHover == bButton.borderAndFillHover)
                 && listsVisuallyEqual aButton.inFront bButton.inFront
                 && visuallyEqual aChild bChild
 
@@ -203,9 +206,6 @@ visuallyEqual a b =
 
         ( Empty, Empty ) ->
             True
-
-        ( IgnoreInputs aChild, IgnoreInputs bChild ) ->
-            visuallyEqual aChild bChild
 
         _ ->
             False
@@ -369,6 +369,7 @@ button data child =
         , inFront = []
         , borderAndFill = defaultButtonBorderAndFill
         , borderAndFillFocus = defaultButtonBorderAndFillFocus
+        , borderAndFillHover = defaultButtonBorderAndFillHover
         , cachedSize =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
@@ -404,6 +405,15 @@ defaultButtonBorderAndFillFocus =
         }
 
 
+defaultButtonBorderAndFillHover : BorderAndFill
+defaultButtonBorderAndFillHover =
+    BorderAndFill
+        { borderWidth = 2
+        , borderColor = Color.outlineColor
+        , fillColor = Color.fillColor3
+        }
+
+
 customButton :
     { id : id
     , padding : Padding
@@ -420,6 +430,7 @@ customButton data child =
         , inFront = data.inFront
         , borderAndFill = data.borderAndFill
         , borderAndFillFocus = data.borderAndFillFocus
+        , borderAndFillHover = defaultButtonBorderAndFillHover
         , cachedSize =
             Coord.plus
                 (Coord.plus data.padding.topLeft data.padding.bottomRight)
@@ -466,6 +477,22 @@ el data element2 =
         , borderAndFill = data.borderAndFill
         , inFront = data.inFront
         , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
+        , id = Nothing
+        }
+        element2
+
+
+elWithId :
+    { padding : Padding, inFront : List (Element id), borderAndFill : BorderAndFill, id : id }
+    -> Element id
+    -> Element id
+elWithId data element2 =
+    Single
+        { padding = data.padding
+        , borderAndFill = data.borderAndFill
+        , inFront = data.inFront
+        , cachedSize = Coord.plus (Coord.plus data.padding.topLeft data.padding.bottomRight) (size element2)
+        , id = Just data.id
         }
         element2
 
@@ -487,6 +514,7 @@ centerHorizontally data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = Coord.xy data.parentWidth childSizeY
+        , id = Nothing
         }
         element2
 
@@ -510,6 +538,7 @@ center data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -531,6 +560,7 @@ topLeft data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -555,6 +585,7 @@ topLeft2 data element2 =
         , inFront = data.inFront
         , borderAndFill = data.borderAndFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -579,6 +610,7 @@ topCenter data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -600,6 +632,7 @@ topRight data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -624,6 +657,7 @@ centerRight data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -645,6 +679,7 @@ bottomLeft data element2 =
         , inFront = []
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
@@ -669,13 +704,34 @@ bottomCenter data element2 =
         , inFront = data.inFront
         , borderAndFill = NoBorderOrFill
         , cachedSize = data.size
+        , id = Nothing
         }
         element2
 
 
-ignoreInputs : Element id -> Element id
-ignoreInputs =
-    IgnoreInputs
+bottomCenterWithId : { id : id, size : Coord Pixels, inFront : List (Element id) } -> Element id -> Element id
+bottomCenterWithId data element2 =
+    let
+        ( sizeX, sizeY ) =
+            Coord.toTuple data.size
+
+        ( childSizeX, childSizeY ) =
+            Coord.toTuple (size element2)
+
+        left =
+            (sizeX - childSizeX) // 2
+    in
+    Single
+        { padding =
+            { topLeft = Coord.xy left (sizeY - childSizeY)
+            , bottomRight = Coord.xy (sizeX - childSizeX) (sizeX - childSizeX - left)
+            }
+        , inFront = data.inFront
+        , borderAndFill = NoBorderOrFill
+        , cachedSize = data.size
+        , id = Just data.id
+        }
+        element2
 
 
 sprite : { size : Coord Pixels, texturePosition : Coord Pixels, textureSize : Coord Pixels } -> Element id
@@ -701,29 +757,67 @@ quads =
     Quads
 
 
-type HoverType id msg
-    = NoHover
-    | InputHover { id : id, position : Coord Pixels }
-    | BackgroundHover
-
-
-hover : Coord Pixels -> Element id -> HoverType id msg
+{-| List all of the elements with ids that contain the given point (usually the mouse cursor position).
+The first element in the list is the top most visible element.
+-}
+hover : Coord Pixels -> Element id -> List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } )
 hover point element2 =
-    hoverHelper point Coord.origin element2
+    hoverHelper [] point Coord.origin element2
 
 
-hoverHelper : Coord Pixels -> Coord Pixels -> Element id -> HoverType id msg
-hoverHelper point elementPosition element2 =
+isHoveringOverInput : List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } ) -> Bool
+isHoveringOverInput elements =
+    case elements of
+        ( _, { ui } ) :: _ ->
+            case ui of
+                TextInput _ ->
+                    True
+
+                Text _ ->
+                    False
+
+                TextInputMultiline _ ->
+                    True
+
+                Button _ _ ->
+                    True
+
+                Row _ _ ->
+                    False
+
+                Column _ _ ->
+                    False
+
+                Single _ _ ->
+                    False
+
+                Quads _ ->
+                    False
+
+                Empty ->
+                    False
+
+        [] ->
+            False
+
+
+hoverHelper :
+    List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } )
+    -> Coord Pixels
+    -> Coord Pixels
+    -> Element id
+    -> List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } )
+hoverHelper hovers point elementPosition element2 =
     case element2 of
         Text _ ->
-            NoHover
+            hovers
 
         TextInput data ->
             if Bounds.fromCoordAndSize elementPosition (TextInput.size data.textScale (Quantity data.width)) |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition }
+                ( data.id, { relativePositionToUi = elementPosition, ui = element2 } ) :: hovers
 
             else
-                NoHover
+                hovers
 
         TextInputMultiline data ->
             if
@@ -732,129 +826,107 @@ hoverHelper point elementPosition element2 =
                     (TextInputMultiline.size data.textScale (Quantity data.width) data.state)
                     |> Bounds.contains point
             then
-                InputHover { id = data.id, position = elementPosition }
+                ( data.id, { relativePositionToUi = elementPosition, ui = element2 } ) :: hovers
 
             else
-                NoHover
+                hovers
 
         Button data _ ->
             if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                InputHover { id = data.id, position = elementPosition }
+                ( data.id, { relativePositionToUi = elementPosition, ui = element2 } ) :: hovers
 
             else
-                NoHover
+                hovers
 
         Row data children ->
-            hoverRowColumnHelper True point elementPosition data children
+            hoverRowColumnHelper hovers True point elementPosition data children
 
         Column data children ->
-            hoverRowColumnHelper False point elementPosition data children
+            hoverRowColumnHelper hovers False point elementPosition data children
 
         Single data child ->
             let
-                hover2 : HoverType id msg
+                hover2 : List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } )
                 hover2 =
-                    List.foldl
-                        (\inFront hover4 ->
-                            case hover4 of
-                                NoHover ->
-                                    hoverHelper point elementPosition inFront
+                    case data.id of
+                        Just id ->
+                            if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
+                                ( id, { relativePositionToUi = elementPosition, ui = element2 } ) :: hovers
 
-                                InputHover _ ->
-                                    hover4
+                            else
+                                hovers
 
-                                BackgroundHover ->
-                                    hover4
-                        )
-                        NoHover
-                        data.inFront
+                        Nothing ->
+                            hovers
 
-                hover3 : HoverType id msg
+                hover3 : List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } )
                 hover3 =
-                    case hover2 of
-                        NoHover ->
-                            hoverHelper point (elementPosition |> Coord.plus data.padding.topLeft) child
-
-                        InputHover _ ->
-                            hover2
-
-                        BackgroundHover ->
-                            hover2
+                    hoverHelper hover2 point (elementPosition |> Coord.plus data.padding.topLeft) child
             in
-            case ( data.borderAndFill, hover3 ) of
-                ( BorderAndFill _, NoHover ) ->
-                    if Bounds.fromCoordAndSize elementPosition data.cachedSize |> Bounds.contains point then
-                        BackgroundHover
-
-                    else
-                        NoHover
-
-                _ ->
-                    hover3
+            List.foldr (\inFront hover4 -> hoverHelper hover4 point elementPosition inFront) hover3 data.inFront
 
         Quads _ ->
-            NoHover
+            hovers
 
         Empty ->
-            NoHover
-
-        IgnoreInputs _ ->
-            NoHover
+            hovers
 
 
 hoverRowColumnHelper :
-    Bool
+    List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } )
+    -> Bool
     -> Coord Pixels
     -> Coord Pixels
     -> RowColumn
     -> List (Element id)
-    -> HoverType id msg
-hoverRowColumnHelper isRow point elementPosition data children =
+    -> List ( id, { relativePositionToUi : Coord Pixels, ui : Element id } )
+hoverRowColumnHelper hovers isRow point elementPosition data children =
     List.foldl
         (\child state ->
-            case state.hover of
-                NoHover ->
-                    let
-                        ( sizeX, sizeY ) =
-                            size child |> Coord.toTuple
-                    in
-                    { elementPosition =
-                        state.elementPosition
-                            |> Coord.plus
-                                (if isRow then
-                                    Coord.xy (sizeX + data.spacing) 0
+            let
+                ( sizeX, sizeY ) =
+                    size child |> Coord.toTuple
+            in
+            { elementPosition =
+                state.elementPosition
+                    |> Coord.plus
+                        (if isRow then
+                            Coord.xy (sizeX + data.spacing) 0
 
-                                 else
-                                    Coord.xy 0 (sizeY + data.spacing)
-                                )
-                    , hover = hoverHelper point state.elementPosition child
-                    }
-
-                _ ->
-                    state
+                         else
+                            Coord.xy 0 (sizeY + data.spacing)
+                        )
+            , hover = hoverHelper state.hover point state.elementPosition child
+            }
         )
-        { elementPosition = elementPosition |> Coord.plus data.padding.topLeft, hover = NoHover }
+        { elementPosition = elementPosition |> Coord.plus data.padding.topLeft, hover = hovers }
         children
         |> .hover
 
 
-view : Maybe id -> Element id -> Effect.WebGL.Mesh Vertex
-view focus element2 =
-    viewHelper focus Coord.origin [] element2 |> Sprite.toMesh
+view : Maybe id -> Maybe id -> Element id -> Effect.WebGL.Mesh Vertex
+view maybeHover focus element2 =
+    viewHelper maybeHover focus Coord.origin [] element2 |> Sprite.toMesh
 
 
-verticesHelper : Maybe id -> Coord Pixels -> List Vertex -> { a | inFront : List (Element id) } -> List Vertex
-verticesHelper focus position vertices data =
+verticesHelper :
+    Maybe id
+    -> Maybe id
+    -> Coord Pixels
+    -> List Vertex
+    -> { a | inFront : List (Element id) }
+    -> List Vertex
+verticesHelper maybeHover focus position vertices data =
     List.foldl
         (\inFront vertices3 ->
-            viewHelper focus position vertices3 inFront
+            viewHelper maybeHover focus position vertices3 inFront
         )
         vertices
         data.inFront
 
 
-viewHelper : Maybe id -> Coord Pixels -> List Vertex -> Element id -> List Vertex
-viewHelper focus position vertices element2 =
+viewHelper : Maybe id -> Maybe id -> Coord Pixels -> List Vertex -> Element id -> List Vertex
+viewHelper maybeHover focus position vertices element2 =
     case element2 of
         Text data ->
             (case data.outline of
@@ -892,7 +964,10 @@ viewHelper focus position vertices element2 =
 
         Button data child ->
             borderAndFillView position
-                (if Just data.id == focus then
+                (if Just data.id == maybeHover then
+                    data.borderAndFillHover
+
+                 else if Just data.id == focus then
                     data.borderAndFillFocus
 
                  else
@@ -900,17 +975,18 @@ viewHelper focus position vertices element2 =
                 )
                 data.cachedSize
                 ++ viewHelper
+                    maybeHover
                     focus
                     (Coord.plus data.padding.topLeft position)
-                    (verticesHelper focus position vertices data)
+                    (verticesHelper maybeHover focus position vertices data)
                     child
 
         Row data children ->
             List.foldl
                 (\child state ->
-                    { vertices = viewHelper focus state.position state.vertices child
+                    { vertices = viewHelper maybeHover focus state.position state.vertices child
                     , position =
-                        Coord.xy (Coord.xRaw (size child) + data.spacing) 0
+                        Coord.xy (Coord.x (size child) + data.spacing) 0
                             |> Coord.plus state.position
                     }
                 )
@@ -923,9 +999,9 @@ viewHelper focus position vertices element2 =
         Column data children ->
             List.foldl
                 (\child state ->
-                    { vertices = viewHelper focus state.position state.vertices child
+                    { vertices = viewHelper maybeHover focus state.position state.vertices child
                     , position =
-                        Coord.xy 0 (Coord.yRaw (size child) + data.spacing)
+                        Coord.xy 0 (Coord.y (size child) + data.spacing)
                             |> Coord.plus state.position
                     }
                 )
@@ -941,19 +1017,19 @@ viewHelper focus position vertices element2 =
                 vertices2 =
                     List.foldl
                         (\inFront vertices3 ->
-                            viewHelper focus position vertices3 inFront
+                            viewHelper maybeHover focus position vertices3 inFront
                         )
                         vertices
                         data.inFront
             in
             borderAndFillView position data.borderAndFill (size element2)
-                ++ viewHelper focus (Coord.plus data.padding.topLeft position) vertices2 child
+                ++ viewHelper maybeHover focus (Coord.plus data.padding.topLeft position) vertices2 child
 
         Quads data ->
             List.map
                 (\v ->
-                    { x = v.x + toFloat (Coord.xRaw position)
-                    , y = v.y + toFloat (Coord.yRaw position)
+                    { x = v.x + toFloat (Coord.x position)
+                    , y = v.y + toFloat (Coord.y position)
                     , z = v.z
                     , texturePosition = v.texturePosition
                     , opacityAndUserId = v.opacityAndUserId
@@ -966,9 +1042,6 @@ viewHelper focus position vertices element2 =
 
         Empty ->
             vertices
-
-        IgnoreInputs element ->
-            viewHelper focus position vertices element
 
 
 borderAndFillView :
@@ -1022,9 +1095,6 @@ size element2 =
         Empty ->
             Coord.origin
 
-        IgnoreInputs element ->
-            size element
-
 
 rowSize : { a | spacing : Int, padding : Padding } -> List (Element id) -> Coord Pixels
 rowSize data children =
@@ -1034,8 +1104,8 @@ rowSize data children =
                 size2 =
                     size child
             in
-            ( Coord.xRaw size2 + data.spacing + x
-            , max (Coord.yRaw size2) y
+            ( Coord.x size2 + data.spacing + x
+            , max (Coord.y size2) y
             )
         )
         ( 0, 0 )
@@ -1058,8 +1128,8 @@ columnSize data children =
                 size2 =
                     size child
             in
-            ( max (Coord.xRaw size2) x
-            , Coord.yRaw size2 + data.spacing + y
+            ( max (Coord.x size2) x
+            , Coord.y size2 + data.spacing + y
             )
         )
         ( 0, 0 )
@@ -1129,7 +1199,7 @@ findInputHelper id position element =
                         Nothing ->
                             { result = findInputHelper id state.position child
                             , position =
-                                Coord.xy (Coord.xRaw (size child) + data.spacing) 0
+                                Coord.xy (Coord.x (size child) + data.spacing) 0
                                     |> Coord.plus state.position
                             }
                 )
@@ -1149,7 +1219,7 @@ findInputHelper id position element =
                         Nothing ->
                             { result = findInputHelper id state.position child
                             , position =
-                                Coord.xy 0 (Coord.yRaw (size child) + data.spacing)
+                                Coord.xy 0 (Coord.y (size child) + data.spacing)
                                     |> Coord.plus state.position
                             }
                 )
@@ -1160,25 +1230,18 @@ findInputHelper id position element =
                 |> .result
 
         Single data child ->
-            let
-                position2 =
-                    Coord.plus data.padding.topLeft position
-            in
-            case List.findMap (findInputHelper id position2) (child :: data.inFront) of
+            case List.findMap (findInputHelper id position) data.inFront of
                 Just result ->
                     Just result
 
                 Nothing ->
-                    findInputHelper id position2 child
+                    findInputHelper id (Coord.plus data.padding.topLeft position) child
 
         Quads _ ->
             Nothing
 
         Empty ->
             Nothing
-
-        IgnoreInputs child ->
-            findInputHelper id position child
 
 
 tabForward : id -> Element id -> id
@@ -1285,9 +1348,6 @@ tabHelper stepForward hasFoundId id element =
 
             else
                 NotFound
-
-        IgnoreInputs _ ->
-            NotFound
 
 
 rowColumnTabHelper : Bool -> Bool -> id -> List (Element id) -> TabForward id

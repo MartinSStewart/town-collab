@@ -8,6 +8,7 @@ module Change exposing
     , LoggedIn_
     , MovementChange
     , NotLoggedIn_
+    , NpcMovementChange
     , Report
     , ServerChange(..)
     , TileHotkey(..)
@@ -22,7 +23,7 @@ import AssocList
 import Bounds exposing (Bounds)
 import Color exposing (Colors)
 import Coord exposing (Coord, RawCellCoord)
-import Cursor
+import Cursor exposing (AnimalOrNpcId)
 import Dict exposing (Dict)
 import DisplayName exposing (DisplayName)
 import Duration exposing (Duration)
@@ -31,10 +32,12 @@ import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
 import Hyperlink exposing (Hyperlink)
-import Id exposing (AnimalId, EventId, Id, MailId, TrainId, UserId)
+import Id exposing (AnimalId, EventId, Id, MailId, NpcId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (BackendMail, MailStatus)
+import Name exposing (Name)
+import Npc exposing (Npc)
 import Point2d exposing (Point2d)
 import Set exposing (Set)
 import Tile exposing (TileGroup)
@@ -54,8 +57,8 @@ type LocalChange
     | LocalUndo
     | LocalRedo
     | LocalAddUndo
-    | PickupAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | DropAnimal (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | PickupAnimalOrNpc AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | DropAnimalOrNpc AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | MoveCursor (Point2d WorldUnit WorldUnit)
     | InvalidChange
     | ChangeHandColor Colors
@@ -78,6 +81,7 @@ type LocalChange
     | ViewBoundsChange ViewBoundsChange2
     | ClearNotifications Effect.Time.Posix
     | VisitedHyperlink Hyperlink
+    | RenameAnimalOrNpc AnimalOrNpcId Name
 
 
 type alias ViewBoundsChange2 =
@@ -139,8 +143,8 @@ type ServerChange
         , newAnimals : List ( Id AnimalId, Animal )
         }
     | ServerUndoPoint { userId : Id UserId, undoPoints : Dict RawCellCoord Int }
-    | ServerPickupAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit) Effect.Time.Posix
-    | ServerDropAnimal (Id UserId) (Id AnimalId) (Point2d WorldUnit WorldUnit)
+    | ServerPickupAnimalOrNpc (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
+    | ServerDropAnimalOrNpc (Id UserId) AnimalOrNpcId (Point2d WorldUnit WorldUnit) Effect.Time.Posix
     | ServerMoveCursor (Id UserId) (Point2d WorldUnit WorldUnit)
     | ServerUserDisconnected (Id UserId)
     | ServerUserConnected
@@ -155,7 +159,12 @@ type ServerChange
     | ServerMailStatusChanged (Id MailId) MailStatus
     | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
-    | ServerWorldUpdateBroadcast (IdDict TrainId TrainDiff)
+    | ServerWorldUpdateBroadcast
+        { trainDiff : IdDict TrainId TrainDiff
+        , maybeNewNpc : Maybe ( Id NpcId, Npc )
+        , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
+        , movementChanges : List ( Id NpcId, NpcMovementChange )
+        }
     | ServerWorldUpdateDuration Duration
     | ServerReceivedMail
         { mailId : Id MailId
@@ -173,12 +182,23 @@ type ServerChange
     | ServerLogout
     | ServerAnimalMovement (Nonempty ( Id AnimalId, MovementChange ))
     | ServerRegenerateCache Effect.Time.Posix
+    | -- This event doesn't actually come from the server. Instead it's triggered on every frontend animation frame. In theory this could involve the backend sending out this message every 16.6ms but that would be a waste of resources so it's better to just trigger it directly from the frontend.
+      FakeServerAnimationFrame { previousTime : Effect.Time.Posix, currentTime : Effect.Time.Posix }
+    | ServerRenameAnimalOrNpc AnimalOrNpcId Name
 
 
 type alias MovementChange =
     { startTime : Effect.Time.Posix
     , position : Point2d WorldUnit WorldUnit
     , endPosition : Point2d WorldUnit WorldUnit
+    }
+
+
+type alias NpcMovementChange =
+    { startTime : Effect.Time.Posix
+    , position : Point2d WorldUnit WorldUnit
+    , endPosition : Point2d WorldUnit WorldUnit
+    , visitedPositions : Nonempty (Point2d WorldUnit WorldUnit)
     }
 
 

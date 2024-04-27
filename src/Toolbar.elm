@@ -13,11 +13,13 @@ module Toolbar exposing
     , toolbarTileGroupsMaxPerPage
     , validateInviteEmailAddress
     , view
+    , worldToScreen
     )
 
 import AdminPage
+import Animal exposing (AnimalData)
 import AssocList
-import Change exposing (AreTrainsAndAnimalsDisabled(..), LoggedIn_, UserStatus(..))
+import Change exposing (AreTrainsAndAnimalsDisabled(..), Change, LoggedIn_, UserStatus(..))
 import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Cursor
@@ -29,12 +31,15 @@ import EmailAddress exposing (EmailAddress)
 import Grid
 import GridCell
 import Hyperlink exposing (Hyperlink)
-import Id
-import IdDict exposing (IdDict)
+import Id exposing (Id, UserId)
+import IdDict
 import List.Extra as List
 import List.Nonempty
-import LocalGrid
+import Local exposing (Local)
+import LocalGrid exposing (LocalGrid)
 import MailEditor
+import Name exposing (Error(..), Name)
+import Npc
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
@@ -49,7 +54,7 @@ import Tile exposing (Category(..), DefaultColor(..), Tile(..), TileData, TileGr
 import TimeOfDay exposing (TimeOfDay(..))
 import Tool exposing (Tool(..))
 import Train
-import Types exposing (ContextMenu, FrontendLoaded, Hover(..), LoginError(..), MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiHover(..), ViewPoint(..))
+import Types exposing (ContextMenu(..), FrontendLoaded, Hover(..), LoginError(..), MapContextMenuData, MouseButtonState(..), Page(..), SubmitStatus(..), ToolButton(..), TopMenu(..), UiId(..), ViewPoint(..))
 import Ui exposing (BorderAndFill(..))
 import Units exposing (WorldUnit)
 import Unsafe
@@ -57,12 +62,12 @@ import User
 import Vector2d exposing (Vector2d)
 
 
-view : FrontendLoaded -> Hover -> Ui.Element UiHover
+view : FrontendLoaded -> Hover -> Ui.Element UiId
 view model hover =
     let
-        localModel : LocalGrid.LocalGrid_
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
         ( cssWindowWidth, cssWindowHeight ) =
             Coord.toTuple model.cssWindowSize
@@ -77,7 +82,7 @@ view model hover =
             MailEditor.ui
                 (isDisconnected model)
                 windowSize
-                MailEditorHover
+                MailEditorUi
                 localModel.users
                 loggedIn.inbox
                 mailEditor
@@ -86,7 +91,7 @@ view model hover =
             case loggedIn.adminData of
                 Just adminData ->
                     AdminPage.adminView
-                        AdminHover
+                        AdminUi
                         windowSize
                         loggedIn.isGridReadOnly
                         adminData
@@ -182,13 +187,14 @@ findHyperlink startPos flattenedValues =
             Nothing
 
 
-normalView : Coord Pixels -> FrontendLoaded -> Hover -> Ui.Element UiHover
+normalView : Coord Pixels -> FrontendLoaded -> Hover -> Ui.Element UiId
 normalView windowSize model hover =
     let
+        maybeCurrentUserId : Maybe (Id UserId)
         maybeCurrentUserId =
             LocalGrid.currentUserId model
 
-        onlineUsers : List (Ui.Element UiHover)
+        onlineUsers : List (Ui.Element UiId)
         onlineUsers =
             List.filterMap
                 (\( userId, _ ) ->
@@ -205,6 +211,7 @@ normalView windowSize model hover =
                 )
                 (IdDict.toList localModel.cursors)
 
+        otherUsersOnline : Int
         otherUsersOnline =
             case localModel.userStatus of
                 LoggedIn { userId } ->
@@ -213,18 +220,19 @@ normalView windowSize model hover =
                 NotLoggedIn _ ->
                     IdDict.size localModel.cursors
 
-        localModel : LocalGrid.LocalGrid_
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
-        toolbarElement : Ui.Element UiHover
+        toolbarElement : Ui.Element UiId
         toolbarElement =
             if model.hideUi then
                 Ui.none
 
             else
-                Ui.el
-                    { padding = Ui.noPadding
+                Ui.elWithId
+                    { id = BlockInputContainer
+                    , padding = Ui.noPadding
                     , inFront = easterEgg
                     , borderAndFill = Ui.defaultElBorderAndFill
                     }
@@ -278,7 +286,7 @@ normalView windowSize model hover =
                                 ( cellPos, startPos ) =
                                     Grid.worldToCellAndLocalCoord tileHover.position
                             in
-                            case Grid.getCell cellPos (LocalGrid.localModel model.localModel).grid of
+                            case Grid.getCell cellPos (Local.model model.localModel).grid of
                                 Just cell ->
                                     case findHyperlink startPos (GridCell.flatten cell) of
                                         Just hyperlink ->
@@ -296,8 +304,9 @@ normalView windowSize model hover =
                 _ ->
                     Nothing
     in
-    Ui.bottomCenter
-        { size = windowSize
+    Ui.bottomCenterWithId
+        { id = WorldContainer
+        , size = windowSize
         , inFront =
             (if model.hideUi then
                 []
@@ -318,10 +327,59 @@ normalView windowSize model hover =
                     Nothing ->
                         Ui.none
                 , case model.contextMenu of
-                    Just contextMenu ->
-                        contextMenuView (Ui.size toolbarElement |> Coord.yRaw) contextMenu model
+                    MapContextMenu contextMenu ->
+                        contextMenuView (Ui.size toolbarElement |> Coord.y) contextMenu model
 
-                    Nothing ->
+                    NpcContextMenu menu ->
+                        (case IdDict.get menu.npcId localModel.npcs of
+                            Just npc ->
+                                Ui.column
+                                    { spacing = 4, padding = Ui.noPadding }
+                                    (nameTextInput NpcContextMenuInput menu.nameInput
+                                        ++ [ Ui.colorSprite
+                                                { colors = { primaryColor = npc.clothColor, secondaryColor = npc.skinColor }
+                                                , size = Coord.scalar 3 Npc.textureSize
+                                                , texturePosition = Npc.idleTexturePosition
+                                                , textureSize = Npc.textureSize
+                                                }
+                                           , Ui.row
+                                                { spacing = 0, padding = Ui.noPadding }
+                                                [ Ui.text "I live at "
+                                                , coordLink Ui.noPadding npc.home (coordToText npc.home)
+                                                ]
+                                           ]
+                                    )
+
+                            Nothing ->
+                                Ui.text "NPC not found"
+                        )
+                            |> contextMenuContainer windowSize menu
+
+                    AnimalContextMenu menu ->
+                        (case IdDict.get menu.animalId localModel.animals of
+                            Just animal ->
+                                let
+                                    data : AnimalData
+                                    data =
+                                        Animal.getData animal.animalType
+                                in
+                                Ui.column
+                                    { spacing = 4, padding = Ui.noPadding }
+                                    (nameTextInput AnimalContextMenuInput menu.nameInput
+                                        ++ [ Ui.sprite
+                                                { size = Coord.scalar 3 data.size
+                                                , texturePosition = data.texturePosition
+                                                , textureSize = data.size
+                                                }
+                                           ]
+                                    )
+
+                            Nothing ->
+                                Ui.text "NPC not found"
+                        )
+                            |> contextMenuContainer windowSize menu
+
+                    NoContextMenu ->
                         Ui.none
                 , if isDisconnected model then
                     MailEditor.disconnectWarning model.windowSize
@@ -357,8 +415,12 @@ normalView windowSize model hover =
                             , if model.showOnlineUsers then
                                 Ui.topRight
                                     { size = model.windowSize }
-                                    (Ui.el
-                                        { padding = Ui.paddingXY 8 8, inFront = [], borderAndFill = Ui.defaultElBorderAndFill }
+                                    (Ui.elWithId
+                                        { id = BlockInputContainer
+                                        , padding = Ui.paddingXY 8 8
+                                        , inFront = []
+                                        , borderAndFill = Ui.defaultElBorderAndFill
+                                        }
                                         (Ui.column
                                             { spacing = 16, padding = Ui.noPadding }
                                             [ onlineUsersButton otherUsersOnline model
@@ -404,13 +466,13 @@ normalView windowSize model hover =
                         NotLoggedIn _ ->
                             Ui.none
                     , case model.topMenuOpened of
-                        Just (SettingsMenu nameTextInput) ->
+                        Just (SettingsMenu nameInput) ->
                             case localModel.userStatus of
                                 LoggedIn loggedIn ->
                                     settingsView
                                         model.musicVolume
                                         model.soundEffectVolume
-                                        nameTextInput
+                                        nameInput
                                         loggedIn
 
                                 NotLoggedIn _ ->
@@ -471,8 +533,9 @@ normalView windowSize model hover =
                                     mapSize2 =
                                         mapSize model.windowSize
                                   in
-                                  Ui.el
-                                    { padding =
+                                  Ui.elWithId
+                                    { id = BlockInputContainer
+                                    , padding =
                                         { topLeft = Coord.xy mapSize2 mapSize2 |> Coord.plus (Coord.xy 16 16)
                                         , bottomRight = Coord.origin
                                         }
@@ -485,7 +548,6 @@ normalView windowSize model hover =
                                     , inFront = []
                                     }
                                     Ui.none
-                                    |> Ui.ignoreInputs
                                     |> Ui.center { size = model.windowSize }
                                 ]
 
@@ -499,7 +561,38 @@ normalView windowSize model hover =
         toolbarElement
 
 
-onlineUsersButton : Int -> { a | showOnlineUsers : Bool } -> Ui.Element UiHover
+nameTextInput : UiId -> TextInput.Model -> List (Ui.Element UiId)
+nameTextInput id nameInput =
+    let
+        result : Result Name.Error Name
+        result =
+            Name.fromString nameInput.current.text
+    in
+    [ Ui.textInput
+        { id = id
+        , width = Coord.x Sprite.charSize * 2 * (Name.maxLength + 2)
+        , isValid =
+            case result of
+                Ok _ ->
+                    True
+
+                Err _ ->
+                    False
+        , state = nameInput.current
+        }
+    , case result of
+        Ok _ ->
+            Ui.none
+
+        Err NameIsTooLong ->
+            Ui.colorText Color.errorColor "Too long"
+
+        Err NameIsTooShort ->
+            Ui.colorText Color.errorColor "Too short"
+    ]
+
+
+onlineUsersButton : Int -> { a | showOnlineUsers : Bool } -> Ui.Element UiId
 onlineUsersButton otherUsersOnline model =
     Ui.selectableButton
         { id = UsersOnlineButton
@@ -514,10 +607,11 @@ onlineUsersButton otherUsersOnline model =
         )
 
 
-notificationsView : LoggedIn_ -> Ui.Element UiHover
+notificationsView : LoggedIn_ -> Ui.Element UiId
 notificationsView loggedIn =
-    Ui.el
-        { padding = Ui.paddingXY 0 8
+    Ui.elWithId
+        { id = BlockInputContainer
+        , padding = Ui.paddingXY 0 8
         , inFront = []
         , borderAndFill = Ui.defaultElBorderAndFill
         }
@@ -546,20 +640,9 @@ notificationsView loggedIn =
                         }
                         (List.map
                             (\coord ->
-                                "Change at "
-                                    ++ "x="
-                                    ++ String.fromInt (Coord.xRaw coord)
-                                    ++ "&y="
-                                    ++ String.fromInt (Coord.yRaw coord)
-                                    |> Ui.underlinedColorText Color.linkColor
-                                    |> Ui.customButton
-                                        { id = MapChangeNotification coord
-                                        , padding = Ui.paddingXY 8 4
-                                        , inFront = []
-                                        , borderAndFill = NoBorderOrFill
-                                        , borderAndFillFocus = FillOnly Color.fillColor2
-                                        }
-                                    |> Ui.el { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
+                                Ui.el
+                                    { padding = Ui.paddingXY 2 0, inFront = [], borderAndFill = NoBorderOrFill }
+                                    (coordLink (Ui.paddingXY 8 4) coord ("Change at " ++ coordToText coord))
                             )
                             loggedIn.notifications
                         )
@@ -568,7 +651,27 @@ notificationsView loggedIn =
         )
 
 
-notificationsHeader : Ui.Element UiHover
+coordToText : Coord WorldUnit -> String
+coordToText coord =
+    "x="
+        ++ String.fromInt (Coord.x coord)
+        ++ "&y="
+        ++ String.fromInt (Coord.y coord)
+
+
+coordLink : Ui.Padding -> Coord WorldUnit -> String -> Ui.Element UiId
+coordLink padding coord text =
+    Ui.customButton
+        { id = MapChangeNotification coord
+        , padding = padding
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        , borderAndFillFocus = FillOnly Color.fillColor2
+        }
+        (Ui.underlinedColorText Color.linkColor text)
+
+
+notificationsHeader : Ui.Element UiId
 notificationsHeader =
     Ui.row
         { padding = Ui.paddingXY 8 0, spacing = 8 }
@@ -581,16 +684,53 @@ notificationsHeader =
 
 notificationsViewWidth : Int
 notificationsViewWidth =
-    Ui.size notificationsHeader |> Coord.xRaw
+    Ui.size notificationsHeader |> Coord.x
 
 
-contextMenuView : Int -> ContextMenu -> FrontendLoaded -> Ui.Element UiHover
+contextMenuContainer : Coord units -> { a | openedAt : Coord Pixels } -> Ui.Element UiId -> Ui.Element UiId
+contextMenuContainer windowSize menu contents =
+    let
+        contents2 : Ui.Element UiId
+        contents2 =
+            Ui.elWithId
+                { padding = Ui.paddingXY 8 8
+                , inFront = []
+                , borderAndFill = Ui.defaultElBorderAndFill
+                , id = BlockInputContainer
+                }
+                contents
+
+        size =
+            Ui.size contents
+
+        p0 : Coord Pixels
+        p0 =
+            Coord.plus (Coord.xy 10 0) menu.openedAt
+    in
+    Ui.el
+        { padding =
+            { topLeft =
+                if Coord.x p0 + Coord.x size > Coord.x windowSize then
+                    Coord.xy (Coord.x p0 - Coord.x size - 20) (Coord.y p0)
+
+                else
+                    p0
+            , bottomRight = Coord.origin
+            }
+        , inFront = []
+        , borderAndFill = NoBorderOrFill
+        }
+        contents2
+
+
+contextMenuView : Int -> MapContextMenuData -> FrontendLoaded -> Ui.Element UiId
 contextMenuView toolbarHeight contextMenu model =
     let
+        localModel : LocalGrid
         localModel =
-            LocalGrid.localModel model.localModel
+            Local.model model.localModel
 
-        contextMenuElement : Ui.Element UiHover
+        contextMenuElement : Ui.Element UiId
         contextMenuElement =
             Ui.el
                 { padding = Ui.paddingXY 12 12, borderAndFill = NoBorderOrFill, inFront = [] }
@@ -601,9 +741,9 @@ contextMenuView toolbarHeight contextMenu model =
                         [ Ui.el
                             { padding = Ui.paddingXY 8 4, inFront = [], borderAndFill = NoBorderOrFill }
                             (Ui.text
-                                (String.fromInt (Coord.xRaw contextMenu.position)
+                                (String.fromInt (Coord.x contextMenu.position)
                                     ++ ","
-                                    ++ String.fromInt (Coord.yRaw contextMenu.position)
+                                    ++ String.fromInt (Coord.y contextMenu.position)
                                 )
                             )
                         , Ui.button
@@ -636,16 +776,65 @@ contextMenuView toolbarHeight contextMenu model =
 
                                                     NotLoggedIn _ ->
                                                         False
+
+                                            tileName : String
+                                            tileName =
+                                                case Tile.tileToTileGroup change.tile of
+                                                    Just { tileGroup } ->
+                                                        Tile.getTileGroupData tileGroup |> .name
+
+                                                    Nothing ->
+                                                        "Unknown tile"
+
+                                            occupants : List String
+                                            occupants =
+                                                case Tile.isBuilding change.tile of
+                                                    Just _ ->
+                                                        IdDict.toList localModel.npcs
+                                                            |> List.filterMap
+                                                                (\( _, npc ) ->
+                                                                    if npc.home == change.position then
+                                                                        Just (Name.toString npc.name)
+
+                                                                    else
+                                                                        Nothing
+                                                                )
+
+                                                    Nothing ->
+                                                        []
+
+                                            listToString : List String -> String
+                                            listToString list =
+                                                case list of
+                                                    [] ->
+                                                        ""
+
+                                                    [ single ] ->
+                                                        single
+
+                                                    [ first, second ] ->
+                                                        first ++ " and " ++ second
+
+                                                    head :: rest ->
+                                                        String.join "," rest ++ " and " ++ head
                                         in
-                                        "Placed by "
+                                        tileName
+                                            ++ " placed by "
                                             ++ name
                                             ++ (if isYou then
-                                                    " (you) "
+                                                    " (you)\n"
 
                                                 else
-                                                    " "
+                                                    "\n"
                                                )
                                             ++ durationToString model.time change.time
+                                            ++ (case occupants of
+                                                    _ :: _ ->
+                                                        "\n\n" ++ listToString occupants ++ " lives here"
+
+                                                    [] ->
+                                                        ""
+                                               )
                                             |> Ui.wrappedText 400
 
                                     Nothing ->
@@ -685,10 +874,10 @@ contextMenuView toolbarHeight contextMenu model =
             model.windowSize |> Coord.minus position |> Coord.minus (Ui.size contextMenuElement)
 
         fitsX =
-            Coord.xRaw fitsWindow > 0
+            Coord.x fitsWindow > 0
 
         fitsY =
-            Coord.yRaw fitsWindow > toolbarHeight
+            Coord.y fitsWindow > toolbarHeight
 
         offset =
             case ( fitsX, fitsY ) of
@@ -696,11 +885,11 @@ contextMenuView toolbarHeight contextMenu model =
                     position
 
                 ( True, False ) ->
-                    Coord.xy (Coord.xRaw position) (Coord.yRaw position2)
+                    Coord.xy (Coord.x position) (Coord.y position2)
                         |> Coord.minus (Ui.size contextMenuElement |> Coord.yOnly)
 
                 ( False, True ) ->
-                    Coord.xy (Coord.xRaw position2) (Coord.yRaw position)
+                    Coord.xy (Coord.x position2) (Coord.y position)
                         |> Coord.minus (Ui.size contextMenuElement |> Coord.xOnly)
 
                 ( False, False ) ->
@@ -826,9 +1015,10 @@ mapSize ( Quantity windowWidth, Quantity windowHeight ) =
     toFloat (min windowWidth windowHeight) * 0.7 |> round
 
 
-settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiHover
-settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
+settingsView : Int -> Int -> TextInput.Model -> LoggedIn_ -> Ui.Element UiId
+settingsView musicVolume soundEffectVolume nameInput loggedIn =
     let
+        musicVolumeInput : Ui.Element UiId
         musicVolumeInput =
             volumeControl
                 "Music volume "
@@ -836,8 +1026,9 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                 RaiseMusicVolume
                 musicVolume
     in
-    Ui.el
-        { padding = Ui.paddingXY 8 8
+    Ui.elWithId
+        { id = BlockInputContainer
+        , padding = Ui.paddingXY 8 8
         , inFront = []
         , borderAndFill = Ui.defaultElBorderAndFill
         }
@@ -865,15 +1056,15 @@ settingsView musicVolume soundEffectVolume nameTextInput loggedIn =
                 [ Ui.text "Display name"
                 , Ui.textInput
                     { id = DisplayNameTextInput
-                    , width = Ui.size musicVolumeInput |> Coord.xRaw
+                    , width = Ui.size musicVolumeInput |> Coord.x
                     , isValid =
-                        case DisplayName.fromString nameTextInput.current.text of
+                        case DisplayName.fromString nameInput.current.text of
                             Ok _ ->
                                 True
 
                             Err _ ->
                                 False
-                    , state = nameTextInput.current
+                    , state = nameInput.current
                     }
                 ]
              , Ui.checkbox
@@ -920,7 +1111,7 @@ volumeControl name lowerId raiseId volume =
         ]
 
 
-loggedOutSettingsView : TimeOfDay -> Int -> Int -> Ui.Element UiHover
+loggedOutSettingsView : TimeOfDay -> Int -> Int -> Ui.Element UiId
 loggedOutSettingsView timeOfDay musicVolume soundEffectVolume =
     Ui.el
         { padding = Ui.paddingXY 8 8
@@ -955,7 +1146,7 @@ loggedOutSettingsView timeOfDay musicVolume soundEffectVolume =
         )
 
 
-timeOfDayRadio : TimeOfDay -> Ui.Element UiHover
+timeOfDayRadio : TimeOfDay -> Ui.Element UiId
 timeOfDayRadio timeOfDay =
     Ui.column
         { spacing = 4, padding = Ui.noPadding }
@@ -1007,10 +1198,10 @@ validateInviteEmailAddress emailAddress inviteEmailAddressText =
             Err "Invalid email"
 
 
-inviteView : EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiHover
+inviteView : EmailAddress -> TextInput.Model -> SubmitStatus EmailAddress -> Ui.Element UiId
 inviteView emailAddress inviteTextInput inviteSubmitStatus =
     let
-        inviteForm : Ui.Element UiHover
+        inviteForm : Ui.Element UiId
         inviteForm =
             Ui.column
                 { spacing = 8, padding = Ui.paddingXY 16 16 }
@@ -1020,7 +1211,7 @@ inviteView emailAddress inviteTextInput inviteSubmitStatus =
                 , content
                 ]
 
-        content : Ui.Element UiHover
+        content : Ui.Element UiId
         content =
             Ui.column
                 { spacing = 0, padding = Ui.noPadding }
@@ -1029,7 +1220,7 @@ inviteView emailAddress inviteTextInput inviteSubmitStatus =
                     [ Ui.text "Enter email address to send an invite to"
                     , Ui.textInput
                         { id = InviteEmailAddressTextInput
-                        , width = Coord.xRaw toolbarUiSize |> (+) (-16 * 2)
+                        , width = Coord.x toolbarUiSize |> (+) (-16 * 2)
                         , isValid = True
                         , state = inviteTextInput.current
                         }
@@ -1073,7 +1264,7 @@ inviteView emailAddress inviteTextInput inviteSubmitStatus =
                 , Ui.center
                     { size = Ui.size content }
                     (Ui.wrappedText
-                        (Ui.size content |> Coord.xRaw |> (+) -16)
+                        (Ui.size content |> Coord.x |> (+) -16)
                         ("An invite email as been sent to " ++ EmailAddress.toString inviteEmailAddress)
                     )
                 ]
@@ -1097,13 +1288,13 @@ loginToolbarUi :
     -> TextInput.Model
     -> TextInput.Model
     -> Maybe LoginError
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLoginError =
     let
         pressedSubmit2 =
             pressedSubmit pressedSubmitEmail
 
-        loginUi : Ui.Element UiHover
+        loginUi : Ui.Element UiId
         loginUi =
             Ui.column
                 { spacing = 10, padding = Ui.paddingXY 20 10 }
@@ -1113,7 +1304,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                     [ Ui.row
                         { spacing = 10, padding = Ui.noPadding }
                         [ Ui.textInput
-                            { id = EmailAddressTextInputHover
+                            { id = EmailAddressTextInput
                             , width = 780
                             , isValid =
                                 if pressedSubmit2 then
@@ -1124,7 +1315,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                             , state = emailTextInput.current
                             }
                         , Ui.button
-                            { id = SendEmailButtonHover, padding = Ui.paddingXY 30 4 }
+                            { id = SendEmailButton, padding = Ui.paddingXY 30 4 }
                             (Ui.text "Send email")
                         ]
                     , case pressedSubmitEmail of
@@ -1156,7 +1347,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                     Ui.colorText Color.errorColor "Login expired, refresh the page to retry"
 
                 centerHorizontally item =
-                    Ui.centerHorizontally { parentWidth = Ui.size loginExpired |> Coord.xRaw } item
+                    Ui.centerHorizontally { parentWidth = Ui.size loginExpired |> Coord.x } item
 
                 ( isValid, statusUi ) =
                     case maybeLoginError of
@@ -1182,7 +1373,7 @@ loginToolbarUi pressedSubmitEmail emailTextInput oneTimePasswordInput maybeLogin
                                 Ui.none
                             )
 
-                submittedText : Ui.Element UiHover
+                submittedText : Ui.Element UiId
                 submittedText =
                     Ui.column
                         { spacing = 8, padding = Ui.noPadding }
@@ -1266,7 +1457,7 @@ toolbarUi :
             , hyperlinkInput : TextInputMultiline.Model
         }
     -> ToolButton
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 toolbarUi handColor loggedIn model currentToolButton =
     let
         showInvite =
@@ -1350,7 +1541,7 @@ toolbarUi handColor loggedIn model currentToolButton =
                         }
                         mapSprite
                     , Ui.selectableButton
-                        { id = ToolButtonHover ReportToolButton
+                        { id = ToolButton ReportToolButton
                         , padding = smallToolButtonPadding
                         }
                         (currentToolButton == ReportToolButton)
@@ -1419,15 +1610,18 @@ toolbarUi handColor loggedIn model currentToolButton =
                     content =
                         toolbarTileGroups tileGroups loggedIn.tileHotkeys currentToolButton handColor model
                   in
-                  Ui.row
-                    { spacing = -2, padding = Ui.noPadding }
-                    [ nextPreviousTilesButton (pageIndex > 0) False (Coord.yRaw toolbarTileGroupsSize)
-                    , Ui.topLeft { size = toolbarTileGroupsSize } content
-                    , nextPreviousTilesButton
-                        (List.isEmpty remainingTileGroups |> not)
-                        True
-                        (Coord.yRaw toolbarTileGroupsSize)
-                    ]
+                  Ui.elWithId
+                    { padding = Ui.noPadding, inFront = [], borderAndFill = NoBorderOrFill, id = TileContainer }
+                    (Ui.row
+                        { spacing = -2, padding = Ui.noPadding }
+                        [ nextPreviousTilesButton (pageIndex > 0) False (Coord.y toolbarTileGroupsSize)
+                        , Ui.topLeft { size = toolbarTileGroupsSize } content
+                        , nextPreviousTilesButton
+                            (List.isEmpty remainingTileGroups |> not)
+                            True
+                            (Coord.y toolbarTileGroupsSize)
+                        ]
+                    )
                 ]
             , selectedToolView handColor model currentToolButton
             ]
@@ -1455,7 +1649,7 @@ toolbarTileGroups :
     -> ToolButton
     -> Colors
     -> { a | hasCmdKey : Bool, tileColors : AssocList.Dict TileGroup Colors }
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 toolbarTileGroups category tileHotkeys currentToolButton handColor model =
     category
         |> List.map
@@ -1468,7 +1662,7 @@ toolbarTileGroups category tileHotkeys currentToolButton handColor model =
         |> Ui.row { spacing = 2, padding = Ui.noPadding }
 
 
-nextPreviousTilesButton : Bool -> Bool -> Int -> Ui.Element UiHover
+nextPreviousTilesButton : Bool -> Bool -> Int -> Ui.Element UiId
 nextPreviousTilesButton isEnabled isNext height =
     Ui.colorSprite
         { colors =
@@ -1556,7 +1750,7 @@ selectedToolView :
             , hyperlinkInput : TextInputMultiline.Model
         }
     -> ToolButton
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 selectedToolView handColor model currentTool =
     let
         { showPrimaryColorTextInput, showSecondaryColorTextInput } =
@@ -1621,7 +1815,7 @@ selectedToolView handColor model currentTool =
                                             model.primaryColorTextInput
                                             Color.black
                                             |> Ui.size
-                                            |> Coord.xRaw
+                                            |> Coord.x
                                         )
                                         0
                                 , bottomRight = Coord.xy 0 0
@@ -1673,7 +1867,7 @@ colorTextInput :
 colorTextInput id textInput color =
     let
         padding =
-            TextInput.size TextInput.defaultTextScale (Quantity primaryColorInputWidth) |> Coord.yRaw |> (\a -> a // 2)
+            TextInput.size TextInput.defaultTextScale (Quantity primaryColorInputWidth) |> Coord.y |> (\a -> a // 2)
     in
     Ui.row
         { spacing = -2, padding = Ui.noPadding }
@@ -1711,7 +1905,7 @@ toolButtonUi :
     -> AssocList.Dict Change.TileHotkey TileGroup
     -> ToolButton
     -> ToolButton
-    -> Ui.Element UiHover
+    -> Ui.Element UiId
 toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
     let
         tileColors =
@@ -1773,7 +1967,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                 ReportToolButton ->
                     Nothing
 
-        label : Ui.Element UiHover
+        label : Ui.Element UiId
         label =
             case tool of
                 TilePlacerToolButton tileGroup ->
@@ -1792,7 +1986,7 @@ toolButtonUi hasCmdKey handColor colors hotkeys currentTool tool =
                     Cursor.gavelCursor2
     in
     Ui.customButton
-        { id = ToolButtonHover tool
+        { id = ToolButton tool
         , padding = Ui.noPadding
         , inFront =
             case hotkeyText of
@@ -1892,7 +2086,7 @@ tileMesh colors tile =
 
 primaryColorInputWidth : Int
 primaryColorInputWidth =
-    6 * Coord.xRaw Sprite.charSize * TextInput.defaultTextScale + Coord.xRaw TextInput.padding * 2 + 2
+    6 * Coord.x Sprite.charSize * TextInput.defaultTextScale + Coord.x TextInput.padding * 2 + 2
 
 
 buttonSize : Coord units
@@ -1975,9 +2169,9 @@ screenToWorld :
         , mouseLeft : MouseButtonState
         , mouseMiddle : MouseButtonState
         , viewPoint : ViewPoint
-        , trains : IdDict Id.TrainId Train.Train
         , time : Effect.Time.Posix
         , currentTool : Tool
+        , localModel : Local Change LocalGrid
     }
     -> Point2d sourceUnits Pixels
     -> Point2d WorldUnit WorldUnit
@@ -2050,7 +2244,7 @@ offsetViewPoint :
         | devicePixelRatio : Float
         , zoomFactor : Int
         , viewPoint : ViewPoint
-        , trains : IdDict Id.TrainId Train.Train
+        , localModel : Local Change LocalGrid
         , time : Effect.Time.Posix
     }
     -> Hover
@@ -2084,17 +2278,17 @@ canDragView hover =
         TrainHover _ ->
             True
 
-        UiBackgroundHover ->
-            False
-
         MapHover ->
             True
 
         AnimalHover _ ->
             True
 
-        UiHover _ _ ->
+        UiHover _ ->
             False
+
+        NpcHover _ ->
+            True
 
 
 actualViewPoint :
@@ -2105,9 +2299,9 @@ actualViewPoint :
         , devicePixelRatio : Float
         , zoomFactor : Int
         , viewPoint : ViewPoint
-        , trains : IdDict Id.TrainId Train.Train
         , time : Effect.Time.Posix
         , currentTool : Tool
+        , localModel : Local Change LocalGrid
     }
     -> Point2d WorldUnit WorldUnit
 actualViewPoint model =
@@ -2137,7 +2331,7 @@ actualViewPoint model =
 
 
 actualViewPointHelper :
-    { a | viewPoint : ViewPoint, trains : IdDict Id.TrainId Train.Train, time : Effect.Time.Posix }
+    { a | viewPoint : ViewPoint, localModel : Local Change LocalGrid, time : Effect.Time.Posix }
     -> Point2d WorldUnit WorldUnit
 actualViewPointHelper model =
     case model.viewPoint of
@@ -2145,7 +2339,7 @@ actualViewPointHelper model =
             viewPoint
 
         TrainViewPoint trainViewPoint ->
-            case IdDict.get trainViewPoint.trainId model.trains of
+            case IdDict.get trainViewPoint.trainId (Local.model model.localModel).trains of
                 Just train ->
                     let
                         t =

@@ -319,8 +319,8 @@ charTexturePosition char =
     case Dict.get char charToInt of
         Just index ->
             Coord.xy
-                (768 + modBy charsPerRow index * Coord.xRaw charSize)
-                (index // charsPerRow |> (*) (Coord.yRaw charSize))
+                (768 + modBy charsPerRow index * Coord.x charSize)
+                (index // charsPerRow |> (*) (Coord.y charSize))
 
         Nothing ->
             Coord.xy 0 0
@@ -331,8 +331,8 @@ underlinedCharTexturePosition char =
     case Dict.get char charToInt of
         Just index ->
             Coord.xy
-                (768 + modBy charsPerRow index * Coord.xRaw charSize)
-                (180 + (index // charsPerRow) * Coord.yRaw charSize)
+                (768 + modBy charsPerRow index * Coord.x charSize)
+                (180 + (index // charsPerRow) * Coord.y charSize)
 
         Nothing ->
             Coord.xy 0 0
@@ -362,12 +362,12 @@ text color charScale string position =
             (\char state ->
                 if char == '\n' then
                     { offsetX = 0
-                    , offsetY = state.offsetY + Coord.yRaw charSize2
+                    , offsetY = state.offsetY + Coord.y charSize2
                     , vertices = state.vertices
                     }
 
                 else
-                    { offsetX = state.offsetX + Coord.xRaw charSize2
+                    { offsetX = state.offsetX + Coord.x charSize2
                     , offsetY = state.offsetY
                     , vertices =
                         spriteWithColor
@@ -395,12 +395,12 @@ underlinedText color charScale string position =
             (\char state ->
                 if char == '\n' then
                     { offsetX = 0
-                    , offsetY = state.offsetY + Coord.yRaw charSize2
+                    , offsetY = state.offsetY + Coord.y charSize2
                     , vertices = state.vertices
                     }
 
                 else
-                    { offsetX = state.offsetX + Coord.xRaw charSize2
+                    { offsetX = state.offsetX + Coord.x charSize2
                     , offsetY = state.offsetY
                     , vertices =
                         spriteWithColor
@@ -427,12 +427,12 @@ textWithZAndOpacityAndUserId opacityAndUserId color charScale string lineSpacing
             (\char state ->
                 if char == '\n' then
                     { offsetX = 0
-                    , offsetY = state.offsetY + Coord.yRaw charSize_ + lineSpacing
+                    , offsetY = state.offsetY + Coord.y charSize_ + lineSpacing
                     , vertices = state.vertices
                     }
 
                 else
-                    { offsetX = state.offsetX + Coord.xRaw charSize_
+                    { offsetX = state.offsetX + Coord.x charSize_
                     , offsetY = state.offsetY
                     , vertices =
                         spriteWithZAndOpacityAndUserId
@@ -469,7 +469,7 @@ shiverText frame charScale string position =
     String.toList string
         |> List.foldl
             (\char state ->
-                { offset = state.offset + Coord.xRaw charSize_
+                { offset = state.offset + Coord.x charSize_
                 , vertices =
                     state.vertices
                         ++ sprite
@@ -504,7 +504,7 @@ textSize charScale string =
                     )
     in
     Coord.xy
-        (List.map Coord.xRaw list |> List.maximum |> Maybe.withDefault 0)
-        (List.map Coord.yRaw list |> List.sum |> max 1)
+        (List.map Coord.x list |> List.maximum |> Maybe.withDefault 0)
+        (List.map Coord.y list |> List.sum |> max 1)
         |> Coord.multiply charSize
         |> Coord.scalar charScale

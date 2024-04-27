@@ -11,8 +11,8 @@ import Env
 import Id exposing (Id, MailId)
 import IdDict
 import Keyboard
+import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
-import LocalModel exposing (LocalModel)
 import MailEditor exposing (MailStatus(..), MailStatus2(..))
 import Pixels exposing (Pixels)
 import Round
@@ -62,7 +62,7 @@ type OutMsg
 
 
 type alias Config a =
-    { a | localModel : LocalModel Change LocalGrid, time : Effect.Time.Posix }
+    { a | localModel : Local Change LocalGrid, time : Effect.Time.Posix }
 
 
 update : Config a -> Hover -> UiEvent -> Model -> ( Model, OutMsg )
@@ -72,7 +72,7 @@ update config hover event model =
             onPress
                 event
                 (\() ->
-                    case LocalGrid.localModel config.localModel |> .userStatus of
+                    case Local.model config.localModel |> .userStatus of
                         LoggedIn { isGridReadOnly } ->
                             ( model, Change.AdminSetGridReadOnly (not isGridReadOnly) |> OutMsgAdminChange )
 
@@ -87,7 +87,7 @@ update config hover event model =
                 (\() ->
                     ( model
                     , Change.AdminSetTrainsDisabled
-                        (case LocalGrid.localModel config.localModel |> .trainsDisabled of
+                        (case Local.model config.localModel |> .trainsDisabled of
                             TrainsAndAnimalsDisabled ->
                                 TrainsAndAnimalsEnabled
 
@@ -124,7 +124,7 @@ update config hover event model =
             onPress event (\() -> ( model, OutMsgAdminChange (Change.AdminRegenerateGridCellCache config.time) )) model
 
 
-adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid.LocalGrid_ -> Ui.Element id
+adminView : (Hover -> id) -> Coord Pixels -> Bool -> AdminData -> Model -> LocalGrid -> Ui.Element id
 adminView idMap windowSize isGridReadOnly adminData model localModel =
     let
         averageWorldUpdateDuration =

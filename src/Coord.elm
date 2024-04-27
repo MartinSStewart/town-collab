@@ -25,11 +25,11 @@ module Coord exposing
     , toVector2d
     , translateMat4
     , tuple
+    , x
     , xOnly
-    , xRaw
     , xy
+    , y
     , yOnly
-    , yRaw
     )
 
 import Math.Matrix4 as Mat4 exposing (Mat4)
@@ -177,13 +177,13 @@ xy x_ y_ =
     ( Quantity x_, Quantity y_ )
 
 
-xRaw : Coord units -> Int
-xRaw ( Quantity x_, _ ) =
+x : Coord units -> Int
+x ( Quantity x_, _ ) =
     x_
 
 
-yRaw : Coord units -> Int
-yRaw ( _, Quantity y_ ) =
+y : Coord units -> Int
+y ( _, Quantity y_ ) =
     y_
 
 

@@ -4,7 +4,7 @@ module Types exposing
     , BackendMsg(..)
     , BackendUserData
     , BackendUserType(..)
-    , ContextMenu
+    , ContextMenu(..)
     , CssPixels
     , EmailResult(..)
     , FrontendLoaded
@@ -20,16 +20,16 @@ module Types exposing
     , LoadingData_
     , LoadingLocalModel(..)
     , LoginError(..)
+    , MapContextMenuData
     , MouseButtonState(..)
     , Page(..)
-    , Person
     , RemovedTileParticle
     , SubmitStatus(..)
     , ToBackend(..)
     , ToFrontend(..)
     , ToolButton(..)
     , TopMenu(..)
-    , UiHover(..)
+    , UiId(..)
     , UpdateMeshesData
     , UserSettings
     , ViewPoint(..)
@@ -62,16 +62,16 @@ import EmailAddress exposing (EmailAddress)
 import Grid exposing (Grid, GridData)
 import GridCell exposing (BackendHistory)
 import Html.Events.Extra.Mouse exposing (Button)
-import Html.Events.Extra.Wheel
-import Id exposing (AnimalId, EventId, Id, MailId, OneTimePasswordId, PersonId, SecretId, TrainId, UserId)
+import Html.Events.Extra.Wheel exposing (DeltaMode)
+import Id exposing (AnimalId, EventId, Id, MailId, NpcId, OneTimePasswordId, SecretId, TrainId, UserId)
 import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
 import List.Nonempty exposing (Nonempty)
+import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
-import LocalModel exposing (LocalModel)
 import MailEditor exposing (BackendMail, FrontendMail)
-import PersonName exposing (PersonName)
+import Npc exposing (Npc)
 import PingData exposing (PingData)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
@@ -134,7 +134,7 @@ type LoadingLocalModel
 
 
 type alias LoadedLocalModel_ =
-    { localModel : LocalModel Change LocalGrid
+    { localModel : Local Change LocalGrid
     , trains : IdDict TrainId Train
     , mail : IdDict MailId FrontendMail
     }
@@ -155,8 +155,7 @@ type ToolButton
 
 type alias FrontendLoaded =
     { key : Effect.Browser.Navigation.Key
-    , localModel : LocalModel Change LocalGrid
-    , trains : IdDict TrainId Train
+    , localModel : Local Change LocalGrid
     , meshes : Dict RawCellCoord { foreground : Effect.WebGL.Mesh Vertex, background : Effect.WebGL.Mesh Vertex }
     , viewPoint : ViewPoint
     , viewPointLastInterval : Point2d WorldUnit WorldUnit
@@ -191,7 +190,7 @@ type alias FrontendLoaded =
     , currentTool : Tool
     , lastTileRotation : List Effect.Time.Posix
     , lastPlacementError : Maybe Effect.Time.Posix
-    , ui : Ui.Element UiHover
+    , ui : Ui.Element UiId
     , uiMesh : Effect.WebGL.Mesh Vertex
     , lastHouseClick : Maybe Effect.Time.Posix
     , eventIdCounter : Id EventId
@@ -202,8 +201,9 @@ type alias FrontendLoaded =
     , tileColors : AssocList.Dict TileGroup Colors
     , primaryColorTextInput : TextInput.Model
     , secondaryColorTextInput : TextInput.Model
-    , previousFocus : Maybe UiHover
-    , focus : Maybe UiHover
+    , previousFocus : Maybe UiId
+    , focus : Maybe UiId
+    , previousHover : Maybe UiId
     , music : { startTime : Effect.Time.Posix, sound : Sound }
     , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
     , handMeshes : IdDict UserId CursorMeshes
@@ -219,7 +219,7 @@ type alias FrontendLoaded =
     , isReconnecting : Bool
     , lastCheckConnection : Time.Posix
     , showOnlineUsers : Bool
-    , contextMenu : Maybe ContextMenu
+    , contextMenu : ContextMenu
     , previousUpdateMeshData : UpdateMeshesData
     , reportsMesh : Effect.WebGL.Mesh Vertex
     , lastReportTilePlaced : Maybe Effect.Time.Posix
@@ -250,7 +250,7 @@ type alias WorldPage2 =
 
 
 type alias UpdateMeshesData =
-    { localModel : LocalModel Change LocalGrid
+    { localModel : Local Change LocalGrid
     , pressedKeys : AssocSet.Set Keyboard.Key
     , currentTool : Tool
     , mouseLeft : MouseButtonState
@@ -260,12 +260,11 @@ type alias UpdateMeshesData =
     , page : Page
     , mouseMiddle : MouseButtonState
     , viewPoint : ViewPoint
-    , trains : IdDict TrainId Train
     , time : Effect.Time.Posix
     }
 
 
-type alias ContextMenu =
+type alias MapContextMenuData =
     { change :
         Maybe
             { userId : Id UserId
@@ -277,6 +276,13 @@ type alias ContextMenu =
     , position : Coord WorldUnit
     , linkCopied : Bool
     }
+
+
+type ContextMenu
+    = MapContextMenu MapContextMenuData
+    | NpcContextMenu { npcId : Id NpcId, openedAt : Coord Pixels, nameInput : TextInput.Model }
+    | AnimalContextMenu { animalId : Id AnimalId, openedAt : Coord Pixels, nameInput : TextInput.Model }
+    | NoContextMenu
 
 
 type TopMenu
@@ -319,14 +325,14 @@ type Hover
     | TrainHover { trainId : Id TrainId, train : Train }
     | MapHover
     | AnimalHover { animalId : Id AnimalId, animal : Animal }
-    | UiBackgroundHover
-    | UiHover UiHover { position : Coord Pixels }
+    | NpcHover { npcId : Id NpcId, npc : Npc }
+    | UiHover (List ( UiId, { relativePositionToUi : Coord Pixels, ui : Ui.Element UiId } ))
 
 
-type UiHover
-    = EmailAddressTextInputHover
-    | SendEmailButtonHover
-    | ToolButtonHover ToolButton
+type UiId
+    = EmailAddressTextInput
+    | SendEmailButton
+    | ToolButton ToolButton
     | PrimaryColorInput
     | SecondaryColorInput
     | ShowInviteUser
@@ -340,7 +346,7 @@ type UiHover
     | SettingsButton
     | CloseSettings
     | DisplayNameTextInput
-    | MailEditorHover MailEditor.Hover
+    | MailEditorUi MailEditor.Hover
     | YouGotMailButton
     | ShowMapButton
     | AllowEmailNotificationsCheckbox
@@ -354,7 +360,7 @@ type UiHover
     | AlwaysDayTimeOfDayButton
     | AlwaysNightTimeOfDayButton
     | ShowAdminPage
-    | AdminHover AdminPage.Hover
+    | AdminUi AdminPage.Hover
     | CategoryButton Category
     | NotificationsButton
     | CloseNotifications
@@ -367,6 +373,11 @@ type UiHover
     | HyperlinkInput
     | CategoryNextPageButton
     | CategoryPreviousPageButton
+    | TileContainer
+    | WorldContainer
+    | BlockInputContainer
+    | NpcContextMenuInput
+    | AnimalContextMenuInput
 
 
 type alias BackendModel =
@@ -382,7 +393,7 @@ type alias BackendModel =
     , errors : List ( Effect.Time.Posix, BackendError )
     , trains : IdDict TrainId Train
     , animals : IdDict AnimalId Animal
-    , people : IdDict PersonId Person
+    , npcs : IdDict NpcId Npc
     , lastWorldUpdateTrains : IdDict TrainId Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
     , mail : IdDict MailId BackendMail
@@ -408,13 +419,6 @@ type alias BackendModel =
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
     , worldUpdateDurations : Array Duration
     , tileCountBot : Maybe TileCountBot.Model
-    }
-
-
-type alias Person =
-    { name : PersonName
-    , home : Coord WorldUnit
-    , position : Point2d WorldUnit WorldUnit
     }
 
 
@@ -491,7 +495,7 @@ type FrontendMsg_
     | MouseDown Button (Point2d Pixels Pixels)
     | MouseUp Button (Point2d Pixels Pixels)
     | MouseMove (Point2d Pixels Pixels)
-    | MouseWheel Html.Events.Extra.Wheel.Event
+    | MouseWheel { deltaY : Float, deltaMode : DeltaMode }
     | MouseLeave
     | ShortIntervalElapsed Effect.Time.Posix
     | AnimationFrame Effect.Time.Posix
@@ -552,10 +556,11 @@ type alias LoadingData_ =
     , viewBounds : Bounds CellUnit
     , trains : IdDict TrainId Train
     , mail : IdDict MailId FrontendMail
-    , cows : IdDict AnimalId Animal
+    , animals : IdDict AnimalId Animal
     , cursors : IdDict UserId Cursor
     , users : IdDict UserId FrontendUser
     , inviteTree : InviteTree
     , isGridReadOnly : Bool
     , trainsDisabled : AreTrainsAndAnimalsDisabled
+    , npcs : IdDict NpcId Npc
     }

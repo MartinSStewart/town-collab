@@ -406,18 +406,18 @@ cursorPosition textScale mousePosition position state =
     let
         mouseX : Int
         mouseX =
-            Coord.xRaw mousePosition
+            Coord.x mousePosition
 
         paddingX : Int
         paddingX =
-            Coord.xRaw padding
+            Coord.x padding
 
         positionX : Int
         positionX =
-            Coord.xRaw position
+            Coord.x position
     in
     toFloat (mouseX - (positionX + paddingX + textScale))
-        / toFloat (Coord.xRaw Sprite.charSize * textScale)
+        / toFloat (Coord.x Sprite.charSize * textScale)
         |> round
         |> clamp 0 (String.length state.text)
 
@@ -448,7 +448,7 @@ size textScale width current =
         text =
             addLineBreaks
                 textScale
-                (Quantity.unwrap width - (Coord.xRaw padding + textScale) * 2)
+                (Quantity.unwrap width - (Coord.x padding + textScale) * 2)
                 current.text
                 |> List.concat
     in
@@ -457,7 +457,7 @@ size textScale width current =
 
 size2 : Int -> Quantity Int units -> Int -> Coord units
 size2 textScale width lineCount =
-    ( width, Coord.yRaw Sprite.charSize * textScale * lineCount + Coord.yRaw padding * 2 |> Quantity )
+    ( width, Coord.y Sprite.charSize * textScale * lineCount + Coord.y padding * 2 |> Quantity )
 
 
 view : Int -> Coord units -> Quantity Int units -> Bool -> Bool -> State -> List Vertex
@@ -467,7 +467,7 @@ view textScale offset width hasFocus isValid current =
         rows =
             addLineBreaks
                 textScale
-                (Quantity.unwrap width - (Coord.xRaw padding + textScale) * 2)
+                (Quantity.unwrap width - (Coord.x padding + textScale) * 2)
                 current.text
 
         lineCount : Int
@@ -542,7 +542,7 @@ view textScale offset width hasFocus isValid current =
                     )
                     (Coord.xy
                         textScale
-                        (Coord.yRaw Sprite.charSize * textScale)
+                        (Coord.y Sprite.charSize * textScale)
                     )
                     (Coord.xy 504 28)
                     (Coord.xy 1 1)
@@ -555,7 +555,7 @@ view textScale offset width hasFocus isValid current =
 addLineBreaks : Int -> Int -> String -> List (List String)
 addLineBreaks textScale maxWidth text2 =
     List.map
-        (\text -> addLineBreaksHelper (Coord.xRaw Sprite.charSize * textScale) maxWidth [] text |> List.reverse)
+        (\text -> addLineBreaksHelper (Coord.x Sprite.charSize * textScale) maxWidth [] text |> List.reverse)
         (String.split "\n" text2)
 
 
@@ -646,7 +646,7 @@ indexToCoord rows cursorIndex =
 
 coordToIndex : List (List String) -> Coord units -> Int
 coordToIndex rows coord =
-    if Coord.yRaw coord < 0 then
+    if Coord.y coord < 0 then
         0
 
     else
@@ -669,7 +669,7 @@ coordToIndex rows coord =
 
                             else
                                 { cursorRow = state2.cursorRow
-                                , charsLeft = state2.charsLeft + min (Coord.xRaw coord) (String.length rowPart)
+                                , charsLeft = state2.charsLeft + min (Coord.x coord) (String.length rowPart)
                                 , stopped = True
                                 }
                         )
@@ -686,6 +686,6 @@ coordToIndex rows coord =
                                     }
                            )
             )
-            { cursorRow = Coord.yRaw coord, charsLeft = 0, stopped = False }
+            { cursorRow = Coord.y coord, charsLeft = 0, stopped = False }
             rows
             |> .charsLeft

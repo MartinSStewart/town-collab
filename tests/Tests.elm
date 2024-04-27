@@ -17,15 +17,15 @@ import Grid exposing (Grid, IntersectionType(..))
 import GridCell exposing (FrontendHistory)
 import Id exposing (Id, UserId)
 import IdDict
-import Point2d exposing (Point2d)
-import Quantity exposing (Quantity(..))
+import Point2d
+import Quantity
 import Test exposing (Test, describe, test)
 import TextInputMultiline
 import Tile exposing (Tile(..))
 import TileCountBot
 import Time
 import Train exposing (Train)
-import Units exposing (WorldUnit)
+import Units
 import Unsafe
 import Vector2d
 

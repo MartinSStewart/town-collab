@@ -18,6 +18,7 @@ module Grid exposing
     , foregroundMesh2
     , from
     , fromData
+    , getBuildings
     , getCell
     , getCell2
     , getPostOffice
@@ -70,7 +71,7 @@ import Set
 import Shaders
 import Sprite exposing (Vertex)
 import Terrain exposing (TerrainType(..), TerrainValue)
-import Tile exposing (RailPathType(..), Tile(..), TileData)
+import Tile exposing (BuildingData, RailPathType(..), Tile(..), TileData)
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit, TileLocalUnit, WorldUnit)
 import User exposing (FrontendUser)
 import Vector2d exposing (Vector2d)
@@ -448,11 +449,7 @@ addChange :
     -> (List GridCell.Value -> a)
     -> GridChange
     -> Grid a
-    ->
-        { grid : Grid a
-        , removed : List RemovedTile
-        , newCells : List (Coord CellUnit)
-        }
+    -> { grid : Grid a, removed : List RemovedTile, newCells : List (Coord CellUnit) }
 addChange emptyHistory getHistory setHistory change grid =
     let
         ( cellPosition, localPosition ) =
@@ -608,9 +605,9 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                                 case
                                     List.find
                                         (\{ linkTopLeft, linkWidth } ->
-                                            (Coord.yRaw position2 - Coord.yRaw linkTopLeft == 0)
-                                                && (Coord.xRaw position2 >= Coord.xRaw linkTopLeft)
-                                                && (Coord.xRaw position2 <= Coord.xRaw linkTopLeft + linkWidth)
+                                            (Coord.y position2 - Coord.y linkTopLeft == 0)
+                                                && (Coord.x position2 >= Coord.x linkTopLeft)
+                                                && (Coord.x position2 <= Coord.x linkTopLeft + linkWidth)
                                         )
                                         hyperlinks
                                 of
@@ -751,6 +748,7 @@ getTerrainLookupValue ( Quantity x, Quantity y ) lookup =
             Ground
 
 
+backgroundMesh : Coord CellUnit -> Effect.WebGL.Mesh Vertex
 backgroundMesh cellPosition =
     let
         lookup : Array2D TerrainValue
@@ -887,15 +885,15 @@ backgroundMesh cellPosition =
 
 tileMesh : Tile -> Coord Pixels -> Int -> Colors -> List Vertex
 tileMesh tile position scale colors =
-    let
-        data : TileData unit
-        data =
-            Tile.getData tile
-    in
     if tile == EmptyTile then
-        Sprite.sprite (Coord.plus (Coord.xy 6 -16) position) (Coord.xy 28 27) (Coord.xy 504 42) (Coord.xy 28 27)
+        []
 
     else
+        let
+            data : TileData unit
+            data =
+                Tile.getData tile
+        in
         tileMeshHelper2
             Sprite.opaque
             colors
@@ -911,14 +909,7 @@ tileMesh tile position scale colors =
             data.size
 
 
-tileMeshHelper2 :
-    Float
-    -> Colors
-    -> Coord unit2
-    -> Int
-    -> Coord unit
-    -> Coord unit
-    -> List Vertex
+tileMeshHelper2 : Float -> Colors -> Coord unit2 -> Int -> Coord unit -> Coord unit -> List Vertex
 tileMeshHelper2 opacityAndUserId { primaryColor, secondaryColor } position scale texturePosition size =
     Sprite.spriteWithZAndOpacityAndUserId
         opacityAndUserId
@@ -973,6 +964,8 @@ regenerateGridCellCacheFrontend (Grid grid) =
         |> Grid
 
 
+{-| Returns a tile, if any, that collides with the given world coord.
+-}
 getTile :
     Coord WorldUnit
     -> Grid a
@@ -1046,6 +1039,24 @@ getPostOffice userId (Grid grid) =
             )
 
 
+getBuildings :
+    Grid BackendHistory
+    -> List { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
+getBuildings (Grid grid) =
+    Dict.toList grid
+        |> List.concatMap
+            (\( position, cell ) ->
+                GridCell.getBuildings cell
+                    |> List.map
+                        (\a ->
+                            { position = cellAndLocalCoordToWorld ( Coord.tuple position, a.position )
+                            , userId = a.userId
+                            , buildingData = a.buildingData
+                            }
+                        )
+            )
+
+
 type IntersectionType
     = TileIntersection
     | UnloadedCellIntersection
@@ -1064,19 +1075,6 @@ rayIntersection includeWater expandBoundsBy start end grid =
         line : LineSegment2d WorldUnit WorldUnit
         line =
             LineSegment2d.from start end
-
-        minReach : Vector2d WorldUnit WorldUnit
-        minReach =
-            Vector2d.xy
-                (BoundingBox2d.minX Tile.aggregateMovementCollision)
-                (BoundingBox2d.minY Tile.aggregateMovementCollision)
-
-        maxReach : Vector2d WorldUnit WorldUnit
-        maxReach =
-            Vector2d.xy
-                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
-                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
-                |> Vector2d.reverse
 
         cellBounds : Bounds CellUnit
         cellBounds =
@@ -1115,6 +1113,21 @@ rayIntersection includeWater expandBoundsBy start end grid =
         |> Quantity.minimumBy (\a -> Point2d.distanceFrom start a.intersection)
 
 
+minReach : Vector2d WorldUnit WorldUnit
+minReach =
+    Vector2d.xy
+        (BoundingBox2d.minX Tile.aggregateMovementCollision)
+        (BoundingBox2d.minY Tile.aggregateMovementCollision)
+
+
+maxReach : Vector2d WorldUnit WorldUnit
+maxReach =
+    Vector2d.xy
+        (BoundingBox2d.maxX Tile.aggregateMovementCollision)
+        (BoundingBox2d.maxY Tile.aggregateMovementCollision)
+        |> Vector2d.reverse
+
+
 pointInside :
     Bool
     -> Vector2d WorldUnit WorldUnit
@@ -1123,19 +1136,6 @@ pointInside :
     -> List { bounds : BoundingBox2d WorldUnit WorldUnit, intersectionType : IntersectionType }
 pointInside includeWater expandBoundsBy start grid =
     let
-        minReach : Vector2d WorldUnit WorldUnit
-        minReach =
-            Vector2d.xy
-                (BoundingBox2d.minX Tile.aggregateMovementCollision)
-                (BoundingBox2d.minY Tile.aggregateMovementCollision)
-
-        maxReach : Vector2d WorldUnit WorldUnit
-        maxReach =
-            Vector2d.xy
-                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
-                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
-                |> Vector2d.reverse
-
         pointMin : Point2d WorldUnit WorldUnit
         pointMin =
             Point2d.translateBy maxReach start
@@ -1255,19 +1255,6 @@ rayIntersection2 includeWater expandBoundsBy start end grid =
         line : LineSegment2d WorldUnit WorldUnit
         line =
             LineSegment2d.from start end
-
-        minReach : Vector2d WorldUnit WorldUnit
-        minReach =
-            Vector2d.xy
-                (BoundingBox2d.minX Tile.aggregateMovementCollision)
-                (BoundingBox2d.minY Tile.aggregateMovementCollision)
-
-        maxReach : Vector2d WorldUnit WorldUnit
-        maxReach =
-            Vector2d.xy
-                (BoundingBox2d.maxX Tile.aggregateMovementCollision)
-                (BoundingBox2d.maxY Tile.aggregateMovementCollision)
-                |> Vector2d.reverse
 
         pointMin : Point2d WorldUnit WorldUnit
         pointMin =

@@ -1,5 +1,6 @@
 module Tile exposing
-    ( Category(..)
+    ( BuildingData
+    , Category(..)
     , CollisionMask(..)
     , DefaultColor(..)
     , Direction(..)
@@ -29,6 +30,7 @@ module Tile exposing
     , getTileGroupData
     , hasCollision
     , hasCollisionWithCoord
+    , isBuilding
     , pathDirection
     , railDataReverse
     , railPathData
@@ -439,6 +441,134 @@ tileToTileGroup tile =
                             Nothing
                 )
                 allTileGroups
+
+
+type alias BuildingData =
+    { entrancePoint : Coord Pixels, isHome : Bool }
+
+
+isBuilding : Tile -> Maybe BuildingData
+isBuilding tile =
+    case tile of
+        HouseLeft ->
+            Just { entrancePoint = Coord.xy 5 44, isHome = True }
+
+        HouseUp ->
+            Just { entrancePoint = Coord.xy 32 15, isHome = True }
+
+        HouseRight ->
+            Just { entrancePoint = Coord.xy 35 46, isHome = True }
+
+        HouseDown ->
+            Just { entrancePoint = Coord.xy 28 51, isHome = True }
+
+        PostOffice ->
+            Just { entrancePoint = Coord.xy 51 64, isHome = False }
+
+        LogCabinDown ->
+            Just { entrancePoint = Coord.xy 20 55, isHome = True }
+
+        LogCabinRight ->
+            Just { entrancePoint = Coord.xy 41 41, isHome = True }
+
+        LogCabinUp ->
+            Just { entrancePoint = Coord.xy 20 16, isHome = True }
+
+        LogCabinLeft ->
+            Just { entrancePoint = Coord.xy -1 41, isHome = True }
+
+        HospitalDown ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        HospitalLeft ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        HospitalUp ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        HospitalRight ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        ApartmentDown ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        ApartmentLeft ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        ApartmentRight ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        ApartmentUp ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        CornerHouseUpLeft ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        CornerHouseUpRight ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        CornerHouseDownLeft ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        CornerHouseDownRight ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        OfficeDown ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        OfficeUp ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        FireTruckGarage ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        TownHouse0 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        TownHouse1 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        TownHouse2 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        TownHouse3 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        TownHouse4 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        RowHouse0 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        RowHouse1 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        RowHouse2 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        RowHouse3 ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        ConvenienceStoreDown ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        ConvenienceStoreUp ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        BeautySalonDown ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        BeautySalonUp ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        CheckmartDown ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        CheckmartUp ->
+            Just { entrancePoint = Coord.xy 0 0, isHome = False }
+
+        _ ->
+            Nothing
 
 
 type alias TileGroupData =
@@ -2566,7 +2696,7 @@ houseUp =
 
 houseLeft : TileData units
 houseLeft =
-    { texturePosition = Coord.xy 11 8 |> Coord.multiply Units.tileSize
+    { texturePosition = Coord.xy 220 144
     , size = Coord.xy 2 4
     , tileCollision =
         [ ( 0, 1 )

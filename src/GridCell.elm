@@ -10,6 +10,7 @@ module GridCell exposing
     , dataToCell
     , empty
     , flatten
+    , getBuildings
     , getPostOffices
     , getToggledRailSplit
     , hasUserChanges
@@ -39,7 +40,7 @@ import Quantity exposing (Quantity(..))
 import Random
 import Shaders
 import Terrain exposing (TerrainType(..))
-import Tile exposing (Tile(..))
+import Tile exposing (BuildingData, Tile(..))
 import Units exposing (CellLocalUnit, CellUnit, TerrainUnit)
 
 
@@ -56,8 +57,8 @@ valueEncoder : Value -> Bytes.Encode.Encoder
 valueEncoder value =
     Bytes.Encode.sequence
         [ Bytes.Encode.unsignedInt16 BE (Id.toInt value.userId)
-        , Bytes.Encode.signedInt8 (Coord.xRaw value.position)
-        , Bytes.Encode.signedInt8 (Coord.yRaw value.position)
+        , Bytes.Encode.signedInt8 (Coord.x value.position)
+        , Bytes.Encode.signedInt8 (Coord.y value.position)
         , Tile.encoder value.tile
         , colorsEncoder value.colors
         , Bytes.Encode.float64 BE (Effect.Time.posixToMillis value.time |> toFloat)
@@ -263,7 +264,7 @@ updateMapPixelData cache =
 
                 index : Int
                 index =
-                    Coord.xRaw terrainPos + Coord.yRaw terrainPos * Terrain.terrainDivisionsPerCell
+                    Coord.x terrainPos + Coord.y terrainPos * Terrain.terrainDivisionsPerCell
 
                 currentValue : Int
                 currentValue =
@@ -404,6 +405,20 @@ getPostOffices cell =
 
             else
                 Nothing
+        )
+        (flatten cell)
+
+
+getBuildings : Cell a -> List { position : Coord CellLocalUnit, userId : Id UserId, buildingData : BuildingData }
+getBuildings cell =
+    List.filterMap
+        (\value ->
+            case Tile.isBuilding value.tile of
+                Just buildingData ->
+                    Just { userId = value.userId, position = value.position, buildingData = buildingData }
+
+                Nothing ->
+                    Nothing
         )
         (flatten cell)
 
