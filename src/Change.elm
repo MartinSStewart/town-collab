@@ -8,6 +8,7 @@ module Change exposing
     , LoggedIn_
     , MovementChange
     , NotLoggedIn_
+    , NpcMovementChange
     , Report
     , ServerChange(..)
     , TileHotkey(..)
@@ -162,7 +163,7 @@ type ServerChange
         { trainDiff : IdDict TrainId TrainDiff
         , maybeNewNpc : Maybe ( Id NpcId, Npc )
         , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
-        , movementChanges : List ( Id NpcId, MovementChange )
+        , movementChanges : List ( Id NpcId, NpcMovementChange )
         }
     | ServerWorldUpdateDuration Duration
     | ServerReceivedMail
@@ -190,6 +191,14 @@ type alias MovementChange =
     { startTime : Effect.Time.Posix
     , position : Point2d WorldUnit WorldUnit
     , endPosition : Point2d WorldUnit WorldUnit
+    }
+
+
+type alias NpcMovementChange =
+    { startTime : Effect.Time.Posix
+    , position : Point2d WorldUnit WorldUnit
+    , endPosition : Point2d WorldUnit WorldUnit
+    , visitedPositions : Nonempty (Point2d WorldUnit WorldUnit)
     }
 
 

@@ -1151,6 +1151,7 @@ updateServerChange serverChange model =
                                         | position = movement.position
                                         , endPosition = movement.endPosition
                                         , startTime = movement.startTime
+                                        , visitedPositions = movement.visitedPositions
                                     }
                                 )
                                 dict

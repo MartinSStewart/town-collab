@@ -797,7 +797,7 @@ updateLoaded audioData msg model =
                         model2 =
                             { model | pressedKeys = AssocSet.insert key model.pressedKeys }
                     in
-                    case model2.page of
+                    (case model2.page of
                         MailPage mailEditor ->
                             case MailEditor.handleKeyDown model2.time (LocalGrid.ctrlOrMeta model2) key mailEditor of
                                 Just ( newMailEditor, outMsg ) ->
@@ -842,6 +842,8 @@ updateLoaded audioData msg model =
 
                                 _ ->
                                     keyMsgCanvasUpdate audioData rawKey key model2
+                    )
+                        |> Tuple.mapFirst updateUiMesh
 
                 Nothing ->
                     ( model, Command.none )

@@ -15,7 +15,7 @@ import AssocList
 import Bounds exposing (Bounds)
 import Bytes exposing (Endianness(..))
 import Bytes.Decode
-import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), MovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), MovementChange, NpcMovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor exposing (AnimalOrNpcId(..), Holding(..))
@@ -723,7 +723,7 @@ updateNpc :
         ( IdDict NpcId Npc
         , { maybeNewNpc : Maybe ( Id NpcId, Npc )
           , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
-          , movementChanges : List ( Id NpcId, MovementChange )
+          , movementChanges : List ( Id NpcId, NpcMovementChange )
           }
         )
 updateNpc newTime model =
@@ -747,6 +747,7 @@ updateNpc newTime model =
                         |> List.filter
                             (\a ->
                                 not (Set.member (Coord.toTuple a.position) occupied)
+                                    && a.buildingData.isHome
                                     && (Maybe.map .userId model.tileCountBot /= Just a.userId)
                             )
 
@@ -824,6 +825,7 @@ updateNpc newTime model =
                             { position = npc.position
                             , startTime = npc.startTime
                             , endPosition = npc.endPosition
+                            , visitedPositions = npc.visitedPositions
                             }
                         )
                         npcs4
