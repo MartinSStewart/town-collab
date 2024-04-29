@@ -820,7 +820,7 @@ updateNpc newTime model =
 
                 npcs4 : IdDict NpcId Npc
                 npcs4 =
-                    IdDict.map (Npc.updateNpcPath 20 newTime model.grid) npcs3
+                    IdDict.map (Npc.updateNpcPath newTime model.grid) npcs3
             in
             ( npcs4
             , { maybeNewNpc = maybeNewNpc

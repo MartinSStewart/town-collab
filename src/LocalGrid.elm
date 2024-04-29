@@ -1423,7 +1423,7 @@ updateServerChange serverChange model =
                             IdDict.map
                                 (\npcId npc ->
                                     if isInLoadedRegion npc.position model then
-                                        Npc.updateNpcPath 20 currentTime model.grid npcId npc
+                                        Npc.updateNpcPath currentTime model.grid npcId npc
 
                                     else
                                         npc
