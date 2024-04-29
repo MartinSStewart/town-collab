@@ -176,16 +176,16 @@ maxNavPointVector =
     Vector2d.xy maxNavPointDistance maxNavPointDistance
 
 
-getNavPoints2 : Point2d WorldUnit WorldUnit -> Grid a -> List (Point2d WorldUnit WorldUnit)
-getNavPoints2 npcPosition grid =
+getNavPoints : Id NpcId -> Npc -> Grid a -> Maybe (Point2d WorldUnit WorldUnit)
+getNavPoints npcId npc grid =
     let
         minPoint : Point2d WorldUnit WorldUnit
         minPoint =
-            Point2d.translateBy (Vector2d.reverse maxNavPointVector) npcPosition
+            Point2d.translateBy (Vector2d.reverse maxNavPointVector) npc.endPosition
 
         maxPoint : Point2d WorldUnit WorldUnit
         maxPoint =
-            Point2d.translateBy maxNavPointVector npcPosition
+            Point2d.translateBy maxNavPointVector npc.endPosition
 
         cellBounds : Bounds CellUnit
         cellBounds =
@@ -196,91 +196,79 @@ getNavPoints2 npcPosition grid =
                 )
     in
     Bounds.coordRangeFold
-        (\cellCoord list ->
+        (\cellCoord state2 ->
             case Grid.getCell cellCoord grid of
                 Just cell ->
-                    GridCell.flatten cell
-                        |> List.concatMap
-                            (\{ tile, position } ->
-                                List.map
-                                    (\tileCoord ->
-                                        Units.pixelToTilePoint tileCoord
-                                            |> Point2d.translateBy
-                                                (Grid.cellAndLocalCoordToWorld
-                                                    ( cellCoord, position )
-                                                    |> Coord.toVector2d
-                                                )
-                                    )
-                                    (navPoints tile)
-                            )
-                        |> (\a -> a ++ list)
+                    List.foldl
+                        (\{ tile, position } state3 ->
+                            List.foldl
+                                (\tileCoord state ->
+                                    let
+                                        navPoint : Point2d WorldUnit WorldUnit
+                                        navPoint =
+                                            Units.pixelToTilePoint tileCoord
+                                                |> Point2d.translateBy
+                                                    (Grid.cellAndLocalCoordToWorld ( cellCoord, position )
+                                                        |> Coord.toVector2d
+                                                    )
+
+                                        distance : Quantity Float WorldUnit
+                                        distance =
+                                            Point2d.distanceFrom navPoint npc.endPosition
+                                    in
+                                    if
+                                        (distance |> Quantity.lessThan maxNavPointDistance)
+                                            && (distance |> Quantity.greaterThan (Quantity.unsafe 0.01))
+                                    then
+                                        let
+                                            weight : Float
+                                            weight =
+                                                navPointWeighting npcId npc navPoint
+                                        in
+                                        if weight < state.minValue then
+                                            case Grid.rayIntersection2 True (Units.pixelToTileVector size |> Vector2d.scaleBy 0.5) npc.endPosition navPoint grid of
+                                                Just _ ->
+                                                    state
+
+                                                Nothing ->
+                                                    { maybeMin = Just navPoint, minValue = weight }
+
+                                        else
+                                            state
+
+                                    else
+                                        state
+                                )
+                                state3
+                                (navPoints tile)
+                        )
+                        state2
+                        (GridCell.flatten cell)
 
                 Nothing ->
-                    list
+                    state2
         )
         identity
         cellBounds
-        []
-
-
-getNavPoints :
-    Id NpcId
-    -> Npc
-    -> List (Point2d WorldUnit WorldUnit)
-    -> Grid a
-    -> Maybe (Point2d WorldUnit WorldUnit)
-getNavPoints npcId npc navPoints3 grid =
-    List.foldl
-        (\navPoint state ->
-            let
-                distance : Quantity Float WorldUnit
-                distance =
-                    Point2d.distanceFrom navPoint npc.endPosition
-            in
-            if
-                (distance |> Quantity.lessThan maxNavPointDistance)
-                    && (distance |> Quantity.greaterThan (Quantity.unsafe 0.01))
-            then
-                let
-                    weight : Float
-                    weight =
-                        navPointWeighting npcId npc navPoint
-                in
-                if weight < state.minValue then
-                    case Grid.rayIntersection2 True (Units.pixelToTileVector size |> Vector2d.scaleBy 0.5) npc.endPosition navPoint grid of
-                        Just _ ->
-                            state
-
-                        Nothing ->
-                            { maybeMin = Just navPoint, minValue = weight }
-
-                else
-                    state
-
-            else
-                state
-        )
         { maybeMin = Nothing, minValue = 99999 }
-        navPoints3
         |> .maybeMin
 
 
 updateNpcPath : Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
 updateNpcPath time grid npcId npc =
     if Duration.from time (moveEndTime npc) |> Quantity.lessThanZero then
-        updateNpcPathHelper (getNavPoints2 npc.endPosition grid) 20 time grid npcId npc
+        updateNpcPathHelper 20 time grid npcId npc
 
     else
         npc
 
 
-updateNpcPathHelper : List (Point2d WorldUnit WorldUnit) -> Int -> Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
-updateNpcPathHelper navPoints3 stepsLeft time grid npcId npc =
+updateNpcPathHelper : Int -> Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
+updateNpcPathHelper stepsLeft time grid npcId npc =
     if Duration.from time (moveEndTime npc) |> Quantity.lessThanZero then
-        case getNavPoints npcId npc navPoints3 grid of
+        case getNavPoints npcId npc grid of
             Just head ->
                 updateNpcPathHelper
-                    navPoints3
                     (stepsLeft - 1)
                     time
                     grid
