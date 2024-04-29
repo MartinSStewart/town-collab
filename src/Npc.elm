@@ -239,7 +239,7 @@ getNavPoints npcPosition grid =
 
 updateNpcPath : Int -> Effect.Time.Posix -> Grid a -> Id NpcId -> Npc -> Npc
 updateNpcPath stepsLeft time grid npcId npc =
-    if (Duration.from time (moveEndTime npc) |> Quantity.lessThanZero) && stepsLeft > 0 then
+    if Duration.from time (moveEndTime npc) |> Quantity.lessThanZero then
         case getNavPoints npc.endPosition grid |> List.Extra.minimumBy (navPointWeighting npcId npc) of
             Just head ->
                 updateNpcPath
@@ -247,11 +247,21 @@ updateNpcPath stepsLeft time grid npcId npc =
                     time
                     grid
                     npcId
-                    { npc
-                        | position = npc.endPosition
-                        , endPosition = head
-                        , startTime = moveEndTime npc
-                        , visitedPositions = List.Nonempty.take 6 npc.visitedPositions |> List.Nonempty.cons npc.endPosition
+                    { position = npc.endPosition
+                    , endPosition = head
+                    , startTime =
+                        if stepsLeft > 0 then
+                            moveEndTime npc
+
+                        else
+                            time
+                    , visitedPositions = List.Nonempty.take 6 npc.visitedPositions |> List.Nonempty.cons npc.endPosition
+                    , name = npc.name
+                    , home = npc.home
+                    , createdAt = npc.createdAt
+                    , skinColor = npc.skinColor
+                    , clothColor = npc.clothColor
+                    , voice = npc.voice
                     }
 
             Nothing ->
