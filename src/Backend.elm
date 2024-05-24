@@ -96,6 +96,10 @@ app_ isProduction =
     }
 
 
+dummyChange =
+    0
+
+
 updateFromFrontend :
     SessionId
     -> ClientId
