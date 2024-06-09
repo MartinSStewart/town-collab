@@ -1569,9 +1569,6 @@ handleKeyDownColorInput userId setTextInputModel updateColor tileGroup key model
                             CopyText text ->
                                 Ports.copyToClipboard text
 
-                            PasteText ->
-                                Ports.readFromClipboardRequest
-
                             NoOutMsg ->
                                 Command.none
                         )
@@ -1796,14 +1793,6 @@ keyMsgCanvasUpdate audioData rawKey key model =
 
                     _ ->
                         ( model, Command.none )
-
-        ( Keyboard.Character "v", True ) ->
-            case model.currentTool of
-                TextTool (Just _) ->
-                    ( model, Ports.readFromClipboardRequest )
-
-                _ ->
-                    ( model, Command.none )
 
         ( Keyboard.Spacebar, False ) ->
             case model.currentTool of
@@ -3371,9 +3360,6 @@ textInputUpdate textScale id textChanged onEnter textInput setTextInput event mo
                 CopyText text ->
                     Command.batch [ cmd, Ports.copyToClipboard text ]
 
-                PasteText ->
-                    Command.batch [ cmd, Ports.readFromClipboardRequest ]
-
                 NoOutMsg ->
                     cmd
             )
@@ -3446,9 +3432,6 @@ textInputMultilineUpdate textScale width id textChanged textInput setTextInput e
             , case outMsg of
                 CopyText text ->
                     Command.batch [ cmd, Ports.copyToClipboard text ]
-
-                PasteText ->
-                    Command.batch [ cmd, Ports.readFromClipboardRequest ]
 
                 NoOutMsg ->
                     cmd
@@ -5644,7 +5627,7 @@ subscriptions _ model =
         , Effect.Browser.Events.onAnimationFrame AnimationFrame
         , Keyboard.downs KeyDown
         , Keyboard.ups KeyUp
-        , Ports.readFromClipboardResponse PastedText
+        , Ports.onPasteEvent PastedText
         , case model of
             Loading _ ->
                 Subscription.batch

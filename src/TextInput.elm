@@ -112,7 +112,6 @@ selectionMax model =
 
 type OutMsg
     = CopyText String
-    | PasteText
     | NoOutMsg
 
 
@@ -132,9 +131,6 @@ keyMsg ctrlDown shiftDown key model =
                 |> String.left (abs model.current.cursorSize)
                 |> CopyText
             )
-
-        ( True, False, Keyboard.Character "v" ) ->
-            ( model, PasteText )
 
         ( True, False, Keyboard.Character "z" ) ->
             ( undo model, NoOutMsg )

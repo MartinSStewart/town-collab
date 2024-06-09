@@ -1,4 +1,18 @@
-port module Ports exposing (audioPortFromJS, audioPortToJS, copyToClipboard, getDevicePixelRatio, getLocalStorage, gotDevicePixelRatio, gotLocalStorage, mouse_leave, openNewTab, readFromClipboardRequest, readFromClipboardResponse, setLocalStorage, user_agent_from_js, user_agent_to_js)
+port module Ports exposing
+    ( audioPortFromJS
+    , audioPortToJS
+    , copyToClipboard
+    , getDevicePixelRatio
+    , getLocalStorage
+    , gotDevicePixelRatio
+    , gotLocalStorage
+    , mouse_leave
+    , onPasteEvent
+    , openNewTab
+    , setLocalStorage
+    , user_agent_from_js
+    , user_agent_to_js
+    )
 
 import Effect.Command as Command exposing (Command, FrontendOnly)
 import Effect.Subscription as Subscription exposing (Subscription)
@@ -44,6 +58,21 @@ port set_local_storage : Json.Encode.Value -> Cmd msg
 
 
 port open_new_tab_to_js : Json.Encode.Value -> Cmd msg
+
+
+port paste_event_from_js : (Json.Decode.Value -> msg) -> Sub msg
+
+
+onPasteEvent : (String -> msg) -> Subscription.Subscription FrontendOnly msg
+onPasteEvent msg =
+    Subscription.fromJs
+        "paste_event_from_js"
+        paste_event_from_js
+        (\value ->
+            Json.Decode.decodeValue Json.Decode.string value
+                |> Result.withDefault ""
+                |> msg
+        )
 
 
 openNewTab : Hyperlink -> Command FrontendOnly toMsg msg
@@ -113,29 +142,3 @@ copyToClipboard text =
         "supermario_copy_to_clipboard_to_js"
         supermario_copy_to_clipboard_to_js
         (Json.Encode.string text)
-
-
-port supermario_read_from_clipboard_to_js : Json.Encode.Value -> Cmd msg
-
-
-readFromClipboardRequest : Command FrontendOnly toMsg msg
-readFromClipboardRequest =
-    Command.sendToJs
-        "supermario_read_from_clipboard_to_js"
-        supermario_read_from_clipboard_to_js
-        Json.Encode.null
-
-
-port supermario_read_from_clipboard_from_js : (Json.Decode.Value -> msg) -> Sub msg
-
-
-readFromClipboardResponse : (String -> msg) -> Subscription FrontendOnly msg
-readFromClipboardResponse msg =
-    Subscription.fromJs
-        "supermario_read_from_clipboard_from_js"
-        supermario_read_from_clipboard_from_js
-        (\value ->
-            Json.Decode.decodeValue Json.Decode.string value
-                |> Result.withDefault ""
-                |> msg
-        )

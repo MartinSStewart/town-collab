@@ -112,9 +112,6 @@ keyMsg textScale width ctrlDown shiftDown key model =
                 |> CopyText
             )
 
-        ( True, False, Keyboard.Character "v" ) ->
-            ( model, PasteText )
-
         ( True, False, Keyboard.Character "z" ) ->
             ( undo model, NoOutMsg )
 

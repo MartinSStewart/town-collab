@@ -9,7 +9,7 @@ exports.init = async function(app) {
             event.preventDefault();
         }
     });
-
+  window.addEventListener("paste", (event) => app.ports.paste_event_from_js.send(event.clipboardData.getData("text")));
   window.addEventListener("mouseout", (event) => app.ports.mouse_leave.send());
 
   app.ports.get_local_storage.subscribe(() => {
@@ -22,15 +22,6 @@ exports.init = async function(app) {
 
   });
   app.ports.set_local_storage.subscribe((json) => window.localStorage.setItem("user-settings", JSON.stringify(json) ));
-
-  app.ports.supermario_read_from_clipboard_to_js.subscribe(function() {
-    try {
-        navigator.clipboard.readText().then((clipText) => app.ports.supermario_read_from_clipboard_from_js.send(clipText));
-    }
-    catch {
-    }
-
-  })
 
   app.ports.supermario_copy_to_clipboard_to_js.subscribe(function(text) {
     copyTextToClipboard(text);
