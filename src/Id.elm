@@ -8,6 +8,7 @@ module Id exposing
     , SecretId(..)
     , TrainId(..)
     , UserId(..)
+    , equals
     , fromInt
     , increment
     , oneTimePasswordLength
@@ -57,6 +58,11 @@ type OneTimePasswordId
 oneTimePasswordLength : number
 oneTimePasswordLength =
     6
+
+
+equals : Id a -> Id a -> Bool
+equals (Id a) (Id b) =
+    a - b == 0
 
 
 fromInt : Int -> Id a

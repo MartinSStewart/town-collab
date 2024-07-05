@@ -1817,27 +1817,37 @@ hasCollision positionA tileA positionB tileB =
         ( Quantity width2, Quantity height2 ) =
             tileDataB.size
     in
-    if isFence tileA && isFence tileB && (positionA /= positionB || tileDataA.size /= tileDataB.size) then
+    if
+        isFence tileA
+            && isFence tileB
+            && (Coord.notEquals positionA positionB || Coord.notEquals tileDataA.size tileDataB.size)
+    then
         False
 
     else
         case ( tileDataA.tileCollision, tileDataB.tileCollision ) of
             ( DefaultCollision, DefaultCollision ) ->
-                ((x2 >= x && x2 < x + width) || (x >= x2 && x < x2 + width2))
-                    && ((y2 >= y && y2 < y + height) || (y >= y2 && y < y2 + height2))
+                ((x2 - x >= 0 && x2 - (x + width) < 0) || (x - x2 >= 0 && x - (x2 + width2) < 0))
+                    && ((y2 - y >= 0 && y2 - (y + height) < 0) || (y - y2 >= 0 && y - (y2 + height2) < 0))
 
             ( CustomCollision setA, DefaultCollision ) ->
                 Set.toList setA
                     |> List.any
                         (\( cx, cy ) ->
-                            x2 <= x + cx && x2 + width2 > x + cx && y2 <= y + cy && y2 + height2 > y + cy
+                            (x2 - (x + cx) <= 0)
+                                && (x2 + width2 - (x + cx) > 0)
+                                && (y2 - (y + cy) <= 0)
+                                && (y2 + height2 - (y + cy) > 0)
                         )
 
             ( DefaultCollision, CustomCollision setB ) ->
                 Set.toList setB
                     |> List.any
                         (\( cx, cy ) ->
-                            x <= x2 + cx && x + width > x2 + cx && y <= y2 + cy && y + height > y2 + cy
+                            (x - (x2 + cx) <= 0)
+                                && (x + width - (x2 + cx) > 0)
+                                && (y - (y2 + cy) <= 0)
+                                && (y + height - (y2 + cy) > 0)
                         )
 
             ( CustomCollision setA, CustomCollision setB ) ->
@@ -1855,17 +1865,42 @@ hasCollision positionA tileA positionB tileB =
 
 isFence : Tile -> Bool
 isFence tile =
-    (tile == FenceHorizontal)
-        || (tile == FenceVertical)
-        || (tile == FenceDiagonal)
-        || (tile == FenceAntidiagonal)
-        || (tile == DirtPathHorizontal)
-        || (tile == DirtPathVertical)
-        || (tile == IronFenceHorizontal)
-        || (tile == IronFenceVertical)
-        || (tile == IronFenceDiagonal)
-        || (tile == IronFenceAntidiagonal)
-        || (tile == IronGate)
+    case tile of
+        FenceHorizontal ->
+            True
+
+        FenceVertical ->
+            True
+
+        FenceDiagonal ->
+            True
+
+        FenceAntidiagonal ->
+            True
+
+        DirtPathHorizontal ->
+            True
+
+        DirtPathVertical ->
+            True
+
+        IronFenceHorizontal ->
+            True
+
+        IronFenceVertical ->
+            True
+
+        IronFenceDiagonal ->
+            True
+
+        IronFenceAntidiagonal ->
+            True
+
+        IronGate ->
+            True
+
+        _ ->
+            False
 
 
 hasCollisionWithCoord : Coord CellLocalUnit -> Coord CellLocalUnit -> TileData unit -> Bool
@@ -1882,7 +1917,7 @@ hasCollisionWithCoord positionA positionB tileB =
     in
     case tileB.tileCollision of
         DefaultCollision ->
-            (x >= x2 && x < x2 + width2) && (y >= y2 && y < y2 + height2)
+            (x - x2 >= 0 && x - (x2 + width2) < 0) && (y - y2 >= 0 && y - (y2 + height2) < 0)
 
         CustomCollision setB ->
             Set.member (positionA |> Coord.minus positionB |> Coord.toTuple) setB
@@ -5370,10 +5405,10 @@ strafeDownSmallPath t =
         t2 =
             0.5
     in
-    if t < t1 then
+    if t - t1 < 0 then
         Point2d.unsafe { x = t * t1Speed, y = 0.5 }
 
-    else if t <= t2 then
+    else if t - t2 <= 0 then
         bottomToLeftPath (0.76 * (t - t1))
             |> Point2d.translateBy (Vector2d.unsafe { x = t1 * t1Speed, y = 0 })
 
@@ -5416,10 +5451,10 @@ strafeDownPath t =
         t2 =
             0.5
     in
-    if t < t1 then
+    if t - t1 < 0 then
         Point2d.unsafe { x = t * t1Speed, y = 0.5 }
 
-    else if t <= t2 then
+    else if t - t2 <= 0 then
         bottomToLeftPath (t - t1)
             |> Point2d.translateBy (Vector2d.unsafe { x = t1 * t1Speed, y = 0 })
 

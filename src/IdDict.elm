@@ -259,7 +259,7 @@ removeHelp targetKey dict =
             RBEmpty_elm_builtin
 
         RBNode_elm_builtin color key value left right ->
-            if targetKey < key then
+            if targetKey - key < 0 then
                 case left of
                     RBNode_elm_builtin Black _ _ lLeft _ ->
                         case lLeft of
@@ -311,7 +311,7 @@ removeHelpEQGT : Int -> IdDict a v -> IdDict a v
 removeHelpEQGT targetKey dict =
     case dict of
         RBNode_elm_builtin color key value left right ->
-            if targetKey == key then
+            if targetKey - key == 0 then
                 case getMin right of
                     RBNode_elm_builtin _ minKey minValue _ _ ->
                         balance color minKey minValue left (removeMin right)
@@ -506,10 +506,10 @@ merge leftStep bothStep rightStep leftDict rightDict initialResult =
                     ( list, rightStep rKey rValue result )
 
                 ( lKey, lValue ) :: rest ->
-                    if Id.toInt lKey < Id.toInt rKey then
+                    if Id.toInt lKey - Id.toInt rKey < 0 then
                         stepState rKey rValue ( rest, leftStep lKey lValue result )
 
-                    else if Id.toInt lKey > Id.toInt rKey then
+                    else if Id.toInt lKey - Id.toInt rKey > 0 then
                         ( list, rightStep rKey rValue result )
 
                     else

@@ -270,7 +270,7 @@ moveUndoPoint getHistory setHistory userId undoPoint (Grid grid) =
 closeNeighborCells : Coord CellUnit -> Coord CellLocalUnit -> List ( Coord CellUnit, Coord CellLocalUnit )
 closeNeighborCells cellPosition localPosition =
     List.filterMap
-        (\offset ->
+        (\(( offsetX, offsetY ) as offset) ->
             let
                 ( Quantity x, Quantity y ) =
                     Coord.tuple offset
@@ -284,7 +284,7 @@ closeNeighborCells cellPosition localPosition =
                     ( if x < 0 then
                         -1
 
-                      else if x < Units.cellSize then
+                      else if x - Units.cellSize < 0 then
                         0
 
                       else
@@ -292,7 +292,7 @@ closeNeighborCells cellPosition localPosition =
                     , if y < 0 then
                         -1
 
-                      else if y < Units.cellSize then
+                      else if y - Units.cellSize < 0 then
                         0
 
                       else
@@ -303,7 +303,7 @@ closeNeighborCells cellPosition localPosition =
                 newCellPos =
                     Coord.tuple offset |> Coord.plus cellPosition
             in
-            if ( a, b ) == offset then
+            if a - offsetX == 0 && b - offsetY == 0 then
                 ( newCellPos
                 , Coord.tuple
                     ( localX - Units.cellSize * a
@@ -355,41 +355,45 @@ canPlaceTile change =
                                 terrain =
                                     Terrain.getTerrainValue (Coord.xy x3 y3) cellPosition
                             in
-                            if terrain.terrainType == Ground then
-                                False
+                            case terrain.terrainType of
+                                Ground ->
+                                    False
 
-                            else
-                                let
-                                    terrainPosition : Coord WorldUnit
-                                    terrainPosition =
-                                        cellAndLocalCoordToWorld
-                                            ( cellPosition
-                                            , Coord.tuple ( x3 * Terrain.terrainSize, y3 * Terrain.terrainSize )
-                                            )
-
-                                    ( Quantity x8, Quantity y8 ) =
-                                        change.position
-
-                                    ( Quantity x9, Quantity y9 ) =
-                                        terrainPosition
-
-                                    tileDataA =
-                                        Tile.getData change.change
-
-                                    ( Quantity width, Quantity height ) =
-                                        tileDataA.size
-                                in
-                                case tileDataA.tileCollision of
-                                    Tile.DefaultCollision ->
-                                        ((x9 >= x8 && x9 < x8 + width) || (x8 >= x9 && x8 < x9 + Terrain.terrainSize))
-                                            && ((y9 >= y8 && y9 < y8 + height) || (y8 >= y9 && y8 < y9 + Terrain.terrainSize))
-
-                                    Tile.CustomCollision setA ->
-                                        Set.toList setA
-                                            |> List.any
-                                                (\( cx, cy ) ->
-                                                    x9 <= x8 + cx && x9 + Terrain.terrainSize > x8 + cx && y9 <= y8 + cy && y9 + Terrain.terrainSize > y8 + cy
+                                _ ->
+                                    let
+                                        terrainPosition : Coord WorldUnit
+                                        terrainPosition =
+                                            cellAndLocalCoordToWorld
+                                                ( cellPosition
+                                                , Coord.tuple ( x3 * Terrain.terrainSize, y3 * Terrain.terrainSize )
                                                 )
+
+                                        ( Quantity x8, Quantity y8 ) =
+                                            change.position
+
+                                        ( Quantity x9, Quantity y9 ) =
+                                            terrainPosition
+
+                                        tileDataA =
+                                            Tile.getData change.change
+
+                                        ( Quantity width, Quantity height ) =
+                                            tileDataA.size
+                                    in
+                                    case tileDataA.tileCollision of
+                                        Tile.DefaultCollision ->
+                                            ((x9 - x8 >= 0 && x9 - (x8 + width) < 0) || (x8 - x9 >= 0 && x8 - (x9 + Terrain.terrainSize) < 0))
+                                                && ((y9 - y8 >= 0 && y9 - (y8 + height) < 0) || (y8 - y9 >= 0 && y8 - (y9 + Terrain.terrainSize) < 0))
+
+                                        Tile.CustomCollision setA ->
+                                            Set.toList setA
+                                                |> List.any
+                                                    (\( cx, cy ) ->
+                                                        (x9 - (x8 + cx) <= 0)
+                                                            && (x9 + Terrain.terrainSize - (x8 + cx) > 0)
+                                                            && (y9 - (y8 + cy) <= 0)
+                                                            && (y9 + Terrain.terrainSize - (y8 + cy) > 0)
+                                                    )
                         )
             )
         |> not
@@ -488,7 +492,13 @@ addChange emptyHistory getHistory setHistory change grid =
                                     GridCell.empty emptyHistory newCellPos
                             )
                                 |> GridCell.addValue getHistory setHistory { value | position = newLocalPos }
-                        , isNewCell = oldCell == Nothing
+                        , isNewCell =
+                            case oldCell of
+                                Nothing ->
+                                    True
+
+                                Just _ ->
+                                    False
                         }
                     )
 
@@ -576,6 +586,15 @@ setCell ( Quantity x, Quantity y ) value (Grid grid) =
     Dict.insert ( x, y ) value grid |> Grid
 
 
+isNotEmptyTile tile =
+    case tile of
+        EmptyTile ->
+            False
+
+        _ ->
+            True
+
+
 foregroundMesh2 :
     List { linkTopLeft : Coord WorldUnit, linkWidth : Int, isVisited : Bool }
     -> Bool
@@ -589,7 +608,7 @@ foregroundMesh2 :
 foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCurrentUserId users railSplitToggled tiles =
     List.concatMap
         (\{ position, userId, tile, colors } ->
-            if showEmptyTiles || tile /= EmptyTile then
+            if showEmptyTiles || isNotEmptyTile tile then
                 let
                     position2 : Coord WorldUnit
                     position2 =
@@ -606,8 +625,8 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                                     List.find
                                         (\{ linkTopLeft, linkWidth } ->
                                             (Coord.y position2 - Coord.y linkTopLeft == 0)
-                                                && (Coord.x position2 >= Coord.x linkTopLeft)
-                                                && (Coord.x position2 <= Coord.x linkTopLeft + linkWidth)
+                                                && (Coord.x position2 - Coord.x linkTopLeft >= 0)
+                                                && (Coord.x position2 - (Coord.x linkTopLeft + linkWidth) <= 0)
                                         )
                                         hyperlinks
                                 of
@@ -668,53 +687,70 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                                 data.size
 
                     _ ->
-                        if tile == PostOffice && Just userId /= maybeCurrentUserId then
-                            let
-                                text =
-                                    Sprite.textWithZAndOpacityAndUserId
-                                        opacityAndUserId
-                                        colors2.secondaryColor
-                                        1
-                                        (case IdDict.get userId users of
-                                            Just user ->
-                                                let
-                                                    name =
-                                                        DisplayName.toString user.name
-                                                in
-                                                String.left 5 name ++ "\n" ++ String.dropLeft 5 name
+                        case ( tile, maybeCurrentUserId ) of
+                            ( PostOffice, Just currentUserId ) ->
+                                if Id.equals currentUserId userId then
+                                    let
+                                        text =
+                                            Sprite.textWithZAndOpacityAndUserId
+                                                opacityAndUserId
+                                                colors2.secondaryColor
+                                                1
+                                                (case IdDict.get userId users of
+                                                    Just user ->
+                                                        let
+                                                            name =
+                                                                DisplayName.toString user.name
+                                                        in
+                                                        String.left 5 name ++ "\n" ++ String.dropLeft 5 name
 
-                                            Nothing ->
-                                                ""
+                                                    Nothing ->
+                                                        ""
+                                                )
+                                                -5
+                                                (Coord.multiply position2 Units.tileSize
+                                                    |> Coord.plus (Coord.xy 15 19)
+                                                )
+                                                -0.55
+                                    in
+                                    text
+                                        ++ tileMeshHelper2
+                                            opacityAndUserId
+                                            colors2
+                                            (Coord.multiply Units.tileSize position2)
+                                            1
+                                            (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
+                                            data.size
+
+                                else
+                                    tileMeshHelper2
+                                        opacityAndUserId
+                                        colors2
+                                        (Coord.multiply Units.tileSize position2)
+                                        (case tile of
+                                            BigText _ ->
+                                                2
+
+                                            _ ->
+                                                1
                                         )
-                                        -5
-                                        (Coord.multiply position2 Units.tileSize
-                                            |> Coord.plus (Coord.xy 15 19)
-                                        )
-                                        -0.55
-                            in
-                            text
-                                ++ tileMeshHelper2
+                                        texturePosition
+                                        data.size
+
+                            _ ->
+                                tileMeshHelper2
                                     opacityAndUserId
                                     colors2
                                     (Coord.multiply Units.tileSize position2)
-                                    1
-                                    (Coord.xy 4 35 |> Coord.multiply Units.tileSize)
+                                    (case tile of
+                                        BigText _ ->
+                                            2
+
+                                        _ ->
+                                            1
+                                    )
+                                    texturePosition
                                     data.size
-
-                        else
-                            tileMeshHelper2
-                                opacityAndUserId
-                                colors2
-                                (Coord.multiply Units.tileSize position2)
-                                (case tile of
-                                    BigText _ ->
-                                        2
-
-                                    _ ->
-                                        1
-                                )
-                                texturePosition
-                                data.size
                 --++ List.concatMap
                 --    (\boundingBox ->
                 --        Sprite.spriteWithZ
@@ -769,6 +805,15 @@ backgroundMesh cellPosition =
                                 getValue x3 y3 =
                                     getTerrainLookupValue (Coord.xy (x2 + x3) (y2 + y3)) lookup
 
+                                isNotWater : TerrainType -> Bool
+                                isNotWater terrainType =
+                                    case terrainType of
+                                        Water ->
+                                            False
+
+                                        _ ->
+                                            True
+
                                 draw : Int -> Int -> List Vertex
                                 draw textureX textureY =
                                     Sprite.sprite
@@ -781,30 +826,30 @@ backgroundMesh cellPosition =
                                         (Coord.xy 80 72)
 
                                 corners =
-                                    [ { side1 = getValue 0 -1 /= Water
-                                      , corner = getValue -1 -1 /= Water
-                                      , side2 = getValue -1 0 /= Water
+                                    [ { side1 = getValue 0 -1 |> isNotWater
+                                      , corner = getValue -1 -1 |> isNotWater
+                                      , side2 = getValue -1 0 |> isNotWater
                                       , texturePos = ( 480, 504 )
                                       }
-                                    , { side1 = getValue 0 -1 /= Water
-                                      , corner = getValue 1 -1 /= Water
-                                      , side2 = getValue 1 0 /= Water
+                                    , { side1 = getValue 0 -1 |> isNotWater
+                                      , corner = getValue 1 -1 |> isNotWater
+                                      , side2 = getValue 1 0 |> isNotWater
                                       , texturePos = ( 400, 504 )
                                       }
-                                    , { side1 = getValue 0 1 /= Water
-                                      , corner = getValue 1 1 /= Water
-                                      , side2 = getValue 1 0 /= Water
+                                    , { side1 = getValue 0 1 |> isNotWater
+                                      , corner = getValue 1 1 |> isNotWater
+                                      , side2 = getValue 1 0 |> isNotWater
                                       , texturePos = ( 400, 432 )
                                       }
-                                    , { side1 = getValue 0 1 /= Water
-                                      , corner = getValue -1 1 /= Water
-                                      , side2 = getValue -1 0 /= Water
+                                    , { side1 = getValue 0 1 |> isNotWater
+                                      , corner = getValue -1 1 |> isNotWater
+                                      , side2 = getValue -1 0 |> isNotWater
                                       , texturePos = ( 480, 432 )
                                       }
                                     ]
                                         |> List.concatMap
                                             (\{ side1, corner, side2, texturePos } ->
-                                                if side1 == False && corner == True && side2 == False then
+                                                if not side1 && corner && not side2 then
                                                     draw (Tuple.first texturePos) (Tuple.second texturePos)
 
                                                 else
@@ -824,9 +869,9 @@ backgroundMesh cellPosition =
 
                                         Water ->
                                             case
-                                                ( {- Top -} getValue 0 -1 /= Water
-                                                , ( getValue -1 0 /= Water, getValue 1 0 /= Water ) {- Left, Right -}
-                                                , {- Bottom -} getValue 0 1 /= Water
+                                                ( {- Top -} getValue 0 -1 |> isNotWater
+                                                , ( getValue -1 0 |> isNotWater, getValue 1 0 |> isNotWater ) {- Left, Right -}
+                                                , {- Bottom -} getValue 0 1 |> isNotWater
                                                 )
                                             of
                                                 ( False, ( False, False ), False ) ->
@@ -885,28 +930,29 @@ backgroundMesh cellPosition =
 
 tileMesh : Tile -> Coord Pixels -> Int -> Colors -> List Vertex
 tileMesh tile position scale colors =
-    if tile == EmptyTile then
-        []
+    case tile of
+        EmptyTile ->
+            []
 
-    else
-        let
-            data : TileData unit
-            data =
-                Tile.getData tile
-        in
-        tileMeshHelper2
-            Sprite.opaque
-            colors
-            position
-            (case tile of
-                BigText _ ->
-                    2 * scale
+        _ ->
+            let
+                data : TileData unit
+                data =
+                    Tile.getData tile
+            in
+            tileMeshHelper2
+                Sprite.opaque
+                colors
+                position
+                (case tile of
+                    BigText _ ->
+                        2 * scale
 
-                _ ->
-                    scale
-            )
-            data.texturePosition
-            data.size
+                    _ ->
+                        scale
+                )
+                data.texturePosition
+                data.size
 
 
 tileMeshHelper2 : Float -> Colors -> Coord unit2 -> Int -> Coord unit -> Coord unit -> List Vertex
@@ -1030,7 +1076,7 @@ getPostOffice userId (Grid grid) =
                 GridCell.getPostOffices cell
                     |> List.findMap
                         (\postOffice ->
-                            if postOffice.userId == userId then
+                            if Id.equals postOffice.userId userId then
                                 Just (cellAndLocalCoordToWorld ( Coord.tuple position, postOffice.position ))
 
                             else

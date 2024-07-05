@@ -17,6 +17,7 @@ import Grid exposing (Grid, IntersectionType(..))
 import GridCell exposing (FrontendHistory)
 import Id exposing (Id, UserId)
 import IdDict
+import Name
 import Point2d
 import Quantity
 import Test exposing (Test, describe, test)
@@ -282,6 +283,7 @@ tests =
                     , startTime = time 0
                     , position = Point2d.origin
                     , endPosition = Point2d.unsafe { x = 10, y = 0 }
+                    , name = Name.sven
                     }
                     |> Expect.equal (Point2d.unsafe { x = 6, y = 0 })
         , test "Tile to int roundtrip" <|

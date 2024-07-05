@@ -29,12 +29,11 @@ import Effect.Time
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, NpcId, UserId)
-import List.Extra
 import List.Nonempty exposing (Nonempty(..))
 import Name exposing (Name)
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity, Rate)
+import Quantity exposing (Quantity(..), Rate)
 import Random
 import Tile exposing (BuildingData, Tile(..))
 import Units exposing (CellUnit, WorldUnit)
@@ -71,7 +70,7 @@ isHomeless : Grid a -> Npc -> Bool
 isHomeless grid npc =
     case Grid.getTile npc.home grid of
         Just a ->
-            a.position /= npc.home
+            Coord.notEquals a.position npc.home
 
         Nothing ->
             True
@@ -212,21 +211,25 @@ getNavPoints npcId npc grid =
                                                         |> Coord.toVector2d
                                                     )
 
-                                        distance : Quantity Float WorldUnit
-                                        distance =
+                                        (Quantity distance) =
                                             Point2d.distanceFrom navPoint npc.endPosition
                                     in
-                                    if
-                                        (distance |> Quantity.lessThan maxNavPointDistance)
-                                            && (distance |> Quantity.greaterThan (Quantity.unsafe 0.01))
-                                    then
+                                    if distance - Quantity.unwrap maxNavPointDistance < 0 && distance > 0.01 then
                                         let
                                             weight : Float
                                             weight =
                                                 navPointWeighting npcId npc navPoint
                                         in
-                                        if weight < state.minValue then
-                                            case Grid.rayIntersection2 True (Units.pixelToTileVector size |> Vector2d.scaleBy 0.5) npc.endPosition navPoint grid of
+                                        if weight - state.minValue < 0 then
+                                            case
+                                                Grid.rayIntersection2 True
+                                                    (Units.pixelToTileVector size
+                                                        |> Vector2d.scaleBy 0.5
+                                                    )
+                                                    npc.endPosition
+                                                    navPoint
+                                                    grid
+                                            of
                                                 Just _ ->
                                                     state
 

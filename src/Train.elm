@@ -424,7 +424,7 @@ moveTrains targetTime time trains model =
                                 CollisionLookup.collisionCandidates (trainPosition nextTime train) lookup
                                     |> List.filterMap
                                         (\( trainId2, train2 ) ->
-                                            if trainId == trainId2 then
+                                            if Id.equals trainId trainId2 then
                                                 Nothing
 
                                             else if
