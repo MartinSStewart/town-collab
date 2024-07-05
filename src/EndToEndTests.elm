@@ -533,7 +533,7 @@ tests depth lights texture trainDepth trainLights trainTexture =
                     |> Effect.Test.simulateTime (Duration.seconds 6)
                     |> clickOnScreen frontend0 (Point2d.pixels 1400 300)
                     |> Effect.Test.simulateTime (Duration.seconds 6)
-                    |> clickOnScreen frontend0 (Point2d.pixels 1120 314)
+                    |> clickOnScreen frontend0 (Point2d.pixels 1140 314)
                     |> Effect.Test.simulateTime (Duration.seconds 1.5)
                     |> Effect.Test.checkState
                         (\state2 ->
