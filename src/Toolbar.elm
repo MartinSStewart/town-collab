@@ -32,7 +32,7 @@ import Grid
 import GridCell
 import Hyperlink exposing (Hyperlink)
 import Id exposing (Id, UserId)
-import IdDict
+import SeqDict
 import List.Extra as List
 import List.Nonempty
 import Local exposing (Local)
@@ -202,23 +202,23 @@ normalView windowSize model hover =
                         Nothing
 
                     else
-                        case IdDict.get userId localModel.users of
+                        case SeqDict.get userId localModel.users of
                             Just user ->
                                 User.nameAndHand True maybeCurrentUserId userId user |> Just
 
                             Nothing ->
                                 Nothing
                 )
-                (IdDict.toList localModel.cursors)
+                (SeqDict.toList localModel.cursors)
 
         otherUsersOnline : Int
         otherUsersOnline =
             case localModel.userStatus of
                 LoggedIn { userId } ->
-                    IdDict.remove userId localModel.cursors |> IdDict.size
+                    SeqDict.remove userId localModel.cursors |> SeqDict.size
 
                 NotLoggedIn _ ->
-                    IdDict.size localModel.cursors
+                    SeqDict.size localModel.cursors
 
         localModel : LocalGrid
         localModel =
@@ -239,7 +239,7 @@ normalView windowSize model hover =
                     (case localModel.userStatus of
                         LoggedIn loggedIn ->
                             toolbarUi
-                                (case IdDict.get loggedIn.userId localModel.users of
+                                (case SeqDict.get loggedIn.userId localModel.users of
                                     Just user ->
                                         user.handColor
 
@@ -331,7 +331,7 @@ normalView windowSize model hover =
                         contextMenuView (Ui.size toolbarElement |> Coord.y) contextMenu model
 
                     NpcContextMenu menu ->
-                        (case IdDict.get menu.npcId localModel.npcs of
+                        (case SeqDict.get menu.npcId localModel.npcs of
                             Just npc ->
                                 Ui.column
                                     { spacing = 4, padding = Ui.noPadding }
@@ -356,7 +356,7 @@ normalView windowSize model hover =
                             |> contextMenuContainer windowSize menu
 
                     AnimalContextMenu menu ->
-                        (case IdDict.get menu.animalId localModel.animals of
+                        (case SeqDict.get menu.animalId localModel.animals of
                             Just animal ->
                                 let
                                     data : AnimalData
@@ -496,9 +496,9 @@ normalView windowSize model hover =
                         LoggedIn loggedIn ->
                             let
                                 unviewedMail =
-                                    IdDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
+                                    SeqDict.filter (\_ mail -> not mail.isViewed) loggedIn.inbox
                             in
-                            if IdDict.isEmpty unviewedMail then
+                            if SeqDict.isEmpty unviewedMail then
                                 Ui.none
 
                             else
@@ -517,7 +517,7 @@ normalView windowSize model hover =
                                             , inFront = []
                                             , borderAndFill = FillOnly (Color.rgb255 255 50 50)
                                             }
-                                            (Ui.colorText Color.white (String.fromInt (IdDict.size unviewedMail)))
+                                            (Ui.colorText Color.white (String.fromInt (SeqDict.size unviewedMail)))
                                         ]
                                     )
 
@@ -763,7 +763,7 @@ contextMenuView toolbarHeight contextMenu model =
                                 Ui.wrappedText 400 "Placed by world gen"
 
                             else
-                                case IdDict.get change.userId localModel.users of
+                                case SeqDict.get change.userId localModel.users of
                                     Just user ->
                                         let
                                             name =
@@ -790,7 +790,7 @@ contextMenuView toolbarHeight contextMenu model =
                                             occupants =
                                                 case Tile.isBuilding change.tile of
                                                     Just _ ->
-                                                        IdDict.toList localModel.npcs
+                                                        SeqDict.toList localModel.npcs
                                                             |> List.filterMap
                                                                 (\( _, npc ) ->
                                                                     if npc.home == change.position then
@@ -2339,7 +2339,7 @@ actualViewPointHelper model =
             viewPoint
 
         TrainViewPoint trainViewPoint ->
-            case IdDict.get trainViewPoint.trainId (Local.model model.localModel).trains of
+            case SeqDict.get trainViewPoint.trainId (Local.model model.localModel).trains of
                 Just train ->
                     let
                         t =

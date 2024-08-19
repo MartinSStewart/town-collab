@@ -16,7 +16,7 @@ import Expect
 import Grid exposing (Grid, IntersectionType(..))
 import GridCell exposing (FrontendHistory)
 import Id exposing (Id, UserId)
-import IdDict
+import SeqDict
 import Name
 import Point2d
 import Quantity
@@ -150,9 +150,9 @@ tests =
                         Train.moveTrains
                             (Time.millisToPosix end)
                             (Time.millisToPosix start)
-                            (IdDict.fromList [ ( Id.fromInt 0, a ) ])
-                            { grid = grid, mail = IdDict.empty }
-                            |> IdDict.get (Id.fromInt 0)
+                            (SeqDict.fromList [ ( Id.fromInt 0, a ) ])
+                            { grid = grid, mail = SeqDict.empty }
+                            |> SeqDict.get (Id.fromInt 0)
                             |> Maybe.withDefault train
 
                     trainA =
@@ -312,12 +312,12 @@ tests =
                             |> Tuple.first
                             |> Backend.createBotUser TileCountBot.name
                 in
-                case IdDict.get userId backendModel.users of
+                case SeqDict.get userId backendModel.users of
                     Just user ->
                         Backend.localAddUndo backendModel userId user
                             |> (\( a, _, _ ) -> a)
                             |> (\model ->
-                                    case IdDict.get userId model.users of
+                                    case SeqDict.get userId model.users of
                                         Just user2 ->
                                             Backend.localGridChange
                                                 (time 0)
@@ -331,7 +331,7 @@ tests =
                                                 user2
                                                 |> (\( a, _, _ ) -> a)
                                                 |> (\model2 ->
-                                                        case IdDict.get userId model2.users of
+                                                        case SeqDict.get userId model2.users of
                                                             Just user3 ->
                                                                 Backend.localUndo model2 userId user3
                                                                     |> (\( a, _, _ ) ->

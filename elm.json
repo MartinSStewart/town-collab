@@ -41,6 +41,7 @@
             "ianmackenzie/elm-units-interval": "2.3.0",
             "ktonon/elm-crypto": "1.1.2",
             "lamdera/codecs": "1.0.0",
+            "lamdera/containers": "1.0.0",
             "lamdera/core": "1.0.0",
             "lamdera/program-test": "2.0.0",
             "mgold/elm-nonempty-list": "4.2.0",

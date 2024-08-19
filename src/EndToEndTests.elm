@@ -17,7 +17,7 @@ import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Html.Parser
 import Id exposing (OneTimePasswordId, SecretId)
-import IdDict
+import SeqDict
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -537,7 +537,7 @@ tests depth lights texture trainDepth trainLights trainTexture =
                     |> Effect.Test.simulateTime (Duration.seconds 1.5)
                     |> Effect.Test.checkState
                         (\state2 ->
-                            case IdDict.values state2.backend.trains |> List.map (Train.status state2.time) of
+                            case SeqDict.values state2.backend.trains |> List.map (Train.status state2.time) of
                                 [ first, second ] ->
                                     case ( first, second ) of
                                         ( Travelling _, WaitingAtHome ) ->

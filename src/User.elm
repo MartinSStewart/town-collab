@@ -5,7 +5,7 @@ import Coord exposing (Coord)
 import Cursor exposing (Cursor)
 import DisplayName exposing (DisplayName)
 import Id exposing (Id, UserId)
-import IdDict exposing (IdDict)
+import SeqDict exposing (SeqDict)
 import List.Extra
 import Pixels exposing (Pixels)
 import Sprite
@@ -88,7 +88,7 @@ nameAndHand isOnline currentUserId userId user =
         ]
 
 
-drawInviteTree : Maybe (Id UserId) -> IdDict UserId Cursor -> IdDict UserId FrontendUser -> InviteTree -> Ui.Element id
+drawInviteTree : Maybe (Id UserId) -> SeqDict (Id UserId) Cursor -> SeqDict (Id UserId) FrontendUser -> InviteTree -> Ui.Element id
 drawInviteTree currentUserId cursors dict (InviteTree tree) =
     let
         childNodes : List (Ui.Element id)
@@ -105,9 +105,9 @@ drawInviteTree currentUserId cursors dict (InviteTree tree) =
     in
     Ui.column
         { spacing = 0, padding = Ui.noPadding }
-        [ case IdDict.get tree.userId dict of
+        [ case SeqDict.get tree.userId dict of
             Just user ->
-                nameAndHand (IdDict.member tree.userId cursors) currentUserId tree.userId user
+                nameAndHand (SeqDict.member tree.userId cursors) currentUserId tree.userId user
 
             Nothing ->
                 Ui.colorScaledText Color.errorColor charScale "Not found"

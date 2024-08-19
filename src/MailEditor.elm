@@ -50,7 +50,6 @@ import Flag
 import Frame2d
 import Grid
 import Id exposing (Id, MailId, TrainId, UserId)
-import IdDict exposing (IdDict)
 import Keyboard exposing (Key(..))
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
@@ -59,6 +58,7 @@ import Math.Vector4 as Vec4
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..))
+import SeqDict exposing (SeqDict)
 import Shaders exposing (RenderData)
 import Sound exposing (Sound(..))
 import Sprite exposing (Vertex)
@@ -107,9 +107,9 @@ type Hover
     | CloseMailViewButton
 
 
-getMailFrom : Id UserId -> IdDict MailId { a | from : Id UserId } -> List ( Id MailId, { a | from : Id UserId } )
+getMailFrom : Id UserId -> SeqDict (Id MailId) { a | from : Id UserId } -> List ( Id MailId, { a | from : Id UserId } )
 getMailFrom userId dict =
-    IdDict.toList dict
+    SeqDict.toList dict
         |> List.filterMap
             (\( mailId, mail ) ->
                 if mail.from == userId then
@@ -120,9 +120,9 @@ getMailFrom userId dict =
             )
 
 
-getMailTo : Id UserId -> IdDict MailId { a | to : Id UserId } -> List ( Id MailId, { a | to : Id UserId } )
+getMailTo : Id UserId -> SeqDict (Id MailId) { a | to : Id UserId } -> List ( Id MailId, { a | to : Id UserId } )
 getMailTo userId dict =
-    IdDict.toList dict
+    SeqDict.toList dict
         |> List.filterMap
             (\( mailId, mail ) ->
                 if mail.to == userId then
@@ -1798,20 +1798,20 @@ date time =
 
 inboxView :
     (Hover -> id)
-    -> IdDict UserId FrontendUser
-    -> IdDict MailId ReceivedMail
+    -> SeqDict (Id UserId) FrontendUser
+    -> SeqDict (Id MailId) ReceivedMail
     -> Model
     -> Ui.Element id
 inboxView idMap users inbox model =
     let
         rows =
-            IdDict.toList inbox
+            SeqDict.toList inbox
                 |> List.sortBy (\( _, mail ) -> Effect.Time.posixToMillis mail.deliveryTime |> negate)
                 |> List.map
                     (\( mailId, mail ) ->
                         Ui.row
                             { spacing = 8, padding = Ui.noPadding }
-                            [ case IdDict.get mail.from users of
+                            [ case SeqDict.get mail.from users of
                                 Just user ->
                                     let
                                         name =
@@ -1852,7 +1852,7 @@ inboxView idMap users inbox model =
                         { id = idMap CloseMailViewButton, padding = Ui.paddingXY 12 6 }
                         (Ui.text "Back to inbox")
             in
-            case IdDict.get mailId inbox of
+            case SeqDict.get mailId inbox of
                 Just mail ->
                     Ui.column
                         { spacing = 16, padding = Ui.noPadding }
@@ -1870,7 +1870,7 @@ inboxView idMap users inbox model =
                                 { spacing = 0, padding = Ui.noPadding }
                                 [ button
                                 , "From:"
-                                    ++ (case IdDict.get mail.from users of
+                                    ++ (case SeqDict.get mail.from users of
                                             Just user ->
                                                 DisplayName.nameAndId user.name mail.from
 
@@ -1906,7 +1906,7 @@ inboxView idMap users inbox model =
                     (Ui.column
                         { spacing = 16, padding = Ui.noPadding }
                         [ Ui.scaledText 3 "Inbox"
-                        , if IdDict.isEmpty inbox then
+                        , if SeqDict.isEmpty inbox then
                             Ui.wrappedText 500 "Here you can view all the mail you've received.\n\nCurrently you don't have any mail but you can send letters to other people by clicking on their post office."
 
                           else
@@ -1922,8 +1922,8 @@ ui :
     Bool
     -> Coord Pixels
     -> (Hover -> uiHover)
-    -> IdDict UserId FrontendUser
-    -> IdDict MailId ReceivedMail
+    -> SeqDict (Id UserId) FrontendUser
+    -> SeqDict (Id MailId) ReceivedMail
     -> Model
     -> Ui.Element uiHover
 ui isDisconnected windowSize idMap users inbox model =

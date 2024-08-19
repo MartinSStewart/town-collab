@@ -32,12 +32,12 @@ import Color exposing (Color, Colors)
 import Coord exposing (Coord)
 import Effect.Time
 import Id exposing (Id, UserId)
-import IdDict exposing (IdDict)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
 import Math.Vector2 as Vec2 exposing (Vec2)
 import Quantity exposing (Quantity(..))
 import Random
+import SeqDict exposing (SeqDict)
 import Shaders
 import Terrain exposing (TerrainType(..))
 import Tile exposing (BuildingData, Tile(..))
@@ -47,7 +47,7 @@ import Units exposing (CellLocalUnit, CellUnit, TerrainUnit)
 type CellData
     = CellData
         { history : Bytes
-        , undoPoint : IdDict UserId Int
+        , undoPoint : SeqDict (Id UserId) Int
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
         , cache : Cache
         }
@@ -362,7 +362,7 @@ type BackendHistory
 type Cell a
     = Cell
         { history : a
-        , undoPoint : IdDict UserId Int
+        , undoPoint : SeqDict (Id UserId) Int
         , cache : Cache
         , railSplitToggled : AssocSet.Set (Coord CellLocalUnit)
         , mapCache : Vec2
@@ -427,7 +427,7 @@ addValue : (a -> List Value) -> (List Value -> a) -> Value -> Cell a -> { cell :
 addValue getHistory setHistory value (Cell cell) =
     let
         userUndoPoint =
-            IdDict.get value.userId cell.undoPoint |> Maybe.withDefault 0
+            SeqDict.get value.userId cell.undoPoint |> Maybe.withDefault 0
 
         { remaining, removed } =
             stepCacheHelperWithRemoved value cell.cache
@@ -456,7 +456,7 @@ addValue getHistory setHistory value (Cell cell) =
                     |> Tuple.first
                     |> (\list -> value :: list)
                     |> setHistory
-            , undoPoint = IdDict.insert value.userId (userUndoPoint + 1) cell.undoPoint
+            , undoPoint = SeqDict.insert value.userId (userUndoPoint + 1) cell.undoPoint
             , cache = remaining
             , railSplitToggled = cell.railSplitToggled
             , mapCache = updateMapPixelData remaining
@@ -499,14 +499,14 @@ updateCache getHistory setHistory cellPosition (Cell cell) =
 
 stepCache :
     Value
-    -> { list : List Value, undoPoint : IdDict UserId number }
-    -> { list : List Value, undoPoint : IdDict UserId number }
+    -> { list : List Value, undoPoint : SeqDict (Id UserId) number }
+    -> { list : List Value, undoPoint : SeqDict (Id UserId) number }
 stepCache item state =
-    case IdDict.get item.userId state.undoPoint of
+    case SeqDict.get item.userId state.undoPoint of
         Just stepsLeft ->
             if stepsLeft > 0 then
                 { list = stepCacheHelper item state.list
-                , undoPoint = IdDict.insert item.userId (stepsLeft - 1) state.undoPoint
+                , undoPoint = SeqDict.insert item.userId (stepsLeft - 1) state.undoPoint
                 }
 
             else
@@ -559,7 +559,7 @@ moveUndoPoint : (a -> List Value) -> (List Value -> a -> a) -> Id UserId -> Int 
 moveUndoPoint getHistory setHistory userId moveAmount cellPosition (Cell cell) =
     Cell
         { history = cell.history
-        , undoPoint = IdDict.update2 userId ((+) moveAmount) cell.undoPoint
+        , undoPoint = SeqDict.updateIfExists userId ((+) moveAmount) cell.undoPoint
         , cache = cell.cache
         , railSplitToggled = cell.railSplitToggled
         , mapCache = cell.mapCache
@@ -586,7 +586,7 @@ empty : a -> Coord CellUnit -> Cell a
 empty emptyHistory cellPosition =
     Cell
         { history = emptyHistory
-        , undoPoint = IdDict.empty
+        , undoPoint = SeqDict.empty
         , cache = addTrees cellPosition
         , railSplitToggled = AssocSet.empty
         , mapCache = Vec2.vec2 0 0

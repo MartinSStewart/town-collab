@@ -9,7 +9,7 @@ module DisplayName exposing
     )
 
 import Id exposing (Id, UserId)
-import IdDict exposing (IdDict)
+import SeqDict exposing (SeqDict)
 import String.Nonempty exposing (NonemptyString(..))
 
 
@@ -68,9 +68,9 @@ nameAndId name userId =
     toString name ++ "#" ++ String.fromInt (Id.toInt userId)
 
 
-nameAndId2 : Id UserId -> IdDict UserId { a | name : DisplayName } -> String
+nameAndId2 : Id UserId -> SeqDict (Id UserId) { a | name : DisplayName } -> String
 nameAndId2 userId users =
-    case IdDict.get userId users of
+    case SeqDict.get userId users of
         Just user ->
             nameAndId user.name userId
 

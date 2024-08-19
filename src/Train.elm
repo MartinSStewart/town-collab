@@ -45,7 +45,6 @@ import Effect.WebGL.Texture
 import Grid exposing (Grid)
 import GridCell
 import Id exposing (Id, MailId, TrainId, UserId)
-import IdDict exposing (IdDict)
 import List.Extra as List
 import MailEditor exposing (FrontendMail, MailStatus(..))
 import Math.Matrix4 as Mat4
@@ -55,6 +54,7 @@ import Math.Vector4 as Vec4
 import Point2d exposing (Point2d)
 import Quantity exposing (Quantity(..), Rate)
 import Random
+import SeqDict exposing (SeqDict)
 import Shaders exposing (InstancedVertex, RenderData)
 import Sprite exposing (Vertex)
 import Tile exposing (Direction, RailData, RailPath, RailPathType(..), Tile(..))
@@ -347,13 +347,13 @@ defaultMaxSpeed =
 moveTrains :
     Effect.Time.Posix
     -> Effect.Time.Posix
-    -> IdDict TrainId Train
+    -> SeqDict (Id TrainId) Train
     ->
         { a
             | grid : Grid c
-            , mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId }
+            , mail : SeqDict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId }
         }
-    -> IdDict TrainId Train
+    -> SeqDict (Id TrainId) Train
 moveTrains targetTime time trains model =
     if Duration.from time targetTime |> Quantity.lessThanOrEqualToZero then
         trains
@@ -367,9 +367,9 @@ moveTrains targetTime time trains model =
                 else
                     Duration.addTo time (Duration.milliseconds 50)
 
-            newTrains : IdDict TrainId Train
+            newTrains : SeqDict (Id TrainId) Train
             newTrains =
-                IdDict.map
+                SeqDict.map
                     (\trainId train ->
                         case status time train of
                             Travelling { startedAt } ->
@@ -413,11 +413,11 @@ moveTrains targetTime time trains model =
                                 CollisionLookup.addItem (trainPosition nextTime train) ( trainId, train ) lookup2
                     )
                     (CollisionLookup.init (Units.tileUnit 3))
-                    (IdDict.toList newTrains)
+                    (SeqDict.toList newTrains)
 
-            newTrains2 : IdDict TrainId Train
+            newTrains2 : SeqDict (Id TrainId) Train
             newTrains2 =
-                IdDict.map
+                SeqDict.map
                     (\trainId train ->
                         let
                             collisions =
@@ -456,7 +456,7 @@ moveTrain :
     -> Float
     -> Effect.Time.Posix
     -> Effect.Time.Posix
-    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : SeqDict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
 moveTrain trainId maxSpeed startTime endTime state (Train train) =
@@ -516,7 +516,7 @@ moveTrainHelper :
     -> Effect.Time.Posix
     -> Quantity Float TileLocalUnit
     -> Quantity Float TileLocalUnit
-    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : SeqDict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Train
     -> Train
 moveTrainHelper trainId startTime endTime initialDistance distanceLeft state (Train train) =
@@ -775,7 +775,7 @@ findNextTile :
     Id TrainId
     -> Effect.Time.Posix
     -> Point2d WorldUnit WorldUnit
-    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : SeqDict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
     -> List ( Coord CellUnit, Coord CellLocalUnit )
@@ -817,7 +817,7 @@ findNextTileHelper :
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
     -> Direction
-    -> { a | grid : Grid c, mail : IdDict MailId { b | status : MailStatus, from : Id UserId, to : Id UserId } }
+    -> { a | grid : Grid c, mail : SeqDict (Id MailId) { b | status : MailStatus, from : Id UserId, to : Id UserId } }
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> Maybe TrainData
@@ -874,7 +874,7 @@ checkPath :
     Id TrainId
     -> Effect.Time.Posix
     -> GridCell.Value
-    -> IdDict MailId { a | status : MailStatus, from : Id UserId, to : Id UserId }
+    -> SeqDict (Id MailId) { a | status : MailStatus, from : Id UserId, to : Id UserId }
     -> Coord CellUnit
     -> Point2d WorldUnit WorldUnit
     -> Quantity Float (Rate TileLocalUnit Seconds)
@@ -911,7 +911,7 @@ checkPath trainId time tile mail neighborCellPos position speed_ direction railP
                     if
                         List.any
                             (\mail_ -> tile.userId == mail_.from && mail_.status == MailWaitingPickup)
-                            (IdDict.values mail)
+                            (SeqDict.values mail)
                     then
                         Just { time = time, userId = tile.userId }
 
@@ -1003,8 +1003,8 @@ draw :
     RenderData
     -> Maybe (Id UserId)
     -> Effect.Time.Posix
-    -> IdDict MailId FrontendMail
-    -> IdDict TrainId Train
+    -> SeqDict (Id MailId) FrontendMail
+    -> SeqDict (Id TrainId) Train
     -> BoundingBox2d WorldUnit WorldUnit
     -> List Effect.WebGL.Entity
 draw renderData maybeSelectedUserId time mail trains viewBounds =
@@ -1180,7 +1180,7 @@ draw renderData maybeSelectedUserId time mail trains viewBounds =
                             []
                    )
         )
-        (IdDict.toList trains)
+        (SeqDict.toList trains)
         |> List.map (trainEntity renderData maybeSelectedUserId)
 
 
@@ -1305,11 +1305,11 @@ trainEntity { nightFactor, viewMatrix, texture, lights, depth, time, scissors } 
 
 
 carryingMail :
-    IdDict MailId { a | status : MailStatus }
+    SeqDict (Id MailId) { a | status : MailStatus }
     -> Id TrainId
     -> Maybe ( Id MailId, { a | status : MailStatus } )
 carryingMail mail trainId =
-    IdDict.toList mail
+    SeqDict.toList mail
         |> List.find
             (\( _, mail_ ) ->
                 case mail_.status of
@@ -1331,9 +1331,9 @@ trainSize =
     Coord.xy 36 36
 
 
-nextId : IdDict a b -> Id a
+nextId : SeqDict (Id a) b -> Id a
 nextId ids =
-    IdDict.toList ids
+    SeqDict.toList ids
         |> List.map (Tuple.first >> Id.toInt)
         |> List.maximum
         |> Maybe.withDefault 0
@@ -1341,7 +1341,7 @@ nextId ids =
         |> Id.fromInt
 
 
-handleAddingTrain : IdDict TrainId Train -> Id UserId -> Tile -> Coord WorldUnit -> Maybe ( Id TrainId, Train )
+handleAddingTrain : SeqDict (Id TrainId) Train -> Id UserId -> Tile -> Coord WorldUnit -> Maybe ( Id TrainId, Train )
 handleAddingTrain trains owner_ tile position =
     if tile == TrainHouseLeft || tile == TrainHouseRight then
         let
@@ -1388,7 +1388,7 @@ handleAddingTrain trains owner_ tile position =
         Nothing
 
 
-canRemoveTiles : Effect.Time.Posix -> List { a | tile : Tile, position : Coord WorldUnit } -> IdDict TrainId Train -> Result (List ( Id TrainId, Train )) (List ( Id TrainId, Train ))
+canRemoveTiles : Effect.Time.Posix -> List { a | tile : Tile, position : Coord WorldUnit } -> SeqDict (Id TrainId) Train -> Result (List ( Id TrainId, Train )) (List ( Id TrainId, Train ))
 canRemoveTiles time removed trains =
     let
         trainsToRemove : List ( Id TrainId, Train )
@@ -1396,7 +1396,7 @@ canRemoveTiles time removed trains =
             List.concatMap
                 (\remove ->
                     if remove.tile == TrainHouseLeft || remove.tile == TrainHouseRight then
-                        IdDict.toList trains
+                        SeqDict.toList trains
                             |> List.filterMap
                                 (\( trainId, train ) ->
                                     if home train == remove.position then
@@ -1455,9 +1455,9 @@ derailedMessageDelay =
     Duration.seconds 1
 
 
-getSpeechBubbles : Effect.Time.Posix -> IdDict TrainId Train -> List { position : Point2d WorldUnit WorldUnit, isRadio : Bool }
+getSpeechBubbles : Effect.Time.Posix -> SeqDict (Id TrainId) Train -> List { position : Point2d WorldUnit WorldUnit, isRadio : Bool }
 getSpeechBubbles currentTime trains =
-    IdDict.toList trains
+    SeqDict.toList trains
         |> List.concatMap
             (\( _, train ) ->
                 case ( status currentTime train, stuckOrDerailed currentTime train ) of
@@ -1478,7 +1478,7 @@ getSpeechBubbles currentTime trains =
                             []
 
                         else
-                            case IdDict.get otherTrainId trains of
+                            case SeqDict.get otherTrainId trains of
                                 Just otherTrain ->
                                     let
                                         position =
@@ -1562,7 +1562,7 @@ speechBubbleMeshHelper frame bubbleTailTexturePosition bubbleTailTextureSize =
 drawSpeechBubble :
     RenderData
     -> Effect.Time.Posix
-    -> IdDict TrainId Train
+    -> SeqDict (Id TrainId) Train
     -> List Effect.WebGL.Entity
 drawSpeechBubble { nightFactor, lights, texture, depth, viewMatrix, time, scissors } time2 trains =
     List.filterMap

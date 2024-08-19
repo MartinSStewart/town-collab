@@ -65,7 +65,6 @@ import GridCell exposing (BackendHistory)
 import Html.Events.Extra.Mouse exposing (Button)
 import Html.Events.Extra.Wheel exposing (DeltaMode)
 import Id exposing (AnimalId, EventId, Id, MailId, NpcId, OneTimePasswordId, SecretId, TrainId, UserId)
-import IdDict exposing (IdDict)
 import Keyboard
 import Lamdera
 import List.Nonempty exposing (Nonempty)
@@ -78,6 +77,7 @@ import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark exposing (PostmarkSendResponse)
 import Route exposing (InviteToken, LoginOrInviteToken, LoginToken, PageRoute)
+import SeqDict exposing (SeqDict)
 import Set exposing (Set)
 import Shaders exposing (DebrisVertex)
 import Sound exposing (Sound)
@@ -136,8 +136,8 @@ type LoadingLocalModel
 
 type alias LoadedLocalModel_ =
     { localModel : Local Change LocalGrid
-    , trains : IdDict TrainId Train
-    , mail : IdDict MailId FrontendMail
+    , trains : SeqDict (Id TrainId) Train
+    , mail : SeqDict (Id MailId) FrontendMail
     }
 
 
@@ -206,8 +206,8 @@ type alias FrontendLoaded =
     , focus : Maybe UiId
     , previousHover : Maybe UiId
     , music : { startTime : Effect.Time.Posix, sound : Sound }
-    , previousCursorPositions : IdDict UserId { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
-    , handMeshes : IdDict UserId CursorMeshes
+    , previousCursorPositions : SeqDict (Id UserId) { position : Point2d WorldUnit WorldUnit, time : Effect.Time.Posix }
+    , handMeshes : SeqDict (Id UserId) CursorMeshes
     , hasCmdKey : Bool
     , loginEmailInput : TextInput.Model
     , oneTimePasswordInput : TextInput.Model
@@ -390,15 +390,15 @@ type alias UserSession =
 type alias BackendModel =
     { grid : Grid BackendHistory
     , userSessions : Dict Lamdera.SessionId UserSession
-    , users : IdDict UserId BackendUserData
+    , users : SeqDict (Id UserId) BackendUserData
     , secretLinkCounter : Int
     , errors : List ( Effect.Time.Posix, BackendError )
-    , trains : IdDict TrainId Train
-    , animals : IdDict AnimalId Animal
-    , npcs : IdDict NpcId Npc
-    , lastWorldUpdateTrains : IdDict TrainId Train
+    , trains : SeqDict (Id TrainId) Train
+    , animals : SeqDict (Id AnimalId) Animal
+    , npcs : SeqDict (Id NpcId) Npc
+    , lastWorldUpdateTrains : SeqDict (Id TrainId) Train
     , lastWorldUpdate : Maybe Effect.Time.Posix
-    , mail : IdDict MailId BackendMail
+    , mail : SeqDict (Id MailId) BackendMail
     , pendingLoginTokens :
         AssocList.Dict
             (SecretId LoginToken)
@@ -415,7 +415,7 @@ type alias BackendModel =
             }
     , invites : AssocList.Dict (SecretId InviteToken) Invite
     , lastCacheRegeneration : Maybe Effect.Time.Posix
-    , reported : IdDict UserId (Nonempty BackendReport)
+    , reported : SeqDict (Id UserId) (Nonempty BackendReport)
     , isGridReadOnly : Bool
     , trainsAndAnimalsDisabled : AreTrainsAndAnimalsDisabled
     , lastReportEmailToAdmin : Maybe Effect.Time.Posix
@@ -447,7 +447,7 @@ type alias BackendUserData =
     { undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
-    , mailDrafts : IdDict UserId (List MailEditor.Content)
+    , mailDrafts : SeqDict (Id UserId) (List MailEditor.Content)
     , cursor : Maybe Cursor
     , handColor : Colors
     , userType : BackendUserType
@@ -462,7 +462,7 @@ type BackendUserType
 
 type alias HumanUserData =
     { emailAddress : EmailAddress
-    , acceptedInvites : IdDict UserId ()
+    , acceptedInvites : SeqDict (Id UserId) ()
     , timeOfDay : TimeOfDay
     , tileHotkeys : AssocList.Dict Change.TileHotkey TileGroup
     , showNotifications : Bool
@@ -556,13 +556,13 @@ type alias LoadingData_ =
     { grid : GridData
     , userStatus : UserStatus
     , viewBounds : Bounds CellUnit
-    , trains : IdDict TrainId Train
-    , mail : IdDict MailId FrontendMail
-    , animals : IdDict AnimalId Animal
-    , cursors : IdDict UserId Cursor
-    , users : IdDict UserId FrontendUser
+    , trains : SeqDict (Id TrainId) Train
+    , mail : SeqDict (Id MailId) FrontendMail
+    , animals : SeqDict (Id AnimalId) Animal
+    , cursors : SeqDict (Id UserId) Cursor
+    , users : SeqDict (Id UserId) FrontendUser
     , inviteTree : InviteTree
     , isGridReadOnly : Bool
     , trainsDisabled : AreTrainsAndAnimalsDisabled
-    , npcs : IdDict NpcId Npc
+    , npcs : SeqDict (Id NpcId) Npc
     }

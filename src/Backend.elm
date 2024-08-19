@@ -37,7 +37,6 @@ import Grid exposing (Grid)
 import GridCell exposing (BackendHistory)
 import Hyperlink
 import Id exposing (AnimalId, EventId, Id, MailId, NpcId, OneTimePasswordId, SecretId, TrainId, UserId)
-import IdDict exposing (IdDict)
 import Lamdera
 import LineSegmentExtra
 import List.Extra as List
@@ -53,6 +52,7 @@ import Quantity
 import Random
 import Route exposing (LoginOrInviteToken(..), PageRoute(..), Route(..))
 import SHA224
+import SeqDict exposing (SeqDict)
 import Set exposing (Set)
 import String.Nonempty exposing (NonemptyString(..))
 import Tile exposing (BuildingData, RailPathType(..))
@@ -139,20 +139,20 @@ init =
         model =
             { grid = Grid.empty
             , userSessions = Dict.empty
-            , users = IdDict.empty
+            , users = SeqDict.empty
             , secretLinkCounter = 0
             , errors = []
-            , trains = IdDict.empty
-            , animals = IdDict.empty
-            , npcs = IdDict.empty
-            , lastWorldUpdateTrains = IdDict.empty
+            , trains = SeqDict.empty
+            , animals = SeqDict.empty
+            , npcs = SeqDict.empty
+            , lastWorldUpdateTrains = SeqDict.empty
             , lastWorldUpdate = Nothing
-            , mail = IdDict.empty
+            , mail = SeqDict.empty
             , pendingLoginTokens = AssocList.empty
             , pendingOneTimePasswords = AssocList.empty
             , invites = AssocList.empty
             , lastCacheRegeneration = Nothing
-            , reported = IdDict.empty
+            , reported = SeqDict.empty
             , isGridReadOnly = False
             , trainsAndAnimalsDisabled = TrainsAndAnimalsEnabled
             , lastReportEmailToAdmin = Nothing
@@ -178,7 +178,7 @@ adminId =
 
 getAdminUser : BackendModel -> Maybe BackendUserData
 getAdminUser model =
-    IdDict.get adminId model.users
+    SeqDict.get adminId model.users
 
 
 sendEmail :
@@ -245,7 +245,7 @@ disconnectClient sessionId clientId model =
         , users =
             case maybeUser of
                 Just ( userId, user ) ->
-                    IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
+                    SeqDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
 
                 Nothing ->
                     model.users
@@ -449,21 +449,21 @@ initTileCountBot time model =
 updateTrains :
     Effect.Time.Posix
     -> Effect.Time.Posix
-    -> IdDict TrainId Train
+    -> SeqDict (Id TrainId) Train
     -> BackendModel
     ->
-        { mail : IdDict MailId BackendMail
+        { mail : SeqDict (Id MailId) BackendMail
         , mailChanges : List ( Id MailId, BackendMail )
-        , diff : IdDict TrainId TrainDiff
+        , diff : SeqDict (Id TrainId) TrainDiff
         }
 updateTrains oldTime time newTrains model =
-    IdDict.merge
+    SeqDict.merge
         (\_ _ a -> a)
         (\trainId oldTrain newTrain state ->
             let
-                diff : IdDict TrainId TrainDiff
+                diff : SeqDict (Id TrainId) TrainDiff
                 diff =
-                    IdDict.insert trainId (Train.diff newTrain) state.diff
+                    SeqDict.insert trainId (Train.diff newTrain) state.diff
             in
             case ( Train.status oldTime oldTrain, Train.status time newTrain ) of
                 ( TeleportingHome _, WaitingAtHome ) ->
@@ -476,7 +476,7 @@ updateTrains oldTime time newTrains model =
                                             mail2 =
                                                 { mail | status = MailWaitingPickup }
                                         in
-                                        { mail = IdDict.insert mailId mail2 state2.mail
+                                        { mail = SeqDict.insert mailId mail2 state2.mail
                                         , mailChanges = ( mailId, mail2 ) :: state2.mailChanges
                                         , diff = state2.diff
                                         }
@@ -488,7 +488,7 @@ updateTrains oldTime time newTrains model =
                                     state2
                         )
                         { state | diff = diff }
-                        (IdDict.toList state.mail)
+                        (SeqDict.toList state.mail)
 
                 ( StoppedAtPostOffice _, _ ) ->
                     { state | diff = diff }
@@ -501,7 +501,7 @@ updateTrains oldTime time newTrains model =
                                     mail2 =
                                         { mail | status = MailReceived { deliveryTime = time } }
                                 in
-                                { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                { mail = SeqDict.update mailId (\_ -> Just mail2) state.mail
                                 , mailChanges = ( mailId, mail2 ) :: state.mailChanges
                                 , diff = diff
                                 }
@@ -519,7 +519,7 @@ updateTrains oldTime time newTrains model =
                                         mail2 =
                                             { mail | status = MailInTransit trainId }
                                     in
-                                    { mail = IdDict.update mailId (\_ -> Just mail2) state.mail
+                                    { mail = SeqDict.update mailId (\_ -> Just mail2) state.mail
                                     , mailChanges = ( mailId, mail2 ) :: state.mailChanges
                                     , diff = diff
                                     }
@@ -531,17 +531,17 @@ updateTrains oldTime time newTrains model =
                     { state | diff = diff }
         )
         (\trainId train state ->
-            { state | diff = IdDict.insert trainId (Train.NewTrain train) state.diff }
+            { state | diff = SeqDict.insert trainId (Train.NewTrain train) state.diff }
         )
         model.lastWorldUpdateTrains
         newTrains
-        { mailChanges = [], mail = model.mail, diff = IdDict.empty }
+        { mailChanges = [], mail = model.mail, diff = SeqDict.empty }
 
 
 handleEmailNotifications isProduction time model mergeTrains =
     List.foldl
         (\( _, mail ) state ->
-            case ( IdDict.get mail.to model.users, mail.status ) of
+            case ( SeqDict.get mail.to model.users, mail.status ) of
                 ( Just user, MailReceived _ ) ->
                     case user.cursor of
                         Just _ ->
@@ -618,7 +618,7 @@ handleEmailNotifications isProduction time model mergeTrains =
 handleWorldUpdate : Bool -> Effect.Time.Posix -> Effect.Time.Posix -> BackendModel -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 handleWorldUpdate isProduction oldTime time model =
     let
-        newTrains : IdDict TrainId Train
+        newTrains : SeqDict (Id TrainId) Train
         newTrains =
             case model.trainsAndAnimalsDisabled of
                 TrainsAndAnimalsDisabled ->
@@ -632,9 +632,9 @@ handleWorldUpdate isProduction oldTime time model =
                         model
 
         mergeTrains :
-            { mail : IdDict MailId BackendMail
+            { mail : SeqDict (Id MailId) BackendMail
             , mailChanges : List ( Id MailId, BackendMail )
-            , diff : IdDict TrainId TrainDiff
+            , diff : SeqDict (Id TrainId) TrainDiff
             }
         mergeTrains =
             updateTrains oldTime time newTrains model
@@ -730,7 +730,7 @@ updateNpc :
     Effect.Time.Posix
     -> BackendModel
     ->
-        ( IdDict NpcId Npc
+        ( SeqDict (Id NpcId) Npc
         , { maybeNewNpc : Maybe ( Id NpcId, Npc )
           , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
           , movementChanges : List ( Id NpcId, NpcMovementChange )
@@ -742,13 +742,13 @@ updateNpc newTime model =
             let
                 occupied : Set ( Int, Int )
                 occupied =
-                    IdDict.values model.npcs
+                    SeqDict.values model.npcs
                         |> List.map (\person -> Coord.toTuple person.home)
                         |> Set.fromList
 
                 homelessNpcs : List ( Id NpcId, Npc )
                 homelessNpcs =
-                    IdDict.toList model.npcs
+                    SeqDict.toList model.npcs
                         |> List.filter (\( _, npc ) -> Npc.isHomeless model.grid npc)
 
                 validHouses : List { position : Coord WorldUnit, userId : Id UserId, buildingData : BuildingData }
@@ -799,38 +799,38 @@ updateNpc newTime model =
 
                                 npcId : Id NpcId
                                 npcId =
-                                    IdDict.nextId model.npcs
+                                    LocalGrid.nextId model.npcs
                             in
                             Just ( npcId, npc )
 
                         Nothing ->
                             Nothing
 
-                npcs2 : IdDict NpcId Npc
+                npcs2 : SeqDict (Id NpcId) Npc
                 npcs2 =
                     List.foldl
-                        (\( npcId, position ) npcs -> IdDict.update2 npcId (\npc -> { npc | home = position }) npcs)
+                        (\( npcId, position ) npcs -> SeqDict.updateIfExists npcId (\npc -> { npc | home = position }) npcs)
                         model.npcs
                         relocatedNpcs
 
-                npcs3 : IdDict NpcId Npc
+                npcs3 : SeqDict (Id NpcId) Npc
                 npcs3 =
                     case maybeNewNpc of
                         Just ( newNpcId, newNpc ) ->
-                            IdDict.insert newNpcId newNpc npcs2
+                            SeqDict.insert newNpcId newNpc npcs2
 
                         Nothing ->
                             npcs2
 
-                npcs4 : IdDict NpcId Npc
+                npcs4 : SeqDict (Id NpcId) Npc
                 npcs4 =
-                    IdDict.map (Npc.updateNpcPath newTime model.grid) npcs3
+                    SeqDict.map (Npc.updateNpcPath newTime model.grid) npcs3
             in
             ( npcs4
             , { maybeNewNpc = maybeNewNpc
               , relocatedNpcs = relocatedNpcs
               , movementChanges =
-                    IdDict.map
+                    SeqDict.map
                         (\_ npc ->
                             { position = npc.position
                             , startTime = npc.startTime
@@ -839,7 +839,7 @@ updateNpc newTime model =
                             }
                         )
                         npcs4
-                        |> IdDict.toList
+                        |> SeqDict.toList
               }
             )
 
@@ -851,7 +851,7 @@ updateAnimals :
     BackendModel
     -> Effect.Time.Posix
     ->
-        ( IdDict AnimalId Animal
+        ( SeqDict (Id AnimalId) Animal
         , List
             ( Id AnimalId
             , { position : Point2d WorldUnit WorldUnit
@@ -864,9 +864,9 @@ updateAnimals model time =
     case model.trainsAndAnimalsDisabled of
         TrainsAndAnimalsEnabled ->
             let
-                newAnimals2 : IdDict AnimalId Animal
+                newAnimals2 : SeqDict (Id AnimalId) Animal
                 newAnimals2 =
-                    IdDict.map
+                    SeqDict.map
                         (\id animal ->
                             if Duration.from (Animal.moveEndTime animal) time |> Quantity.lessThanZero then
                                 animal
@@ -913,7 +913,7 @@ updateAnimals model time =
                         model.animals
             in
             ( newAnimals2
-            , IdDict.merge
+            , SeqDict.merge
                 (\_ _ list -> list)
                 (\id old new list ->
                     if old.endPosition == new.endPosition then
@@ -949,7 +949,7 @@ getUserFromSessionId sessionId model =
         Just { userId } ->
             case userId of
                 Just userId2 ->
-                    case IdDict.get userId2 model.users of
+                    case SeqDict.get userId2 model.users of
                         Just user ->
                             Just ( userId2, user )
 
@@ -1000,7 +1000,7 @@ broadcastBotLocalChange :
     -> BackendModel
     -> ( BackendModel, Command BackendOnly ToFrontend BackendMsg )
 broadcastBotLocalChange userId time changes model =
-    case IdDict.get userId model.users of
+    case SeqDict.get userId model.users of
         Just user ->
             let
                 ( model2, _, firstMsg ) =
@@ -1010,7 +1010,7 @@ broadcastBotLocalChange userId time changes model =
                     Nonempty.tail changes
                         |> List.foldl
                             (\change ( model_, serverChanges_ ) ->
-                                case IdDict.get userId model_.users of
+                                case SeqDict.get userId model_.users of
                                     Just user2 ->
                                         let
                                             ( newModel, _, serverChange_ ) =
@@ -1305,7 +1305,7 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
                             generateOneTimePassword currentTime model
 
                         maybeUser =
-                            IdDict.toList model.users
+                            SeqDict.toList model.users
                                 |> List.find
                                     (\( _, user ) ->
                                         case user.userType of
@@ -1377,7 +1377,7 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
                         (\userId user model2 ->
                             -- Check if email address has already accepted an invite
                             if
-                                IdDict.toList model2.users
+                                SeqDict.toList model2.users
                                     |> List.any
                                         (\( _, user2 ) ->
                                             case user2.userType of
@@ -1490,7 +1490,7 @@ updateFromFrontendWithTime isProduction currentTime sessionId clientId msg model
                             && (pending.loginAttempts < 20)
                     then
                         if Id.secretIdEquals oneTimePassword pending.oneTimePassword then
-                            case IdDict.get pending.userId model.users of
+                            case SeqDict.get pending.userId model.users of
                                 Just user ->
                                     case user.userType of
                                         HumanUser humanUser ->
@@ -1626,7 +1626,7 @@ localGridChange time model localChange userId user =
 
             maybeTrain : Maybe ( Id TrainId, Train )
             maybeTrain =
-                if IdDict.size model.trains < 50 then
+                if SeqDict.size model.trains < 50 then
                     Train.handleAddingTrain model.trains userId change.change change.position
 
                 else
@@ -1636,7 +1636,7 @@ localGridChange time model localChange userId user =
                 Grid.addChangeBackend change model.grid
 
             nextCowId =
-                IdDict.nextId model.animals |> Id.toInt
+                LocalGrid.nextId model.animals |> Id.toInt
 
             newAnimals : List ( Id AnimalId, Animal )
             newAnimals =
@@ -1653,14 +1653,14 @@ localGridChange time model localChange userId user =
                             , trains =
                                 case maybeTrain of
                                     Just ( trainId, train ) ->
-                                        IdDict.insert trainId train model.trains
+                                        SeqDict.insert trainId train model.trains
 
                                     Nothing ->
                                         model.trains
                             , animals =
-                                IdDict.union
+                                SeqDict.union
                                     (LocalGrid.updateAnimalMovement localChange model.animals)
-                                    (IdDict.fromList newAnimals)
+                                    (SeqDict.fromList newAnimals)
                             , npcs = LocalGrid.updateNpcMovement localChange model.npcs
                             , tileCountBot =
                                 case model.tileCountBot of
@@ -1716,7 +1716,7 @@ localUndo model userId user =
 
                 trainsToRemove : List (Id TrainId)
                 trainsToRemove =
-                    IdDict.toList model.trains
+                    SeqDict.toList model.trains
                         |> List.filterMap
                             (\( trainId, train ) ->
                                 if Train.owner train == userId then
@@ -1887,7 +1887,7 @@ updateLocalChange sessionId clientId time change model =
                         let
                             isAlreadyHeld : Bool
                             isAlreadyHeld =
-                                IdDict.toList model.users
+                                SeqDict.toList model.users
                                     |> List.any
                                         (\( _, user2 ) ->
                                             case user2.cursor of
@@ -1944,7 +1944,7 @@ updateLocalChange sessionId clientId time change model =
         DropAnimalOrNpc animalOrNpcId position time2 ->
             asUser2
                 (\userId _ ->
-                    case IdDict.get userId model.users |> Maybe.andThen .cursor of
+                    case SeqDict.get userId model.users |> Maybe.andThen .cursor of
                         Just cursor ->
                             case cursor.holding of
                                 HoldingAnimalOrNpc holding ->
@@ -1971,7 +1971,7 @@ updateLocalChange sessionId clientId time change model =
                                                 AnimalId animalId ->
                                                     { model
                                                         | animals =
-                                                            IdDict.update2
+                                                            SeqDict.updateIfExists
                                                                 animalId
                                                                 (LocalGrid.placeAnimal position model.grid)
                                                                 model.animals
@@ -1980,7 +1980,7 @@ updateLocalChange sessionId clientId time change model =
                                                 NpcId npcId ->
                                                     { model
                                                         | npcs =
-                                                            IdDict.update2
+                                                            SeqDict.updateIfExists
                                                                 npcId
                                                                 (LocalGrid.placeNpc time position model.grid)
                                                                 model.npcs
@@ -2046,7 +2046,7 @@ updateLocalChange sessionId clientId time change model =
         ChangeDisplayName displayName ->
             asUser2
                 (\userId user ->
-                    ( { model | users = IdDict.insert userId { user | name = displayName } model.users }
+                    ( { model | users = SeqDict.insert userId { user | name = displayName } model.users }
                     , OriginalChange
                     , ServerChangeDisplayName userId displayName |> BroadcastToEveryoneElse
                     )
@@ -2057,11 +2057,11 @@ updateLocalChange sessionId clientId time change model =
                 (\userId user ->
                     let
                         mailId =
-                            IdDict.size model.mail |> Id.fromInt
+                            SeqDict.size model.mail |> Id.fromInt
 
-                        newMail : IdDict MailId BackendMail
+                        newMail : SeqDict (Id MailId) BackendMail
                         newMail =
-                            IdDict.insert
+                            SeqDict.insert
                                 mailId
                                 { content = content
                                 , status = MailWaitingPickup
@@ -2072,7 +2072,7 @@ updateLocalChange sessionId clientId time change model =
                     in
                     ( { model
                         | mail = newMail
-                        , users = IdDict.insert userId { user | mailDrafts = IdDict.remove to user.mailDrafts } model.users
+                        , users = SeqDict.insert userId { user | mailDrafts = SeqDict.remove to user.mailDrafts } model.users
                       }
                     , OriginalChange
                     , ServerSubmitMail { to = to, from = userId } |> BroadcastToEveryoneElse
@@ -2084,9 +2084,9 @@ updateLocalChange sessionId clientId time change model =
                 (\userId user ->
                     ( { model
                         | users =
-                            IdDict.insert
+                            SeqDict.insert
                                 userId
-                                { user | mailDrafts = IdDict.insert to content user.mailDrafts }
+                                { user | mailDrafts = SeqDict.insert to content user.mailDrafts }
                                 model.users
                       }
                     , OriginalChange
@@ -2101,7 +2101,7 @@ updateLocalChange sessionId clientId time change model =
                         adjustedTime =
                             adjustEventTime time teleportTime
                     in
-                    ( { model | trains = IdDict.update2 trainId (Train.startTeleportingHome adjustedTime) model.trains }
+                    ( { model | trains = SeqDict.updateIfExists trainId (Train.startTeleportingHome adjustedTime) model.trains }
                     , TeleportHomeTrainRequest trainId adjustedTime |> NewLocalChange
                     , ServerTeleportHomeTrainRequest trainId adjustedTime |> BroadcastToEveryoneElse
                     )
@@ -2114,7 +2114,7 @@ updateLocalChange sessionId clientId time change model =
                         adjustedTime =
                             adjustEventTime time leaveTime
                     in
-                    ( { model | trains = IdDict.update2 trainId (Train.leaveHome adjustedTime) model.trains }
+                    ( { model | trains = SeqDict.updateIfExists trainId (Train.leaveHome adjustedTime) model.trains }
                     , LeaveHomeTrainRequest trainId adjustedTime |> NewLocalChange
                     , ServerLeaveHomeTrainRequest trainId adjustedTime |> BroadcastToEveryoneElse
                     )
@@ -2123,13 +2123,13 @@ updateLocalChange sessionId clientId time change model =
         ViewedMail mailId ->
             asUser2
                 (\userId _ ->
-                    case IdDict.get mailId model.mail of
+                    case SeqDict.get mailId model.mail of
                         Just mail ->
                             case ( mail.to == userId, mail.status ) of
                                 ( True, MailReceived data ) ->
                                     ( { model
                                         | mail =
-                                            IdDict.insert mailId { mail | status = MailReceivedAndViewed data } model.mail
+                                            SeqDict.insert mailId { mail | status = MailReceivedAndViewed data } model.mail
                                       }
                                     , OriginalChange
                                     , ServerViewedMail mailId userId |> BroadcastToEveryoneElse
@@ -2156,7 +2156,7 @@ updateLocalChange sessionId clientId time change model =
                 (\userId user ->
                     ( { model
                         | users =
-                            IdDict.insert userId
+                            SeqDict.insert userId
                                 { user
                                     | cursor =
                                         case user.cursor of
@@ -2293,7 +2293,7 @@ updateLocalChange sessionId clientId time change model =
                                 (Effect.Lamdera.sessionIdToString sessionId)
                                 (Maybe.map (\session -> { session | userId = Nothing }))
                                 model.userSessions
-                        , users = IdDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
+                        , users = SeqDict.update userId (\_ -> Just { user | cursor = Nothing }) model.users
                       }
                     , OriginalChange
                     , BroadcastToRestOfSessionAndEveryoneElse sessionId ServerLogout (ServerUserDisconnected userId)
@@ -2343,7 +2343,7 @@ updateHumanUser : (HumanUserData -> HumanUserData) -> Id UserId -> BackendUserDa
 updateHumanUser updateFunc userId user model =
     { model
         | users =
-            IdDict.insert
+            SeqDict.insert
                 userId
                 (case user.userType of
                     HumanUser humanUser ->
@@ -2389,7 +2389,7 @@ viewBoundsChange { viewBounds, previewBounds } sessionId clientId model =
                                     )
                                 )
                                 model.userSessions
-                        , animals = IdDict.fromList newCows |> IdDict.union model.animals
+                        , animals = SeqDict.fromList newCows |> SeqDict.union model.animals
                         , grid = newGrid
                     }
             in
@@ -2421,7 +2421,7 @@ generateVisibleRegion :
 generateVisibleRegion oldBounds bounds model =
     let
         nextCowId =
-            IdDict.nextId model.animals |> Id.toInt
+            LocalGrid.nextId model.animals |> Id.toInt
 
         coords : List (Coord CellUnit)
         coords =
@@ -2480,9 +2480,9 @@ generateVisibleRegion oldBounds bounds model =
 removeTrain : Id TrainId -> BackendModel -> BackendModel
 removeTrain trainId model =
     { model
-        | trains = IdDict.remove trainId model.trains
+        | trains = SeqDict.remove trainId model.trains
         , mail =
-            IdDict.map
+            SeqDict.map
                 (\_ mail ->
                     case mail.status of
                         MailInTransit trainId2 ->
@@ -2510,12 +2510,12 @@ removeTrain trainId model =
 
 updateUser : Id UserId -> (BackendUserData -> BackendUserData) -> BackendModel -> BackendModel
 updateUser userId updateUserFunc model =
-    { model | users = IdDict.update2 userId updateUserFunc model.users }
+    { model | users = SeqDict.updateIfExists userId updateUserFunc model.users }
 
 
-getUserInbox : Id UserId -> BackendModel -> IdDict MailId MailEditor.ReceivedMail
+getUserInbox : Id UserId -> BackendModel -> SeqDict (Id MailId) MailEditor.ReceivedMail
 getUserInbox userId model =
-    IdDict.filterMap
+    SeqDict.filterMap
         (\_ mail ->
             if mail.to == userId then
                 case mail.status of
@@ -2575,7 +2575,7 @@ getAdminData userId model =
 
 getUserReports : Id UserId -> BackendModel -> List Change.Report
 getUserReports userId model =
-    case IdDict.get userId model.reported of
+    case SeqDict.get userId model.reported of
         Just nonempty ->
             Nonempty.toList nonempty
                 |> List.map
@@ -2664,7 +2664,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                     case AssocList.get loginToken model.pendingLoginTokens of
                         Just data ->
                             if Duration.from data.requestTime currentTime |> Quantity.lessThan Duration.day then
-                                case IdDict.get data.userId model.users of
+                                case SeqDict.get data.userId model.users of
                                     Just user ->
                                         case user.userType of
                                             HumanUser humanUser ->
@@ -2743,7 +2743,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                     , { model4
                                         | invites = AssocList.remove inviteToken model.invites
                                         , users =
-                                            IdDict.update2
+                                            SeqDict.updateIfExists
                                                 invite.invitedBy
                                                 (\user ->
                                                     case user.userType of
@@ -2752,7 +2752,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                                                                 | userType =
                                                                     { humanUser2
                                                                         | acceptedInvites =
-                                                                            IdDict.insert userId () humanUser2.acceptedInvites
+                                                                            SeqDict.insert userId () humanUser2.acceptedInvites
                                                                     }
                                                                         |> HumanUser
                                                             }
@@ -2783,7 +2783,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
                 clientId
                 viewBounds
                 userStatus
-                { model2 | grid = newGrid, animals = IdDict.fromList newCows |> IdDict.union model.animals }
+                { model2 | grid = newGrid, animals = SeqDict.fromList newCows |> SeqDict.union model.animals }
 
         loadingData : LoadingData_
         loadingData =
@@ -2794,10 +2794,10 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
             , userStatus = userStatus
             , viewBounds = viewBounds
             , trains = model3.trains
-            , mail = IdDict.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
+            , mail = SeqDict.map (\_ mail -> { status = mail.status, from = mail.from, to = mail.to }) model3.mail
             , animals = model3.animals
-            , cursors = IdDict.filterMap (\_ a -> a.cursor) model3.users
-            , users = IdDict.map (\_ a -> backendUserToFrontend a) model3.users
+            , cursors = SeqDict.filterMap (\_ a -> a.cursor) model3.users
+            , users = SeqDict.map (\_ a -> backendUserToFrontend a) model3.users
             , inviteTree =
                 invitesToInviteTree adminId model3.users
                     |> Maybe.withDefault (InviteTree { userId = adminId, invited = [] })
@@ -2810,7 +2810,7 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
         frontendUser =
             case userStatus of
                 LoggedIn loggedIn ->
-                    case IdDict.get loggedIn.userId model3.users of
+                    case SeqDict.get loggedIn.userId model3.users of
                         Just user ->
                             backendUserToFrontend user
 
@@ -2861,9 +2861,9 @@ connectToBackend currentTime sessionId clientId viewBounds maybeToken model =
     )
 
 
-invitesToInviteTree : Id UserId -> IdDict UserId BackendUserData -> Maybe InviteTree
+invitesToInviteTree : Id UserId -> SeqDict (Id UserId) BackendUserData -> Maybe InviteTree
 invitesToInviteTree rootUserId users =
-    case IdDict.get rootUserId users of
+    case SeqDict.get rootUserId users of
         Just user ->
             case user.userType of
                 HumanUser humanUser ->
@@ -2871,7 +2871,7 @@ invitesToInviteTree rootUserId users =
                     , invited =
                         List.filterMap
                             (\( userId, () ) -> invitesToInviteTree userId users)
-                            (IdDict.toList humanUser.acceptedInvites)
+                            (SeqDict.toList humanUser.acceptedInvites)
                     }
                         |> InviteTree
                         |> Just
@@ -2939,14 +2939,14 @@ createHumanUser userId emailAddress model =
             { undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
-            , mailDrafts = IdDict.empty
+            , mailDrafts = SeqDict.empty
             , cursor = Nothing
             , handColor = Cursor.defaultColors
             , name = DisplayName.default
             , userType =
                 HumanUser
                     { emailAddress = emailAddress
-                    , acceptedInvites = IdDict.empty
+                    , acceptedInvites = SeqDict.empty
                     , allowEmailNotifications = True
                     , timeOfDay = Automatic
                     , tileHotkeys = AssocList.empty
@@ -2956,7 +2956,7 @@ createHumanUser userId emailAddress model =
                     }
             }
     in
-    ( { model | users = IdDict.insert userId userBackendData model.users }, userBackendData )
+    ( { model | users = SeqDict.insert userId userBackendData model.users }, userBackendData )
 
 
 createBotUser : DisplayName -> BackendModel -> ( BackendModel, Id UserId )
@@ -2967,7 +2967,7 @@ createBotUser name model =
             { undoHistory = []
             , redoHistory = []
             , undoCurrent = Dict.empty
-            , mailDrafts = IdDict.empty
+            , mailDrafts = SeqDict.empty
             , cursor = Nothing
             , handColor = Cursor.defaultColors
             , name = name
@@ -2979,15 +2979,15 @@ createBotUser name model =
     in
     ( { model
         | users =
-            IdDict.insert id userBackendData model.users
-                |> IdDict.update2
+            SeqDict.insert id userBackendData model.users
+                |> SeqDict.updateIfExists
                     adminId
                     (\user ->
                         case user.userType of
                             HumanUser humanUser ->
                                 { user
                                     | userType =
-                                        { humanUser | acceptedInvites = IdDict.insert id () humanUser.acceptedInvites } |> HumanUser
+                                        { humanUser | acceptedInvites = SeqDict.insert id () humanUser.acceptedInvites } |> HumanUser
                                 }
 
                             BotUser ->

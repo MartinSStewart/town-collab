@@ -44,4 +44,4 @@ config =
     , NoMissingTypeExpose.rule
     ]
         |> List.map (Review.Rule.ignoreErrorsForDirectories [ "src/Evergreen", "packages", "email" ])
-        |> List.map (Review.Rule.ignoreErrorsForFiles [ "src/IdDict.elm", "src/NonemptyExtra.elm", "src/PersonName.elm" ])
+        |> List.map (Review.Rule.ignoreErrorsForFiles [ "src/SeqDict.elm", "src/NonemptyExtra.elm", "src/PersonName.elm" ])

@@ -58,7 +58,6 @@ import Html.Attributes
 import Html.Events.Extra.Mouse exposing (Button(..))
 import Hyperlink
 import Id exposing (AnimalId, Id, NpcId, TrainId, UserId)
-import IdDict exposing (IdDict)
 import Keyboard
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
@@ -74,6 +73,7 @@ import Ports
 import Quantity exposing (Quantity)
 import Random
 import Route exposing (PageRoute(..))
+import SeqDict exposing (SeqDict)
 import Set exposing (Set)
 import Shaders
 import Sound
@@ -342,11 +342,11 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
                         (Random.initialSeed (Time.posixToMillis time))
                         |> Tuple.first
                 }
-            , previousCursorPositions = IdDict.empty
+            , previousCursorPositions = SeqDict.empty
             , handMeshes =
                 Local.model loadedLocalModel.localModel
                     |> .users
-                    |> IdDict.map
+                    |> SeqDict.map
                         (\userId user ->
                             Cursor.meshes
                                 (if currentUserId2 == Just userId then
@@ -427,7 +427,7 @@ loadedInit time loading texture lightsTexture depthTexture simplexNoiseLookup lo
         |> (\( a, b ) -> ( Loaded a, b, Audio.cmdNone ))
 
 
-canPlaceTile : Time.Posix -> Grid.GridChange -> IdDict TrainId Train -> Grid a -> Bool
+canPlaceTile : Time.Posix -> Grid.GridChange -> SeqDict (Id TrainId) Train -> Grid a -> Bool
 canPlaceTile time change trains grid =
     if Grid.canPlaceTile change then
         let
@@ -944,7 +944,7 @@ getHandColor userId model =
         localGrid =
             Local.model model.localModel
     in
-    case IdDict.get userId localGrid.users of
+    case SeqDict.get userId localGrid.users of
         Just { handColor } ->
             handColor
 
@@ -1047,7 +1047,7 @@ getReports localModel =
             []
 
 
-getAdminReports : Local a LocalGrid -> IdDict UserId (Nonempty BackendReport)
+getAdminReports : Local a LocalGrid -> SeqDict (Id UserId) (Nonempty BackendReport)
 getAdminReports localModel =
     case Local.model localModel |> .userStatus of
         LoggedIn loggedIn ->
@@ -1056,10 +1056,10 @@ getAdminReports localModel =
                     adminData.reported
 
                 Nothing ->
-                    IdDict.empty
+                    SeqDict.empty
 
         NotLoggedIn _ ->
-            IdDict.empty
+            SeqDict.empty
 
 
 updateLocalModel : Change.LocalChange -> FrontendLoaded -> ( FrontendLoaded, LocalGrid.OutMsg )
@@ -1219,7 +1219,7 @@ hoverAt model mousePosition =
                             Nothing
 
                         HandTool ->
-                            IdDict.toList localGrid.trains
+                            SeqDict.toList localGrid.trains
                                 |> List.filterMap
                                     (\( trainId, train ) ->
                                         let
@@ -1248,7 +1248,7 @@ hoverAt model mousePosition =
                 animalHovers =
                     case model.currentTool of
                         HandTool ->
-                            IdDict.toList localGrid.animals
+                            SeqDict.toList localGrid.animals
                                 |> List.filter
                                     (\( animalId, animal ) ->
                                         case animalActualPosition animalId model of
@@ -1273,7 +1273,7 @@ hoverAt model mousePosition =
                 npcHovers =
                     case model.currentTool of
                         HandTool ->
-                            IdDict.toList localGrid.npcs
+                            SeqDict.toList localGrid.npcs
                                 |> List.filter
                                     (\( npcId, npc ) ->
                                         case npcActualPosition npcId model of
@@ -1334,7 +1334,7 @@ npcActualPosition npcId model =
 
         cursorHoldingNpc : Maybe ( Id UserId, Cursor )
         cursorHoldingNpc =
-            IdDict.toList localGrid.cursors
+            SeqDict.toList localGrid.cursors
                 |> List.find
                     (\( _, cursor ) ->
                         case cursor.holding of
@@ -1355,7 +1355,7 @@ npcActualPosition npcId model =
                 |> Just
 
         Nothing ->
-            case IdDict.get npcId localGrid.npcs of
+            case SeqDict.get npcId localGrid.npcs of
                 Just npc ->
                     { position = Npc.actualPositionWithoutCursor model.time npc, isHeld = False } |> Just
 
@@ -1372,7 +1372,7 @@ animalActualPosition animalId model =
 
         cursorHoldingAnimal : Maybe ( Id UserId, Cursor )
         cursorHoldingAnimal =
-            IdDict.toList localGrid.cursors
+            SeqDict.toList localGrid.cursors
                 |> List.find
                     (\( _, cursor ) ->
                         case cursor.holding of
@@ -1393,7 +1393,7 @@ animalActualPosition animalId model =
                 |> Just
 
         Nothing ->
-            case IdDict.get animalId localGrid.animals of
+            case SeqDict.get animalId localGrid.animals of
                 Just animal ->
                     { position = Animal.actualPositionWithoutCursor model.time animal, isHeld = False } |> Just
 
@@ -1407,7 +1407,7 @@ cursorActualPosition isCurrentUser userId cursor model =
         cursor.position
 
     else
-        case ( cursor.currentTool, IdDict.get userId model.previousCursorPositions ) of
+        case ( cursor.currentTool, SeqDict.get userId model.previousCursorPositions ) of
             ( Cursor.TextTool (Just textTool), _ ) ->
                 Coord.toPoint2d textTool.cursorPosition
                     |> Point2d.translateBy (Vector2d.unsafe { x = 0, y = 0.5 })
@@ -1458,23 +1458,23 @@ handleOutMsg isFromBackend ( model, outMsg ) =
                 | previousCursorPositions =
                     case previousPosition of
                         Just previousPosition2 ->
-                            IdDict.insert
+                            SeqDict.insert
                                 userId
                                 { position = previousPosition2, time = model.time }
                                 model.previousCursorPositions
 
                         Nothing ->
-                            IdDict.remove userId model.previousCursorPositions
+                            SeqDict.remove userId model.previousCursorPositions
               }
             , Command.none
             )
 
         LocalGrid.HandColorOrNameChanged userId ->
-            ( case Local.model model.localModel |> .users |> IdDict.get userId of
+            ( case Local.model model.localModel |> .users |> SeqDict.get userId of
                 Just user ->
                     { model
                         | handMeshes =
-                            IdDict.insert
+                            SeqDict.insert
                                 userId
                                 (Cursor.meshes
                                     (if Just userId == LocalGrid.currentUserId model then
@@ -1594,7 +1594,7 @@ viewLoadingBoundingBox model =
     BoundingBox2d.from viewMin viewMax
 
 
-createReportsMesh : List Report -> IdDict UserId (Nonempty BackendReport) -> Effect.WebGL.Mesh Vertex
+createReportsMesh : List Report -> SeqDict (Id UserId) (Nonempty BackendReport) -> Effect.WebGL.Mesh Vertex
 createReportsMesh localReports adminReports =
     List.concatMap
         (\( _, reports ) ->
@@ -1609,7 +1609,7 @@ createReportsMesh localReports adminReports =
                             Units.tileSize
                     )
         )
-        (IdDict.toList adminReports)
+        (SeqDict.toList adminReports)
         ++ List.concatMap
             (\report ->
                 Sprite.spriteWithColor

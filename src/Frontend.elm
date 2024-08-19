@@ -44,7 +44,6 @@ import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Hyperlink
 import Id exposing (Id, TrainId, UserId)
-import IdDict exposing (IdDict)
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -69,6 +68,7 @@ import Ports
 import Quantity exposing (Quantity(..))
 import Random
 import Route exposing (PageRoute(..))
+import SeqDict exposing (SeqDict)
 import Shaders exposing (DebrisVertex, MapOverlayVertex, RenderData)
 import Sound exposing (Sound(..))
 import Sprite exposing (Vertex)
@@ -174,7 +174,7 @@ audioLoaded audioData model =
 
         allTrains : List ( Id TrainId, Train )
         allTrains =
-            IdDict.toList localModel.trains
+            SeqDict.toList localModel.trains
 
         movingTrains : List { playbackRate : Float, volume : Float }
         movingTrains =
@@ -290,7 +290,7 @@ audioLoaded audioData model =
                 _ ->
                     Audio.silence
         )
-        (IdDict.toList localModel.trains)
+        (SeqDict.toList localModel.trains)
         |> Audio.group
     , case model.lastTrainWhistle of
         Just time ->
@@ -378,7 +378,7 @@ audioLoaded audioData model =
             Audio.silence
     , case LocalGrid.currentUserId model of
         Just userId ->
-            case IdDict.get userId localModel.cursors of
+            case SeqDict.get userId localModel.cursors of
                 Just cursor ->
                     case cursor.holding of
                         HoldingAnimalOrNpc holding ->
@@ -389,7 +389,7 @@ audioLoaded audioData model =
                                 maybeSound =
                                     case holding.animalOrNpcId of
                                         AnimalId animalId ->
-                                            case IdDict.get animalId localModel.animals of
+                                            case SeqDict.get animalId localModel.animals of
                                                 Just animal ->
                                                     let
                                                         sounds : Nonempty ( Float, Sound )
@@ -409,7 +409,7 @@ audioLoaded audioData model =
                                                     Nothing
 
                                         NpcId npcId ->
-                                            case IdDict.get npcId localModel.npcs of
+                                            case SeqDict.get npcId localModel.npcs of
                                                 Just _ ->
                                                     Nothing
 
@@ -1205,7 +1205,7 @@ updateLoaded audioData msg model =
                     )
                         && List.any
                             (\( _, train ) -> BoundingBox2d.contains (Train.trainPosition model.time train) viewBounds)
-                            (IdDict.toList localState.trains)
+                            (SeqDict.toList localState.trains)
 
                 musicEnd : Effect.Time.Posix
                 musicEnd =
@@ -2063,7 +2063,7 @@ isHolding model =
     in
     case LocalGrid.currentUserId model of
         Just userId ->
-            case IdDict.get userId localGrid.cursors of
+            case SeqDict.get userId localGrid.cursors of
                 Just cursor ->
                     cursor.holding
 
@@ -2094,7 +2094,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
         handleTrainHouse : Maybe (() -> ( FrontendLoaded, Command FrontendOnly ToBackend FrontendMsg_ ))
         handleTrainHouse =
             case
-                IdDict.toList localState.trains
+                SeqDict.toList localState.trains
                     |> List.find (\( _, train ) -> Train.home train == position)
             of
                 Just ( trainId, train ) ->
@@ -2135,7 +2135,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                                 localModel =
                                     Local.model model.localModel
                             in
-                            case localModel.users |> IdDict.get userId of
+                            case localModel.users |> SeqDict.get userId of
                                 Just user ->
                                     ( { model
                                         | page =
@@ -2145,7 +2145,7 @@ tileInteraction currentUserId2 { tile, userId, position } model =
                                                         (Just
                                                             { userId = userId
                                                             , name = user.name
-                                                            , draft = IdDict.get userId drafts |> Maybe.withDefault []
+                                                            , draft = SeqDict.get userId drafts |> Maybe.withDefault []
                                                             }
                                                         )
                                                         |> MailPage
@@ -2873,7 +2873,7 @@ uiUpdate audioData id event model =
                                 LoggedIn loggedIn ->
                                     TextInput.init
                                         |> TextInput.withText
-                                            (case IdDict.get loggedIn.userId localModel.users of
+                                            (case SeqDict.get loggedIn.userId localModel.users of
                                                 Just user ->
                                                     DisplayName.toString user.name
 
@@ -3607,7 +3607,7 @@ setTrainViewPoint trainId model =
     }
 
 
-canOpenMailEditor : FrontendLoaded -> Maybe (IdDict UserId (List MailEditor.Content))
+canOpenMailEditor : FrontendLoaded -> Maybe (SeqDict (Id UserId) (List MailEditor.Content))
 canOpenMailEditor model =
     case ( model.page, model.currentTool, Local.model model.localModel |> .userStatus ) of
         ( WorldPage _, HandTool, LoggedIn loggedIn ) ->
@@ -4898,7 +4898,7 @@ drawAnimals viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time,
                 Nothing ->
                     Nothing
         )
-        (IdDict.toList localGrid.animals)
+        (SeqDict.toList localGrid.animals)
 
 
 drawNpcs : BoundingBox2d WorldUnit WorldUnit -> RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
@@ -4989,7 +4989,7 @@ drawNpcs viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, time, sc
                 Nothing ->
                     Nothing
         )
-        (IdDict.toList localGrid.npcs)
+        (SeqDict.toList localGrid.npcs)
 
 
 drawFlags : RenderData -> FrontendLoaded -> List Effect.WebGL.Entity
@@ -5364,12 +5364,12 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
     in
     (case LocalGrid.currentUserId model of
         Just userId ->
-            IdDict.remove userId localGrid.cursors
+            SeqDict.remove userId localGrid.cursors
 
         Nothing ->
             localGrid.cursors
     )
-        |> IdDict.toList
+        |> SeqDict.toList
         |> List.filterMap
             (\( userId, cursor ) ->
                 let
@@ -5380,7 +5380,7 @@ drawOtherCursors viewBounds_ { nightFactor, lights, texture, viewMatrix, depth, 
                     point =
                         Point2d.unwrap cursorPosition2
                 in
-                case ( BoundingBox2d.contains cursorPosition2 viewBounds_, IdDict.get userId model.handMeshes ) of
+                case ( BoundingBox2d.contains cursorPosition2 viewBounds_, SeqDict.get userId model.handMeshes ) of
                     ( True, Just mesh ) ->
                         Effect.WebGL.entityWith
                             [ Shaders.blend, Shaders.scissorBox scissors ]
@@ -5433,7 +5433,7 @@ drawCursor :
     -> AudioData
     -> List Effect.WebGL.Entity
 drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePointer userId model audioData =
-    case IdDict.get userId (Local.model model.localModel).cursors of
+    case SeqDict.get userId (Local.model model.localModel).cursors of
         Just cursor ->
             case showMousePointer.cursorType of
                 CursorSprite mousePointer ->
@@ -5443,7 +5443,7 @@ drawCursor { nightFactor, lights, texture, viewMatrix, depth, time } showMousePo
                             LoadingPage.cursorActualPosition True userId cursor model
                                 |> Point2d.unwrap
                     in
-                    case IdDict.get userId model.handMeshes of
+                    case SeqDict.get userId model.handMeshes of
                         Just mesh ->
                             let
                                 scale : Float

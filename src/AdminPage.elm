@@ -9,7 +9,7 @@ import Duration
 import Effect.Time
 import Env
 import Id exposing (Id, MailId)
-import IdDict
+import SeqDict
 import Keyboard
 import Local exposing (Local)
 import LocalGrid exposing (LocalGrid)
@@ -174,11 +174,11 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                 (idMap ToggleTrainsDisabledButton)
                 (localModel.trainsDisabled == TrainsAndAnimalsDisabled)
                 ("Disable trains and animals ("
-                    ++ String.fromInt (IdDict.size localModel.trains)
+                    ++ String.fromInt (SeqDict.size localModel.trains)
                     ++ " trains, "
-                    ++ String.fromInt (IdDict.size localModel.npcs)
+                    ++ String.fromInt (SeqDict.size localModel.npcs)
                     ++ " NPCs, "
-                    ++ String.fromInt (IdDict.size localModel.animals)
+                    ++ String.fromInt (SeqDict.size localModel.animals)
                     ++ " animals)"
                 )
             , Ui.row
@@ -234,7 +234,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
             , Ui.column
                 { spacing = 4, padding = Ui.noPadding }
                 [ Ui.text "Backend Mail"
-                , IdDict.toList adminData.mail
+                , SeqDict.toList adminData.mail
                     |> List.drop (model.mailPage * mailPerPage)
                     |> List.take mailPerPage
                     |> Ui.table
@@ -297,7 +297,7 @@ adminView idMap windowSize isGridReadOnly adminData model localModel =
                                                 (Ui.text "Delete")
                           }
                         ]
-                , List.range 0 (IdDict.size adminData.mail // mailPerPage)
+                , List.range 0 (SeqDict.size adminData.mail // mailPerPage)
                     |> List.map
                         (\index ->
                             Ui.selectableButton

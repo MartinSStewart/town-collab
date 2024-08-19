@@ -33,12 +33,12 @@ import Grid
 import GridCell
 import Hyperlink exposing (Hyperlink)
 import Id exposing (AnimalId, EventId, Id, MailId, NpcId, TrainId, UserId)
-import IdDict exposing (IdDict)
 import List.Nonempty exposing (Nonempty)
 import MailEditor exposing (BackendMail, MailStatus)
 import Name exposing (Name)
 import Npc exposing (Npc)
 import Point2d exposing (Point2d)
+import SeqDict exposing (SeqDict)
 import Set exposing (Set)
 import Tile exposing (TileGroup)
 import TimeOfDay exposing (TimeOfDay)
@@ -160,7 +160,7 @@ type ServerChange
     | ServerTeleportHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerLeaveHomeTrainRequest (Id TrainId) Effect.Time.Posix
     | ServerWorldUpdateBroadcast
-        { trainDiff : IdDict TrainId TrainDiff
+        { trainDiff : SeqDict (Id TrainId) TrainDiff
         , maybeNewNpc : Maybe ( Id NpcId, Npc )
         , relocatedNpcs : List ( Id NpcId, Coord WorldUnit )
         , movementChanges : List ( Id NpcId, NpcMovementChange )
@@ -216,9 +216,9 @@ type alias LoggedIn_ =
     , undoHistory : List (Dict RawCellCoord Int)
     , redoHistory : List (Dict RawCellCoord Int)
     , undoCurrent : Dict RawCellCoord Int
-    , mailDrafts : IdDict UserId (List MailEditor.Content)
+    , mailDrafts : SeqDict (Id UserId) (List MailEditor.Content)
     , emailAddress : EmailAddress
-    , inbox : IdDict MailId MailEditor.ReceivedMail
+    , inbox : SeqDict (Id MailId) MailEditor.ReceivedMail
     , allowEmailNotifications : Bool
     , adminData : Maybe AdminData
     , reports : List Report
@@ -239,8 +239,8 @@ type alias Report =
 type alias AdminData =
     { lastCacheRegeneration : Maybe Effect.Time.Posix
     , userSessions : List { userId : Maybe (Id UserId), connectionCount : Int }
-    , reported : IdDict UserId (Nonempty BackendReport)
-    , mail : IdDict MailId BackendMail
+    , reported : SeqDict (Id UserId) (Nonempty BackendReport)
+    , mail : SeqDict (Id MailId) BackendMail
     , worldUpdateDurations : Array Duration
     , totalGridCells : Int
     }

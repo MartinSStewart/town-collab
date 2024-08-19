@@ -59,7 +59,7 @@ import Effect.Time
 import Effect.WebGL
 import GridCell exposing (BackendHistory(..), Cell, CellData, FrontendHistory(..))
 import Id exposing (Id, UserId)
-import IdDict exposing (IdDict)
+import SeqDict exposing (SeqDict)
 import LineSegment2d exposing (LineSegment2d)
 import List.Extra as List
 import List.Nonempty exposing (Nonempty(..))
@@ -601,7 +601,7 @@ foregroundMesh2 :
     -> Maybe { a | tile : Tile, position : Coord WorldUnit }
     -> Coord CellUnit
     -> Maybe (Id UserId)
-    -> IdDict UserId FrontendUser
+    -> SeqDict (Id UserId) FrontendUser
     -> AssocSet.Set (Coord CellLocalUnit)
     -> List GridCell.Value
     -> Effect.WebGL.Mesh Vertex
@@ -696,7 +696,7 @@ foregroundMesh2 hyperlinks showEmptyTiles maybeCurrentTile cellPosition maybeCur
                                                 opacityAndUserId
                                                 colors2.secondaryColor
                                                 1
-                                                (case IdDict.get userId users of
+                                                (case SeqDict.get userId users of
                                                     Just user ->
                                                         let
                                                             name =
