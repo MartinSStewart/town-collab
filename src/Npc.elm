@@ -1,6 +1,6 @@
 module Npc exposing
     ( Npc
-    , Voice
+    , Voice(..)
     , actualPositionWithoutCursor
     , idleTexturePosition
     , inside
