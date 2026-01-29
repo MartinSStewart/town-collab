@@ -76,7 +76,6 @@ type AnimalType
     = Cow
     | Hamster
     | Sheep
-    | Pig
 
 
 type alias AnimalData =
@@ -147,16 +146,6 @@ getData animal =
             , speed = Quantity.per Duration.second (Units.tileUnit 1.5)
             }
 
-        Pig ->
-            { size = Coord.xy 16 12
-            , texturePosition = Coord.xy 220 378
-            , walkTexturePosition = Coord.xy 236 378
-            , texturePositionFlipped = Coord.xy 252 378
-            , walkTexturePositionFlipped = Coord.xy 268 378
-            , sounds = Nonempty ( 0.5, Sheep0 ) [ ( 0.5, Sheep1 ) ]
-            , speed = Quantity.per Duration.second (Units.tileUnit 1.5)
-            }
-
 
 defaultColors : Colors
 defaultColors =
@@ -213,9 +202,6 @@ randomName animalType =
         Sheep ->
             List.Nonempty.sample sheepNames
 
-        Pig ->
-            List.Nonempty.sample pigNames
-
 
 cowNames : Nonempty Name
 cowNames =
@@ -252,16 +238,6 @@ sheepNames =
     , "Sheela the Sheep"
     , "Sheepard"
     , "Baaby"
-    ]
-        |> toNonempty
-
-
-pigNames : Nonempty Name
-pigNames =
-    [ "Pigly Snort"
-    , "Booglis the Spy Pig"
-    , "Big Pork"
-    , "Porkie"
     ]
         |> toNonempty
 

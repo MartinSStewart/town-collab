@@ -1,6 +1,5 @@
 module EndToEndTests exposing (PostmarkRequest, main, tests)
 
-import AssocList
 import Audio
 import Backend
 import Change exposing (UserStatus(..))
@@ -8,7 +7,7 @@ import Coord
 import Dict
 import Duration
 import Effect.Lamdera
-import Effect.Test exposing (Config, FileUpload(..), HttpRequest, HttpResponse(..), MultipleFilesUpload(..), PortToJs)
+import Effect.Test exposing (Action, Config, EndToEndTest, FileUpload(..), HttpRequest, HttpResponse(..), MultipleFilesUpload(..), PortToJs)
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Env
@@ -17,7 +16,6 @@ import Html.Events.Extra.Mouse exposing (Button(..))
 import Html.Events.Extra.Wheel exposing (DeltaMode(..))
 import Html.Parser
 import Id exposing (OneTimePasswordId, SecretId)
-import SeqDict
 import Json.Decode
 import Json.Encode
 import Keyboard
@@ -25,7 +23,9 @@ import Local
 import Pixels exposing (Pixels)
 import Point2d exposing (Point2d)
 import Postmark
+import SeqDict
 import Tile exposing (Category(..), TileGroup(..))
+import Time
 import Toolbar
 import Train exposing (Status(..))
 import Types exposing (BackendModel, BackendMsg, FrontendModel, FrontendModel_(..), FrontendMsg, FrontendMsg_(..), Hover(..), LoadingLocalModel(..), ToBackend(..), ToFrontend, ToolButton(..), UiId(..))
@@ -244,7 +244,7 @@ isOneTimePasswordEmail httpRequest =
         Nothing
 
 
-shouldBeLoggedIn : { a | clientId : Effect.Lamdera.ClientId } -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel
+shouldBeLoggedIn : { a | clientId : Effect.Lamdera.ClientId } -> Action toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel
 shouldBeLoggedIn frontend0 =
     checkFrontend
         frontend0.clientId
@@ -273,7 +273,7 @@ shouldBeLoggedIn frontend0 =
         )
 
 
-shouldBeLoggedOut : { a | clientId : Effect.Lamdera.ClientId } -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel
+shouldBeLoggedOut : { a | clientId : Effect.Lamdera.ClientId } -> Action toBackend frontendMsg (Audio.Model userMsg FrontendModel_) toFrontend backendMsg backendModel
 shouldBeLoggedOut frontend0 =
     checkFrontend
         frontend0.clientId
@@ -305,66 +305,61 @@ shouldBeLoggedOut frontend0 =
 typeText :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> String
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-typeText frontend0 text instructions =
+    -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
+typeText frontend0 text =
     String.foldl
-        (\char instructions2 ->
+        (\char actions ->
             let
                 keyEvent : Keyboard.RawKey
                 keyEvent =
                     Keyboard.RawKey (String.fromChar char) ("Key" ++ String.fromChar char)
             in
-            frontend0.update (Audio.UserMsg (Types.KeyDown keyEvent)) instructions2
-                |> shortWait
-                |> frontend0.update (Audio.UserMsg (Types.KeyUp keyEvent))
-                |> shortWait
+            actions
+                ++ [ frontend0.update 0 (Audio.UserMsg (Types.KeyDown keyEvent))
+                   , frontend0.update shortWaitMs (Audio.UserMsg (Types.KeyUp keyEvent))
+                   ]
         )
-        instructions
+        []
         text
 
 
 pressEnter :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-pressEnter frontend0 instructions =
+    -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
+pressEnter frontend0 =
     let
         keyEvent =
             Keyboard.RawKey "Enter" ""
     in
-    frontend0.update (Audio.UserMsg (Types.KeyDown keyEvent)) instructions
-        |> shortWait
-        |> frontend0.update (Audio.UserMsg (Types.KeyUp keyEvent))
-        |> shortWait
+    [ frontend0.update 0 (Audio.UserMsg (Types.KeyDown keyEvent))
+    , frontend0.update shortWaitMs (Audio.UserMsg (Types.KeyUp keyEvent))
+    ]
 
 
 clickOnScreen :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> Point2d Pixels Pixels
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-clickOnScreen frontend0 position instructions =
-    instructions
-        |> frontend0.update (Audio.UserMsg (MouseMove position))
-        |> frontend0.update (Audio.UserMsg (MouseDown MainButton position))
-        |> frontend0.update (Audio.UserMsg (MouseUp MainButton position))
-        |> shortWait
+    -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
+clickOnScreen frontend0 position =
+    [ frontend0.update 0 (Audio.UserMsg (MouseMove position))
+    , frontend0.update 0 (Audio.UserMsg (MouseDown MainButton position))
+    , frontend0.update shortWaitMs (Audio.UserMsg (MouseUp MainButton position))
+    ]
 
 
 clickOnUi :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> Types.UiId
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-clickOnUi frontend0 id instructions =
+    -> Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+clickOnUi frontend0 id =
     Effect.Test.andThen
-        (\data state ->
-            case AssocList.get frontend0.clientId data.frontends of
+        0
+        (\data ->
+            case SeqDict.get frontend0.clientId data.frontends of
                 Just (Audio.Model audioModel) ->
                     case audioModel.userModel of
                         Loading _ ->
-                            Effect.Test.checkState (\_ -> Err "Currently in loading state") state
+                            [ Effect.Test.checkState 0 (\_ -> Err "Currently in loading state") ]
 
                         Loaded loaded ->
                             let
@@ -386,79 +381,83 @@ clickOnUi frontend0 id instructions =
                             in
                             case maybePosition of
                                 Just position ->
-                                    frontend0.update (Audio.UserMsg (Types.MouseDown MainButton position)) state
-                                        |> shortWait
-                                        |> frontend0.update (Audio.UserMsg (Types.MouseUp MainButton position))
-                                        |> shortWait
+                                    [ frontend0.update 0 (Audio.UserMsg (Types.MouseDown MainButton position))
+                                    , frontend0.update shortWaitMs (Audio.UserMsg (Types.MouseUp MainButton position))
+                                    ]
 
                                 Nothing ->
-                                    Effect.Test.checkState (\_ -> Err ("Couldn't find UI with ID: " ++ Debug.toString id)) state
+                                    [ Effect.Test.checkState 0 (\_ -> Err ("Couldn't find UI with ID: " ++ Debug.toString id)) ]
 
                 Nothing ->
-                    Effect.Test.checkState (\_ -> Err "Couldn't find frontend") state
+                    [ Effect.Test.checkState 0 (\_ -> Err "Couldn't find frontend") ]
         )
-        instructions
 
 
+windowSize : { width : Int, height : Int }
 windowSize =
     { width = 1000, height = 600 }
 
 
 makeItDayTime :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-makeItDayTime frontendActions state =
-    clickOnUi frontendActions SettingsButton state
-        |> clickOnUi frontendActions AlwaysDayTimeOfDayButton
-        |> clickOnUi frontendActions CloseSettings
+    -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
+makeItDayTime frontendActions =
+    [ clickOnUi frontendActions SettingsButton
+    , clickOnUi frontendActions AlwaysDayTimeOfDayButton
+    , clickOnUi frontendActions CloseSettings
+    ]
 
 
 loadPage :
     Effect.Lamdera.SessionId
     ->
         (Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-         -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-         -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+         -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
         )
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-    -> Effect.Test.Instructions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-loadPage sessionId func state =
-    state
-        |> Effect.Test.connectFrontend
-            sessionId
-            url
-            windowSize
-            (\( state2, frontend0 ) ->
-                pressEnter frontend0 state2
-                    |> func frontend0
-            )
+    -> Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+loadPage sessionId func =
+    Effect.Test.connectFrontend
+        0
+        sessionId
+        (Url.toString url)
+        windowSize
+        (\frontend0 ->
+            pressEnter frontend0
+                ++ func frontend0
+        )
 
 
-loadAndLogin sessionId func state =
+loadAndLogin :
+    Effect.Lamdera.SessionId
+    ->
+        (Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+         -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
+        )
+    -> Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+loadAndLogin sessionId func =
     loadPage
         sessionId
-        (\frontend0 state2 ->
-            state2
-                |> shouldBeLoggedOut frontend0
-                |> clickOnUi frontend0 Types.EmailAddressTextInput
-                |> typeText frontend0 Env.adminEmail2
-                |> pressEnter frontend0
-                |> Effect.Test.andThen
-                    (\data state3 ->
-                        case List.filterMap isOneTimePasswordEmail data.httpRequests of
-                            [ loginEmail ] ->
-                                state3
-                                    |> clickOnUi frontend0 Types.OneTimePasswordInput
-                                    |> typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
-                                    |> shouldBeLoggedIn frontend0
+        (\frontend0 ->
+            [ shouldBeLoggedOut frontend0
+            , clickOnUi frontend0 Types.EmailAddressTextInput
+            ]
+                ++ typeText frontend0 Env.adminEmail2
+                ++ pressEnter frontend0
+                ++ [ Effect.Test.andThen
+                        0
+                        (\data ->
+                            case List.filterMap isOneTimePasswordEmail data.httpRequests of
+                                [ loginEmail ] ->
+                                    [ clickOnUi frontend0 Types.OneTimePasswordInput ]
+                                        ++ typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
+                                        ++ [ shouldBeLoggedIn frontend0 ]
 
-                            _ ->
-                                Effect.Test.checkState (\_ -> Err "Login email not found") state3
-                    )
-                |> func frontend0
+                                _ ->
+                                    [ Effect.Test.checkState 0 (\_ -> Err "Login email not found") ]
+                        )
+                   ]
+                ++ func frontend0
         )
-        state
 
 
 tests :
@@ -468,7 +467,7 @@ tests :
     -> Texture
     -> Texture
     -> Texture
-    -> List (Effect.Test.Instructions ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
+    -> List (EndToEndTest ToBackend FrontendMsg (Audio.Model Types.FrontendMsg_ FrontendModel_) ToFrontend BackendMsg BackendModel)
 tests depth lights texture trainDepth trainLights trainTexture =
     let
         config : Config ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
@@ -481,127 +480,131 @@ tests depth lights texture trainDepth trainLights trainTexture =
             , handleMultipleFilesUpload = \_ -> UnhandledMultiFileUpload
             , domain = url
             }
+
+        startTime : Time.Posix
+        startTime =
+            Time.millisToPosix 0
     in
-    [ Effect.Test.start config "Login with one time password"
-        |> loadAndLogin sessionId0 (\_ state -> state)
-    , Effect.Test.start config "Test NPC movement"
-        |> loadAndLogin
+    [ Effect.Test.start "Login with one time password"
+        startTime
+        config
+        [ loadAndLogin sessionId0 (\_ -> []) ]
+    , Effect.Test.start "Test NPC movement"
+        startTime
+        config
+        [ loadAndLogin
             sessionId0
-            (\frontend0 state ->
-                state
-                    |> clickOnUi frontend0 (CategoryButton Buildings)
-                    |> makeItDayTime frontend0
-                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton HouseGroup))
-                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
-                    |> Effect.Test.simulateTime (Duration.seconds 9)
-                    |> clickOnUi frontend0 (CategoryButton Road)
-                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton SidewalkGroup))
-                    |> (\state2 ->
-                            List.foldl
-                                (\index state3 ->
-                                    clickOnScreen frontend0 (Point2d.pixels (300 + toFloat index * 20) 340) state3
-                                )
-                                state2
-                                (List.range 0 10)
-                       )
-                    |> Effect.Test.simulateTime (Duration.seconds 5)
-            )
-    , Effect.Test.start config "Test train movement"
-        |> loadAndLogin
-            sessionId0
-            (\frontend0 state ->
-                state
-                    |> clickOnUi frontend0 (CategoryButton Rail)
-                    |> makeItDayTime frontend0
-                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton TrainHouseGroup))
-                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
-                    |> frontend0.update (Audio.UserMsg (MouseWheel { deltaY = 100, deltaMode = DeltaPixel }))
-                    |> shortWait
-                    |> clickOnScreen frontend0 (Point2d.pixels 1400 300)
-                    |> clickOnUi frontend0 (ToolButton (TilePlacerToolButton RailStraightGroup))
-                    |> clickOnScreen frontend0 (Point2d.pixels 340 310)
-                    |> (\state2 ->
-                            List.foldl
-                                (\index state3 ->
-                                    clickOnScreen frontend0 (Point2d.pixels (340 + toFloat index * 20) 310) state3
-                                )
-                                state2
-                                (List.range 0 50)
-                       )
-                    |> clickOnUi frontend0 (ToolButton HandToolButton)
-                    |> clickOnScreen frontend0 (Point2d.pixels 300 300)
-                    |> Effect.Test.simulateTime (Duration.seconds 6)
-                    |> clickOnScreen frontend0 (Point2d.pixels 1400 300)
-                    |> Effect.Test.simulateTime (Duration.seconds 6)
-                    |> clickOnScreen frontend0 (Point2d.pixels 1140 314)
-                    |> Effect.Test.simulateTime (Duration.seconds 1.5)
-                    |> Effect.Test.checkState
-                        (\state2 ->
-                            case SeqDict.values state2.backend.trains |> List.map (Train.status state2.time) of
-                                [ first, second ] ->
-                                    case ( first, second ) of
-                                        ( Travelling _, WaitingAtHome ) ->
-                                            Ok ()
-
-                                        ( WaitingAtHome, Travelling _ ) ->
-                                            Ok ()
-
-                                        _ ->
-                                            Err "Unexpected train state"
-
-                                _ ->
-                                    Err "Both trains not found"
+            (\frontend0 ->
+                [ clickOnUi frontend0 (CategoryButton Buildings) ]
+                    ++ makeItDayTime frontend0
+                    ++ [ clickOnUi frontend0 (ToolButton (TilePlacerToolButton HouseGroup)) ]
+                    ++ clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    ++ [ Effect.Test.fastForward (Duration.seconds 9)
+                       , clickOnUi frontend0 (CategoryButton Road)
+                       , clickOnUi frontend0 (ToolButton (TilePlacerToolButton SidewalkGroup))
+                       ]
+                    ++ List.concatMap
+                        (\index ->
+                            clickOnScreen frontend0 (Point2d.pixels (300 + toFloat index * 20) 340)
                         )
+                        (List.range 0 10)
+                    ++ [ Effect.Test.fastForward (Duration.seconds 5) ]
             )
-    , Effect.Test.start config "Can't log in for a different session"
-        |> loadPage
+        ]
+    , Effect.Test.start "Test train movement"
+        startTime
+        config
+        [ loadAndLogin
             sessionId0
-            (\frontend0 state ->
-                state
-                    |> shouldBeLoggedOut frontend0
-                    |> Effect.Test.sendToBackend sessionId0 frontend0.clientId (SendLoginEmailRequest (Untrusted.untrust email))
-                    |> shortWait
-                    |> Effect.Test.andThen
-                        (\data state2 ->
-                            case List.filterMap isOneTimePasswordEmail data.httpRequests of
-                                [ loginEmail ] ->
-                                    loadPage
-                                        sessionId1
-                                        (\frontend1 state3 ->
-                                            state3
-                                                |> Effect.Test.sendToBackend
-                                                    sessionId1
-                                                    frontend1.clientId
-                                                    (LoginAttemptRequest loginEmail.oneTimePassword)
-                                                |> shortWait
-                                                |> shouldBeLoggedOut frontend0
-                                                |> shouldBeLoggedOut frontend1
-                                        )
-                                        state2
-
-                                _ ->
-                                    Effect.Test.checkState (\_ -> Err "Login email not found") state2
+            (\frontend0 ->
+                [ clickOnUi frontend0 (CategoryButton Rail) ]
+                    ++ makeItDayTime frontend0
+                    ++ [ clickOnUi frontend0 (ToolButton (TilePlacerToolButton TrainHouseGroup)) ]
+                    ++ clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    ++ [ frontend0.update 0 (Audio.UserMsg (MouseWheel { deltaY = 100, deltaMode = DeltaPixel })) ]
+                    ++ clickOnScreen frontend0 (Point2d.pixels 1400 300)
+                    ++ [ clickOnUi frontend0 (ToolButton (TilePlacerToolButton RailStraightGroup)) ]
+                    ++ clickOnScreen frontend0 (Point2d.pixels 340 310)
+                    ++ List.concatMap
+                        (\index ->
+                            clickOnScreen frontend0 (Point2d.pixels (340 + toFloat index * 20) 310)
                         )
+                        (List.range 0 50)
+                    ++ [ clickOnUi frontend0 (ToolButton HandToolButton) ]
+                    ++ clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    ++ [ Effect.Test.fastForward (Duration.seconds 6) ]
+                    ++ clickOnScreen frontend0 (Point2d.pixels 1400 300)
+                    ++ [ Effect.Test.fastForward (Duration.seconds 6) ]
+                    ++ clickOnScreen frontend0 (Point2d.pixels 1140 314)
+                    ++ [ Effect.Test.fastForward (Duration.seconds 1.5)
+                       , Effect.Test.checkState
+                            0
+                            (\state2 ->
+                                case SeqDict.values state2.backend.trains |> List.map (Train.status state2.time) of
+                                    [ first, second ] ->
+                                        case ( first, second ) of
+                                            ( Travelling _, WaitingAtHome ) ->
+                                                Ok ()
+
+                                            ( WaitingAtHome, Travelling _ ) ->
+                                                Ok ()
+
+                                            _ ->
+                                                Err "Unexpected train state"
+
+                                    _ ->
+                                        Err "Both trains not found"
+                            )
+                       ]
             )
+        ]
+    , Effect.Test.start "Can't log in for a different session"
+        startTime
+        config
+        [ loadPage
+            sessionId0
+            (\frontend0 ->
+                [ shouldBeLoggedOut frontend0
+                , frontend0.sendToBackend 0 (SendLoginEmailRequest (Untrusted.untrust email))
+                , Effect.Test.andThen
+                    shortWaitMs
+                    (\data ->
+                        case List.filterMap isOneTimePasswordEmail data.httpRequests of
+                            [ loginEmail ] ->
+                                [ loadPage
+                                    sessionId1
+                                    (\frontend1 ->
+                                        [ frontend1.sendToBackend 0 (LoginAttemptRequest loginEmail.oneTimePassword)
+                                        , Effect.Test.checkState shortWaitMs (\_ -> Ok ())
+                                        , shouldBeLoggedOut frontend0
+                                        , shouldBeLoggedOut frontend1
+                                        ]
+                                    )
+                                ]
+
+                            _ ->
+                                [ Effect.Test.checkState 0 (\_ -> Err "Login email not found") ]
+                    )
+                ]
+            )
+        ]
     ]
 
 
-shortWait :
-    Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-    -> Effect.Test.Instructions toBackend frontendMsg frontendModel toFrontend backendMsg backendModel
-shortWait =
-    Effect.Test.simulateTime (Duration.milliseconds 34)
+shortWaitMs : Float
+shortWaitMs =
+    34
 
 
 checkFrontend :
     Effect.Lamdera.ClientId
     -> (userModel -> Result String ())
-    -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg userModel) toFrontend backendMsg backendModel
-    -> Effect.Test.Instructions toBackend frontendMsg (Audio.Model userMsg userModel) toFrontend backendMsg backendModel
+    -> Action toBackend frontendMsg (Audio.Model userMsg userModel) toFrontend backendMsg backendModel
 checkFrontend clientId checkFunc =
     Effect.Test.checkState
+        0
         (\data ->
-            case AssocList.get clientId data.frontends of
+            case SeqDict.get clientId data.frontends of
                 Just (Audio.Model { userModel }) ->
                     checkFunc userModel
 

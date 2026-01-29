@@ -53,13 +53,4 @@ unwrapResult result =
 -}
 unreachable : () -> a
 unreachable () =
-    let
-        _ =
-            stackOverflow 0
-    in
     unreachable ()
-
-
-stackOverflow : Int -> Int
-stackOverflow a =
-    stackOverflow a + 1

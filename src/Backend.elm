@@ -15,7 +15,7 @@ import AssocList
 import Bounds exposing (Bounds)
 import Bytes exposing (Endianness(..))
 import Bytes.Decode
-import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), MovementChange, NpcMovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
+import Change exposing (AdminChange(..), AdminData, AreTrainsAndAnimalsDisabled(..), LocalChange(..), NpcMovementChange, ServerChange(..), UserStatus(..), ViewBoundsChange2)
 import Coord exposing (Coord, RawCellCoord)
 import Crypto.Hash
 import Cursor exposing (AnimalOrNpcId(..), Holding(..))
@@ -59,7 +59,7 @@ import Tile exposing (BuildingData, RailPathType(..))
 import TileCountBot
 import TimeOfDay exposing (TimeOfDay(..))
 import Train exposing (Status(..), Train, TrainDiff)
-import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), ToBackend(..), ToFrontend(..), UserSession)
+import Types exposing (BackendError(..), BackendModel, BackendMsg(..), BackendUserData, BackendUserType(..), EmailResult(..), HumanUserData, LoadingData_, LoginError(..), ToBackend(..), ToFrontend(..))
 import Undo
 import Units exposing (CellUnit, WorldUnit)
 import Untrusted exposing (Validation(..))
@@ -94,10 +94,6 @@ app_ isProduction =
     , updateFromFrontend = updateFromFrontend
     , subscriptions = subscriptions
     }
-
-
-dummyChange =
-    0
 
 
 updateFromFrontend :
