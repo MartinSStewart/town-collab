@@ -54,7 +54,7 @@ import Maybe.Extra as Maybe
 import Name exposing (Name)
 import Npc exposing (Npc)
 import Point2d exposing (Point2d)
-import Quantity exposing (Quantity(..))
+import Quantity
 import Random
 import SeqDict exposing (SeqDict)
 import Set

@@ -5,7 +5,6 @@ module Coord exposing
     , changeUnit
     , clamp
     , divide
-    , equals
     , floorPoint
     , maxComponent
     , maxTuple
@@ -206,11 +205,6 @@ yOnly ( _, Quantity y_ ) =
 maxComponent : Coord a -> Quantity Int a
 maxComponent ( x2, y2 ) =
     Quantity.max x2 y2
-
-
-equals : Coord a -> Coord a -> Bool
-equals ( Quantity x1, Quantity y1 ) ( Quantity x2, Quantity y2 ) =
-    x1 - x2 == 0 && y1 - y2 == 0
 
 
 notEquals : Coord a -> Coord a -> Bool
