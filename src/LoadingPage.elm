@@ -154,7 +154,7 @@ update msg loadingModel =
         KeyDown rawKey ->
             case Keyboard.anyKeyOriginal rawKey of
                 Just Keyboard.Enter ->
-                    case tryLoading loadingModel of
+                    case tryLoading loadingModel |> Debug.log "tryload" of
                         Just a ->
                             a ()
 

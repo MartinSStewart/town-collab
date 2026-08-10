@@ -7,7 +7,7 @@ import Coord
 import Dict
 import Duration
 import Effect.Lamdera
-import Effect.Test exposing (Action, Config, EndToEndTest, FileUpload(..), HttpRequest, HttpResponse(..), MultipleFilesUpload(..), PortToJs)
+import Effect.Test exposing (Action, Config, DelayInMs, EndToEndTest, FileUpload(..), HttpRequest, HttpResponse(..), MultipleFilesUpload(..), PortToJs)
 import Effect.WebGL.Texture exposing (Texture)
 import EmailAddress exposing (EmailAddress)
 import Env
@@ -331,29 +331,31 @@ pressEnter frontend0 =
         keyEvent =
             Keyboard.RawKey "Enter" ""
     in
-    [ frontend0.update 0 (Audio.UserMsg (Types.KeyDown keyEvent))
+    [ frontend0.update 100 (Audio.UserMsg (Types.KeyDown keyEvent))
     , frontend0.update shortWaitMs (Audio.UserMsg (Types.KeyUp keyEvent))
     ]
 
 
 clickOnScreen :
-    Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    Effect.Test.DelayInMs
+    -> Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> Point2d Pixels Pixels
     -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
-clickOnScreen frontend0 position =
-    [ frontend0.update 0 (Audio.UserMsg (MouseMove position))
-    , frontend0.update 0 (Audio.UserMsg (MouseDown MainButton position))
+clickOnScreen delay frontend0 position =
+    [ frontend0.update delay (Audio.UserMsg (MouseMove position))
+    , frontend0.update shortWaitMs (Audio.UserMsg (MouseDown MainButton position))
     , frontend0.update shortWaitMs (Audio.UserMsg (MouseUp MainButton position))
     ]
 
 
 clickOnUi :
-    Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
+    DelayInMs
+    -> Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> Types.UiId
     -> Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
-clickOnUi frontend0 id =
+clickOnUi delay frontend0 id =
     Effect.Test.andThen
-        0
+        delay
         (\data ->
             case SeqDict.get frontend0.clientId data.frontends of
                 Just (Audio.Model audioModel) ->
@@ -402,9 +404,9 @@ makeItDayTime :
     Effect.Test.FrontendActions ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel
     -> List (Action ToBackend FrontendMsg FrontendModel ToFrontend BackendMsg BackendModel)
 makeItDayTime frontendActions =
-    [ clickOnUi frontendActions SettingsButton
-    , clickOnUi frontendActions AlwaysDayTimeOfDayButton
-    , clickOnUi frontendActions CloseSettings
+    [ clickOnUi shortWaitMs frontendActions SettingsButton
+    , clickOnUi shortWaitMs frontendActions AlwaysDayTimeOfDayButton
+    , clickOnUi shortWaitMs frontendActions CloseSettings
     ]
 
 
@@ -419,7 +421,7 @@ loadPage sessionId func =
     Effect.Test.connectFrontend
         0
         sessionId
-        (Url.toString url)
+        "/"
         windowSize
         (\frontend0 ->
             pressEnter frontend0
@@ -439,7 +441,7 @@ loadAndLogin sessionId func =
         sessionId
         (\frontend0 ->
             [ shouldBeLoggedOut frontend0
-            , clickOnUi frontend0 Types.EmailAddressTextInput
+            , clickOnUi shortWaitMs frontend0 Types.EmailAddressTextInput
             ]
                 ++ typeText frontend0 Env.adminEmail2
                 ++ pressEnter frontend0
@@ -448,7 +450,7 @@ loadAndLogin sessionId func =
                         (\data ->
                             case List.filterMap isOneTimePasswordEmail data.httpRequests of
                                 [ loginEmail ] ->
-                                    [ clickOnUi frontend0 Types.OneTimePasswordInput ]
+                                    [ clickOnUi shortWaitMs frontend0 Types.OneTimePasswordInput ]
                                         ++ typeText frontend0 (Id.secretToString loginEmail.oneTimePassword)
                                         ++ [ shouldBeLoggedIn frontend0 ]
 
@@ -495,20 +497,18 @@ tests depth lights texture trainDepth trainLights trainTexture =
         [ loadAndLogin
             sessionId0
             (\frontend0 ->
-                [ clickOnUi frontend0 (CategoryButton Buildings) ]
+                [ clickOnUi shortWaitMs frontend0 (CategoryButton Buildings) ]
                     ++ makeItDayTime frontend0
-                    ++ [ clickOnUi frontend0 (ToolButton (TilePlacerToolButton HouseGroup)) ]
-                    ++ clickOnScreen frontend0 (Point2d.pixels 300 300)
-                    ++ [ Effect.Test.fastForward (Duration.seconds 9)
-                       , clickOnUi frontend0 (CategoryButton Road)
-                       , clickOnUi frontend0 (ToolButton (TilePlacerToolButton SidewalkGroup))
+                    ++ [ clickOnUi shortWaitMs frontend0 (ToolButton (TilePlacerToolButton HouseGroup)) ]
+                    ++ clickOnScreen shortWaitMs frontend0 (Point2d.pixels 300 300)
+                    ++ [ clickOnUi 9000 frontend0 (CategoryButton Road)
+                       , clickOnUi shortWaitMs frontend0 (ToolButton (TilePlacerToolButton SidewalkGroup))
                        ]
                     ++ List.concatMap
                         (\index ->
-                            clickOnScreen frontend0 (Point2d.pixels (300 + toFloat index * 20) 340)
+                            clickOnScreen shortWaitMs frontend0 (Point2d.pixels (300 + toFloat index * 20) 340)
                         )
                         (List.range 0 10)
-                    ++ [ Effect.Test.fastForward (Duration.seconds 5) ]
             )
         ]
     , Effect.Test.start "Test train movement"
@@ -517,28 +517,25 @@ tests depth lights texture trainDepth trainLights trainTexture =
         [ loadAndLogin
             sessionId0
             (\frontend0 ->
-                [ clickOnUi frontend0 (CategoryButton Rail) ]
+                [ clickOnUi shortWaitMs frontend0 (CategoryButton Rail) ]
                     ++ makeItDayTime frontend0
-                    ++ [ clickOnUi frontend0 (ToolButton (TilePlacerToolButton TrainHouseGroup)) ]
-                    ++ clickOnScreen frontend0 (Point2d.pixels 300 300)
+                    ++ [ clickOnUi shortWaitMs frontend0 (ToolButton (TilePlacerToolButton TrainHouseGroup)) ]
+                    ++ clickOnScreen shortWaitMs frontend0 (Point2d.pixels 300 300)
                     ++ [ frontend0.update 0 (Audio.UserMsg (MouseWheel { deltaY = 100, deltaMode = DeltaPixel })) ]
-                    ++ clickOnScreen frontend0 (Point2d.pixels 1400 300)
-                    ++ [ clickOnUi frontend0 (ToolButton (TilePlacerToolButton RailStraightGroup)) ]
-                    ++ clickOnScreen frontend0 (Point2d.pixels 340 310)
+                    ++ clickOnScreen shortWaitMs frontend0 (Point2d.pixels 1400 300)
+                    ++ [ clickOnUi shortWaitMs frontend0 (ToolButton (TilePlacerToolButton RailStraightGroup)) ]
+                    ++ clickOnScreen shortWaitMs frontend0 (Point2d.pixels 340 310)
                     ++ List.concatMap
                         (\index ->
-                            clickOnScreen frontend0 (Point2d.pixels (340 + toFloat index * 20) 310)
+                            clickOnScreen shortWaitMs frontend0 (Point2d.pixels (340 + toFloat index * 20) 310)
                         )
                         (List.range 0 50)
-                    ++ [ clickOnUi frontend0 (ToolButton HandToolButton) ]
-                    ++ clickOnScreen frontend0 (Point2d.pixels 300 300)
-                    ++ [ Effect.Test.fastForward (Duration.seconds 6) ]
-                    ++ clickOnScreen frontend0 (Point2d.pixels 1400 300)
-                    ++ [ Effect.Test.fastForward (Duration.seconds 6) ]
-                    ++ clickOnScreen frontend0 (Point2d.pixels 1140 314)
-                    ++ [ Effect.Test.fastForward (Duration.seconds 1.5)
-                       , Effect.Test.checkState
-                            0
+                    ++ [ clickOnUi shortWaitMs frontend0 (ToolButton HandToolButton) ]
+                    ++ clickOnScreen shortWaitMs frontend0 (Point2d.pixels 300 300)
+                    ++ clickOnScreen 6000 frontend0 (Point2d.pixels 1400 300)
+                    ++ clickOnScreen 6000 frontend0 (Point2d.pixels 1140 314)
+                    ++ [ Effect.Test.checkState
+                            1500
                             (\state2 ->
                                 case SeqDict.values state2.backend.trains |> List.map (Train.status state2.time) of
                                     [ first, second ] ->
